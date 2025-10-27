@@ -184,16 +184,20 @@
   },
   "services": {
     "turn_on": {
-      "name": "打开"
+      "name": "打开",
+      "description": "打开"
     },
     "turn_off": {
-      "name": "关闭"
+      "name": "关闭",
+      "description": "关闭"
     },
     "restart_device": {
-      "name": "重启"
+      "name": "重启",
+      "description": "重启设备"
     },
     "select": {
-      "name": "选择"
+      "name": "选择",
+      "description": "选择"
     },
     "control_move_ptz": {
       "name": "转动云台",

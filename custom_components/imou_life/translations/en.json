@@ -184,16 +184,20 @@
   },
   "services": {
     "turn_on": {
-      "name": "Turn On"
+      "name": "Turn On",
+      "description": "turn on"
     },
     "turn_off": {
-      "name": "Turn Off"
+      "name": "Turn Off",
+      "description": "turn off"
     },
     "restart_device": {
-      "name": "Restart Device"
+      "name": "Restart Device",
+      "description": "restart device"
     },
     "select": {
-      "name": "Select"
+      "name": "Select",
+      "description": "select"
     },
     "control_move_ptz": {
       "name": "Move Ptz",
