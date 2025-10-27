@@ -82,12 +82,12 @@
       "night_vision_mode": {
         "name": "Night Vision Mode",
         "state": {
-          "Intelligent": "Smart Night Vision",
-          "FullColor": "Bright Color Night Vision",
-          "Infrared": "Infrared Night Vision",
-          "Off": "Off",
-          "LowLight": "Low Light Night Vision",
-          "SmartLowLight": "Smart Low Light Night Vision",
+          "intelligent": "Smart Night Vision",
+          "fullcolor": "Bright Color Night Vision",
+          "infrared": "Infrared Night Vision",
+          "off": "Off",
+          "lowlight": "Low Light Night Vision",
+          "smartlowlight": "Smart Low Light Night Vision",
           "0": "Smart Night Vision",
           "1": "Bright Color Night Vision",
           "2": "Infrared Night Vision",
@@ -199,7 +199,7 @@
       "name": "Move Ptz",
       "description": "control move ptz",
       "fields": {
-        "duration ": {
+        "duration": {
           "name": "Duration",
           "description": "PTZ rotation duration"
         }

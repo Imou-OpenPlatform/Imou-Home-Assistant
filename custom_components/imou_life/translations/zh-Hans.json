@@ -82,12 +82,12 @@
       "night_vision_mode": {
         "name": "夜视模式",
         "state": {
-          "Intelligent": "智能夜视",
-          "FullColor": "全彩夜视",
-          "Infrared": "红外夜视",
-          "Off": "关闭",
-          "LowLight": "微光夜视",
-          "SmartLowLight": "智能微光夜视",
+          "intelligent": "智能夜视",
+          "fullcolor": "全彩夜视",
+          "infrared": "红外夜视",
+          "off": "关闭",
+          "lowlight": "微光夜视",
+          "smartlowlight": "智能微光夜视",
           "0": "智能夜视",
           "1": "全彩夜视",
           "2": "红外夜视",
@@ -199,7 +199,7 @@
       "name": "转动云台",
       "description": "控制云台转动",
       "fields": {
-        "duration ": {
+        "duration": {
           "name": "转动时间 ",
           "description": "云台转动时间"
         }
