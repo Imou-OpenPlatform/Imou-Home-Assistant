@@ -32,7 +32,7 @@
 			"device_volume": {
 				"default": "mdi:volume-high",
 				"state": {
-					"99": "mdi:volume-off",
+					"-1": "mdi:volume-off",
 					"0": "mdi:volume-low",
 					"1": "mdi:volume-medium",
 					"2": "mdi:volume-high"
