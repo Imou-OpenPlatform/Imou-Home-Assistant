@@ -80,19 +80,19 @@
     },
     "select": {
       "night_vision_mode": {
-        "name": "Night Vision Mode",
+        "name": "Night-Vision-Mode",
         "state": {
-          "Intelligent": "Smart Night Vision",
-          "FullColor": "Bright Color Night Vision",
-          "Infrared": "Infrared Night Vision",
+          "Intelligent": "Smart-Night-Vision",
+          "FullColor": "Bright-Color-Night-Vision",
+          "Infrared": "Infrared-Night-Vision",
           "Off": "Off",
-          "LowLight": "Low Light Night Vision",
-          "SmartLowLight": "Smart Low Light Night Vision",
-          "0": "Smart Night Vision",
-          "1": "Bright Color Night Vision",
-          "2": "Infrared Night Vision",
+          "LowLight": "Low-Light-Night-Vision",
+          "SmartLowLight": "Smart-Low-Light-Night-Vision",
+          "0": "Smart-Night-Vision",
+          "1": "Bright-Color-Night-Vision",
+          "2": "Infrared-Night-Vision",
           "3": "Off",
-          "4": "Custom Mode"
+          "4": "Custom-Mode"
         }
       },
       "mode": {
@@ -115,45 +115,45 @@
     },
     "switch": {
       "motion_detect": {
-        "name": "Motion Detect"
+        "name": "Motion-Detect"
       },
       "ab_alarm_sound": {
-        "name": "Abnormal Sound Alarm"
+        "name": "Abnormal-Sound-Alarm"
       },
       "close_camera": {
-        "name": "Close Camera"
+        "name": "Close-Camera"
       },
       "white_light": {
-        "name": "White Light"
+        "name": "White-Light"
       },
       "audio_encode_control": {
-        "name": "Audio Encode Control"
+        "name": "Audio-Encode-Control"
       },
       "header_detect": {
-        "name": "Human Detect"
+        "name": "Human-Detect"
       },
       "light": {
         "name": "Light"
       },
       "switch": {
-        "name": "Plug Switch"
+        "name": "Plug-Switch"
       }
     },
     "button": {
       "ptz_up": {
-        "name": "Ptz Up"
+        "name": "Ptz-Up"
       },
       "ptz_down": {
-        "name": "Ptz Down"
+        "name": "Ptz-Down"
       },
       "ptz_left": {
-        "name": "Ptz Left"
+        "name": "Ptz-Left"
       },
       "ptz_right": {
-        "name": "Ptz Right"
+        "name": "Ptz-Right"
       },
       "restart_device": {
-        "name": "Restart Device"
+        "name": "Restart-Device"
       },
       "mute": {
         "name": "Mute"
@@ -166,7 +166,7 @@
     },
     "binary_sensor": {
       "door_contact_status": {
-        "name": "Switch Status",
+        "name": "Switch-Status",
         "state": {
           "on": "Open",
           "off": "Closed"
@@ -197,11 +197,11 @@
     },
     "control_move_ptz": {
       "name": "Move Ptz",
-      "description": "control move ptz",
+      "description": "control-move-ptz",
       "fields": {
         "duration ": {
           "name": "Duration",
-          "description": "PTZ rotation duration"
+          "description": "PTZ-rotation-duration"
         }
       }
     }
