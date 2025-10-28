@@ -82,12 +82,12 @@
       "night_vision_mode": {
         "name": "夜视模式",
         "state": {
-          "Intelligent": "智能夜视",
-          "FullColor": "全彩夜视",
-          "Infrared": "红外夜视",
-          "Off": "关闭",
-          "LowLight": "微光夜视",
-          "SmartLowLight": "智能微光夜视",
+          "intelligent": "智能夜视",
+          "fullcolor": "全彩夜视",
+          "infrared": "红外夜视",
+          "off": "关闭",
+          "lowlight": "微光夜视",
+          "smartlowlight": "智能微光夜视",
           "0": "智能夜视",
           "1": "全彩夜视",
           "2": "红外夜视",
@@ -106,7 +106,7 @@
       "device_volume": {
         "name": "音量",
         "state": {
-          "-1": "静音",
+          "99": "静音",
           "0": "低",
           "1": "中",
           "2": "高"
@@ -184,22 +184,26 @@
   },
   "services": {
     "turn_on": {
-      "name": "打开"
+      "name": "打开",
+      "description": "打开"
     },
     "turn_off": {
-      "name": "关闭"
+      "name": "关闭",
+      "description": "关闭"
     },
     "restart_device": {
-      "name": "重启"
+      "name": "重启",
+      "description": "重启设备"
     },
     "select": {
-      "name": "选择"
+      "name": "选择",
+      "description": "选择"
     },
     "control_move_ptz": {
       "name": "转动云台",
       "description": "控制云台转动",
       "fields": {
-        "duration ": {
+        "duration": {
           "name": "转动时间 ",
           "description": "云台转动时间"
         }

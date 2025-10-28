@@ -82,12 +82,12 @@
       "night_vision_mode": {
         "name": "Night Vision Mode",
         "state": {
-          "Intelligent": "Smart Night Vision",
-          "FullColor": "Bright Color Night Vision",
-          "Infrared": "Infrared Night Vision",
-          "Off": "Off",
-          "LowLight": "Low Light Night Vision",
-          "SmartLowLight": "Smart Low Light Night Vision",
+          "intelligent": "Smart Night Vision",
+          "fullcolor": "Bright Color Night Vision",
+          "infrared": "Infrared Night Vision",
+          "off": "Off",
+          "lowlight": "Low Light Night Vision",
+          "smartlowlight": "Smart Low Light Night Vision",
           "0": "Smart Night Vision",
           "1": "Bright Color Night Vision",
           "2": "Infrared Night Vision",
@@ -106,7 +106,7 @@
       "device_volume": {
         "name": "Volume",
         "state": {
-          "-1": "Mute",
+          "99": "Mute",
           "0": "Low",
           "1": "Medium",
           "2": "High"
@@ -184,22 +184,26 @@
   },
   "services": {
     "turn_on": {
-      "name": "Turn On"
+      "name": "Turn On",
+      "description": "turn on"
     },
     "turn_off": {
-      "name": "Turn Off"
+      "name": "Turn Off",
+      "description": "turn off"
     },
     "restart_device": {
-      "name": "Restart Device"
+      "name": "Restart Device",
+      "description": "restart device"
     },
     "select": {
-      "name": "Select"
+      "name": "Select",
+      "description": "select"
     },
     "control_move_ptz": {
       "name": "Move Ptz",
       "description": "control move ptz",
       "fields": {
-        "duration ": {
+        "duration": {
           "name": "Duration",
           "description": "PTZ rotation duration"
         }

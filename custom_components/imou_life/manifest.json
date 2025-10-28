@@ -8,6 +8,6 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Imou-OpenPlatform/Imou-Home-Assistant/issues",
   "quality_scale": "bronze",
-  "requirements": ["pyimouapi==1.2.0","simpleeval~=1.0.3"],
+  "requirements": ["pyimouapi==1.2.2","simpleeval~=1.0.3"],
   "version": "1.2.0"
 }
