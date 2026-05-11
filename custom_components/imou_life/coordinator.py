@@ -76,7 +76,11 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
             return False
         entries = [
             e
-            for e in entity_registry.async_entries_for_device(device_entry.id)
+            for e in er.async_entries_for_device(
+                entity_registry,
+                device_entry.id,
+                include_disabled_entities=True,
+            )
             if e.config_entry_id == entry_id
         ]
         if not entries:
