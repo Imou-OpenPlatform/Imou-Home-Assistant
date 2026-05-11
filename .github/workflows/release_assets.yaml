@@ -25,10 +25,10 @@ jobs:
             ${{ github.event_name == 'release' && github.event.release.tag_name
             || inputs.tag_name }}
 
-      # Archive only custom_components/imou_life → zip paths are imou_life/... (HACS extracts under custom_components/)
+      # Flat zip: entries are manifest.json, __init__.py, ... (no imou_life/ prefix). HACS installs into custom_components/imou_life/.
       - name: Create imou_life.zip
-        working-directory: ${{ github.workspace }}/custom_components
-        run: zip -r "${{ github.workspace }}/imou_life.zip" imou_life
+        working-directory: ${{ github.workspace }}/custom_components/imou_life
+        run: zip -r "${{ github.workspace }}/imou_life.zip" .
 
       - name: Upload zip to release (from GitHub release event)
         if: github.event_name == 'release'
