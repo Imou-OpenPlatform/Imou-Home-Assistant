@@ -1,7 +1,8 @@
-"""config flow for Imou."""
+"""Config flow for Imou Life."""
 
-import logging
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -11,67 +12,55 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    CONF_API_URL_FK,
-    CONF_API_URL_OR,
+    API_URL_OPTIONS,
     CONF_API_URL_SG,
+    CONF_HD,
+    CONF_HTTP,
+    CONF_SD,
+    CONF_HTTPS,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
-    CONF_API_URL_HZ,
-    PARAM_UPDATE_INTERVAL,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
-    PARAM_LIVE_RESOLUTION,
-    CONF_HD,
-    CONF_SD,
-    PARAM_ROTATION_DURATION,
-    CONF_HTTPS,
-    CONF_HTTP,
     PARAM_LIVE_PROTOCOL,
+    PARAM_LIVE_RESOLUTION,
+    PARAM_ROTATION_DURATION,
+    PARAM_UPDATE_INTERVAL,
 )
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for imou."""
+    """Handle a config flow for Imou Life."""
 
-    def __init__(self) -> None:
-        """Init ImouConfigFlow."""
-        self._api_url = None
-        self._app_id = None
-        self._app_secret = None
-        self._api_client = None
-        self._session = None
+    VERSION = 1
+
+    @staticmethod
+    def _login_schema(default_api_url: str = CONF_API_URL_SG) -> vol.Schema:
+        """Schema for App Id / Secret / API region."""
+        return vol.Schema(
+            {
+                vol.Required(PARAM_APP_ID): str,
+                vol.Required(PARAM_APP_SECRET): str,
+                vol.Required(PARAM_API_URL, default=default_api_url): vol.In(API_URL_OPTIONS),
+            }
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult | Dict:
-        """Set up user."""
-        # USER INPUT IS EMPTY RETURN TO FORM
+    ) -> ConfigFlowResult:
+        """Step when user starts adding the integration."""
         if user_input is None:
             return self.async_show_form(
                 step_id="login",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(PARAM_APP_ID): str,
-                        vol.Required(PARAM_APP_SECRET): str,
-                        vol.Required(PARAM_API_URL, default=CONF_API_URL_SG): vol.In(
-                            [
-                                CONF_API_URL_SG,
-                                CONF_API_URL_OR,
-                                CONF_API_URL_FK,
-                                CONF_API_URL_HZ,
-                            ]
-                        ),
-                    }
-                ),
+                data_schema=self._login_schema(),
             )
-        # USER INPUT IS NOT EMPTY START LOGIN
         return await self.async_step_login(user_input)
 
-    async def async_step_login(self, user_input) -> ConfigFlowResult | Dict:
-        """Step login."""
+    async def async_step_login(
+        self, user_input: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Validate credentials and create the config entry."""
         await self.async_set_unique_id(user_input[PARAM_APP_ID])
         self._abort_if_unique_id_configured()
         api_client = ImouOpenApiClient(
@@ -79,48 +68,45 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[PARAM_APP_SECRET],
             user_input[PARAM_API_URL],
         )
-        errors = {}
+        errors: dict[str, str] = {}
         try:
             await api_client.async_get_token()
-            data = {
-                PARAM_APP_ID: user_input[PARAM_APP_ID],
-                PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-                PARAM_API_URL: user_input[PARAM_API_URL],
-            }
-            return self.async_create_entry(title=DOMAIN, data=data)
         except ImouException as exception:
             errors["base"] = exception.get_title()
             return self.async_show_form(
                 step_id="login",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(PARAM_APP_ID): str,
-                        vol.Required(PARAM_APP_SECRET): str,
-                        vol.Required(PARAM_API_URL, default=CONF_API_URL_SG): vol.In(
-                            [
-                                CONF_API_URL_SG,
-                                CONF_API_URL_OR,
-                                CONF_API_URL_FK,
-                                CONF_API_URL_HZ,
-                            ]
-                        ),
-                    }
-                ),
+                data_schema=self._login_schema(user_input[PARAM_API_URL]),
                 errors=errors,
             )
 
+        return self.async_create_entry(
+            title=DOMAIN,
+            data={
+                PARAM_APP_ID: user_input[PARAM_APP_ID],
+                PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+                PARAM_API_URL: user_input[PARAM_API_URL],
+            },
+        )
+
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> OptionsFlow:
-        """Get the options flow for this handler."""
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> OptionsFlow:
+        """Return the options flow."""
         return ImouOptionsFlow()
 
 
-class ImouOptionsFlow(config_entries.OptionsFlow):
-    async def async_step_init(self, user_input=None):
-        """Manage the options."""
+class ImouOptionsFlow(OptionsFlow):
+    """Imou Life options."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage options."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
+
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(

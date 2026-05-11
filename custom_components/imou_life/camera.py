@@ -1,6 +1,6 @@
 """Imou camera entity."""
 
-import logging
+from __future__ import annotations
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -11,9 +11,8 @@ from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from . import ImouDataUpdateCoordinator
+from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .const import (
-    DOMAIN,
     PARAM_MOTION_DETECT,
     PARAM_STORAGE_USED,
     PARAM_LIVE_RESOLUTION,
@@ -23,25 +22,22 @@ from .const import (
 )
 from .entity import ImouEntity
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
-
-async def async_setup_entry(  # noqa: D103
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    _LOGGER.info("ImouCamera.async_setup_entry")
-    imou_coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for device in imou_coordinator.devices:
+    """Set up Imou camera entities."""
+    coordinator = entry.runtime_data
+    entities: list[ImouCamera] = []
+    for device in coordinator.devices:
         if device.channel_id is not None:
-            camera_entity = ImouCamera(imou_coordinator, entry, "camera", device)
-            entities.append(camera_entity)
-    if len(entities) > 0:
+            entities.append(ImouCamera(coordinator, entry, "camera", device))
+    if entities:
         async_add_entities(entities)
 
 
 class ImouCamera(ImouEntity, Camera):
-    """imou camera."""
+    """Representation of an Imou camera stream."""
 
     def __init__(
         self,
@@ -49,12 +45,13 @@ class ImouCamera(ImouEntity, Camera):
         config_entry: ConfigEntry,
         entity_type: str,
         device: ImouHaDevice,
-    ):
+    ) -> None:
+        """Initialize the camera entity."""
         Camera.__init__(self)
         ImouEntity.__init__(self, coordinator, config_entry, entity_type, device)
 
     async def stream_source(self) -> str | None:
-        """GET STREAMING ADDRESS."""
+        """Return the live stream URL from the Imou cloud."""
         try:
             return await self._coordinator.device_manager.async_get_device_stream(
                 self._device,
@@ -62,7 +59,7 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_LIVE_PROTOCOL, "https"),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message)  # noqa: B904
+            raise HomeAssistantError(e.message) from e
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -74,11 +71,11 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message)  # noqa: B904
+            raise HomeAssistantError(e.message) from e
 
     @property
     def is_recording(self) -> bool:
-        """The battery level is normal and the motion detect is activated, indicating that it is in  recording mode."""
+        """Return True when storage reports usage and motion detection is enabled."""
         return (
             self.is_non_negative_number(
                 self._device.sensors[PARAM_STORAGE_USED][PARAM_STATE]
@@ -96,16 +93,14 @@ class ImouCamera(ImouEntity, Camera):
 
     @property
     def motion_detection_enabled(self) -> bool:
-        """Camera Motion Detection Status."""
-        return (
-            self._device.switches[PARAM_HEADER_DETECT][PARAM_STATE]
-            if self._device.switches.get(PARAM_HEADER_DETECT)
-            else False or self._device.switches[PARAM_MOTION_DETECT][PARAM_STATE]
-            if self._device.switches.get(PARAM_MOTION_DETECT)
-            else False
-        )
+        """Return True when human and/or motion detection switch is on."""
+        header = self._device.switches.get(PARAM_HEADER_DETECT)
+        motion = self._device.switches.get(PARAM_MOTION_DETECT)
+        header_on = bool(header[PARAM_STATE]) if header else False
+        motion_on = bool(motion[PARAM_STATE]) if motion else False
+        return header_on or motion_on
 
     @property
-    def supported_features(self) -> int | None:
-        """Camera Motion Detection Status."""
+    def supported_features(self) -> CameraEntityFeature:
+        """Flag streaming support."""
         return CameraEntityFeature.STREAM

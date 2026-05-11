@@ -9,6 +9,13 @@ CONF_API_URL_OR = "openapi-or.easy4ip.com"
 CONF_API_URL_FK = "openapi-fk.easy4ip.com"
 CONF_API_URL_HZ = "openapi.lechange.cn"
 
+API_URL_OPTIONS = (
+    CONF_API_URL_SG,
+    CONF_API_URL_OR,
+    CONF_API_URL_FK,
+    CONF_API_URL_HZ,
+)
+
 CONF_HD = "HD"
 CONF_SD = "SD"
 

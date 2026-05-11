@@ -1,6 +1,8 @@
-"""An abstract class common to all IMOU entities."""
+"""Base entity for Imou Life."""
 
-import logging
+from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -8,14 +10,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
-from . import ImouDataUpdateCoordinator
 from .const import DOMAIN, PARAM_STATUS
+from .coordinator import ImouDataUpdateCoordinator
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
-
-class ImouEntity(CoordinatorEntity):
-    """EntityBaseClass."""
+class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
+    """Base class for Imou entities."""
 
     _attr_has_entity_name = True
 
@@ -26,7 +26,7 @@ class ImouEntity(CoordinatorEntity):
         entity_type: str,
         device: ImouHaDevice,
     ) -> None:
-        """Init ImouEntity."""
+        """Initialize ImouEntity."""
         super().__init__(coordinator)
         self._coordinator = coordinator
         self._config_entry = config_entry
@@ -38,7 +38,6 @@ class ImouEntity(CoordinatorEntity):
         """Return the device info."""
         return DeviceInfo(
             identifiers={
-                # The combination of DeviceId and ChannelId uniquely identifies the device
                 (
                     DOMAIN,
                     f"{self._device.device_id}_{self._device.channel_id or self._device.product_id}",
@@ -52,19 +51,21 @@ class ImouEntity(CoordinatorEntity):
         )
 
     @property
-    def unique_id(self):
-        """Return a unique ID to use for this entity."""
-        unique_id = f"{self._device.device_id}_{self._device.channel_id or self._device.product_id}${self._entity_type}"
-        return unique_id
+    def unique_id(self) -> str:
+        """Return a unique ID for this entity."""
+        return (
+            f"{self._device.device_id}_{self._device.channel_id or self._device.product_id}"
+            f"${self._entity_type}"
+        )
 
     @property
-    def translation_key(self):
-        """Return translation_key."""
+    def translation_key(self) -> str | None:
+        """Return the translation key."""
         return self._entity_type
 
     @property
     def available(self) -> bool:
-        """Return entity is available."""
+        """Return True if entity is available."""
         if self._entity_type == PARAM_STATUS:
             return True
         return (
@@ -73,12 +74,10 @@ class ImouEntity(CoordinatorEntity):
         )
 
     @staticmethod
-    def is_non_negative_number(s):
+    def is_non_negative_number(value: Any) -> bool:
+        """Return True if value parses as a non-negative number."""
         try:
-            # 尝试将字符串转换为浮点数
-            number = float(s)
-            # 判断是否大于等于0
-            return number >= 0
-        except ValueError:
-            # 如果转换失败，说明字符串不是有效的数字
+            number = float(value)
+        except (TypeError, ValueError):
             return False
+        return number >= 0

@@ -1,8 +1,9 @@
-import logging
+"""Imou select entities."""
+
+from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, entity_platform
@@ -10,29 +11,26 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.exceptions import ImouException
 
 from .const import (
-    DOMAIN,
     PARAM_CURRENT_OPTION,
-    PARAM_OPTIONS,
     PARAM_ENTITY_ID,
-    SERVICE_SELECT,
     PARAM_OPTION,
+    PARAM_OPTIONS,
+    SERVICE_SELECT,
 )
+from .coordinator import ImouConfigEntry
 from .entity import ImouEntity
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
-
-async def async_setup_entry(  # noqa: D103
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    _LOGGER.info("ImouSelect.async_setup_entry")
-    imou_coordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up Imou select entities."""
+    coordinator = entry.runtime_data
     entities: list[ImouSelect] = []
-    for device in imou_coordinator.devices:
-        for select_type, value in device.selects.items():
-            select_entity = ImouSelect(imou_coordinator, entry, select_type, device)
-            entities.append(select_entity)
-    if len(entities) > 0:
+    for device in coordinator.devices:
+        for select_type in device.selects:
+            entities.append(ImouSelect(coordinator, entry, select_type, device))
+    if entities:
         async_add_entities(entities)
 
     platform = entity_platform.async_get_current_platform()
@@ -47,22 +45,25 @@ async def async_setup_entry(  # noqa: D103
 
 
 class ImouSelect(ImouEntity, SelectEntity):
-    """imou select."""
+    """Representation of an Imou select."""
 
     @property
-    def options(self) -> list[str]:  # noqa: D102
+    def options(self) -> list[str]:
+        """Return available options."""
         return self._device.selects[self._entity_type][PARAM_OPTIONS]
 
     @property
-    def current_option(self) -> str | None:  # noqa: D102
+    def current_option(self) -> str | None:
+        """Return the selected option."""
         return self._device.selects[self._entity_type][PARAM_CURRENT_OPTION]
 
-    async def async_select_option(self, option: str) -> None:  # noqa: D102
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected option."""
         try:
             await self._coordinator.device_manager.async_select_option(
                 self._device, self._entity_type, option
             )
             self._device.selects[self._entity_type][PARAM_CURRENT_OPTION] = option
             self.async_write_ha_state()
-        except ImouException as e:
-            raise HomeAssistantError(e.message)  # noqa: B904
+        except ImouException as err:
+            raise HomeAssistantError(err.message) from err

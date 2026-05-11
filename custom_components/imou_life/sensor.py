@@ -1,36 +1,33 @@
-import logging
+"""Imou sensor entities."""
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 
-from .const import DOMAIN
+from .coordinator import ImouConfigEntry
 from .entity import ImouEntity
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    _LOGGER.info("ImouSensor.async_setup_entry")
-    imou_coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for device in imou_coordinator.devices:
-        for sensor_type, value in device.sensors.items():
-            sensor_entity = ImouSensor(imou_coordinator, entry, sensor_type, device)
-            entities.append(sensor_entity)
-    if len(entities) > 0:
+    """Set up Imou sensor entities."""
+    coordinator = entry.runtime_data
+    entities: list[ImouSensor] = []
+    for device in coordinator.devices:
+        for sensor_type in device.sensors:
+            entities.append(ImouSensor(coordinator, entry, sensor_type, device))
+    if entities:
         async_add_entities(entities)
 
 
 class ImouSensor(ImouEntity, SensorEntity):
-    """imou sensor."""
+    """Representation of an Imou sensor value."""
 
     @property
-    def native_value(self):
+    def native_value(self) -> str | int | float | None:
+        """Return the sensor value."""
         return self._device.sensors[self._entity_type][PARAM_STATE]
 
     @property
