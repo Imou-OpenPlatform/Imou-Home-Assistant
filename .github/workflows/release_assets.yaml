@@ -25,8 +25,10 @@ jobs:
             ${{ github.event_name == 'release' && github.event.release.tag_name
             || inputs.tag_name }}
 
+      # Archive only custom_components/imou_life → zip paths are imou_life/... (HACS extracts under custom_components/)
       - name: Create imou_life.zip
-        run: zip -r imou_life.zip custom_components/imou_life
+        working-directory: ${{ github.workspace }}/custom_components
+        run: zip -r "${{ github.workspace }}/imou_life.zip" imou_life
 
       - name: Upload zip to release (from GitHub release event)
         if: github.event_name == 'release'
