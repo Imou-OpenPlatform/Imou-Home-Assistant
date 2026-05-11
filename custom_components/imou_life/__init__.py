@@ -39,7 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, config: ConfigEntry) -> bool:
     device_manager = ImouDeviceManager(imou_client)
     imou_device_manager = ImouHaDeviceManager(device_manager)
     imou_coordinator = ImouDataUpdateCoordinator(
-        hass, imou_device_manager, config.options.get(PARAM_UPDATE_INTERVAL, 60)
+        hass,
+        imou_device_manager,
+        config.options.get(PARAM_UPDATE_INTERVAL, 60),
+        config.entry_id,
     )
     if hass.data.get(DOMAIN) is None:
         hass.data.setdefault(DOMAIN, {})

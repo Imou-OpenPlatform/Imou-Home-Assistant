@@ -5,8 +5,12 @@ import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +23,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator):
         hass: HomeAssistant,
         device_manager: ImouHaDeviceManager,
         update_interval: int,
+        config_entry_id: str,
     ) -> None:
         """Init ImouDataUpdateCoordinator."""
         _LOGGER.info("ImouDataUpdateCoordinator init")
@@ -31,6 +36,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self._device_manager = device_manager
         self._devices: list[ImouHaDevice] = []
+        self._config_entry_id = config_entry_id
 
     @property
     def devices(self):  # noqa: D102
@@ -53,12 +59,35 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator):
         for device in devices_list:
             self._devices.append(device)
 
+    def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
+        """Skip cloud status poll when every HA entity for this device is disabled."""
+        device_registry = dr.async_get(self.hass)
+        entity_registry = er.async_get(self.hass)
+        unique = f"{device.device_id}_{device.channel_id or device.product_id}"
+        device_entry = device_registry.async_get_device({(DOMAIN, unique)})
+        if device_entry is None:
+            return False
+        entries = [
+            e
+            for e in entity_registry.async_entries_for_device(device_entry.id)
+            if e.config_entry_id == self._config_entry_id
+        ]
+        if not entries:
+            return False
+        return all(e.disabled_by is not None for e in entries)
+
     async def async_update_all_device(self) -> bool:
         """Update all device."""
+        to_update = [d for d in self._devices if not self._should_skip_device_update(d)]
+        if len(to_update) < len(self._devices):
+            _LOGGER.debug(
+                "Skipping cloud poll for %s device(s) with all entities disabled",
+                len(self._devices) - len(to_update),
+            )
         await asyncio.gather(
             *[
                 self._device_manager.async_update_device_status(device)
-                for device in self._devices
+                for device in to_update
             ],
             return_exceptions=True,
         )

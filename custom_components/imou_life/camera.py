@@ -97,13 +97,11 @@ class ImouCamera(ImouEntity, Camera):
     @property
     def motion_detection_enabled(self) -> bool:
         """Camera Motion Detection Status."""
-        return (
-            self._device.switches[PARAM_HEADER_DETECT][PARAM_STATE]
-            if self._device.switches.get(PARAM_HEADER_DETECT)
-            else False or self._device.switches[PARAM_MOTION_DETECT][PARAM_STATE]
-            if self._device.switches.get(PARAM_MOTION_DETECT)
-            else False
-        )
+        header = self._device.switches.get(PARAM_HEADER_DETECT)
+        motion = self._device.switches.get(PARAM_MOTION_DETECT)
+        header_on = bool(header[PARAM_STATE]) if header else False
+        motion_on = bool(motion[PARAM_STATE]) if motion else False
+        return header_on or motion_on
 
     @property
     def supported_features(self) -> int | None:
