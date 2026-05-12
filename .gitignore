@@ -161,3 +161,10 @@ cython_debug/
 #.idea/
 requirements.txt
 
+# Cursor IDE / Agent（含本仓库内 skill 与脚本；若需纳入版本控制可改为 `!.cursor/skills/` 等规则）
+.cursor/
+# 开放项汇报 skill 本地 GitHub Token（勿提交；即使以后只放开追踪 .cursor/skills/ 也应保留此行）
+.cursor/skills/github-open-items-report/github_report.secrets.json
+
+docs/
+
