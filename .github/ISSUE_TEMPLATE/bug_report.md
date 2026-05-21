@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something is broken in the Imou integration
+about: Report something broken in the Imou integration
 title: "[Bug] "
 labels: bug
 ---
