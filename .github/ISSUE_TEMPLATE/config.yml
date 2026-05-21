@@ -1,5 +1,6 @@
-blank_issues_enabled: false
+# 允许社区用户直接新建 Issue；仅维护者可用的「Blank issue」见 GitHub 文档
+blank_issues_enabled: true
 contact_links:
-  - name: HACS Issue tracker
+  - name: HACS 相关问题（跳转 HACS 仓库）
     url: https://github.com/hacs/integration/issues
-    about: For issues and feature requests related to HACS
+    about: 仅用于 HACS 安装/升级等 HACS 本身的问题，Imou 集成问题请用下方「Feedback & bug report」模板
