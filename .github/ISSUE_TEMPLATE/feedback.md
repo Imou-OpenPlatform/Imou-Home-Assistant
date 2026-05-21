@@ -1,9 +1,8 @@
 ---
 name: Feedback & bug report
-description: Report a problem or ask for help with the Imou Home Assistant integration
+about: Report a problem or ask for help with the Imou Home Assistant integration
 title: "[Imou] "
-labels:
-  - question
+labels: question
 ---
 
 Thank you for opening an issue! To help us diagnose and resolve the problem more efficiently, please provide the following information when reporting:

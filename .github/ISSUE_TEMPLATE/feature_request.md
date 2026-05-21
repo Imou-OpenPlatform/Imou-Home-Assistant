@@ -1,9 +1,8 @@
 ---
 name: Feature request
-description: Suggest an enhancement for the Imou integration
+about: Suggest an enhancement for the Imou integration
 title: "[Feature] "
-labels:
-  - enhancement
+labels: enhancement
 ---
 
 ## Problem / use case
