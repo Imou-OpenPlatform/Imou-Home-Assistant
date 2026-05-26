@@ -8,13 +8,6 @@
           "app_secret": "AppSecret",
           "api_url": "网址"
         }
-      },
-      "select_devices": {
-        "title": "选择设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。",
-        "data": {
-          "selected_devices": "设备列表"
-        }
       }
     },
     "abort": {
@@ -29,7 +22,6 @@
   "options": {
     "step": {
       "init": {
-        "description": "当前真实 Webhook ID：{webhook_id}\n\n建议回调地址：{suggested_webhook_url}\n\n当前填写地址：{current_webhook_url}\n\n请确保上面的『消息回调地址』填写为建议回调地址；如果留空，则使用集成自动生成的地址。",
         "data": {
           "update_interval": "自动刷新间隔（秒）",
           "download_snap_wait_time": "抓图等待时间（秒）",
@@ -53,13 +45,6 @@
           "event_push_types": "选择要接收哪些类型的消息。alarm=设备报警（烟感/燃气/人形/动检等），deviceStatus=设备上下线，iot=物联网设备消息，numberstat=客流统计，faceAnalysis=人脸智能分析",
           "base_push": "是否同时把消息推送给乐橙APP。选\"推送\"=乐橙APP也会收到，选\"不推送\"=只推给HA",
           "notify_services": "收到报警后自动发通知到哪里。填HA的动作名称，多个用英文逗号分隔。\n\n查找方法：HA → 开发者工具 → 动作 → 搜索你要用的通知服务\n\n例如：qiyewechat.send  →  企业微信通知\n例如：notify.mobile_app_xxx  →  HA APP弹窗通知\n同时推两个：qiyewechat.send,notify.mobile_app_xxx\n\n留空则不自动发通知（但报警事件仍会触发，可在自动化中使用）"
-        }
-      },
-      "devices": {
-        "title": "管理设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
-        "data": {
-          "selected_devices": "设备列表"
         }
       }
     }
