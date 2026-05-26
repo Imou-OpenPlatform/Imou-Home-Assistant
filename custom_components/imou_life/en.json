@@ -8,13 +8,6 @@
           "app_secret": "AppSecret",
           "api_url": "url"
         }
-      },
-      "select_devices": {
-        "title": "Select Devices",
-        "description": "Found {device_count} device(s). Select the devices you want to add. Unselected devices will NOT be polled, saving API quota.",
-        "data": {
-          "selected_devices": "Devices"
-        }
       }
     },
     "abort": {
@@ -52,13 +45,6 @@
           "event_push_types": "Select which message types to receive. alarm = device alarms (smoke/gas/human/motion etc.), deviceStatus = online/offline, iot = IoT device messages, numberstat = people counting, faceAnalysis = face detection.",
           "base_push": "Whether to also push messages to the Imou APP. 'Push' = Imou APP also receives, 'No push' = HA only.",
           "notify_services": "Where to send alarm notifications. Enter HA action names, separate with commas.\nExample: qiyewechat.send → WeChat Work\nExample: notify.mobile_app_xxx → HA APP push\nBoth: qiyewechat.send,notify.mobile_app_xxx\nLeave empty to skip (alarm events still fire for automations)."
-        }
-      },
-      "devices": {
-        "title": "Manage Devices",
-        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices will be removed on next reload.",
-        "data": {
-          "selected_devices": "Devices"
         }
       }
     }

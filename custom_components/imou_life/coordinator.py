@@ -14,7 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
-from .const import DOMAIN
+from .const import DOMAIN, PARAM_SELECTED_DEVICES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,7 +61,23 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
         coordinator.async_config_entry_first_refresh.
         """
         devices_list = await self._device_manager.async_get_devices()
-        self._devices.extend(devices_list)
+        selected_ids = (
+            self.config_entry.options.get(PARAM_SELECTED_DEVICES)
+            or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
+        )
+        if selected_ids:
+            # Only keep devices the user selected — saves API quota on polling
+            selected_set = set(selected_ids)
+            filtered = [d for d in devices_list if d.device_id in selected_set]
+            _LOGGER.info(
+                "Device filter active: %d/%d devices selected for polling",
+                len(filtered),
+                len(devices_list),
+            )
+            self._devices.extend(filtered)
+        else:
+            # No selection = keep all (backward compatible with old config entries)
+            self._devices.extend(devices_list)
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""
