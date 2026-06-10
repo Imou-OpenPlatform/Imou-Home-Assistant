@@ -33,10 +33,12 @@ jobs:
         with:
           reviewdog_version: latest
       - name: Ruff check
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            uv run ruff check custom_components tests --output-format=reviewdog | \
-              reviewdog -f=ruff -name="ruff" -reporter=github-pr-review -fail-on-error=true
+            uv run ruff check custom_components tests --output-format=rdjson | \
+              reviewdog -f=rdjson -name="ruff" -reporter=github-pr-review -fail-on-error=true
           else
             uv run ruff check custom_components tests
           fi
@@ -57,6 +59,8 @@ jobs:
         with:
           reviewdog_version: latest
       - name: codespell
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           SPELL_PATHS="custom_components tests README.md CHANGELOG.md CONTRIBUTING.md AGENTS.md"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
