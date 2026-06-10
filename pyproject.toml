@@ -30,16 +30,6 @@ src = ["custom_components", "tests"]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
 ]
-ignore = [
-  "N815",   # mixedCase in HA platform constants
-  "N802",   # HA callback naming
-  "E501",   # legacy long lines; tighten incrementally
-  "UP040",  # TypeAlias style in coordinator
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "PLR2004", "SLF001"]
-"custom_components/imou_life/config_flow.py" = ["N806"]
 
 [tool.ruff.format]
 quote-style = "double"

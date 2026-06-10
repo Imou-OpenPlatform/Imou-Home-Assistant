@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
-from typing import TypeAlias
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -14,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
-from .const import DOMAIN
+from .const import DOMAIN, imou_life_device_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
         entry_id = self.config_entry.entry_id
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
-        unique = f"{device.device_id}_{device.channel_id or device.product_id}"
+        unique = imou_life_device_key(device)
         device_entry = device_registry.async_get_device({(DOMAIN, unique)})
         if device_entry is None:
             return False
@@ -115,4 +114,4 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
                 raise UpdateFailed from err
 
 
-ImouConfigEntry: TypeAlias = ConfigEntry[ImouDataUpdateCoordinator]
+type ImouConfigEntry = ConfigEntry[ImouDataUpdateCoordinator]
