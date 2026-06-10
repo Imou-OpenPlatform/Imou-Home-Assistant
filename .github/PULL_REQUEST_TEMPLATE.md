@@ -15,6 +15,7 @@ Fixes #
 
 - [ ] I understand the code I am submitting and can explain how it works.
 - [ ] Local `script/lint-check` and `script/test` pass.
+- [ ] I have manually verified the changed behavior in Home Assistant (see **Testing** below).
 - [ ] New behavior has tests; bugfixes include regression tests where applicable.
 - [ ] No commented-out dead code.
 - [ ] If `manifest.json` changed: version bumped and `CHANGELOG.md` updated.
@@ -30,7 +31,7 @@ Fixes #
 
 ## Testing
 
-<!-- How did you test this? -->
+<!-- Required: describe manual HA verification steps and results (config flow, entities, services, real devices). -->
 
 ## Additional notes
 

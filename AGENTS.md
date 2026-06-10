@@ -13,7 +13,7 @@ This repository contains the Imou Life HACS custom integration (`custom_componen
 
 - Keep `domain=imou_life` and existing `unique_id` / device key semantics unless explicitly scoped.
 - Tests must use public Home Assistant APIs (config flow, services). Do not call coordinator internals directly.
-- Match `pyimouapi` version in `manifest.json` when changing dependencies.
+- Dependency bumps are manual (Dependabot covers GitHub Actions only). For `pyimouapi`, update `pyproject.toml`, `manifest.json`, and `uv.lock` together.
 
 ## AI limitations
 
