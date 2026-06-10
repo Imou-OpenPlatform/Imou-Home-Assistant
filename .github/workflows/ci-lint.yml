@@ -1,0 +1,121 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - uses: reviewdog/action-setup@v1
+        if: github.event_name == 'pull_request'
+        with:
+          reviewdog_version: latest
+      - name: Ruff check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            uv run ruff check custom_components tests --output-format=reviewdog | \
+              reviewdog -f=ruff -name="ruff" -reporter=github-pr-review -fail-on-error=true
+          else
+            uv run ruff check custom_components tests
+          fi
+      - run: uv run ruff format --check custom_components tests
+
+  spell:
+    name: Spell
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - uses: reviewdog/action-setup@v1
+        if: github.event_name == 'pull_request'
+        with:
+          reviewdog_version: latest
+      - name: codespell
+        run: |
+          SPELL_PATHS="custom_components tests README.md CHANGELOG.md CONTRIBUTING.md AGENTS.md"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            uv run codespell $SPELL_PATHS | \
+              reviewdog -efm="%f:%l: %m" -name="codespell" -reporter=github-pr-review -fail-on-error=true
+          else
+            uv run codespell $SPELL_PATHS
+          fi
+
+  yamllint:
+    name: YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - run: |
+          uv run yamllint \
+            .github/workflows/ci-lint.yml \
+            .github/workflows/ci-test.yml \
+            .github/dependabot.yml \
+            .pre-commit-config.yaml \
+            hacs.json \
+            .yamllint.yml
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    if: github.repository == 'Imou-OpenPlatform/Imou-Home-Assistant'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  manifest-sync:
+    name: Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - name: Verify manifest, hacs.json, and dev dependencies align
+        run: |
+          MANIFEST_VERSION=$(jq -r '.version' custom_components/imou_life/manifest.json)
+          HACS_HA=$(jq -r '.homeassistant' hacs.json)
+          PYIMOU_MANIFEST=$(jq -r '.requirements[]' custom_components/imou_life/manifest.json | grep pyimouapi)
+          PYIMOU_DEV=$(uv run python -c "import tomllib; deps=tomllib.load(open('pyproject.toml','rb'))['dependency-groups']['dev']; print([d for d in deps if d.startswith('pyimouapi')][0])")
+
+          test -n "$MANIFEST_VERSION" && test "$MANIFEST_VERSION" != "null"
+          test -n "$HACS_HA" && test "$HACS_HA" != "null"
+          test "$PYIMOU_MANIFEST" = "$PYIMOU_DEV"
+
+          echo "manifest version: $MANIFEST_VERSION"
+          echo "hacs homeassistant: $HACS_HA"
+          echo "pyimouapi: $PYIMOU_MANIFEST"

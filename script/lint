@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+uv run ruff check --fix custom_components tests
+uv run ruff format custom_components tests
+uv run codespell custom_components tests README.md CHANGELOG.md

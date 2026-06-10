@@ -1,0 +1,56 @@
+[project]
+name = "imou-life-ha"
+version = "0.0.0"
+description = "Development tooling for Imou Life Home Assistant custom integration"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+prerelease = "allow"
+
+[dependency-groups]
+dev = [
+  "homeassistant==2025.1.4",
+  "pyimouapi==1.2.6",
+  "pytest-homeassistant-custom-component==0.13.205",
+  "pytest-asyncio>=0.24.0",
+  "pytest-timeout>=2.3.0",
+  "ruff>=0.8.3",
+  "codespell>=2.3.0",
+  "yamllint>=1.35.0",
+  "pre-commit>=4.0.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["custom_components", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+]
+ignore = [
+  "N815",   # mixedCase in HA platform constants
+  "N802",   # HA callback naming
+  "E501",   # legacy long lines; tighten incrementally
+  "UP040",  # TypeAlias style in coordinator
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "SLF001"]
+"custom_components/imou_life/config_flow.py" = ["N806"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+timeout = 30
+
+[tool.codespell]
+ignore-words-list = "aiport,astroid,checkin,currenty,hass,iif,incomfort,lookin,nam,NotIn"
+skip = "./.*,*.csv,*.json,*.ambr"

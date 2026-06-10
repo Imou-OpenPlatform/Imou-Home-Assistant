@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+uv run ruff check custom_components tests
+uv run ruff format --check custom_components tests
+uv run codespell custom_components tests README.md CHANGELOG.md CONTRIBUTING.md AGENTS.md
+uv run yamllint \
+  .github/workflows/ci-lint.yml \
+  .github/workflows/ci-test.yml \
+  .github/dependabot.yml \
+  .pre-commit-config.yaml \
+  hacs.json \
+  .yamllint.yml
