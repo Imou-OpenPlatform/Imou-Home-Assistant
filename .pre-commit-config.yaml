@@ -7,47 +7,20 @@ repos:
       - id: trailing-whitespace
       - id: check-json
         exclude: (.vscode|.devcontainer)
-  - repo: local
-    hooks:
-      - id: black
-        name: black
-        entry: black
-        language: system
-        types: [python]
-        require_serial: true
-        files: ^((custom_components|test)/.+)?[^/]+\.(py|pyi)$
-      - id: flake8
-        name: flake8
-        entry: flake8
-        language: system
-        types: [python]
-        require_serial: true
-        files: ^((custom_components|test)/.+)?[^/]+\.(py|pyi)$
-        args:
-          - --ignore=E501,W503
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.3
     hooks:
       - id: ruff
-        args:
-          - --fix
+        args: [--fix]
+        files: ^(custom_components|tests)/.+\.py$
       - id: ruff-format
-        files: ^((custom_components|test)/.+)?[^/]+\.(py|pyi)$
+        files: ^(custom_components|tests)/.+\.py$
   - repo: https://github.com/codespell-project/codespell
     rev: v2.3.0
     hooks:
       - id: codespell
         args:
           - --ignore-words-list=aiport,astroid,checkin,currenty,hass,iif,incomfort,lookin,nam,NotIn
-          - --skip="./.*,*.csv,*.json,*.ambr"
+          - --skip=./.*,*.csv,*.json,*.ambr
           - --quiet-level=2
         exclude_types: [csv, json, html]
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.3
-    hooks:
-      - id: prettier
-        files: ^((custom_components|test)/.+)?[^/]+\.(py|pyi)$

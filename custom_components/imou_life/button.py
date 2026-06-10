@@ -8,7 +8,8 @@ import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_DURATION
 from pyimouapi.exceptions import ImouException
@@ -84,9 +85,7 @@ class ImouButton(ImouEntity, ButtonEntity):
 
     async def async_handle_control_move_ptz(self, duration: int) -> None:
         """Service: move PTZ for the given duration."""
-        _LOGGER.debug(
-            "PTZ move for %ss on entity type %s", duration, self._entity_type
-        )
+        _LOGGER.debug("PTZ move for %ss on entity type %s", duration, self._entity_type)
         if PARAM_PTZ not in self._entity_type:
             raise HomeAssistantError(
                 f"Invalid entity type {self._entity_type}; expected PTZ button"

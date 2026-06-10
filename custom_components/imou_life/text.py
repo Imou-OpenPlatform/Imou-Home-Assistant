@@ -13,6 +13,16 @@ from .const import PARAM_COUNT_DOWN_SWITCH, PARAM_OVERCHARGE_SWITCH
 from .coordinator import ImouConfigEntry
 from .entity import ImouEntity
 
+_OVERCHARGE_PATTERN_128900 = (
+    r"^(?:[5-9]|[1-9][0-9]{1,2}|[1-2][0-9]{3}|" r"3[0-5][0-9]{2}|36[0-7][0-9]|3680)$"
+)
+_OVERCHARGE_PATTERN_DEFAULT = (
+    r"^(?:[5-9]|[1-9][0-9]{1,2}|[1-9][0-9]{3}|" r"1[0-9]{3}|2[0-4][0-9]{2}|2500)$"
+)
+_COUNTDOWN_PATTERN = (
+    r"^(?:0|[1-9]|[1-9][0-9]{1,2}|" r"1[0-3][0-9]{2}|14[0-3][0-9]|1440)$"
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
@@ -52,8 +62,8 @@ class ImouText(ImouEntity, TextEntity):
         """Optional regex validation pattern."""
         if self._entity_type == PARAM_OVERCHARGE_SWITCH:
             if self._device.texts[self._entity_type][PARAM_REF] == "128900":
-                return "^(?:[5-9]|[1-9][0-9]{1,2}|[1-2][0-9]{3}|3[0-5][0-9]{2}|36[0-7][0-9]|3680)$"
-            return "^(?:[5-9]|[1-9][0-9]{1,2}|[1-9][0-9]{3}|1[0-9]{3}|2[0-4][0-9]{2}|2500)$"
+                return _OVERCHARGE_PATTERN_128900
+            return _OVERCHARGE_PATTERN_DEFAULT
         if self._entity_type == PARAM_COUNT_DOWN_SWITCH:
-            return "^(?:0|[1-9]|[1-9][0-9]{1,2}|1[0-3][0-9]{2}|14[0-3][0-9]|1440)$"
+            return _COUNTDOWN_PATTERN
         return None

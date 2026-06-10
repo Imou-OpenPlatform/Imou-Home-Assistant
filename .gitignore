@@ -166,5 +166,5 @@ requirements.txt
 # 开放项汇报 skill 本地 GitHub Token（勿提交；即使以后只放开追踪 .cursor/skills/ 也应保留此行）
 .cursor/skills/github-open-items-report/github_report.secrets.json
 
+# Local planning docs (not versioned)
 docs/
-

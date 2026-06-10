@@ -1,7 +1,7 @@
 """Test for the Imou integration."""
 
 import pytest
-from homeassistant.components.imou_life.const import DOMAIN
+from custom_components.imou_life.const import DOMAIN
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -9,7 +9,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from . import USER_INPUT, patch_async_setup_entry
 
 
-@pytest.mark.usefixtures("imou_config_flow")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     """Test async_step_user with no user input."""
     result = await hass.config_entries.flow.async_init(
@@ -29,7 +29,7 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
 
-@pytest.mark.usefixtures("imou_config_flow_exception")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")
 async def test_async_step_user_with_user_input_fail(hass: HomeAssistant) -> None:
     """Test async_step_user with user input fail."""
     result = await hass.config_entries.flow.async_init(
@@ -48,7 +48,7 @@ async def test_async_step_user_with_user_input_fail(hass: HomeAssistant) -> None
     assert result["errors"]["base"] == "appIdOrSecret_invalid"
 
 
-@pytest.mark.usefixtures("imou_config_flow_exception")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")
 async def test_async_step_user_with_user_input(hass: HomeAssistant) -> None:
     """Test async_step_user with user input success."""
     result = await hass.config_entries.flow.async_init(

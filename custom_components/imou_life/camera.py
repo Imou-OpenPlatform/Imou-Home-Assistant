@@ -11,15 +11,15 @@ from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .const import (
-    PARAM_MOTION_DETECT,
-    PARAM_STORAGE_USED,
-    PARAM_LIVE_RESOLUTION,
-    PARAM_LIVE_PROTOCOL,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
+    PARAM_LIVE_PROTOCOL,
+    PARAM_LIVE_RESOLUTION,
+    PARAM_MOTION_DETECT,
+    PARAM_STORAGE_USED,
 )
+from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
 
 
@@ -86,10 +86,10 @@ class ImouCamera(ImouEntity, Camera):
         )
 
     @property
-    def is_streaming(self) -> bool:  # noqa: D102
+    def is_streaming(self) -> bool:
         if self.stream is None:
             return False
-        return self.stream._thread is not None and self.stream._thread.is_alive()  # noqa: SLF001
+        return self.stream._thread is not None and self.stream._thread.is_alive()
 
     @property
     def motion_detection_enabled(self) -> bool:

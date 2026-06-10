@@ -1,0 +1,10 @@
+# Default owners for all files
+* @Imou-OpenPlatform
+
+# Integration code
+/custom_components/imou_life/ @Imou-OpenPlatform
+
+# CI and governance
+/.github/ @Imou-OpenPlatform
+/pyproject.toml @Imou-OpenPlatform
+/script/ @Imou-OpenPlatform

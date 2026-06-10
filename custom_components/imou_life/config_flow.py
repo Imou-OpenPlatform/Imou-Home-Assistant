@@ -16,8 +16,8 @@ from .const import (
     CONF_API_URL_SG,
     CONF_HD,
     CONF_HTTP,
-    CONF_SD,
     CONF_HTTPS,
+    CONF_SD,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
@@ -42,7 +42,9 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(PARAM_APP_ID): str,
                 vol.Required(PARAM_APP_SECRET): str,
-                vol.Required(PARAM_API_URL, default=default_api_url): vol.In(API_URL_OPTIONS),
+                vol.Required(PARAM_API_URL, default=default_api_url): vol.In(
+                    API_URL_OPTIONS
+                ),
             }
         )
 
@@ -57,9 +59,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         return await self.async_step_login(user_input)
 
-    async def async_step_login(
-        self, user_input: dict[str, Any]
-    ) -> ConfigFlowResult:
+    async def async_step_login(self, user_input: dict[str, Any]) -> ConfigFlowResult:
         """Validate credentials and create the config entry."""
         await self.async_set_unique_id(user_input[PARAM_APP_ID])
         self._abort_if_unique_id_configured()
