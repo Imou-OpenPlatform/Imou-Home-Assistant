@@ -61,9 +61,31 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
   - Do not change existing entity `unique_id` or device key rules without an explicit migration plan
 - Keep `pyimouapi` version in `manifest.json` aligned with `pyproject.toml` dev dependencies when bumping dependencies.
 
+## Dependency upgrades
+
+[Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs for **GitHub Actions** only. Python dependencies are upgraded manually so `pyproject.toml`, `uv.lock`, and (when needed) `manifest.json` stay in sync.
+
+### Dev-only packages (`ruff`, `pytest`, `homeassistant`, etc.)
+
+1. Bump the version in `pyproject.toml` (`[dependency-groups].dev`).
+2. Regenerate the lockfile: `uv lock`
+3. Run `script/lint-check` and `script/test`.
+4. Open a `chore/…` PR.
+
+### `pyimouapi` (runtime + dev)
+
+This package is installed for end users via `manifest.json` and for local/CI testing via `pyproject.toml`. Update **all three** in one PR:
+
+1. `pyproject.toml` — `[dependency-groups].dev`
+2. `custom_components/imou_life/manifest.json` — `requirements`
+3. `uv lock`
+4. Run `script/lint-check` and `script/test`; manually verify against Imou devices if the API changed.
+5. Open a `chore/…` PR. CI **Manifest** must pass (versions must match).
+
 ## Testing
 
-- Tests live in `tests/` and use [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component).
+- Every PR must include **manual verification** in a real Home Assistant instance (or dev container) for the behavior you changed. Describe the steps and results in the PR **Testing** section.
+- Automated tests live in `tests/` and use [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component).
 - Use public Home Assistant APIs in tests (config flow, services, entity states).
 - Do **not** call coordinator internals such as `coordinator.async_request_refresh()` directly.
 - Mark tests that need custom component loading with the `enable_custom_integrations` fixture.
@@ -117,4 +139,5 @@ Configure in GitHub → **Settings** → **Branches** → rule for `main`:
 2. **提交前**：`script/lint` + `script/test` 必须通过。
 3. **PR 目标分支**：`main`；使用仓库 PR 模板填写说明。
 4. **测试约定**：不要直接调用 coordinator 内部方法；需要加载集成时使用 `enable_custom_integrations` fixture。
-5. **更多细节**：见上文英文章节。
+5. **依赖升级**：仅 GitHub Actions 由 Dependabot 自动提 PR；Python 依赖手动升级。升 `pyimouapi` 须同时改 `pyproject.toml`、`manifest.json` 并执行 `uv lock`。
+6. **更多细节**：见上文英文章节。
