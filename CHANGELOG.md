@@ -1,4 +1,14 @@
 # CHANGELOG
+## [1.2.7]
+### Added
+- Contributor governance: PR template, CI (lint/test/hassfest/HACS), CODEOWNERS, and CONTRIBUTING guide
+- Issue automation: stale label and auto-close after maintainer reply; simplified new-issue auto-reply
+
+### Changed
+- Bump pyimouapi to 1.2.7
+- Default device polling interval changed from 60s to 120s
+- GitHub Actions dependencies updated
+
 ## [1.2.0]
 ### Added
 - Support the access of smart sockets
