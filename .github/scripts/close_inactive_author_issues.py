@@ -3,9 +3,9 @@
 在 GitHub Actions 中运行：按 Issue **评论时间线**上**最后一条评论**的发起人判断。
 
 规则：
-  · 若最后一条评论来自配置的维护者账号，且该评论距今 ≥ INACTIVE_DAYS（默认 60）天 →
+  · 若最后一条评论来自配置的维护者账号，且该评论距今 ≥ INACTIVE_DAYS（默认 30）天 →
     先发关闭说明评论，再关闭 Issue。
-  · 若最后一条评论来自维护者，且距今 ≥ STALE_AFTER_DAYS（默认 30）天且 < 关闭阈值 →
+  · 若最后一条评论来自维护者，且距今 ≥ STALE_AFTER_DAYS（默认 21）天且 < 关闭阈值 →
     打上 STALE_LABEL（默认 stale），便于筛选「待跟进」。
   · 若最后一条评论**不是**维护者（社区/他人已回复），则移除 STALE_LABEL（若存在），避免误标。
 
@@ -13,8 +13,8 @@
   GITHUB_TOKEN / GH_TOKEN — 需 issues:write（Actions 自动注入；本地可省略）
   GITHUB_REPOSITORY — owner/repo（Actions 自动注入；本地未设时默认本仓库）
   MAINTAINERS — 逗号分隔的维护者登录名，默认 Imou-OpenPlatform
-  STALE_AFTER_DAYS — 打 stale 标签的天数阈值，默认 30
-  INACTIVE_DAYS — 关闭的天数阈值，默认 60（应 ≥ STALE_AFTER_DAYS）
+  STALE_AFTER_DAYS — 打 stale 标签的天数阈值，默认 21
+  INACTIVE_DAYS — 关闭的天数阈值，默认 30（应 ≥ STALE_AFTER_DAYS）
   STALE_LABEL — 标签名，默认 stale（请在本仓库预先创建该 label，或首次在网页上建同名标签）
   INACTIVE_EXCLUDE_LABELS — 逗号分隔，命中则跳过（默认含 no-auto-close, enhancement）
   DRY_RUN — 设为 1 时只打印，不修改 Issue
@@ -125,11 +125,11 @@ def _int_env(name: str, default: int, *, minimum: int = 1) -> int:
 
 
 def _close_days() -> int:
-    return _int_env("INACTIVE_DAYS", 60, minimum=1)
+    return _int_env("INACTIVE_DAYS", 30, minimum=1)
 
 
 def _stale_days() -> int:
-    return _int_env("STALE_AFTER_DAYS", 30, minimum=1)
+    return _int_env("STALE_AFTER_DAYS", 21, minimum=1)
 
 
 def _stale_label_name() -> str:

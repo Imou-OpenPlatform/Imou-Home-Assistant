@@ -28,8 +28,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAINTAINERS: Imou-OpenPlatform
-          STALE_AFTER_DAYS: "30"
-          INACTIVE_DAYS: "60"
+          STALE_AFTER_DAYS: "21"
+          INACTIVE_DAYS: "30"
           STALE_LABEL: stale
           INACTIVE_EXCLUDE_LABELS: no-auto-close,enhancement
         run: python3 .github/scripts/close_inactive_author_issues.py

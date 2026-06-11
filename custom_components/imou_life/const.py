@@ -43,6 +43,7 @@ PARAM_CURRENT_OPTION = "current_option"
 PARAM_OPTIONS = "options"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_UPDATE_INTERVAL = "update_interval"
+DEFAULT_UPDATE_INTERVAL = 120
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
 PARAM_LIVE_PROTOCOL = "live_protocol"

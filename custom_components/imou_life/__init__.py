@@ -14,6 +14,7 @@ from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
@@ -39,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     coordinator = ImouDataUpdateCoordinator(
         hass,
         imou_device_manager,
-        entry.options.get(PARAM_UPDATE_INTERVAL, 60),
+        entry.options.get(PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
         entry,
     )
     await coordinator.async_config_entry_first_refresh()

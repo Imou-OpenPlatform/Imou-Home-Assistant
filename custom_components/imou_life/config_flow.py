@@ -18,6 +18,7 @@ from .const import (
     CONF_HTTP,
     CONF_HTTPS,
     CONF_SD,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
@@ -112,9 +113,9 @@ class ImouOptionsFlow(OptionsFlow):
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
-                        vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
-                            vol.Coerce(int), vol.Range(min=30, max=900)
-                        ),
+                        vol.Required(
+                            PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
+                        ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
                         vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
                             vol.Coerce(int), vol.Range(min=1, max=9)
                         ),
