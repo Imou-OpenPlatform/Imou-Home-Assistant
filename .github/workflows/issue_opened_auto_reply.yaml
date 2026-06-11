@@ -1,4 +1,4 @@
-# 新建 Issue 时由 bot 自动回复，内容与 ISSUE_TEMPLATE/feedback.md 保持一致，便于线程内可见。
+# 新建 Issue 时由 bot 自动回复；字段清单见各 ISSUE_TEMPLATE，此处仅补充支持工单链接。
 name: Issue opened — auto welcome reply
 
 on:
@@ -20,16 +20,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const body = [
-              'Thank you for opening an issue! To help us diagnose and resolve the problem more efficiently, please provide the following information when reporting:',
+              'Thank you for opening an issue! Please complete the sections in the issue template above so we can help you faster.',
               '',
-              '- **Region:** China or Overseas',
-              '- **AppId:** (Available from the Imou Open Platform)',
-              '- **Device Serial Number (SN):** (Can be found on the device or in the App)',
-              '- **Home Assistant Logs:** It is recommended to set the log level to debug and attach the relevant error messages. This will greatly assist our troubleshooting.',
-              '',
-              '**Tip:**',
-              '',
-              'If you require more professional technical support, you may also submit a support ticket at the following links with the information above:',
+              '**Tip:** For professional technical support, you may also submit a support ticket:',
               '',
               '- **For China Region:** [Click here to submit a ticket (Imou Open)](https://open.imou.com/support)',
               '- **For Overseas Region:** [Click here to submit a ticket (Imou Cloud)](https://www.imou.com/support/contact-us)',
