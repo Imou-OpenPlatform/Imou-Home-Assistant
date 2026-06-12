@@ -1,4 +1,8 @@
 # CHANGELOG
+## [1.2.8]
+### Changed
+- Bump pyimouapi to 1.2.8 (batch property polling via getIotDeviceDetailInfo)
+
 ## [1.2.7]
 ### Added
 - Contributor governance: PR template, CI (lint/test/hassfest/HACS), CODEOWNERS, and CONTRIBUTING guide
