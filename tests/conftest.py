@@ -4,7 +4,7 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pyimouapi import ImouOpenApiClient, InvalidAppIdOrSecretException
+from pyimouapi import InvalidAppIdOrSecretException
 
 IMOU_TOKEN_RETURN = {
     "accessToken": "test_token",
@@ -16,32 +16,62 @@ IMOU_TOKEN_RETURN = {
 @pytest.fixture
 def imou_config_flow() -> Generator[MagicMock]:
     """Mock ImouOpenApiClient for successful config flow tests."""
-    with (
-        patch.object(ImouOpenApiClient, "async_get_token", return_value=True),
-        patch(
-            "custom_components.imou_life.config_flow.ImouOpenApiClient"
-        ) as mock_client,
-    ):
-        instance = mock_client.return_value = ImouOpenApiClient(
-            "test_app_id", "test_app_secret", "openapi.imoulife.com"
-        )
+    with patch(
+        "custom_components.imou_life.config_flow.ImouOpenApiClient"
+    ) as mock_client:
+        instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_request_api = AsyncMock(
+            return_value={"count": 0, "deviceList": []}
+        )
+        instance.async_close = AsyncMock()
+        mock_client.return_value = instance
+        yield mock_client
+
+
+@pytest.fixture
+def imou_config_flow_with_devices() -> Generator[MagicMock]:
+    """Mock ImouOpenApiClient returning devices for selection tests."""
+    with patch(
+        "custom_components.imou_life.config_flow.ImouOpenApiClient"
+    ) as mock_client:
+        instance = MagicMock()
+        instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_request_api = AsyncMock(
+            return_value={
+                "count": 2,
+                "deviceList": [
+                    {
+                        "deviceId": "device_1",
+                        "deviceName": "Front Door",
+                        "deviceModel": "IPC",
+                        "deviceStatus": "1",
+                    },
+                    {
+                        "deviceId": "device_2",
+                        "deviceName": "Garage",
+                        "deviceModel": "unknown",
+                        "deviceStatus": "0",
+                    },
+                ],
+            }
+        )
+        instance.async_close = AsyncMock()
+        mock_client.return_value = instance
         yield mock_client
 
 
 @pytest.fixture
 def imou_config_flow_exception() -> Generator[MagicMock]:
     """Mock ImouOpenApiClient raising InvalidAppIdOrSecretException."""
-    with (
-        patch.object(ImouOpenApiClient, "async_get_token", return_value=True),
-        patch(
-            "custom_components.imou_life.config_flow.ImouOpenApiClient"
-        ) as mock_client,
-    ):
-        instance = mock_client.return_value = ImouOpenApiClient(
-            "test_app_id", "test_app_secret", "openapi.imoulife.com"
-        )
+    with patch(
+        "custom_components.imou_life.config_flow.ImouOpenApiClient"
+    ) as mock_client:
+        instance = MagicMock()
         instance.async_get_token = AsyncMock(
             side_effect=InvalidAppIdOrSecretException()
         )
+        instance.async_request_api = AsyncMock()
+        instance.async_close = AsyncMock()
+        mock_client.return_value = instance
         yield mock_client

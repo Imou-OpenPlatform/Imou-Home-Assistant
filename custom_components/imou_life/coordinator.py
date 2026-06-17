@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
-from .const import DOMAIN, imou_life_device_key
+from .const import DOMAIN, PARAM_SELECTED_DEVICES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +60,22 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
         coordinator.async_config_entry_first_refresh.
         """
         devices_list = await self._device_manager.async_get_devices()
-        self._devices.extend(devices_list)
+        selected_ids = self.config_entry.options.get(
+            PARAM_SELECTED_DEVICES
+        ) or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
+        if selected_ids:
+            # Only keep devices the user selected — saves API quota on polling
+            selected_set = set(selected_ids)
+            filtered = [d for d in devices_list if d.device_id in selected_set]
+            _LOGGER.info(
+                "Device filter active: %d/%d devices selected for polling",
+                len(filtered),
+                len(devices_list),
+            )
+            self._devices.extend(filtered)
+        else:
+            # No selection = keep all (backward compatible with old config entries)
+            self._devices.extend(devices_list)
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""
@@ -69,7 +84,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
         entry_id = self.config_entry.entry_id
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
-        unique = imou_life_device_key(device)
+        unique = f"{device.device_id}_{device.channel_id or device.product_id}"
         device_entry = device_registry.async_get_device({(DOMAIN, unique)})
         if device_entry is None:
             return False

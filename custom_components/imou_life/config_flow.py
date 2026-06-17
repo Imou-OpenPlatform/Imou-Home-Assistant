@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import uuid
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
 from pyimouapi.exceptions import ImouException
 from pyimouapi.openapi import ImouOpenApiClient
 
@@ -18,23 +22,71 @@ from .const import (
     CONF_HTTP,
     CONF_HTTPS,
     CONF_SD,
-    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_BASE_PUSH,
+    DEFAULT_CALLBACK_FLAGS,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
+    PARAM_BASE_PUSH,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
+    PARAM_NOTIFY_SERVICES,
     PARAM_ROTATION_DURATION,
+    PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
+    PARAM_WEBHOOK_ID,
+    PARAM_WEBHOOK_URL,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+
+async def _async_fetch_device_list(api_client: ImouOpenApiClient) -> dict[str, str]:
+    """Fetch device list from Imou cloud (lightweight, no ability resolution).
+
+    Returns {device_id: "设备名 (型号) [在线/离线]"}.
+    """
+    devices: dict[str, str] = {}
+    page = 1
+    while True:
+        data = await api_client.async_request_api(
+            "/openapi/listDeviceDetailsByPage",
+            {"page": page, "pageSize": 50},
+        )
+        count = data.get("count", 0)
+        if count == 0:
+            break
+        for device in data.get("deviceList", []):
+            did = device.get("deviceId", "")
+            if not did:
+                continue
+            name = device.get("deviceName", did)
+            model = device.get("deviceModel", "")
+            status = device.get("deviceStatus", "")
+            label = f"{name} ({model})" if model and model != "unknown" else name
+            status_map = {"1": "在线", "0": "离线"}
+            if status in status_map:
+                label += f" [{status_map[status]}]"
+            devices[did] = label
+        if count < 50:
+            break
+        page += 1
+    return devices
 
 
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Imou Life."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize config flow."""
+        self._devices_map: dict[str, str] = {}
+        self._login_data: dict[str, Any] = {}
 
     @staticmethod
     def _login_schema(default_api_url: str = CONF_API_URL_SG) -> vol.Schema:
@@ -61,7 +113,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_login(user_input)
 
     async def async_step_login(self, user_input: dict[str, Any]) -> ConfigFlowResult:
-        """Validate credentials and create the config entry."""
+        """Validate credentials, then fetch device list for selection."""
         await self.async_set_unique_id(user_input[PARAM_APP_ID])
         self._abort_if_unique_id_configured()
         api_client = ImouOpenApiClient(
@@ -80,12 +132,58 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors,
             )
 
-        return self.async_create_entry(
-            title=DOMAIN,
-            data={
-                PARAM_APP_ID: user_input[PARAM_APP_ID],
-                PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-                PARAM_API_URL: user_input[PARAM_API_URL],
+        # Save login data for later entry creation
+        self._login_data = {
+            PARAM_APP_ID: user_input[PARAM_APP_ID],
+            PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+            PARAM_API_URL: user_input[PARAM_API_URL],
+            PARAM_WEBHOOK_ID: uuid.uuid4().hex,
+        }
+
+        # Fetch device list for selection
+        try:
+            self._devices_map = await _async_fetch_device_list(api_client)
+        except Exception:
+            _LOGGER.warning(
+                "Failed to fetch device list, creating entry without device selection"
+            )
+            self._devices_map = {}
+        finally:
+            await api_client.async_close()
+
+        if not self._devices_map:
+            # No devices found or fetch failed — create entry directly (all devices)
+            return self.async_create_entry(
+                title=DOMAIN,
+                data=self._login_data,
+            )
+
+        return await self.async_step_select_devices()
+
+    async def async_step_select_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let user select which devices to add."""
+        if user_input is not None:
+            selected = user_input.get(PARAM_SELECTED_DEVICES, [])
+            return self.async_create_entry(
+                title=DOMAIN,
+                data={**self._login_data, PARAM_SELECTED_DEVICES: selected},
+            )
+
+        # Default: all devices preselected
+        return self.async_show_form(
+            step_id="select_devices",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        PARAM_SELECTED_DEVICES,
+                        default=list(self._devices_map.keys()),
+                    ): cv.multi_select(self._devices_map),
+                }
+            ),
+            description_placeholders={
+                "device_count": str(len(self._devices_map)),
             },
         )
 
@@ -101,21 +199,39 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ImouOptionsFlow(OptionsFlow):
     """Imou Life options."""
 
+    def __init__(self) -> None:
+        """Initialize options flow."""
+        self._devices_map: dict[str, str] = {}
+        self._general_options: dict[str, Any] = {}
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage options."""
+        """Manage options — general settings page."""
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            # Stash general options, then move to device selection step
+            self._general_options = user_input
+            return await self.async_step_devices()
+
+        webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
+        suggested_webhook_url = ""
+        if webhook_id:
+            try:
+                suggested_webhook_url = webhook.async_generate_url(
+                    self.hass, webhook_id
+                )
+            except Exception:
+                suggested_webhook_url = f"/api/webhook/{webhook_id}"
+        current_webhook_url = self.config_entry.options.get(PARAM_WEBHOOK_URL, "")
 
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
-                        vol.Required(
-                            PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-                        ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
+                        vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
+                            vol.Coerce(int), vol.Range(min=30, max=900)
+                        ),
                         vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
                             vol.Coerce(int), vol.Range(min=1, max=9)
                         ),
@@ -128,8 +244,92 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
                             vol.Coerce(int), vol.Range(min=100, max=10000)
                         ),
+                        # --- Event push settings ---
+                        vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
+                        vol.Optional(PARAM_WEBHOOK_URL, default=""): str,
+                        vol.Required(
+                            PARAM_EVENT_PUSH_TYPES,
+                            default=DEFAULT_CALLBACK_FLAGS,
+                        ): cv.multi_select(
+                            {
+                                "alarm": "设备报警(烟感/燃气/人形/动检等)",
+                                "deviceStatus": "设备上下线通知",
+                                "iot": "物联网设备消息",
+                                "numberstat": "客流统计",
+                                "faceAnalysis": "人脸智能分析",
+                            }
+                        ),
+                        vol.Required(
+                            PARAM_BASE_PUSH, default=DEFAULT_BASE_PUSH
+                        ): vol.In({"1": "推送", "2": "不推送"}),
+                        # --- Notification settings ---
+                        vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
                     }
                 ),
                 self.config_entry.options,
             ),
+            description_placeholders={
+                "webhook_id": webhook_id or "未生成",
+                "suggested_webhook_url": suggested_webhook_url or "未生成",
+                "current_webhook_url": current_webhook_url
+                or "未填写, 将使用上方建议地址/自动生成地址",
+            },
+            last_step=False,
+        )
+
+    async def async_step_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage device selection — add/remove devices without re-setup."""
+        if user_input is not None:
+            selected = user_input.get(PARAM_SELECTED_DEVICES, [])
+            # Merge general options + device selection into one options dict
+            merged = {**self._general_options, PARAM_SELECTED_DEVICES: selected}
+            return self.async_create_entry(data=merged)
+
+        # Fetch current device list from API
+        errors: dict[str, str] = {}
+        try:
+            api_client = ImouOpenApiClient(
+                self.config_entry.data[PARAM_APP_ID],
+                self.config_entry.data[PARAM_APP_SECRET],
+                self.config_entry.data[PARAM_API_URL],
+            )
+            try:
+                self._devices_map = await _async_fetch_device_list(api_client)
+            finally:
+                await api_client.async_close()
+        except Exception:
+            _LOGGER.exception("Failed to fetch device list for options")
+            errors["base"] = "request_failed"
+
+        if not self._devices_map and not errors:
+            errors["base"] = "request_failed"
+
+        if errors:
+            # Can't fetch devices, show error and let user go back
+            return self.async_show_form(
+                step_id="devices",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+
+        # Preselect currently active devices
+        current_selected = self.config_entry.options.get(
+            PARAM_SELECTED_DEVICES, list(self._devices_map.keys())
+        )
+
+        return self.async_show_form(
+            step_id="devices",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        PARAM_SELECTED_DEVICES,
+                        default=[d for d in current_selected if d in self._devices_map],
+                    ): cv.multi_select(self._devices_map),
+                }
+            ),
+            description_placeholders={
+                "device_count": str(len(self._devices_map)),
+            },
         )

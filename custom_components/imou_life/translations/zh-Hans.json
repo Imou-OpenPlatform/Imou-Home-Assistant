@@ -8,6 +8,13 @@
           "app_secret": "AppSecret",
           "api_url": "网址"
         }
+      },
+      "select_devices": {
+        "title": "选择设备",
+        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。",
+        "data": {
+          "selected_devices": "设备列表"
+        }
       }
     },
     "abort": {
@@ -22,12 +29,37 @@
   "options": {
     "step": {
       "init": {
+        "description": "当前真实 Webhook ID：{webhook_id}\n\n建议回调地址：{suggested_webhook_url}\n\n当前填写地址：{current_webhook_url}\n\n请确保上面的『消息回调地址』填写为建议回调地址；如果留空，则使用集成自动生成的地址。",
         "data": {
-          "update_interval": "自动刷新时间（秒）",
-          "download_snap_wait_time": "下载抓图等待时间（秒）",
+          "update_interval": "自动刷新间隔（秒）",
+          "download_snap_wait_time": "抓图等待时间（秒）",
           "live_resolution": "视频分辨率",
           "live_protocol": "视频协议",
-          "rotation_duration": "云台转动持续时间（毫秒）"
+          "rotation_duration": "云台转动时间（毫秒）",
+          "enable_event_push": "启用消息推送",
+          "webhook_url": "消息回调地址",
+          "event_push_types": "推送消息类型",
+          "base_push": "乐橙APP消息同步",
+          "notify_services": "报警通知服务"
+        },
+        "data_description": {
+          "update_interval": "集成多久去乐橙云拉一次设备状态，默认60秒，范围30-900秒",
+          "download_snap_wait_time": "抓取摄像头截图前等待的秒数，默认3秒",
+          "live_resolution": "摄像头直播的分辨率，HD=高清，SD=标清",
+          "live_protocol": "视频流协议，一般用https即可",
+          "rotation_duration": "按一次云台方向按钮转多久，默认500毫秒",
+          "enable_event_push": "打开后，乐橙云会把设备报警消息实时推送到你的HA。需要HA有公网可访问的地址（域名/DDNS均可）",
+          "webhook_url": "乐橙云把报警消息推到哪个地址。留空会自动生成（前提是HA已配置外部URL）。如果自动生成不对，手动填完整URL，格式如：https://你的域名:8123/api/webhook/xxxxx",
+          "event_push_types": "选择要接收哪些类型的消息。alarm=设备报警（烟感/燃气/人形/动检等），deviceStatus=设备上下线，iot=物联网设备消息，numberstat=客流统计，faceAnalysis=人脸智能分析",
+          "base_push": "是否同时把消息推送给乐橙APP。选\"推送\"=乐橙APP也会收到，选\"不推送\"=只推给HA",
+          "notify_services": "收到报警后自动发通知到哪里。填HA的动作名称，多个用英文逗号分隔。\n\n查找方法：HA → 开发者工具 → 动作 → 搜索你要用的通知服务\n\n例如：qiyewechat.send  →  企业微信通知\n例如：notify.mobile_app_xxx  →  HA APP弹窗通知\n同时推两个：qiyewechat.send,notify.mobile_app_xxx\n\n留空则不自动发通知（但报警事件仍会触发，可在自动化中使用）"
+        }
+      },
+      "devices": {
+        "title": "管理设备",
+        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
+        "data": {
+          "selected_devices": "设备列表"
         }
       }
     }
@@ -204,7 +236,7 @@
       "description": "控制云台转动",
       "fields": {
         "duration": {
-          "name": "转动时间 ",
+          "name": "转动时间",
           "description": "云台转动时间"
         }
       }

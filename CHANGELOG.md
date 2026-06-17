@@ -1,4 +1,13 @@
 # CHANGELOG
+## [1.2.10]
+### Added
+- Add setup/options device selection so users can choose which Imou devices to include
+- Add webhook alarm push support with Home Assistant events and notifications
+- Add tests for device selection and webhook edge cases
+
+### Changed
+- Treat non-alarm push types such as iotProperty as generic events to avoid alarm notification spam
+
 ## [1.2.8]
 ### Changed
 - Bump pyimouapi to 1.2.8 (batch property polling via getIotDeviceDetailInfo)
