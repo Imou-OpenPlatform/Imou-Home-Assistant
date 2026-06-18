@@ -60,12 +60,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     ) or entry.data.get(PARAM_SELECTED_DEVICES, [])
     try:
         webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
-        if webhook_id:
-            generated_url = async_register_imou_webhook(hass, webhook_id)
-            if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
-                await _async_set_message_callback(
-                    entry, imou_client, "on", generated_url
-                )
+        if not webhook_id:
+            # No webhook_id in entry.data: generate one for upgrade users
+            webhook_id = uuid.uuid4().hex
+            entry.data[PARAM_WEBHOOK_ID] = webhook_id
+            await hass.config_entries.async_update_entry(entry, data=entry.data)
+        generated_url = async_register_imou_webhook(hass, webhook_id)
+        if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
+            await _async_set_message_callback(
+                entry, imou_client, "on", generated_url
+            )
 
         # Store notify services list for the webhook handler to use
         raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
@@ -74,7 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
                 s.strip() for s in raw_services.split(",") if s.strip()
             ]
     except Exception:
-        _LOGGER.warning(
+        _LOGGER.exception(
             "Failed to set up event push (non-fatal, integration continues normally)"
         )
 

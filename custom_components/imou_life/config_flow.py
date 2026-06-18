@@ -315,8 +315,10 @@ class ImouOptionsFlow(OptionsFlow):
             )
 
         # Preselect currently active devices
-        current_selected = self.config_entry.options.get(
-            PARAM_SELECTED_DEVICES, list(self._devices_map.keys())
+        current_selected = (
+            self.config_entry.options.get(PARAM_SELECTED_DEVICES)
+            or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
+            or list(self._devices_map.keys())
         )
 
         return self.async_show_form(

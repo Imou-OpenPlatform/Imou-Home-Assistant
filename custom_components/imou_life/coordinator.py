@@ -60,10 +60,11 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[bool]):
         coordinator.async_config_entry_first_refresh.
         """
         devices_list = await self._device_manager.async_get_devices()
-        selected_ids = self.config_entry.options.get(
-            PARAM_SELECTED_DEVICES
-        ) or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
-        if selected_ids:
+        selected_ids = (
+            self.config_entry.options.get(PARAM_SELECTED_DEVICES)
+            or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
+        )
+        if selected_ids and selected_ids != []:
             # Only keep devices the user selected — saves API quota on polling
             selected_set = set(selected_ids)
             filtered = [d for d in devices_list if d.device_id in selected_set]
