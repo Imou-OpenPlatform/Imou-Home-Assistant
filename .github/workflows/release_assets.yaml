@@ -19,7 +19,7 @@ jobs:
   imou_life_zip:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: >-
             ${{ github.event_name == 'release' && github.event.release.tag_name
