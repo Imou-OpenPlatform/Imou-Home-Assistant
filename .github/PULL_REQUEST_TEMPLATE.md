@@ -21,6 +21,7 @@ Fixes #
 - [ ] If `manifest.json` changed: version bumped and `CHANGELOG.md` updated.
 - [ ] If user-facing strings changed: `translations/` updated.
 - [ ] If dependencies changed: version pin updated with changelog link in this description.
+- [ ] GitHub Actions checks are green (CI runs automatically on fork PRs; mark **Ready for review** if this was a draft).
 
 ### AI-assisted contributions
 
