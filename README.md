@@ -60,3 +60,11 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - Development setup: `script/setup`
 - Lint: `script/lint-check`
 - Tests: `script/test`
+
+## Star History
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
+</picture>
