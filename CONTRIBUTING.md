@@ -123,6 +123,13 @@ This package is installed for end users via `manifest.json` and for local/CI tes
 3. Tag on `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`
 4. The release workflow publishes the HACS zip asset.
 
+## CI on pull requests
+
+- **Fork PRs:** CI (Lint, Test, Hassfest, Manifest, etc.) runs automatically when a PR is opened or updated. Maintainers do **not** need to click "Approve and run workflows" on fork PRs (see **Settings → Actions → Fork pull request workflows**).
+- **Draft PRs:** Mark the PR **Ready for review** (or push new commits) to trigger CI. Workflows listen for `ready_for_review` and `synchronize`.
+- **HACS** still runs only on PRs in the canonical repository `Imou-OpenPlatform/Imou-Home-Assistant`.
+- **Merge** still requires one maintainer approval and all required status checks (see Branch protection below).
+
 ## Branch protection (maintainers)
 
 Configure in GitHub → **Settings** → **Branches** → rule for `main`:
@@ -131,7 +138,10 @@ Configure in GitHub → **Settings** → **Branches** → rule for `main`:
 - Require status checks: **Lint**, **Spell**, **YAML**, **Hassfest**, **HACS**, **Manifest**, **Test**
 - Dismiss stale approvals when new commits are pushed
 
-**HACS** runs only on the canonical repository `Imou-OpenPlatform/Imou-Home-Assistant`; fork PRs may skip it.
+Configure in GitHub → **Settings** → **Actions** → **General** → **Fork pull request workflows**:
+
+- Enable **Run workflows from fork pull requests**
+- Choose the least restrictive approval option (e.g. **first-time contributors new to GitHub** only). Public repositories cannot disable fork workflow approval entirely via API; established fork contributors typically run CI automatically after their first approved workflow run.
 
 ## Appendix: 中文快速指引
 
@@ -140,4 +150,5 @@ Configure in GitHub → **Settings** → **Branches** → rule for `main`:
 3. **PR 目标分支**：`main`；使用仓库 PR 模板填写说明。
 4. **测试约定**：不要直接调用 coordinator 内部方法；需要加载集成时使用 `enable_custom_integrations` fixture。
 5. **依赖升级**：仅 GitHub Actions 由 Dependabot 自动提 PR；Python 依赖手动升级。升 `pyimouapi` 须同时改 `pyproject.toml`、`manifest.json` 并执行 `uv lock`。
-6. **更多细节**：见上文英文章节。
+6. **CI 触发**：fork PR 自动跑 CI，无需 maintainer 点 Approve and run；Draft PR 需 Ready for review 后触发。
+7. **更多细节**：见上文英文章节。
