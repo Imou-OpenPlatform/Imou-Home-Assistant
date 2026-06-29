@@ -12,7 +12,7 @@ Imou Open Platform offers an open-source Imou python component. By integrating t
 
 This integration enables bidirectional communication between Home Assistant and Imou ecosystem devices via the Imou Open Platform API.
 
-> **Open Platform portals:** [China 中国站 — open.imou.com](https://open.imou.com/) · [International — open.imoulife.com](https://open.imoulife.com/)
+> **Open Platform portals:** [China — open.imou.com](https://open.imou.com/) · [International — open.imoulife.com](https://open.imoulife.com/)
 
 ## Installation
 
@@ -20,13 +20,13 @@ Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 d
 
 ### 1–2. Register & create AppId / AppSecret
 
-| | **China 中国站** | **International 海外** |
+| | **China** | **International** |
 | --- | --- | --- |
 | Portal | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
 | Console | [My App](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| API region URL (HA login) | `openapi.lechange.cn` | See [API domains (intl.)](https://open.imoulife.com/book/http/develop.html) — e.g. `openapi-sg.easy4ip.com`, `openapi-or.easy4ip.com`, `openapi-fk.easy4ip.com` |
-| API domain doc | [develop.html (CN)](https://open.imou.com/book/http/develop.html) | [develop.html (intl.)](https://open.imoulife.com/book/http/develop.html) |
-| My Resources | [Resource manage (CN)](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage (intl.)](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
+| API region URL (HA login) | `openapi.lechange.cn` | See [API domains](https://open.imoulife.com/book/http/develop.html) — e.g. `openapi-sg.easy4ip.com`, `openapi-or.easy4ip.com`, `openapi-fk.easy4ip.com` |
+| API domain doc | [develop.html](https://open.imou.com/book/http/develop.html) | [develop.html](https://open.imoulife.com/book/http/develop.html) |
+| My Resources | [Resource manage](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
 
 Register on the portal for your region, then open **My App** in the console to create an application and obtain **AppId** and **AppSecret**.
 
