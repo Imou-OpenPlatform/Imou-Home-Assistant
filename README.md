@@ -12,14 +12,16 @@ Imou Open Platform offers an open-source Imou python component. By integrating t
 
 This integration enables bidirectional communication between Home Assistant and Imou ecosystem devices via the Imou Open Platform API.
 
-## Installation
-1: <b>Register an Imou Account.</b> Visit the [Imou Open Platform official website](https://open.Imoulife.Com) to register or log in to your Imou account;
+> **Open Platform portals:** [China 中国站 — open.imou.com](https://open.imou.com/) · [International — open.imoulife.com](https://open.imoulife.com/)
 
-2: <b>Generate AppId and AppSecret.</b> After registration, proceed to the [Official Console](https://open.Imoulife.Com/consoleNew/myApp/appInfo) to complete your application details and generate an AppId and AppSecret;
+## Installation
+1: <b>Register an Imou Account.</b> Visit the [Imou Open Platform (China)](https://open.imou.com/) to register or log in to your Imou account;
+
+2: <b>Generate AppId and AppSecret.</b> After registration, proceed to the [Official Console](https://open.imou.com/consoleNew/myApp/appInfo) to complete your application details and generate an AppId and AppSecret;
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/appMsg.png" width="70%">
 
-3: <b>Navigate to HACS, search for `Imou Life`, and install the Imou component.</b> On the component login page, enter the obtained AppId and AppSecret. The URL address can be referenced from the [Interface Domain Name Description](https://open.Imoulife.Com/book/http/develop.Html) to obtain the recommended optimal domain URL;
+3: <b>Navigate to HACS, search for `Imou Life`, and install the Imou component.</b> On the component login page, enter the obtained AppId and AppSecret. For the API region URL, see the [Interface Domain Name Description](https://open.imou.com/book/http/develop.html) (China users often use `openapi.lechange.cn`; overseas users see the international doc on [open.imoulife.com](https://open.imoulife.com/book/http/develop.html));
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%">
 
@@ -29,7 +31,7 @@ This integration enables bidirectional communication between Home Assistant and 
 >Note: <br>
 >The components is integrated with the Imou Open Platform for cloud-based remote device viewing. <br>
 >The cloud API requests and video playback within the components will consume the resource quota under the AppId account. <br>
->You may check the account resource status in the [My Resources of the Open Platform](https://open.imoulife.com/consoleNew/resourceManage/myResource).
+>You may check the account resource status in [My Resources (China)](https://open.imou.com/consoleNew/resourceManage/myResource) or [My Resources (International)](https://open.imoulife.com/consoleNew/resourceManage/myResource).
 
 ## Features
 * **Camera Function Management**
