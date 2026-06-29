@@ -12,24 +12,41 @@ Imou Open Platform offers an open-source Imou python component. By integrating t
 
 This integration enables bidirectional communication between Home Assistant and Imou ecosystem devices via the Imou Open Platform API.
 
-## Installation
-1: <b>Register an Imou Account.</b> Visit the [Imou Open Platform official website](https://open.Imoulife.Com) to register or log in to your Imou account;
+> **Open Platform portals:** [China 中国站 — open.imou.com](https://open.imou.com/) · [International — open.imoulife.com](https://open.imoulife.com/)
 
-2: <b>Generate AppId and AppSecret.</b> After registration, proceed to the [Official Console](https://open.Imoulife.Com/consoleNew/myApp/appInfo) to complete your application details and generate an AppId and AppSecret;
+## Installation
+
+Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 differ by region; steps 3–4 are the same.
+
+### 1–2. Register & create AppId / AppSecret
+
+| | **China 中国站** | **International 海外** |
+| --- | --- | --- |
+| Portal | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
+| Console | [My App](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
+| API region URL (HA login) | `openapi.lechange.cn` | See [API domains (intl.)](https://open.imoulife.com/book/http/develop.html) — e.g. `openapi-sg.easy4ip.com`, `openapi-or.easy4ip.com`, `openapi-fk.easy4ip.com` |
+| API domain doc | [develop.html (CN)](https://open.imou.com/book/http/develop.html) | [develop.html (intl.)](https://open.imoulife.com/book/http/develop.html) |
+| My Resources | [Resource manage (CN)](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage (intl.)](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
+
+Register on the portal for your region, then open **My App** in the console to create an application and obtain **AppId** and **AppSecret**.
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/appMsg.png" width="70%">
 
-3: <b>Navigate to HACS, search for `Imou Life`, and install the Imou component.</b> On the component login page, enter the obtained AppId and AppSecret. The URL address can be referenced from the [Interface Domain Name Description](https://open.Imoulife.Com/book/http/develop.Html) to obtain the recommended optimal domain URL;
+### 3. Install via HACS
+
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **API region URL** from the table above (must match the portal where the app was created).
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%">
 
-4: <b>Integration completed.</b> At this point, you can view the devices under the Imou account.
+### 4. Done
+
+Devices under your Imou account should appear in Home Assistant.
+
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/list.png" width="70%">
 
 >Note: <br>
->The components is integrated with the Imou Open Platform for cloud-based remote device viewing. <br>
->The cloud API requests and video playback within the components will consume the resource quota under the AppId account. <br>
->You may check the account resource status in the [My Resources of the Open Platform](https://open.imoulife.com/consoleNew/resourceManage/myResource).
+>The integration uses the Imou Open Platform for cloud-based remote device access. <br>
+>Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the console for your region (see table above).
 
 ## Features
 * **Camera Function Management**
