@@ -1,6 +1,10 @@
 # Imou Home Assistant Component Integration
 
-[![HACS](https://img.shields.io/badge/HACS-Default-orange.svg?logo=HomeAssistantCommunityStore&logoColor=white)](https://github.com/hacs/integration)
+[![HACS Default][hacs-badge]][hacs-url]
+[![GitHub Release][release-badge]][release-url]
+[![HACS Downloads][downloads-badge]][release-url]
+[![GitHub Stars][stars-badge]][repo-url]
+[![Active Installs][installs-badge]][analytics-url]
 
 ## Introduction
 
@@ -61,10 +65,29 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - Lint: `script/lint-check`
 - Tests: `script/test`
 
-## Star History
+## Statistics
+
+| Metric | Source | Notes |
+| --- | --- | --- |
+| **Active installs** | [Home Assistant Analytics](https://analytics.home-assistant.io/custom_integrations.json) | Live HA instances reporting `imou_life` (opt-in analytics only) |
+| **HACS downloads** | GitHub Releases | Total downloads of `imou_life.zip` (HACS install + update) |
+| **GitHub stars** | GitHub | Repository stargazers |
+
+### Star History
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date&theme=dark" />
   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
 </picture>
+
+<!-- Badge references -->
+[hacs-badge]: https://img.shields.io/badge/HACS-Default-orange.svg?logo=HomeAssistantCommunityStore&logoColor=white&style=flat-square
+[release-badge]: https://img.shields.io/github/v/release/Imou-OpenPlatform/Imou-Home-Assistant?style=flat-square&label=Release
+[downloads-badge]: https://img.shields.io/github/downloads/Imou-OpenPlatform/Imou-Home-Assistant/total.svg?style=flat-square&label=HACS%20downloads
+[stars-badge]: https://img.shields.io/github/stars/Imou-OpenPlatform/Imou-Home-Assistant?style=flat-square
+[installs-badge]: https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Active%20installs&suffix=%20installs&cacheSeconds=21600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.imou_life.total
+[hacs-url]: https://github.com/hacs/integration
+[release-url]: https://github.com/Imou-OpenPlatform/Imou-Home-Assistant/releases
+[repo-url]: https://github.com/Imou-OpenPlatform/Imou-Home-Assistant
+[analytics-url]: https://analytics.home-assistant.io/custom_integrations.json
