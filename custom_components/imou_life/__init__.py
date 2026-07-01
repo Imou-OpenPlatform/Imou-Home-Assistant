@@ -68,9 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
             await hass.config_entries.async_update_entry(entry, data=entry.data)
         generated_url = async_register_imou_webhook(hass, webhook_id)
         if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
-            await _async_set_message_callback(
-                entry, imou_client, "on", generated_url
-            )
+            await _async_set_message_callback(entry, imou_client, "on", generated_url)
 
         # Store notify services list for the webhook handler to use
         raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
