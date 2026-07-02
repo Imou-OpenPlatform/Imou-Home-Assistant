@@ -1,5 +1,5 @@
 # CHANGELOG
-## [1.3.0]
+## [1.2.9]
 ### Added
 - pyimouapi 1.2.9 dependency for API encapsulation (no direct OpenAPI paths in integration code)
 - Full i18n: no Chinese in Python; translations for webhook messages and config flow strings
