@@ -12,11 +12,17 @@ from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import translation
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+)
 from pyimouapi.exceptions import ImouException
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
     API_URL_OPTIONS,
+    CALLBACK_FLAG_OPTIONS,
     CONF_API_URL_SG,
     CONF_HD,
     CONF_HTTP,
@@ -41,41 +47,17 @@ from .const import (
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
 )
+from .helpers import async_build_device_map
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _async_fetch_device_list(api_client: ImouOpenApiClient) -> dict[str, str]:
-    """Fetch device list from Imou cloud (lightweight, no ability resolution).
-
-    Returns {device_id: "设备名 (型号) [在线/离线]"}.
-    """
-    devices: dict[str, str] = {}
-    page = 1
-    while True:
-        data = await api_client.async_request_api(
-            "/openapi/listDeviceDetailsByPage",
-            {"page": page, "pageSize": 50},
-        )
-        count = data.get("count", 0)
-        if count == 0:
-            break
-        for device in data.get("deviceList", []):
-            did = device.get("deviceId", "")
-            if not did:
-                continue
-            name = device.get("deviceName", did)
-            model = device.get("deviceModel", "")
-            status = device.get("deviceStatus", "")
-            label = f"{name} ({model})" if model and model != "unknown" else name
-            status_map = {"1": "在线", "0": "离线"}
-            if status in status_map:
-                label += f" [{status_map[status]}]"
-            devices[did] = label
-        if count < 50:
-            break
-        page += 1
-    return devices
+def _options_placeholder(hass, key: str, fallback: str) -> str:
+    """Load an options.placeholder translation string."""
+    translations = translation.async_get_cached_translations(
+        hass, hass.config.language, "options", DOMAIN
+    )
+    return translations.get(f"component.{DOMAIN}.options.placeholder.{key}", fallback)
 
 
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -142,7 +124,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Fetch device list for selection
         try:
-            self._devices_map = await _async_fetch_device_list(api_client)
+            self._devices_map = await async_build_device_map(self.hass, api_client)
         except Exception:
             _LOGGER.warning(
                 "Failed to fetch device list, creating entry without device selection"
@@ -224,6 +206,15 @@ class ImouOptionsFlow(OptionsFlow):
                 suggested_webhook_url = f"/api/webhook/{webhook_id}"
         current_webhook_url = self.config_entry.options.get(PARAM_WEBHOOK_URL, "")
 
+        not_generated = _options_placeholder(
+            self.hass, "not_generated", "Not generated"
+        )
+        not_set_use_suggested = _options_placeholder(
+            self.hass,
+            "not_set_use_suggested",
+            "Not set — the suggested URL above will be used",
+        )
+
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
@@ -250,18 +241,21 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Required(
                             PARAM_EVENT_PUSH_TYPES,
                             default=DEFAULT_CALLBACK_FLAGS,
-                        ): cv.multi_select(
-                            {
-                                "alarm": "设备报警(烟感/燃气/人形/动检等)",
-                                "deviceStatus": "设备上下线通知",
-                                "iot": "物联网设备消息",
-                                "numberstat": "客流统计",
-                                "faceAnalysis": "人脸智能分析",
-                            }
+                        ): SelectSelector(
+                            SelectSelectorConfig(
+                                options=list(CALLBACK_FLAG_OPTIONS),
+                                multiple=True,
+                                translation_key="event_push_type",
+                            )
                         ),
                         vol.Required(
                             PARAM_BASE_PUSH, default=DEFAULT_BASE_PUSH
-                        ): vol.In({"1": "推送", "2": "不推送"}),
+                        ): SelectSelector(
+                            SelectSelectorConfig(
+                                options=["1", "2"],
+                                translation_key="base_push",
+                            )
+                        ),
                         # --- Notification settings ---
                         vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
                     }
@@ -269,10 +263,9 @@ class ImouOptionsFlow(OptionsFlow):
                 self.config_entry.options,
             ),
             description_placeholders={
-                "webhook_id": webhook_id or "未生成",
-                "suggested_webhook_url": suggested_webhook_url or "未生成",
-                "current_webhook_url": current_webhook_url
-                or "未填写, 将使用上方建议地址/自动生成地址",
+                "webhook_id": webhook_id or not_generated,
+                "suggested_webhook_url": suggested_webhook_url or not_generated,
+                "current_webhook_url": current_webhook_url or not_set_use_suggested,
             },
             last_step=False,
         )
@@ -296,7 +289,7 @@ class ImouOptionsFlow(OptionsFlow):
                 self.config_entry.data[PARAM_API_URL],
             )
             try:
-                self._devices_map = await _async_fetch_device_list(api_client)
+                self._devices_map = await async_build_device_map(self.hass, api_client)
             finally:
                 await api_client.async_close()
         except Exception:

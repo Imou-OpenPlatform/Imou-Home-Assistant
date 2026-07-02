@@ -16,14 +16,17 @@ IMOU_TOKEN_RETURN = {
 @pytest.fixture
 def imou_config_flow() -> Generator[MagicMock]:
     """Mock ImouOpenApiClient for successful config flow tests."""
-    with patch(
-        "custom_components.imou_life.config_flow.ImouOpenApiClient"
-    ) as mock_client:
+    with (
+        patch(
+            "custom_components.imou_life.config_flow.ImouOpenApiClient",
+        ) as mock_client,
+        patch(
+            "custom_components.imou_life.config_flow.async_build_device_map",
+            AsyncMock(return_value={}),
+        ),
+    ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_request_api = AsyncMock(
-            return_value={"count": 0, "deviceList": []}
-        )
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client
@@ -32,30 +35,22 @@ def imou_config_flow() -> Generator[MagicMock]:
 @pytest.fixture
 def imou_config_flow_with_devices() -> Generator[MagicMock]:
     """Mock ImouOpenApiClient returning devices for selection tests."""
-    with patch(
-        "custom_components.imou_life.config_flow.ImouOpenApiClient"
-    ) as mock_client:
+    with (
+        patch(
+            "custom_components.imou_life.config_flow.ImouOpenApiClient",
+        ) as mock_client,
+        patch(
+            "custom_components.imou_life.config_flow.async_build_device_map",
+            AsyncMock(
+                return_value={
+                    "device_1": "Front Door (IPC) [Online]",
+                    "device_2": "Garage [Offline]",
+                }
+            ),
+        ),
+    ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_request_api = AsyncMock(
-            return_value={
-                "count": 2,
-                "deviceList": [
-                    {
-                        "deviceId": "device_1",
-                        "deviceName": "Front Door",
-                        "deviceModel": "IPC",
-                        "deviceStatus": "1",
-                    },
-                    {
-                        "deviceId": "device_2",
-                        "deviceName": "Garage",
-                        "deviceModel": "unknown",
-                        "deviceStatus": "0",
-                    },
-                ],
-            }
-        )
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client
