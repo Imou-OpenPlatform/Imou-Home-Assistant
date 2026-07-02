@@ -29,6 +29,7 @@
   "options": {
     "step": {
       "init": {
+        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nEnsure the 'Callback URL' field above matches the suggested URL; if left empty, the integration will use the auto-generated URL.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
@@ -38,7 +39,7 @@
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
           "event_push_types": "Event push types",
-          "base_push": "Imou APP message sync",
+          "base_push": "Sync to Imou mobile app",
           "notify_services": "Alarm notification services"
         },
         "data_description": {
@@ -61,6 +62,90 @@
           "selected_devices": "Devices"
         }
       }
+    },
+    "placeholder": {
+      "not_generated": "Not generated",
+      "not_set_use_suggested": "Not set — the suggested URL above will be used"
+    }
+  },
+  "selector": {
+    "event_push_type": {
+      "options": {
+        "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
+        "deviceStatus": "Device online/offline",
+        "iot": "IoT device messages",
+        "numberstat": "People counting",
+        "faceAnalysis": "Face analysis"
+      }
+    },
+    "base_push": {
+      "options": {
+        "1": "Push to Imou app",
+        "2": "Home Assistant only"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "Online",
+        "0": "Offline"
+      }
+    }
+  },
+  "webhook": {
+    "notification": {
+      "title": "Imou alarm: {alarm_type}",
+      "device": "Device: {device_name}",
+      "type": "Type: {alarm_type}",
+      "time": "Time: {time_str}",
+      "details": "Details: {desc_type}",
+      "unknown_device": "Unknown device",
+      "unknown_alarm": "Alarm"
+    },
+    "alarm_types": {
+      "videoMotion": "Motion detection",
+      "human": "Human detection",
+      "alarmPIR": "PIR alarm",
+      "smokeAlarm": "Smoke alarm",
+      "gasAlarm": "Gas alarm",
+      "waterAlarm": "Water leak alarm",
+      "soundLightAlarm": "Sound and light alarm",
+      "alarmLocal": "Local alarm",
+      "Doorbell": "Doorbell",
+      "magnetomerAlarm": "Door contact alarm",
+      "urgencyAlarm": "Emergency button alarm",
+      "sensorAbnormal": "Tamper alarm",
+      "hoveringAlarm": "Loitering alarm",
+      "crossLineDetection": "Line crossing detection",
+      "highTemAbnormal": "High temperature",
+      "lowTemAbnormal": "Low temperature",
+      "highHumAbnormal": "High humidity",
+      "lowHumAbnormal": "Low humidity",
+      "electricAbnormal": "Voltage abnormal",
+      "fireAlarm": "Fire alarm",
+      "earlyWarning": "Early warning",
+      "alarmOccurs": "Alarm triggered",
+      "alarmEnd": "Alarm ended",
+      "earlyWarningEnd": "Early warning ended",
+      "online": "Device online",
+      "offline": "Device offline",
+      "beOpenedDoor": "Door opened successfully",
+      "notOpenedDoor": "Door open failed",
+      "openDoorAbnormal": "Unauthorized door open",
+      "hijackAlarm": "Duress alarm",
+      "mobileDetect": "Mobile detection",
+      "callBellEvent": "Call event",
+      "abAlarmSound": "Abnormal sound alarm",
+      "objectMoved": "Object moved",
+      "goodsMove": "Object moved",
+      "leftDetection": "Object left behind",
+      "videoBlind": "Video blinded",
+      "wireLessDevLowPower": "Low battery",
+      "litElec": "Lithium battery low",
+      "alkElec": "Alkaline battery low",
+      "storageAbnormal": "SD card abnormal",
+      "storageEmpty": "No SD card",
+      "checkAlarmFail": "Fault alarm",
+      "unknownAlarm": "Unknown alarm"
     }
   },
   "entity": {
@@ -100,7 +185,7 @@
         "name": "Current"
       },
       "switch_cnt": {
-        "name": "On-Off Today"
+        "name": "Switch cycles today"
       },
       "use_electricity": {
         "name": "Consumption"
@@ -149,10 +234,10 @@
         "name": "Motion Detect"
       },
       "ab_alarm_sound": {
-        "name": "Abnormal Sound Alarm"
+        "name": "Abnormal sound detection"
       },
       "close_camera": {
-        "name": "Close Camera"
+        "name": "Privacy mode"
       },
       "white_light": {
         "name": "White Light"
@@ -200,7 +285,7 @@
         "name": "Status",
         "state": {
           "on": "Open",
-          "off": "Close"
+          "off": "Closed"
         }
       }
     },

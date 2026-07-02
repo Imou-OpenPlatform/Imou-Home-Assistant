@@ -62,6 +62,90 @@
           "selected_devices": "设备列表"
         }
       }
+    },
+    "placeholder": {
+      "not_generated": "未生成",
+      "not_set_use_suggested": "未填写，将使用上方建议地址/自动生成地址"
+    }
+  },
+  "selector": {
+    "event_push_type": {
+      "options": {
+        "alarm": "设备报警（烟感/燃气/人形/动检等）",
+        "deviceStatus": "设备上下线通知",
+        "iot": "物联网设备消息",
+        "numberstat": "客流统计",
+        "faceAnalysis": "人脸智能分析"
+      }
+    },
+    "base_push": {
+      "options": {
+        "1": "推送",
+        "2": "不推送"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "在线",
+        "0": "离线"
+      }
+    }
+  },
+  "webhook": {
+    "notification": {
+      "title": "🚨 乐橙报警: {alarm_type}",
+      "device": "设备: {device_name}",
+      "type": "类型: {alarm_type}",
+      "time": "时间: {time_str}",
+      "details": "详情: {desc_type}",
+      "unknown_device": "未知设备",
+      "unknown_alarm": "报警"
+    },
+    "alarm_types": {
+      "videoMotion": "动态检测",
+      "human": "人形检测",
+      "alarmPIR": "人体红外",
+      "smokeAlarm": "烟感报警",
+      "gasAlarm": "燃气报警",
+      "waterAlarm": "水浸报警",
+      "soundLightAlarm": "声光报警",
+      "alarmLocal": "本地报警",
+      "Doorbell": "门铃事件",
+      "magnetomerAlarm": "门磁报警",
+      "urgencyAlarm": "紧急按钮报警",
+      "sensorAbnormal": "防拆报警",
+      "hoveringAlarm": "徘徊报警",
+      "crossLineDetection": "拌线报警",
+      "highTemAbnormal": "温度过高",
+      "lowTemAbnormal": "温度过低",
+      "highHumAbnormal": "湿度过高",
+      "lowHumAbnormal": "湿度过低",
+      "electricAbnormal": "电压异常",
+      "fireAlarm": "火警报警",
+      "earlyWarning": "早期预警",
+      "alarmOccurs": "报警发生",
+      "alarmEnd": "报警结束",
+      "earlyWarningEnd": "早期预警结束",
+      "online": "设备上线",
+      "offline": "设备离线",
+      "beOpenedDoor": "开门成功",
+      "notOpenedDoor": "开门失败",
+      "openDoorAbnormal": "恶意开门",
+      "hijackAlarm": "劫持报警",
+      "mobileDetect": "移动监测",
+      "callBellEvent": "呼叫事件",
+      "abAlarmSound": "异常音报警",
+      "objectMoved": "物品搬移",
+      "goodsMove": "物品搬移",
+      "leftDetection": "物品遗留",
+      "videoBlind": "视频遮挡",
+      "wireLessDevLowPower": "低电量",
+      "litElec": "锂电池低电量",
+      "alkElec": "碱性电池低电量",
+      "storageAbnormal": "SD卡异常",
+      "storageEmpty": "无SD卡",
+      "checkAlarmFail": "故障报警",
+      "unknownAlarm": "未知告警"
     }
   },
   "entity": {
