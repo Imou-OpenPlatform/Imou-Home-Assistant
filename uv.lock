@@ -1237,7 +1237,7 @@ dev = [
     { name = "codespell", specifier = ">=2.3.0" },
     { name = "homeassistant", specifier = "==2025.1.4" },
     { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pyimouapi", specifier = "==1.2.9" },
+    { name = "pyimouapi", git = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api.git?rev=8c8b2768c96193b131e6ad893ad1f6838cfd1c5f" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.205" },
     { name = "pytest-timeout", specifier = ">=2.3.0" },
@@ -1916,14 +1916,10 @@ wheels = [
 [[package]]
 name = "pyimouapi"
 version = "1.2.9"
-source = { registry = "/home/open/projects/Py-Imou-Open-Api/dist" }
+source = { git = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api.git?rev=8c8b2768c96193b131e6ad893ad1f6838cfd1c5f#8c8b2768c96193b131e6ad893ad1f6838cfd1c5f" }
 dependencies = [
     { name = "aiohttp" },
     { name = "simpleeval" },
-]
-sdist = { path = "/home/open/projects/Py-Imou-Open-Api/dist/pyimouapi-1.2.9.tar.gz" }
-wheels = [
-    { path = "/home/open/projects/Py-Imou-Open-Api/dist/pyimouapi-1.2.9-py3-none-any.whl" },
 ]
 
 [[package]]

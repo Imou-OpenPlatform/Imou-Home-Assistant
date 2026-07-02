@@ -8,6 +8,10 @@ dependencies = []
 [tool.uv]
 prerelease = "allow"
 
+[tool.uv.sources]
+# Until pyimouapi 1.2.9 is on PyPI (merge: Py-Imou-Open-Api#11)
+pyimouapi = { git = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api.git", rev = "8c8b2768c96193b131e6ad893ad1f6838cfd1c5f" }
+
 [dependency-groups]
 dev = [
   "homeassistant==2025.1.4",
