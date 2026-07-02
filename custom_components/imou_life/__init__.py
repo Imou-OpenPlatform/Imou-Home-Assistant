@@ -19,7 +19,6 @@ from .const import (
     PARAM_APP_ID,
     PARAM_APP_SECRET,
     PARAM_ENABLE_EVENT_PUSH,
-    PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PLATFORMS,
 )
@@ -39,12 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     )
     device_manager = ImouDeviceManager(imou_client)
     imou_device_manager = ImouHaDeviceManager(device_manager)
-    coordinator = ImouDataUpdateCoordinator(
-        hass,
-        imou_device_manager,
-        entry.options.get(PARAM_UPDATE_INTERVAL, 60),
-        entry,
-    )
+    coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
 
     # --- Event push / webhook setup (optional, never blocks normal startup) ---
     try:

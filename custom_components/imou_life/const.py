@@ -4,6 +4,7 @@ from pyimouapi.ha_device import ImouHaDevice
 
 # Internal constants
 DOMAIN = "imou_life"
+UPDATE_TIMEOUT = 300
 
 
 def imou_life_device_key(device: ImouHaDevice) -> str:
