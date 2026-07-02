@@ -1,7 +1,15 @@
 """Constants."""
 
+from pyimouapi.ha_device import ImouHaDevice
+
 # Internal constants
 DOMAIN = "imou_life"
+
+
+def imou_life_device_key(device: ImouHaDevice) -> str:
+    """Stable device registry / unique_id prefix (legacy semantics)."""
+    return f"{device.device_id}_{device.channel_id or device.product_id}"
+
 
 # Configuration definitions
 CONF_API_URL_SG = "openapi-sg.easy4ip.com"
