@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
@@ -14,7 +13,6 @@ from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
@@ -24,13 +22,14 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
+from .runtime_data import ImouRuntimeData
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:
     """Set up Imou Life from a config entry."""
-    _LOGGER.debug("Setting up %s", DOMAIN)
+    _LOGGER.debug("Setting up imou_life")
     imou_client = ImouOpenApiClient(
         entry.data[PARAM_APP_ID],
         entry.data[PARAM_APP_SECRET],
@@ -39,18 +38,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     device_manager = ImouDeviceManager(imou_client)
     imou_device_manager = ImouHaDeviceManager(device_manager)
     coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
+    runtime = ImouRuntimeData(coordinator=coordinator)
 
-    # --- Event push / webhook setup (optional, never blocks normal startup) ---
     try:
-        await async_setup_event_push(hass, entry, imou_client)
+        await async_setup_event_push(hass, entry, imou_client, runtime)
     except Exception:
         _LOGGER.exception(
             "Failed to set up event push (non-fatal, integration continues normally)"
         )
 
     await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = coordinator
+    entry.runtime_data = runtime
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    @callback
+    def _async_keep_polling() -> None:
+        pass
+
+    entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 
@@ -58,16 +63,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
-    results = await asyncio.gather(
-        *[
-            hass.config_entries.async_forward_entry_unload(entry, platform)
-            for platform in PLATFORMS
-        ]
-    )
-    if not all(results):
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 
-    # --- Disable callback + unregister webhook ---
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH) and webhook_id:
         imou_client = ImouOpenApiClient(
@@ -84,7 +82,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     elif webhook_id:
         await async_teardown_event_push(hass, entry)
 
-    hass.data.pop(DOMAIN, None)
     _remove_devices_for_config_entry(hass, entry.entry_id)
     return True
 

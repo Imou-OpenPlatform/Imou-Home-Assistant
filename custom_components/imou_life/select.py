@@ -26,7 +26,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou select entities."""
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     entities: list[ImouSelect] = []
     for device in coordinator.devices:
         for select_type in device.selects:

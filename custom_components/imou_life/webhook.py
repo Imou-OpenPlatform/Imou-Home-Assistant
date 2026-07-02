@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import translation
 
 from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT
+from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -167,6 +168,17 @@ async def _async_send_notifications(
             )
 
 
+def _get_runtime_data(hass: HomeAssistant) -> ImouRuntimeData | None:
+    """Return runtime data from the Imou config entry, if available."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return None
+    runtime = entries[0].runtime_data
+    if runtime is None:
+        return None
+    return runtime
+
+
 async def async_handle_imou_webhook(
     hass: HomeAssistant,
     webhook_id: str,
@@ -189,12 +201,13 @@ async def async_handle_imou_webhook(
     _LOGGER.debug("Received Imou push event: %s", event_data)
 
     # Check: is push enabled? If user disabled it, silently ignore.
-    if not hass.data.get(DOMAIN, {}).get("push_enabled", False):
+    runtime = _get_runtime_data(hass)
+    if runtime is None or not runtime.push_enabled:
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 
     # Filter: only process events from selected devices (if device selection is active)
-    selected_devices = hass.data.get(DOMAIN, {}).get("selected_devices", [])
+    selected_devices = runtime.selected_devices
     if selected_devices and device_id and device_id not in selected_devices:
         _LOGGER.debug(
             "Ignoring push from unselected device %s (selected: %s)",
@@ -212,7 +225,7 @@ async def async_handle_imou_webhook(
         hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
 
     # Send notifications if configured
-    notify_services: list[str] = hass.data.get(DOMAIN, {}).get("notify_services", [])
+    notify_services = runtime.notify_services
     if is_alarm and notify_services:
         await _async_send_notifications(hass, event_data, notify_services)
 

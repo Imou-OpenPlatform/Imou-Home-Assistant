@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    DOMAIN,
     PARAM_BASE_PUSH,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -20,6 +19,7 @@ from .const import (
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
 )
+from .runtime_data import ImouRuntimeData
 from .webhook import async_register_imou_webhook, async_unregister_imou_webhook
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,12 +29,12 @@ async def async_setup_event_push(
     hass: HomeAssistant,
     entry: ConfigEntry,
     imou_client: ImouOpenApiClient,
+    runtime: ImouRuntimeData,
 ) -> tuple[str, str]:
     """Register webhook and optionally enable Imou message callback."""
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN]["notify_services"] = []
-    hass.data[DOMAIN]["push_enabled"] = bool(entry.options.get(PARAM_ENABLE_EVENT_PUSH))
-    hass.data[DOMAIN]["selected_devices"] = entry.options.get(
+    runtime.notify_services = []
+    runtime.push_enabled = bool(entry.options.get(PARAM_ENABLE_EVENT_PUSH))
+    runtime.selected_devices = entry.options.get(
         PARAM_SELECTED_DEVICES
     ) or entry.data.get(PARAM_SELECTED_DEVICES, [])
 
@@ -50,7 +50,7 @@ async def async_setup_event_push(
 
     raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
     if raw_services:
-        hass.data[DOMAIN]["notify_services"] = [
+        runtime.notify_services = [
             s.strip() for s in raw_services.split(",") if s.strip()
         ]
 

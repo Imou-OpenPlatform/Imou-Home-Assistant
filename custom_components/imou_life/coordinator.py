@@ -22,6 +22,7 @@ from .const import (
     UPDATE_TIMEOUT,
     imou_life_device_key,
 )
+from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -204,4 +205,4 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return all(e.disabled_by is not None for e in entries)
 
 
-type ImouConfigEntry = ConfigEntry[ImouDataUpdateCoordinator]
+type ImouConfigEntry = ConfigEntry[ImouRuntimeData]

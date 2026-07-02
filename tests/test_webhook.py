@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 from custom_components.imou_life.const import (
-    DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
 )
@@ -15,6 +14,8 @@ from custom_components.imou_life.webhook import (
     async_handle_imou_webhook,
 )
 from homeassistant.core import Event, HomeAssistant
+
+from .conftest import setup_imou_runtime
 
 
 class MockRequest:
@@ -58,11 +59,11 @@ async def test_webhook_filters_unselected_device(hass: HomeAssistant) -> None:
     """Events from unselected devices are ignored."""
     events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
-    hass.data[DOMAIN] = {
-        "push_enabled": True,
-        "selected_devices": ["selected_device"],
-        "notify_services": [],
-    }
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["selected_device"],
+    )
 
     response = await async_handle_imou_webhook(
         hass,
@@ -82,11 +83,11 @@ async def test_webhook_iot_property_is_not_alarm(hass: HomeAssistant) -> None:
     alarm_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
     hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
-    hass.data[DOMAIN] = {
-        "push_enabled": True,
-        "selected_devices": ["device_1"],
-        "notify_services": [],
-    }
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["device_1"],
+    )
 
     response = await async_handle_imou_webhook(
         hass,
