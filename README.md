@@ -48,6 +48,13 @@ Devices under your Imou account should appear in Home Assistant.
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
 >Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the console for your region (see table above).
 
+## What's New (v1.2.9)
+
+- **Full UI translations** — English and Simplified Chinese for config flow, options, and webhook notifications (follows your Home Assistant language setting).
+- **Home Assistant best practices** — dynamic device discovery when your account changes, cleaner coordinator architecture, and API calls routed through [pyimouapi](https://pypi.org/project/pyimouapi/) **1.2.9** (no direct OpenAPI paths in the integration).
+- **Device selection** — choose which devices to poll during setup or later in integration **Options**, saving API quota.
+- **Event push (webhook)** — optional real-time alarm push from Imou cloud; fires `imou_life_event` / `imou_life_alarm` events and supports optional notify services. Requires a publicly reachable Home Assistant URL (or manual callback URL in options).
+
 ## Features
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
@@ -74,11 +81,20 @@ Devices under your Imou account should appear in Home Assistant.
   - Socket indicator configuration
   - Socket power configuration
 
+## Options & events
+
+| Item | Description |
+| --- | --- |
+| **Options → Manage devices** | Add or remove polled devices without re-authenticating |
+| **Options → Event push** | Enable webhook callback, choose message types, sync to Imou app or HA-only |
+| **`imou_life_event`** | Fires for every accepted push message (automations) |
+| **`imou_life_alarm`** | Fires for alarm-type messages (excludes status/IoT noise) |
+
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-- Development setup: `script/setup`
+- Development setup: `script/setup` (requires **pyimouapi==1.2.9** from PyPI, pinned in `manifest.json`)
 - Lint: `script/lint-check`
 - Tests: `script/test`
 

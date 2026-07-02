@@ -8,6 +8,7 @@
 
 ### Changed
 - Refactor aligned with Home Assistant best practices; no breaking changes for existing users
+- README updated for v1.2.9 features, options, events, and pyimouapi dependency
 
 ## [1.2.10]
 ### Added
