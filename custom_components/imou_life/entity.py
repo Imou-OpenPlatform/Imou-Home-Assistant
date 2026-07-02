@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
-from .const import DOMAIN, PARAM_STATUS, imou_life_device_key
+from .const import DOMAIN, PARAM_STATUS
 from .coordinator import ImouDataUpdateCoordinator
 
 
@@ -36,8 +36,12 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
+        device_key = (
+            f"{self._device.device_id}_"
+            f"{self._device.channel_id or self._device.product_id}"
+        )
         return DeviceInfo(
-            identifiers={(DOMAIN, imou_life_device_key(self._device))},
+            identifiers={(DOMAIN, device_key)},
             name=self._device.channel_name or self._device.device_name,
             manufacturer=self._device.manufacturer,
             model=self._device.model,
@@ -48,7 +52,11 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
     @property
     def unique_id(self) -> str:
         """Return a unique ID for this entity."""
-        return f"{imou_life_device_key(self._device)}${self._entity_type}"
+        device_key = (
+            f"{self._device.device_id}_"
+            f"{self._device.channel_id or self._device.product_id}"
+        )
+        return f"{device_key}${self._entity_type}"
 
     @property
     def translation_key(self) -> str | None:
