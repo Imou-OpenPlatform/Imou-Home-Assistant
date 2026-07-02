@@ -18,6 +18,7 @@ from .const import (
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
+    event_push_types_to_callback_flags,
 )
 from .runtime_data import ImouRuntimeData
 from .webhook import async_register_imou_webhook, async_unregister_imou_webhook
@@ -78,7 +79,9 @@ async def _async_set_message_callback(
 ) -> None:
     """Register or unregister Imou Open Platform message callback."""
     callback_url = entry.options.get(PARAM_WEBHOOK_URL) or generated_webhook_url
-    callback_flags = entry.options.get(PARAM_EVENT_PUSH_TYPES, [])
+    callback_flags = event_push_types_to_callback_flags(
+        entry.options.get(PARAM_EVENT_PUSH_TYPES, [])
+    )
     base_push = entry.options.get(PARAM_BASE_PUSH, "2")
     if status == "on":
         if not callback_url:

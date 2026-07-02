@@ -22,15 +22,15 @@ from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
     API_URL_OPTIONS,
-    CALLBACK_FLAG_OPTIONS,
     CONF_API_URL_SG,
     CONF_HD,
     CONF_HTTP,
     CONF_HTTPS,
     CONF_SD,
     DEFAULT_BASE_PUSH,
-    DEFAULT_CALLBACK_FLAGS,
+    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
+    EVENT_PUSH_TYPE_OPTIONS,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
@@ -46,6 +46,7 @@ from .const import (
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
+    callback_flags_to_event_push_types,
 )
 from .helpers import async_build_device_map
 
@@ -215,6 +216,12 @@ class ImouOptionsFlow(OptionsFlow):
             "Not set — the suggested URL above will be used",
         )
 
+        suggested_options = dict(self.config_entry.options)
+        if stored_types := suggested_options.get(PARAM_EVENT_PUSH_TYPES):
+            suggested_options[PARAM_EVENT_PUSH_TYPES] = (
+                callback_flags_to_event_push_types(stored_types)
+            )
+
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
@@ -240,10 +247,10 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Optional(PARAM_WEBHOOK_URL, default=""): str,
                         vol.Required(
                             PARAM_EVENT_PUSH_TYPES,
-                            default=DEFAULT_CALLBACK_FLAGS,
+                            default=DEFAULT_EVENT_PUSH_TYPES,
                         ): SelectSelector(
                             SelectSelectorConfig(
-                                options=list(CALLBACK_FLAG_OPTIONS),
+                                options=list(EVENT_PUSH_TYPE_OPTIONS),
                                 multiple=True,
                                 translation_key="event_push_type",
                             )
@@ -260,7 +267,7 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
                     }
                 ),
-                self.config_entry.options,
+                suggested_options,
             ),
             description_placeholders={
                 "webhook_id": webhook_id or not_generated,

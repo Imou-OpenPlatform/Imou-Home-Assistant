@@ -72,10 +72,10 @@
     "event_push_type": {
       "options": {
         "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
-        "deviceStatus": "Device online/offline",
+        "device_status": "Device online/offline",
         "iot": "IoT device messages",
         "numberstat": "People counting",
-        "faceAnalysis": "Face analysis"
+        "face_analysis": "Face analysis"
       }
     },
     "base_push": {

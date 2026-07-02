@@ -72,10 +72,10 @@
     "event_push_type": {
       "options": {
         "alarm": "设备报警（烟感/燃气/人形/动检等）",
-        "deviceStatus": "设备上下线通知",
+        "device_status": "设备上下线通知",
         "iot": "物联网设备消息",
         "numberstat": "客流统计",
-        "faceAnalysis": "人脸智能分析"
+        "face_analysis": "人脸智能分析"
       }
     },
     "base_push": {

@@ -61,26 +61,73 @@ PARAM_OPTION = "option"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
 
-# event push
-EVENT_IMOU_EVENT = f"{DOMAIN}_event"
-EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
+# event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
+EVENT_PUSH_TYPE_ALARM = "alarm"
+EVENT_PUSH_TYPE_DEVICE_STATUS = "device_status"
+EVENT_PUSH_TYPE_IOT = "iot"
+EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
+EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
+
+EVENT_PUSH_TYPE_OPTIONS = (
+    EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_NUMBERSTAT,
+    EVENT_PUSH_TYPE_FACE_ANALYSIS,
+)
+
 CALLBACK_FLAG_ALARM = "alarm"
 CALLBACK_FLAG_DEVICE_STATUS = "deviceStatus"
 CALLBACK_FLAG_IOT = "iot"
 CALLBACK_FLAG_NUMBERSTAT = "numberstat"
 CALLBACK_FLAG_FACE_ANALYSIS = "faceAnalysis"
-CALLBACK_FLAG_OPTIONS = (
-    CALLBACK_FLAG_ALARM,
-    CALLBACK_FLAG_DEVICE_STATUS,
-    CALLBACK_FLAG_IOT,
-    CALLBACK_FLAG_NUMBERSTAT,
-    CALLBACK_FLAG_FACE_ANALYSIS,
-)
-DEFAULT_CALLBACK_FLAGS = [
-    CALLBACK_FLAG_ALARM,
-    CALLBACK_FLAG_DEVICE_STATUS,
-    CALLBACK_FLAG_IOT,
+
+EVENT_PUSH_TYPE_TO_CALLBACK_FLAG: dict[str, str] = {
+    EVENT_PUSH_TYPE_ALARM: CALLBACK_FLAG_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS: CALLBACK_FLAG_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT: CALLBACK_FLAG_IOT,
+    EVENT_PUSH_TYPE_NUMBERSTAT: CALLBACK_FLAG_NUMBERSTAT,
+    EVENT_PUSH_TYPE_FACE_ANALYSIS: CALLBACK_FLAG_FACE_ANALYSIS,
+}
+
+CALLBACK_FLAG_TO_EVENT_PUSH_TYPE: dict[str, str] = {
+    v: k for k, v in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG.items()
+}
+
+DEFAULT_EVENT_PUSH_TYPES = [
+    EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT,
 ]
+
+
+def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
+    """Map config option values to Imou API callbackFlag strings."""
+    flags: list[str] = []
+    for value in types:
+        if value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
+            flags.append(EVENT_PUSH_TYPE_TO_CALLBACK_FLAG[value])
+        else:
+            # Legacy v1.2.10 options stored API flag strings directly
+            flags.append(value)
+    return flags
+
+
+def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
+    """Map stored values to hassfest-safe selector option keys."""
+    types: list[str] = []
+    for value in flags:
+        if value in CALLBACK_FLAG_TO_EVENT_PUSH_TYPE:
+            types.append(CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value])
+        elif value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
+            types.append(value)
+        else:
+            types.append(value)
+    return types
+
+
+EVENT_IMOU_EVENT = f"{DOMAIN}_event"
+EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
 DEFAULT_BASE_PUSH = "2"
 
 # service
