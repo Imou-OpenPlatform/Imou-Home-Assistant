@@ -9,8 +9,9 @@ from typing import Any
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import translation
 
-from .const import ALARM_TYPE_NAMES, DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT
+from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,26 @@ _NON_ALARM_TYPES = frozenset(
         "numberstat",
     }
 )
+
+
+def _webhook_translation_groups(
+    strings: dict[str, str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Split flattened webhook translation keys into notification and alarm_types."""
+    prefix = f"component.{DOMAIN}.webhook."
+    notif_prefix = f"{prefix}notification."
+    alarm_prefix = f"{prefix}alarm_types."
+    notif = {
+        key[len(notif_prefix) :]: value
+        for key, value in strings.items()
+        if key.startswith(notif_prefix)
+    }
+    alarm_types = {
+        key[len(alarm_prefix) :]: value
+        for key, value in strings.items()
+        if key.startswith(alarm_prefix)
+    }
+    return notif, alarm_types
 
 
 def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -49,7 +70,7 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     event = {
         "msg_type": msg_type,
-        "msg_type_name": ALARM_TYPE_NAMES.get(msg_type, msg_type),
+        "msg_type_name": msg_type,
         "device_id": device_id,
         "channel_id": channel_id,
         "time": raw_time,
@@ -62,10 +83,22 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
-def _build_notification_message(event_data: dict[str, Any]) -> tuple[str, str]:
+async def _async_build_notification_message(
+    hass: HomeAssistant, event_data: dict[str, Any]
+) -> tuple[str, str]:
     """Build a notification title and message from an event payload."""
-    device_name = event_data.get("name") or event_data.get("device_id") or "未知设备"
-    alarm_type = event_data.get("msg_type_name") or event_data.get("msg_type") or "报警"
+    strings = await translation.async_get_translations(
+        hass, hass.config.language, "webhook", [DOMAIN]
+    )
+    notif, alarm_types = _webhook_translation_groups(strings)
+
+    msg_type = event_data.get("msg_type")
+    unknown_device = notif.get("unknown_device", "Unknown device")
+    unknown_alarm = notif.get("unknown_alarm", "Alarm")
+    device_name = (
+        event_data.get("name") or event_data.get("device_id") or unknown_device
+    )
+    alarm_type = alarm_types.get(msg_type, msg_type or unknown_alarm)
 
     raw_time = event_data.get("time")
     if isinstance(raw_time, (int, float)) and raw_time > 1000000000:
@@ -76,16 +109,24 @@ def _build_notification_message(event_data: dict[str, Any]) -> tuple[str, str]:
     else:
         time_str = str(raw_time) if raw_time else ""
 
-    title = f"🚨 乐橙报警: {alarm_type}"
-    message = f"设备: {device_name}\n类型: {alarm_type}"
+    title = notif.get("title", "Imou alarm: {alarm_type}").format(alarm_type=alarm_type)
+    message = notif.get("device", "Device: {device_name}").format(
+        device_name=device_name
+    )
+    type_line = notif.get("type", "Type: {alarm_type}").format(alarm_type=alarm_type)
+    message += f"\n{type_line}"
     if time_str:
-        message += f"\n时间: {time_str}"
+        time_line = notif.get("time", "Time: {time_str}").format(time_str=time_str)
+        message += f"\n{time_line}"
 
     desc = event_data.get("desc")
     if desc and isinstance(desc, dict):
         desc_type = desc.get("type")
         if desc_type:
-            message += f"\n详情: {desc_type}"
+            details_line = notif.get("details", "Details: {desc_type}").format(
+                desc_type=desc_type
+            )
+            message += f"\n{details_line}"
 
     return title, message
 
@@ -101,7 +142,7 @@ async def _async_send_notifications(
       - "notify.xxx"                -> tries notify.send_message entity, then legacy
       - "domain.service"            -> calls any HA service
     """
-    title, message = _build_notification_message(event_data)
+    title, message = await _async_build_notification_message(hass, event_data)
     for svc in notify_services:
         svc = svc.strip()
         if not svc:
