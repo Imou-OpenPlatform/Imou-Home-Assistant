@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import translation
 
 from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
+
+_WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
 
 # Message types that are NOT alarm events (status / iot / stats)
 _NON_ALARM_TYPES = frozenset(
@@ -31,24 +35,26 @@ _NON_ALARM_TYPES = frozenset(
 )
 
 
-def _webhook_translation_groups(
-    strings: dict[str, str],
+def _webhook_strings_filename(language: str) -> str:
+    if language.startswith("zh"):
+        return "zh-Hans.json"
+    return "en.json"
+
+
+@lru_cache(maxsize=4)
+def _load_webhook_strings_file(filename: str) -> dict[str, Any]:
+    path = _WEBHOOK_STRINGS_DIR / filename
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _get_webhook_strings(
+    language: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """Split flattened webhook translation keys into notification and alarm_types."""
-    prefix = f"component.{DOMAIN}.webhook."
-    notif_prefix = f"{prefix}notification."
-    alarm_prefix = f"{prefix}alarm_types."
-    notif = {
-        key[len(notif_prefix) :]: value
-        for key, value in strings.items()
-        if key.startswith(notif_prefix)
-    }
-    alarm_types = {
-        key[len(alarm_prefix) :]: value
-        for key, value in strings.items()
-        if key.startswith(alarm_prefix)
-    }
-    return notif, alarm_types
+    """Load webhook notification templates and alarm type labels."""
+    data = _load_webhook_strings_file(_webhook_strings_filename(language))
+    notification = data.get("notification", {})
+    alarm_types = data.get("alarm_types", {})
+    return notification, alarm_types
 
 
 def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -88,10 +94,7 @@ async def _async_build_notification_message(
     hass: HomeAssistant, event_data: dict[str, Any]
 ) -> tuple[str, str]:
     """Build a notification title and message from an event payload."""
-    strings = await translation.async_get_translations(
-        hass, hass.config.language, "webhook", [DOMAIN]
-    )
-    notif, alarm_types = _webhook_translation_groups(strings)
+    notif, alarm_types = _get_webhook_strings(hass.config.language)
 
     msg_type = event_data.get("msg_type")
     unknown_device = notif.get("unknown_device", "Unknown device")

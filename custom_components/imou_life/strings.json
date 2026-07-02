@@ -93,63 +93,6 @@
       }
     }
   },
-  "webhook": {
-    "notification": {
-      "title": "Imou alarm: {alarm_type}",
-      "device": "Device: {device_name}",
-      "type": "Type: {alarm_type}",
-      "time": "Time: {time_str}",
-      "details": "Details: {desc_type}",
-      "unknown_device": "Unknown device",
-      "unknown_alarm": "Alarm"
-    },
-    "alarm_types": {
-      "videoMotion": "Motion detection",
-      "human": "Human detection",
-      "alarmPIR": "PIR alarm",
-      "smokeAlarm": "Smoke alarm",
-      "gasAlarm": "Gas alarm",
-      "waterAlarm": "Water leak alarm",
-      "soundLightAlarm": "Sound and light alarm",
-      "alarmLocal": "Local alarm",
-      "Doorbell": "Doorbell",
-      "magnetomerAlarm": "Door contact alarm",
-      "urgencyAlarm": "Emergency button alarm",
-      "sensorAbnormal": "Tamper alarm",
-      "hoveringAlarm": "Loitering alarm",
-      "crossLineDetection": "Line crossing detection",
-      "highTemAbnormal": "High temperature",
-      "lowTemAbnormal": "Low temperature",
-      "highHumAbnormal": "High humidity",
-      "lowHumAbnormal": "Low humidity",
-      "electricAbnormal": "Voltage abnormal",
-      "fireAlarm": "Fire alarm",
-      "earlyWarning": "Early warning",
-      "alarmOccurs": "Alarm triggered",
-      "alarmEnd": "Alarm ended",
-      "earlyWarningEnd": "Early warning ended",
-      "online": "Device online",
-      "offline": "Device offline",
-      "beOpenedDoor": "Door opened successfully",
-      "notOpenedDoor": "Door open failed",
-      "openDoorAbnormal": "Unauthorized door open",
-      "hijackAlarm": "Duress alarm",
-      "mobileDetect": "Mobile detection",
-      "callBellEvent": "Call event",
-      "abAlarmSound": "Abnormal sound alarm",
-      "objectMoved": "Object moved",
-      "goodsMove": "Object moved",
-      "leftDetection": "Object left behind",
-      "videoBlind": "Video blinded",
-      "wireLessDevLowPower": "Low battery",
-      "litElec": "Lithium battery low",
-      "alkElec": "Alkaline battery low",
-      "storageAbnormal": "SD card abnormal",
-      "storageEmpty": "No SD card",
-      "checkAlarmFail": "Fault alarm",
-      "unknownAlarm": "Unknown alarm"
-    }
-  },
   "entity": {
     "sensor": {
       "storage_used": {
