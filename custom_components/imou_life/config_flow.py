@@ -54,11 +54,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _options_placeholder(hass, key: str, fallback: str) -> str:
-    """Load an options.placeholder translation string."""
+    """Load webhook placeholder label from selector translations."""
     translations = translation.async_get_cached_translations(
-        hass, hass.config.language, "options", DOMAIN
+        hass, hass.config.language, DOMAIN, category="selector"
     )
-    return translations.get(f"component.{DOMAIN}.options.placeholder.{key}", fallback)
+    options = translations.get("webhook_placeholder", {}).get("options", {})
+    return options.get(key, fallback)
 
 
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

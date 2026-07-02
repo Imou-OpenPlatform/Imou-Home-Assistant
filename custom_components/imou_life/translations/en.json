@@ -62,13 +62,15 @@
           "selected_devices": "Devices"
         }
       }
-    },
-    "placeholder": {
-      "not_generated": "Not generated",
-      "not_set_use_suggested": "Not set — the suggested URL above will be used"
     }
   },
   "selector": {
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "Not generated",
+        "not_set_use_suggested": "Not set — the suggested URL above will be used"
+      }
+    },
     "event_push_type": {
       "options": {
         "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
