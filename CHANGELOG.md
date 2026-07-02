@@ -1,4 +1,15 @@
 # CHANGELOG
+## [1.2.9]
+### Added
+- pyimouapi 1.2.9 dependency for API encapsulation (no direct OpenAPI paths in integration code)
+- Full i18n: no Chinese in Python; translations for webhook messages and config flow strings
+- Coordinator `devices_by_key` and dynamic device hot-load when device lists change
+- `ImouRuntimeData` replaces `hass.data` for event push wiring
+
+### Changed
+- Refactor aligned with Home Assistant best practices; no breaking changes for existing users
+- README features section updated (device selection, event push, translations)
+
 ## [1.2.10]
 ### Added
 - Add setup/options device selection so users can choose which Imou devices to include

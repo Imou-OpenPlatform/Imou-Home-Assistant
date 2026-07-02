@@ -1,7 +1,16 @@
 """Constants."""
 
+from pyimouapi.ha_device import ImouHaDevice
+
 # Internal constants
 DOMAIN = "imou_life"
+UPDATE_TIMEOUT = 300
+
+
+def imou_life_device_key(device: ImouHaDevice) -> str:
+    """Stable device registry / unique_id prefix (legacy semantics)."""
+    return f"{device.device_id}_{device.channel_id or device.product_id}"
+
 
 # Configuration definitions
 CONF_API_URL_SG = "openapi-sg.easy4ip.com"
@@ -52,75 +61,74 @@ PARAM_OPTION = "option"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
 
-# event push
-EVENT_IMOU_EVENT = f"{DOMAIN}_event"
-EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
+# event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
+EVENT_PUSH_TYPE_ALARM = "alarm"
+EVENT_PUSH_TYPE_DEVICE_STATUS = "device_status"
+EVENT_PUSH_TYPE_IOT = "iot"
+EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
+EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
+
+EVENT_PUSH_TYPE_OPTIONS = (
+    EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_NUMBERSTAT,
+    EVENT_PUSH_TYPE_FACE_ANALYSIS,
+)
+
 CALLBACK_FLAG_ALARM = "alarm"
 CALLBACK_FLAG_DEVICE_STATUS = "deviceStatus"
 CALLBACK_FLAG_IOT = "iot"
 CALLBACK_FLAG_NUMBERSTAT = "numberstat"
 CALLBACK_FLAG_FACE_ANALYSIS = "faceAnalysis"
-CALLBACK_FLAG_OPTIONS = (
-    CALLBACK_FLAG_ALARM,
-    CALLBACK_FLAG_DEVICE_STATUS,
-    CALLBACK_FLAG_IOT,
-    CALLBACK_FLAG_NUMBERSTAT,
-    CALLBACK_FLAG_FACE_ANALYSIS,
-)
-DEFAULT_CALLBACK_FLAGS = [
-    CALLBACK_FLAG_ALARM,
-    CALLBACK_FLAG_DEVICE_STATUS,
-    CALLBACK_FLAG_IOT,
-]
-DEFAULT_BASE_PUSH = "2"
 
-# Alarm type -> Chinese description mapping for notifications
-ALARM_TYPE_NAMES: dict[str, str] = {
-    "videoMotion": "动态检测",
-    "human": "人形检测",
-    "alarmPIR": "人体红外",
-    "smokeAlarm": "烟感报警",
-    "gasAlarm": "燃气报警",
-    "waterAlarm": "水浸报警",
-    "soundLightAlarm": "声光报警",
-    "alarmLocal": "本地报警",
-    "Doorbell": "门铃事件",
-    "magnetomerAlarm": "门磁报警",
-    "urgencyAlarm": "紧急按钮报警",
-    "sensorAbnormal": "防拆报警",
-    "hoveringAlarm": "徘徊报警",
-    "crossLineDetection": "拌线报警",
-    "highTemAbnormal": "温度过高",
-    "lowTemAbnormal": "温度过低",
-    "highHumAbnormal": "湿度过高",
-    "lowHumAbnormal": "湿度过低",
-    "electricAbnormal": "电压异常",
-    "fireAlarm": "火警报警",
-    "earlyWarning": "早期预警",
-    "alarmOccurs": "报警发生",
-    "alarmEnd": "报警结束",
-    "earlyWarningEnd": "早期预警结束",
-    "online": "设备上线",
-    "offline": "设备离线",
-    "beOpenedDoor": "开门成功",
-    "notOpenedDoor": "开门失败",
-    "openDoorAbnormal": "恶意开门",
-    "hijackAlarm": "劫持报警",
-    "mobileDetect": "移动监测",
-    "callBellEvent": "呼叫事件",
-    "abAlarmSound": "异常音报警",
-    "objectMoved": "物品搬移",
-    "goodsMove": "物品搬移",
-    "leftDetection": "物品遗留",
-    "videoBlind": "视频遮挡",
-    "wireLessDevLowPower": "低电量",
-    "litElec": "锂电池低电量",
-    "alkElec": "碱性电池低电量",
-    "storageAbnormal": "SD卡异常",
-    "storageEmpty": "无SD卡",
-    "checkAlarmFail": "故障报警",
-    "unknownAlarm": "未知告警",
+EVENT_PUSH_TYPE_TO_CALLBACK_FLAG: dict[str, str] = {
+    EVENT_PUSH_TYPE_ALARM: CALLBACK_FLAG_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS: CALLBACK_FLAG_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT: CALLBACK_FLAG_IOT,
+    EVENT_PUSH_TYPE_NUMBERSTAT: CALLBACK_FLAG_NUMBERSTAT,
+    EVENT_PUSH_TYPE_FACE_ANALYSIS: CALLBACK_FLAG_FACE_ANALYSIS,
 }
+
+CALLBACK_FLAG_TO_EVENT_PUSH_TYPE: dict[str, str] = {
+    v: k for k, v in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG.items()
+}
+
+DEFAULT_EVENT_PUSH_TYPES = [
+    EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT,
+]
+
+
+def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
+    """Map config option values to Imou API callbackFlag strings."""
+    flags: list[str] = []
+    for value in types:
+        if value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
+            flags.append(EVENT_PUSH_TYPE_TO_CALLBACK_FLAG[value])
+        else:
+            # Legacy v1.2.10 options stored API flag strings directly
+            flags.append(value)
+    return flags
+
+
+def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
+    """Map stored values to hassfest-safe selector option keys."""
+    types: list[str] = []
+    for value in flags:
+        if value in CALLBACK_FLAG_TO_EVENT_PUSH_TYPE:
+            types.append(CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value])
+        elif value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
+            types.append(value)
+        else:
+            types.append(value)
+    return types
+
+
+EVENT_IMOU_EVENT = f"{DOMAIN}_event"
+EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
+DEFAULT_BASE_PUSH = "2"
 
 # service
 SERVICE_RESTART_DEVICE = "restart_device"

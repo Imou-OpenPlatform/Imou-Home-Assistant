@@ -1,5 +1,8 @@
 """Test for the Imou integration."""
 
+import re
+from pathlib import Path
+
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
@@ -11,6 +14,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from . import USER_INPUT, patch_async_setup_entry
+
+_CONFIG_FLOW_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "custom_components"
+    / "imou_life"
+    / "config_flow.py"
+)
+# Config flow must stay i18n-only: no hardcoded Chinese or direct openapi paths.
+assert not re.search(r"[\u4e00-\u9fff]", _CONFIG_FLOW_PATH.read_text(encoding="utf-8"))
+assert "/openapi/" not in _CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")

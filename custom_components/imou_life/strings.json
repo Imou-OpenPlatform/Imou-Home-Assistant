@@ -29,6 +29,7 @@
   "options": {
     "step": {
       "init": {
+        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nEnsure the 'Callback URL' field above matches the suggested URL; if left empty, the integration will use the auto-generated URL.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
@@ -38,7 +39,7 @@
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
           "event_push_types": "Event push types",
-          "base_push": "Imou APP message sync",
+          "base_push": "Sync to Imou mobile app",
           "notify_services": "Alarm notification services"
         },
         "data_description": {
@@ -51,7 +52,7 @@
           "webhook_url": "The URL where Imou cloud sends alarm messages. Leave empty to auto-generate (requires HA external URL configured). To set manually, enter full URL like: https://yourdomain:8123/api/webhook/xxxxx",
           "event_push_types": "Select which message types to receive. alarm = device alarms (smoke/gas/human/motion etc.), deviceStatus = online/offline, iot = IoT device messages, numberstat = people counting, faceAnalysis = face detection.",
           "base_push": "Whether to also push messages to the Imou APP. 'Push' = Imou APP also receives, 'No push' = HA only.",
-          "notify_services": "收到报警后自动发通知到哪里。填HA的动作名称，多个用英文逗号分隔。\n\n查找方法：HA → 开发者工具 → 动作 → 搜索你要用的通知服务\n\n例如：qiyewechat.send  →  企业微信通知\n例如：notify.mobile_app_xxx  →  HA APP弹窗通知\n同时推两个：qiyewechat.send,notify.mobile_app_xxx\n\n留空则不自动发通知（但报警事件仍会触发，可在自动化中使用）"
+          "notify_services": "Where to send alarm notifications. Enter HA action names, separate with commas.\nExample: qiyewechat.send → WeChat Work\nExample: notify.mobile_app_xxx → HA APP push\nBoth: qiyewechat.send,notify.mobile_app_xxx\nLeave empty to skip (alarm events still fire for automations)."
         }
       },
       "devices": {
@@ -60,6 +61,35 @@
         "data": {
           "selected_devices": "Devices"
         }
+      }
+    }
+  },
+  "selector": {
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "Not generated",
+        "not_set_use_suggested": "Not set — the suggested URL above will be used"
+      }
+    },
+    "event_push_type": {
+      "options": {
+        "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
+        "device_status": "Device online/offline",
+        "iot": "IoT device messages",
+        "numberstat": "People counting",
+        "face_analysis": "Face analysis"
+      }
+    },
+    "base_push": {
+      "options": {
+        "1": "Push to Imou app",
+        "2": "Home Assistant only"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "Online",
+        "0": "Offline"
       }
     }
   },
@@ -100,7 +130,7 @@
         "name": "Current"
       },
       "switch_cnt": {
-        "name": "On-Off Today"
+        "name": "Switch cycles today"
       },
       "use_electricity": {
         "name": "Consumption"
@@ -149,10 +179,10 @@
         "name": "Motion Detect"
       },
       "ab_alarm_sound": {
-        "name": "Abnormal Sound Alarm"
+        "name": "Abnormal sound detection"
       },
       "close_camera": {
-        "name": "Close Camera"
+        "name": "Privacy mode"
       },
       "white_light": {
         "name": "White Light"
@@ -200,7 +230,7 @@
         "name": "Status",
         "state": {
           "on": "Open",
-          "off": "Close"
+          "off": "Closed"
         }
       }
     },

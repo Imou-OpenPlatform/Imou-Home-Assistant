@@ -34,13 +34,13 @@ Register on the portal for your region, then open **My App** in the console to c
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **API region URL** from the table above (must match the portal where the app was created).
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **API region URL** from the table above (must match the portal where the app was created). After login you can select which devices to add; unselected devices are not polled (saves API quota).
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%">
 
 ### 4. Done
 
-Devices under your Imou account should appear in Home Assistant.
+Devices under your Imou account should appear in Home Assistant. Use **Configure** on the integration entry to adjust polling, device selection, live stream settings, or event push.
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/list.png" width="70%">
 
@@ -49,6 +49,16 @@ Devices under your Imou account should appear in Home Assistant.
 >Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the console for your region (see table above).
 
 ## Features
+* **Integration & account**
+  - Device selection at setup and in **Options → Manage devices** (poll only chosen devices)
+  - Polling interval, snapshot wait time, live resolution/protocol, PTZ duration
+  - UI available in English and Simplified Chinese (follows Home Assistant language)
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) for Open Platform API access
+* **Event push & automations**
+  - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
+  - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
+  - Optional notify services for alarm messages
+  - Choose push message types; sync to Imou mobile app or HA-only
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview

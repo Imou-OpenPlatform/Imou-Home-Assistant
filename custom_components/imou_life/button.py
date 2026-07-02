@@ -6,13 +6,14 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_DURATION
 from pyimouapi.exceptions import ImouException
+from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     PARAM_ENTITY_ID,
@@ -21,31 +22,48 @@ from .const import (
     PARAM_ROTATION_DURATION,
     SERVICE_CONTROL_MOVE_PTZ,
     SERVICE_RESTART_DEVICE,
+    imou_life_device_key,
 )
-from .coordinator import ImouConfigEntry
+from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
 
 _LOGGER = logging.getLogger(__package__)
+
+
+def _iter_buttons(
+    coordinator: ImouDataUpdateCoordinator,
+) -> list[tuple[str, ImouHaDevice]]:
+    """Return (button_type, device) pairs for supported buttons."""
+    return [
+        (button_type, device)
+        for device in coordinator.devices
+        for button_type in device.buttons
+    ]
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou button entities."""
-    coordinator = entry.runtime_data
-    entities: list[ImouButton] = []
-    for device in coordinator.devices:
-        for button_type in device.buttons:
-            entities.append(
-                ImouButton(
-                    coordinator,
-                    entry,
-                    button_type,
-                    device,
-                )
-            )
-    if entities:
-        async_add_entities(entities)
+    coordinator = entry.runtime_data.coordinator
+
+    def _async_add_buttons(new_devices: list[ImouHaDevice]) -> None:
+        device_keys = {imou_life_device_key(device) for device in new_devices}
+        async_add_entities(
+            ImouButton(coordinator, entry, button_type, device)
+            for button_type, device in _iter_buttons(coordinator)
+            if imou_life_device_key(device) in device_keys
+        )
+
+    coordinator.new_device_callbacks.append(_async_add_buttons)
+
+    @callback
+    def _remove_new_device_callback() -> None:
+        if _async_add_buttons in coordinator.new_device_callbacks:
+            coordinator.new_device_callbacks.remove(_async_add_buttons)
+
+    entry.async_on_unload(_remove_new_device_callback)
+    _async_add_buttons(coordinator.devices)
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
@@ -104,8 +122,8 @@ class ImouButton(ImouEntity, ButtonEntity):
     async def _async_do_press(self, duration: int) -> None:
         """Send button command to the cloud API."""
         try:
-            await self._coordinator.device_manager.async_press_button(
-                self._device,
+            await self.coordinator.device_manager.async_press_button(
+                self.device,
                 self._entity_type,
                 duration,
             )

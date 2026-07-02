@@ -1237,7 +1237,7 @@ dev = [
     { name = "codespell", specifier = ">=2.3.0" },
     { name = "homeassistant", specifier = "==2025.1.4" },
     { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pyimouapi", specifier = "==1.2.8" },
+    { name = "pyimouapi", specifier = "==1.2.9" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.205" },
     { name = "pytest-timeout", specifier = ">=2.3.0" },
@@ -1915,15 +1915,15 @@ wheels = [
 
 [[package]]
 name = "pyimouapi"
-version = "1.2.8"
+version = "1.2.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "simpleeval" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/90/b1a3e544eda50252641c54f2758bfd04445531d92aaf8fe999ac84ccdaef/pyimouapi-1.2.8.tar.gz", hash = "sha256:8b50fcf35e10f2df59313d93f870375397ae46aedbe787fbf3d0f20e23af8bf9", size = 22445, upload-time = "2026-06-12T03:24:22.727Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/dd/69add8b71cb0855b1fe0396b77d88275dcc27867cf2c063e999702c2df21/pyimouapi-1.2.9.tar.gz", hash = "sha256:19fc7cac2239c981e5e34843d986d712c6aa19b9adde87474c5fef54c70149d8", size = 23971, upload-time = "2026-07-02T11:51:07.609Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dd/87/3285ecddacf23418d1ddf745b5660339527ff2954d1c87c9cf6d949deb66/pyimouapi-1.2.8-py3-none-any.whl", hash = "sha256:12d5aefd19b31898d5b776345f7effb2f33270d8b40276d717847045c51a2232", size = 20621, upload-time = "2026-06-12T03:24:21.667Z" },
+    { url = "https://files.pythonhosted.org/packages/01/07/707e62b9a389a738eb37523fda3d0e7ab2bfbd9d5d0c0915d37479cb9bd6/pyimouapi-1.2.9-py3-none-any.whl", hash = "sha256:040e6b10ce02fec60a4e4c38235b76b15a448724dd4a8e260d0953e1da7116f0", size = 21172, upload-time = "2026-07-02T11:51:06.369Z" },
 ]
 
 [[package]]

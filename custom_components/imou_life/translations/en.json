@@ -29,6 +29,7 @@
   "options": {
     "step": {
       "init": {
+        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nEnsure the 'Callback URL' field above matches the suggested URL; if left empty, the integration will use the auto-generated URL.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
@@ -38,7 +39,7 @@
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
           "event_push_types": "Event push types",
-          "base_push": "Imou APP message sync",
+          "base_push": "Sync to Imou mobile app",
           "notify_services": "Alarm notification services"
         },
         "data_description": {
@@ -60,6 +61,35 @@
         "data": {
           "selected_devices": "Devices"
         }
+      }
+    }
+  },
+  "selector": {
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "Not generated",
+        "not_set_use_suggested": "Not set — the suggested URL above will be used"
+      }
+    },
+    "event_push_type": {
+      "options": {
+        "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
+        "device_status": "Device online/offline",
+        "iot": "IoT device messages",
+        "numberstat": "People counting",
+        "face_analysis": "Face analysis"
+      }
+    },
+    "base_push": {
+      "options": {
+        "1": "Push to Imou app",
+        "2": "Home Assistant only"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "Online",
+        "0": "Offline"
       }
     }
   },
@@ -100,7 +130,7 @@
         "name": "Current"
       },
       "switch_cnt": {
-        "name": "On-Off Today"
+        "name": "Switch cycles today"
       },
       "use_electricity": {
         "name": "Consumption"
@@ -149,10 +179,10 @@
         "name": "Motion Detect"
       },
       "ab_alarm_sound": {
-        "name": "Abnormal Sound Alarm"
+        "name": "Abnormal sound detection"
       },
       "close_camera": {
-        "name": "Close Camera"
+        "name": "Privacy mode"
       },
       "white_light": {
         "name": "White Light"
@@ -200,7 +230,7 @@
         "name": "Status",
         "state": {
           "on": "Open",
-          "off": "Close"
+          "off": "Closed"
         }
       }
     },

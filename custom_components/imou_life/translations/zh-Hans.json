@@ -64,6 +64,35 @@
       }
     }
   },
+  "selector": {
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "未生成",
+        "not_set_use_suggested": "未填写，将使用上方建议地址/自动生成地址"
+      }
+    },
+    "event_push_type": {
+      "options": {
+        "alarm": "设备报警（烟感/燃气/人形/动检等）",
+        "device_status": "设备上下线通知",
+        "iot": "物联网设备消息",
+        "numberstat": "客流统计",
+        "face_analysis": "人脸智能分析"
+      }
+    },
+    "base_push": {
+      "options": {
+        "1": "推送",
+        "2": "不推送"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "在线",
+        "0": "离线"
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "storage_used": {
