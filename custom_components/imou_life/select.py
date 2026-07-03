@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     PARAM_CURRENT_OPTION,
-    PARAM_ENTITY_ID,
-    PARAM_OPTION,
     PARAM_OPTIONS,
-    SERVICE_SELECT,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -60,16 +54,6 @@ async def async_setup_entry(
 
     entry.async_on_unload(_remove_new_device_callback)
     _async_add_selects(coordinator.devices)
-
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(
-        SERVICE_SELECT,
-        {
-            vol.Required(PARAM_ENTITY_ID): cv.entity_id,
-            vol.Required(PARAM_OPTION): cv.string,
-        },
-        "async_select_option",
-    )
 
 
 class ImouSelect(ImouEntity, SelectEntity):

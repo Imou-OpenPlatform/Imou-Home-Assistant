@@ -16,12 +16,10 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    PARAM_ENTITY_ID,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
     PARAM_ROTATION_DURATION,
     SERVICE_CONTROL_MOVE_PTZ,
-    SERVICE_RESTART_DEVICE,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -71,19 +69,12 @@ async def async_setup_entry(
     platform.async_register_entity_service(
         SERVICE_CONTROL_MOVE_PTZ,
         {
-            vol.Required(PARAM_ENTITY_ID): cv.entity_id,
+            vol.Required("entity_id"): cv.entity_id,
             vol.Required(PARAM_DURATION, default=500): vol.All(
                 vol.Coerce(int), vol.Range(min=100, max=10000)
             ),
         },
         "async_handle_control_move_ptz",
-    )
-    platform.async_register_entity_service(
-        SERVICE_RESTART_DEVICE,
-        {
-            vol.Required(PARAM_ENTITY_ID): cv.entity_id,
-        },
-        "async_handle_restart_device",
     )
 
 
@@ -111,15 +102,6 @@ class ImouButton(ImouEntity, ButtonEntity):
                 f"Invalid entity type {self._entity_type}; expected PTZ button"
             )
         await self._async_do_press(duration)
-
-    async def async_handle_restart_device(self) -> None:
-        """Service: restart the device."""
-        _LOGGER.debug("Restart device for entity type %s", self._entity_type)
-        if self._entity_type != PARAM_RESTART_DEVICE:
-            raise HomeAssistantError(
-                f"Invalid entity type {self._entity_type}; expected restart button"
-            )
-        await self._async_do_press(0)
 
     async def _async_do_press(self, duration: int) -> None:
         """Send button command to the cloud API."""

@@ -94,18 +94,6 @@
 		}
 	},
 	"services": {
-		"turn_on": {
-			"service": "mdi:toggle-switch"
-		},
-		"turn_off": {
-			"service": "mdi:toggle-switch-off"
-		},
-		"restart_device": {
-			"service": "mdi:restart"
-		},
-		"select": {
-			"service": "mdi:cursor-pointer"
-		},
 		"control_move_ptz": {
 			"service": "mdi:cursor-move"
 		}
