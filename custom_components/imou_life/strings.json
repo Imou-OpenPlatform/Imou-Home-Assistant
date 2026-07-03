@@ -15,6 +15,13 @@
         "data": {
           "selected_devices": "Devices"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Imou Life",
+        "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
+        "data": {
+          "app_secret": "AppSecret"
+        }
       }
     },
     "abort": {
@@ -28,6 +35,16 @@
       "connect_failed": "Failed to connect to Imou",
       "request_failed": "Request failed",
       "unknown": "An unknown error occurred"
+    }
+  },
+  "issues": {
+    "event_push_no_external_url": {
+      "title": "Imou event push has no callback URL",
+      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a manual callback URL in Imou Life options."
+    },
+    "event_push_callback_failed": {
+      "title": "Imou event push registration failed",
+      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your AppId resource quota, then reload the integration."
     }
   },
   "options": {

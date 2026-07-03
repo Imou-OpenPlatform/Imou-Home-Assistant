@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -196,6 +197,59 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             description_placeholders={
                 "device_count": str(len(self._devices_map)),
+            },
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle reauthentication."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm reauthentication with a new App Secret."""
+        reauth_entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+                description_placeholders={
+                    "app_id": reauth_entry.data[PARAM_APP_ID],
+                },
+            )
+
+        api_client = ImouOpenApiClient(
+            reauth_entry.data[PARAM_APP_ID],
+            user_input[PARAM_APP_SECRET],
+            reauth_entry.data[PARAM_API_URL],
+        )
+        try:
+            await api_client.async_get_token()
+        except InvalidAppIdOrSecretException:
+            errors["base"] = "appIdOrSecret_invalid"
+        except ImouException as exception:
+            errors["base"] = _config_flow_error_key(exception)
+        else:
+            return self.async_update_reload_and_abort(
+                reauth_entry,
+                data={
+                    **reauth_entry.data,
+                    PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+                },
+            )
+        finally:
+            await api_client.async_close()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+            errors=errors,
+            description_placeholders={
+                "app_id": reauth_entry.data[PARAM_APP_ID],
             },
         )
 

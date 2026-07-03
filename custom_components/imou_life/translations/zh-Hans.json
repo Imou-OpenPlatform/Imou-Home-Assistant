@@ -15,6 +15,13 @@
         "data": {
           "selected_devices": "设备列表"
         }
+      },
+      "reauth_confirm": {
+        "title": "重新验证 Imou Life",
+        "description": "App Secret 已失效。请为 AppId {app_id} 输入新的 App Secret。",
+        "data": {
+          "app_secret": "AppSecret"
+        }
       }
     },
     "abort": {
@@ -28,6 +35,16 @@
       "connect_failed": "连接失败",
       "request_failed": "请求失败",
       "unknown": "发生未知错误"
+    }
+  },
+  "issues": {
+    "event_push_no_external_url": {
+      "title": "Imou 事件推送缺少回调 URL",
+      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 Imou Life 选项中填写手动回调 URL。"
+    },
+    "event_push_callback_failed": {
+      "title": "Imou 事件推送注册失败",
+      "description": "无法向 Imou 开放平台注册消息回调。请检查回调 URL 与 AppId 资源配额，然后重新加载集成。"
     }
   },
   "options": {

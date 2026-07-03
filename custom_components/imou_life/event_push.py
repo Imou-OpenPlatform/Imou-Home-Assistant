@@ -19,6 +19,11 @@ from .const import (
     PARAM_WEBHOOK_URL,
     event_push_types_to_callback_flags,
 )
+from .repairs import (
+    async_create_event_push_callback_failed_issue,
+    async_create_event_push_no_url_issue,
+    async_delete_event_push_issues,
+)
 from .runtime_data import ImouRuntimeData
 from .webhook import async_register_imou_webhook, async_unregister_imou_webhook
 
@@ -32,6 +37,7 @@ async def async_setup_event_push(
     runtime: ImouRuntimeData,
 ) -> tuple[str, str]:
     """Register webhook and optionally enable Imou message callback."""
+    async_delete_event_push_issues(hass, entry)
     runtime.notify_services = []
     runtime.push_enabled = bool(entry.options.get(PARAM_ENABLE_EVENT_PUSH))
     runtime.selected_devices = entry.options.get(
@@ -49,7 +55,9 @@ async def async_setup_event_push(
     generated_url = async_register_imou_webhook(hass, webhook_id)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
-        await _async_set_message_callback(entry, imou_client, "on", generated_url)
+        await _async_set_message_callback(hass, entry, imou_client, "on", generated_url)
+    else:
+        async_delete_event_push_issues(hass, entry)
 
     raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
     if raw_services:
@@ -66,14 +74,16 @@ async def async_teardown_event_push(
     imou_client: ImouOpenApiClient | None = None,
 ) -> None:
     """Disable Imou message callback and unregister webhook."""
+    async_delete_event_push_issues(hass, entry)
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH) and webhook_id and imou_client:
-        await _async_set_message_callback(entry, imou_client, "off")
+        await _async_set_message_callback(hass, entry, imou_client, "off")
     if webhook_id:
         async_unregister_imou_webhook(hass, webhook_id)
 
 
 async def _async_set_message_callback(
+    hass: HomeAssistant,
     entry: ConfigEntry,
     imou_client: ImouOpenApiClient,
     status: Literal["on", "off"],
@@ -92,6 +102,7 @@ async def _async_set_message_callback(
                 "Please set webhook_url in integration options or configure HA "
                 "external URL."
             )
+            async_create_event_push_no_url_issue(hass, entry)
             return
         try:
             await imou_client.async_set_message_callback(
@@ -105,8 +116,10 @@ async def _async_set_message_callback(
                 status,
                 callback_url,
             )
+            async_delete_event_push_issues(hass, entry)
         except Exception:
             _LOGGER.exception("Failed to set Imou message callback")
+            async_create_event_push_callback_failed_issue(hass, entry)
     else:
         try:
             await imou_client.async_set_message_callback(
