@@ -13,6 +13,8 @@ from .const import imou_life_device_key
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
 
+PARALLEL_UPDATES = 0
+
 
 def _iter_binary_sensors(
     coordinator: ImouDataUpdateCoordinator,

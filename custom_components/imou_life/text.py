@@ -18,6 +18,8 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
 
+PARALLEL_UPDATES = 0
+
 
 def _iter_texts(
     coordinator: ImouDataUpdateCoordinator,

@@ -29,6 +29,8 @@ from .entity import ImouEntity
 
 _LOGGER = logging.getLogger(__package__)
 
+PARALLEL_UPDATES = 0
+
 
 def _iter_buttons(
     coordinator: ImouDataUpdateCoordinator,
