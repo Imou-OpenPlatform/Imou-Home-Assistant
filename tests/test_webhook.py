@@ -40,6 +40,64 @@ def webhook_language(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_respects_matching_config_entry_only(
+    hass: HomeAssistant,
+) -> None:
+    """Push handling uses the config entry that owns the webhook_id."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+
+    setup_imou_runtime(
+        hass,
+        webhook_id="wh-a",
+        app_id="app_a",
+        selected_devices=["dev-a"],
+    )
+    setup_imou_runtime(
+        hass,
+        webhook_id="wh-b",
+        app_id="app_b",
+        selected_devices=["dev-b"],
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "wh-a",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "dev-b"}),
+    )
+    await hass.async_block_till_done()
+    assert response.status == 200
+    assert events == []
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "wh-a",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "dev-a"}),
+    )
+    await hass.async_block_till_done()
+    assert response.status == 200
+    assert len(events) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_unknown_webhook_id_returns_ok(hass: HomeAssistant) -> None:
+    """Unknown webhook_id is acknowledged without firing events."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(hass, webhook_id="known-id")
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "unknown-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_ignores_invalid_json(hass: HomeAssistant) -> None:
     """Invalid JSON is acknowledged so Imou keeps pushing later events."""
     events: list[Event] = []

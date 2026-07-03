@@ -13,7 +13,7 @@ from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT
+from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT, PARAM_WEBHOOK_ID
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -171,15 +171,18 @@ async def _async_send_notifications(
             )
 
 
-def _get_runtime_data(hass: HomeAssistant) -> ImouRuntimeData | None:
-    """Return runtime data from the Imou config entry, if available."""
-    entries = hass.config_entries.async_entries(DOMAIN)
-    if not entries:
-        return None
-    runtime = entries[0].runtime_data
-    if runtime is None:
-        return None
-    return runtime
+def _get_runtime_data_for_webhook(
+    hass: HomeAssistant, webhook_id: str
+) -> ImouRuntimeData | None:
+    """Return runtime data for the config entry that owns webhook_id."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.data.get(PARAM_WEBHOOK_ID) != webhook_id:
+            continue
+        runtime = entry.runtime_data
+        if runtime is not None:
+            return runtime
+    _LOGGER.debug("No Imou config entry for webhook_id %s", webhook_id)
+    return None
 
 
 async def async_handle_imou_webhook(
@@ -204,7 +207,7 @@ async def async_handle_imou_webhook(
     _LOGGER.debug("Received Imou push event: %s", event_data)
 
     # Check: is push enabled? If user disabled it, silently ignore.
-    runtime = _get_runtime_data(hass)
+    runtime = _get_runtime_data_for_webhook(hass, webhook_id)
     if runtime is None or not runtime.push_enabled:
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
