@@ -25,16 +25,16 @@ rules:
   entity-unavailable: done
   integration-owner: done
   parallel-updates: done
-  reauthentication-flow: todo
+  reauthentication-flow: done
   test-coverage: todo
 
   # Gold
   devices: done
-  diagnostics: todo
+  diagnostics: done
   discovery:
     status: exempt
     comment: Cloud API integration; no local discovery.
   dynamic-devices: done
   entity-translations: done
   icon-translations: done
-  repair-issues: todo
+  repair-issues: done

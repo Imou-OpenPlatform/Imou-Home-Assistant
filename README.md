@@ -84,6 +84,13 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
   - Socket indicator configuration
   - Socket power configuration
 
+## Troubleshooting
+
+- **Invalid AppId / AppSecret** — Home Assistant prompts reauthentication; update App Secret under **Settings → Devices & services → Imou Life → Reconfigure**.
+- **Event push not working** — Check **Settings → System → Network → Home Assistant URL** (external URL required), or set a manual callback URL in **Configure**. Review repair issues under **Settings → System → Repairs**.
+- **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
+- **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
+
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
