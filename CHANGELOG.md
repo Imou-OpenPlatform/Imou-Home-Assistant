@@ -7,7 +7,7 @@
 - `integration_type: hub` and `quality_scale.yaml`
 
 ### Changed
-- Webhook runtime data isolated per config entry; setup assigns `runtime_data` before event push
+- Webhook runtime data isolated per config entry; config entry v2 migration adds missing `webhook_id`
 - Config entry titles show readable integration name; abort when device list is empty or unavailable
 - Switch/select/text writes trigger coordinator refresh; switch types whitelisted
 - All platforms declare `PARALLEL_UPDATES = 0`

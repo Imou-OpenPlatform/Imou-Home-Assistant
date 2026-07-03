@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -25,6 +26,20 @@ from .event_push import async_setup_event_push, async_teardown_event_push
 from .runtime_data import ImouRuntimeData
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entries to the current schema."""
+    if entry.version >= 2:
+        return True
+
+    data = dict(entry.data)
+    if not data.get(PARAM_WEBHOOK_ID):
+        data[PARAM_WEBHOOK_ID] = uuid.uuid4().hex
+        _LOGGER.debug("Added missing webhook_id to config entry %s", entry.entry_id)
+
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:

@@ -91,7 +91,7 @@ def _options_placeholder(hass, key: str, fallback: str) -> str:
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Imou Life."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize config flow."""
@@ -131,47 +131,44 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[PARAM_APP_SECRET],
             user_input[PARAM_API_URL],
         )
-        errors: dict[str, str] = {}
         try:
-            await api_client.async_get_token()
-        except ImouException as exception:
-            errors["base"] = _config_flow_error_key(exception)
-            return self.async_show_form(
-                step_id="login",
-                data_schema=self._login_schema(user_input[PARAM_API_URL]),
-                errors=errors,
-            )
+            try:
+                await api_client.async_get_token()
+            except ImouException as exception:
+                return self.async_show_form(
+                    step_id="login",
+                    data_schema=self._login_schema(user_input[PARAM_API_URL]),
+                    errors={"base": _config_flow_error_key(exception)},
+                )
 
-        # Save login data for later entry creation
-        self._login_data = {
-            PARAM_APP_ID: user_input[PARAM_APP_ID],
-            PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-            PARAM_API_URL: user_input[PARAM_API_URL],
-            PARAM_WEBHOOK_ID: uuid.uuid4().hex,
-        }
+            self._login_data = {
+                PARAM_APP_ID: user_input[PARAM_APP_ID],
+                PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+                PARAM_API_URL: user_input[PARAM_API_URL],
+                PARAM_WEBHOOK_ID: uuid.uuid4().hex,
+            }
 
-        # Fetch device list for selection
-        try:
-            self._devices_map = await async_build_device_map(self.hass, api_client)
-        except ConnectFailedException:
-            _LOGGER.warning("Failed to fetch device list: connection error")
-            return self.async_abort(reason="cannot_connect")
-        except RequestFailedException:
-            _LOGGER.warning("Failed to fetch device list: request failed")
-            return self.async_abort(reason="request_failed")
-        except ImouException as exception:
-            _LOGGER.warning("Failed to fetch device list: %s", exception.message)
-            return self.async_abort(reason="cannot_connect")
-        except Exception:
-            _LOGGER.exception("Failed to fetch device list")
-            return self.async_abort(reason="cannot_connect")
+            try:
+                self._devices_map = await async_build_device_map(self.hass, api_client)
+            except ConnectFailedException:
+                _LOGGER.warning("Failed to fetch device list: connection error")
+                return self.async_abort(reason="cannot_connect")
+            except RequestFailedException:
+                _LOGGER.warning("Failed to fetch device list: request failed")
+                return self.async_abort(reason="request_failed")
+            except ImouException as exception:
+                _LOGGER.warning("Failed to fetch device list: %s", exception.message)
+                return self.async_abort(reason="cannot_connect")
+            except Exception:
+                _LOGGER.exception("Failed to fetch device list")
+                return self.async_abort(reason="cannot_connect")
+
+            if not self._devices_map:
+                return self.async_abort(reason="no_devices")
+
+            return await self.async_step_select_devices()
         finally:
             await api_client.async_close()
-
-        if not self._devices_map:
-            return self.async_abort(reason="no_devices")
-
-        return await self.async_step_select_devices()
 
     async def async_step_select_devices(
         self, user_input: dict[str, Any] | None = None

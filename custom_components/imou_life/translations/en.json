@@ -265,22 +265,6 @@
     }
   },
   "services": {
-    "turn_on": {
-      "name": "Turn On",
-      "description": "Turn on"
-    },
-    "turn_off": {
-      "name": "Turn Off",
-      "description": "Turn off"
-    },
-    "restart_device": {
-      "name": "Restart",
-      "description": "Restart device"
-    },
-    "select": {
-      "name": "Select",
-      "description": "Select option"
-    },
     "control_move_ptz": {
       "name": "Control PTZ",
       "description": "Control PTZ rotation",

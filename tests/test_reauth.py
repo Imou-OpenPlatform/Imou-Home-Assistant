@@ -36,3 +36,27 @@ async def test_reauth_updates_app_secret(hass) -> None:
     assert result["reason"] == "reauth_successful"
     assert entry.data[PARAM_APP_SECRET] == "new_secret"
     assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")
+async def test_reauth_rejects_invalid_secret(hass) -> None:
+    """Reauth flow shows an error when the new App Secret is invalid."""
+    from homeassistant.config_entries import SOURCE_REAUTH
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+        data=entry.data,
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={PARAM_APP_SECRET: "wrong_secret"},
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"]["base"] == "appIdOrSecret_invalid"
+    assert entry.data[PARAM_APP_SECRET] == USER_INPUT["app_secret"]
