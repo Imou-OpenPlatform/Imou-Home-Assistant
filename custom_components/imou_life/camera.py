@@ -17,7 +17,6 @@ from .const import (
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_MOTION_DETECT,
-    PARAM_STORAGE_USED,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -96,24 +95,6 @@ class ImouCamera(ImouEntity, Camera):
             )
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
-
-    @property
-    def is_recording(self) -> bool:
-        """Return True when storage reports usage and motion detection is enabled."""
-        return (
-            self.is_non_negative_number(
-                self.device.sensors[PARAM_STORAGE_USED][PARAM_STATE]
-                if self.device.sensors.get(PARAM_STORAGE_USED)
-                else "-1"
-            )
-            and self.motion_detection_enabled
-        )
-
-    @property
-    def is_streaming(self) -> bool:
-        if self.stream is None:
-            return False
-        return self.stream._thread is not None and self.stream._thread.is_alive()
 
     @property
     def motion_detection_enabled(self) -> bool:

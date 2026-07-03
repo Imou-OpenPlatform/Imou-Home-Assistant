@@ -83,10 +83,9 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 self._entity_type,
                 True,
             )
-            self.device.switches[self._entity_type][PARAM_STATE] = True
-            self.async_write_ha_state()
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         try:
@@ -95,10 +94,9 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 self._entity_type,
                 False,
             )
-            self.device.switches[self._entity_type][PARAM_STATE] = False
-            self.async_write_ha_state()
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
+        await self.coordinator.async_request_refresh()
 
     @property
     def is_on(self) -> bool | None:

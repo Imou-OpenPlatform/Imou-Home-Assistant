@@ -89,7 +89,6 @@ class ImouSelect(ImouEntity, SelectEntity):
             await self.coordinator.device_manager.async_select_option(
                 self.device, self._entity_type, option
             )
-            self.device.selects[self._entity_type][PARAM_CURRENT_OPTION] = option
-            self.async_write_ha_state()
         except ImouException as err:
             raise HomeAssistantError(err.message) from err
+        await self.coordinator.async_request_refresh()

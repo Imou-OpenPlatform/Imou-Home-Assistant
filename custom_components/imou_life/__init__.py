@@ -82,7 +82,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     elif webhook_id:
         await async_teardown_event_push(hass, entry)
 
-    _remove_devices_for_config_entry(hass, entry.entry_id)
     return True
 
 
@@ -90,16 +89,6 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
     _LOGGER.debug("Reloading entry %s", entry.entry_id)
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-def _remove_devices_for_config_entry(hass: HomeAssistant, config_entry_id: str) -> None:
-    """Remove device registry entries tied to this config entry."""
-    device_registry = dr.async_get(hass)
-    for device_entry in device_registry.devices.get_devices_for_config_entry_id(
-        config_entry_id
-    ):
-        _LOGGER.debug("Removing device %s", device_entry.name)
-        device_registry.async_remove_device(device_entry.id)
 
 
 async def async_remove_config_entry_device(
