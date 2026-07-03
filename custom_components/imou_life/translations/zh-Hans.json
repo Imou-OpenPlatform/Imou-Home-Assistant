@@ -18,12 +18,16 @@
       }
     },
     "abort": {
-      "already_configured": "该AppId已配置"
+      "already_configured": "该AppId已配置",
+      "no_devices": "该账号下未找到 Imou 设备",
+      "cannot_connect": "无法连接 Imou 开放平台",
+      "request_failed": "从 Imou 加载设备列表失败"
     },
     "error": {
       "appIdOrSecret_invalid": "appId或者appSecret有误",
       "connect_failed": "连接失败",
-      "request_failed": "请求失败"
+      "request_failed": "请求失败",
+      "unknown": "发生未知错误"
     }
   },
   "options": {

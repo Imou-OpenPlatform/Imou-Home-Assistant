@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from typing import Literal
 
 from homeassistant.config_entries import ConfigEntry
@@ -41,9 +40,12 @@ async def async_setup_event_push(
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if not webhook_id:
-        webhook_id = uuid.uuid4().hex
-        entry.data[PARAM_WEBHOOK_ID] = webhook_id
-        await hass.config_entries.async_update_entry(entry, data=entry.data)
+        _LOGGER.error(
+            "Config entry %s missing webhook_id; event push cannot be registered",
+            entry.entry_id,
+        )
+        return webhook_id, ""
+
     generated_url = async_register_imou_webhook(hass, webhook_id)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):

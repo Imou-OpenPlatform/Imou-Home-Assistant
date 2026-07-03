@@ -168,3 +168,6 @@ requirements.txt
 
 # Local planning docs (not versioned)
 docs/
+
+# Local release notes drafts (publish via GitHub Releases; use skill imou-ha-release-notes)
+releases/

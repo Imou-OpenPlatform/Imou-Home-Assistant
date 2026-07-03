@@ -17,7 +17,12 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
-from pyimouapi.exceptions import ImouException
+from pyimouapi.exceptions import (
+    ConnectFailedException,
+    ImouException,
+    InvalidAppIdOrSecretException,
+    RequestFailedException,
+)
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
@@ -51,6 +56,26 @@ from .const import (
 from .helpers import async_build_device_map
 
 _LOGGER = logging.getLogger(__name__)
+
+_ENTRY_NAME = "Imou Life Official"
+
+
+def _entry_title(app_id: str) -> str:
+    """Build a readable config entry title."""
+    suffix = app_id if len(app_id) <= 12 else f"{app_id[:8]}…"
+    return f"{_ENTRY_NAME} ({suffix})"
+
+
+def _config_flow_error_key(exception: ImouException) -> str:
+    """Map pyimouapi exceptions to config flow error translation keys."""
+    if isinstance(exception, InvalidAppIdOrSecretException):
+        return "appIdOrSecret_invalid"
+    if isinstance(exception, ConnectFailedException):
+        return "connect_failed"
+    if isinstance(exception, RequestFailedException):
+        return "request_failed"
+    title = exception.get_title()
+    return title if title != "generic_error" else "unknown"
 
 
 def _options_placeholder(hass, key: str, fallback: str) -> str:
@@ -109,7 +134,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             await api_client.async_get_token()
         except ImouException as exception:
-            errors["base"] = exception.get_title()
+            errors["base"] = _config_flow_error_key(exception)
             return self.async_show_form(
                 step_id="login",
                 data_schema=self._login_schema(user_input[PARAM_API_URL]),
@@ -127,20 +152,23 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Fetch device list for selection
         try:
             self._devices_map = await async_build_device_map(self.hass, api_client)
+        except ConnectFailedException:
+            _LOGGER.warning("Failed to fetch device list: connection error")
+            return self.async_abort(reason="cannot_connect")
+        except RequestFailedException:
+            _LOGGER.warning("Failed to fetch device list: request failed")
+            return self.async_abort(reason="request_failed")
+        except ImouException as exception:
+            _LOGGER.warning("Failed to fetch device list: %s", exception.message)
+            return self.async_abort(reason="cannot_connect")
         except Exception:
-            _LOGGER.warning(
-                "Failed to fetch device list, creating entry without device selection"
-            )
-            self._devices_map = {}
+            _LOGGER.exception("Failed to fetch device list")
+            return self.async_abort(reason="cannot_connect")
         finally:
             await api_client.async_close()
 
         if not self._devices_map:
-            # No devices found or fetch failed — create entry directly (all devices)
-            return self.async_create_entry(
-                title=DOMAIN,
-                data=self._login_data,
-            )
+            return self.async_abort(reason="no_devices")
 
         return await self.async_step_select_devices()
 
@@ -151,7 +179,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected = user_input.get(PARAM_SELECTED_DEVICES, [])
             return self.async_create_entry(
-                title=DOMAIN,
+                title=_entry_title(self._login_data[PARAM_APP_ID]),
                 data={**self._login_data, PARAM_SELECTED_DEVICES: selected},
             )
 

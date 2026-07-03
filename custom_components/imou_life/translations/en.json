@@ -18,12 +18,16 @@
       }
     },
     "abort": {
-      "already_configured": "AppId is already configured"
+      "already_configured": "AppId is already configured",
+      "no_devices": "No Imou devices were found on this account",
+      "cannot_connect": "Could not connect to Imou Open Platform",
+      "request_failed": "Failed to load device list from Imou"
     },
     "error": {
       "appIdOrSecret_invalid": "Invalid appId or appSecret",
       "connect_failed": "Failed to connect to Imou",
-      "request_failed": "Request failed"
+      "request_failed": "Request failed",
+      "unknown": "An unknown error occurred"
     }
   },
   "options": {
