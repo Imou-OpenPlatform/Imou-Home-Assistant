@@ -102,6 +102,9 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # Bootstrap: license validation reads GitHub repo metadata (default branch).
+          # Remove after LICENSE is on main and GitHub exposes repository.license.
+          ignore: license
 
   manifest-sync:
     name: Manifest
