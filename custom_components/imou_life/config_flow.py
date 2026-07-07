@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -17,7 +18,12 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
-from pyimouapi.exceptions import ImouException
+from pyimouapi.exceptions import (
+    ConnectFailedException,
+    ImouException,
+    InvalidAppIdOrSecretException,
+    RequestFailedException,
+)
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
@@ -52,6 +58,26 @@ from .helpers import async_build_device_map
 
 _LOGGER = logging.getLogger(__name__)
 
+_ENTRY_NAME = "Imou Life Official"
+
+
+def _entry_title(app_id: str) -> str:
+    """Build a readable config entry title."""
+    suffix = app_id if len(app_id) <= 12 else f"{app_id[:8]}…"
+    return f"{_ENTRY_NAME} ({suffix})"
+
+
+def _config_flow_error_key(exception: ImouException) -> str:
+    """Map pyimouapi exceptions to config flow error translation keys."""
+    if isinstance(exception, InvalidAppIdOrSecretException):
+        return "appIdOrSecret_invalid"
+    if isinstance(exception, ConnectFailedException):
+        return "connect_failed"
+    if isinstance(exception, RequestFailedException):
+        return "request_failed"
+    title = exception.get_title()
+    return title if title != "generic_error" else "unknown"
+
 
 def _options_placeholder(hass, key: str, fallback: str) -> str:
     """Load webhook placeholder label from selector translations."""
@@ -65,7 +91,7 @@ def _options_placeholder(hass, key: str, fallback: str) -> str:
 class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Imou Life."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize config flow."""
@@ -105,44 +131,44 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[PARAM_APP_SECRET],
             user_input[PARAM_API_URL],
         )
-        errors: dict[str, str] = {}
         try:
-            await api_client.async_get_token()
-        except ImouException as exception:
-            errors["base"] = exception.get_title()
-            return self.async_show_form(
-                step_id="login",
-                data_schema=self._login_schema(user_input[PARAM_API_URL]),
-                errors=errors,
-            )
+            try:
+                await api_client.async_get_token()
+            except ImouException as exception:
+                return self.async_show_form(
+                    step_id="login",
+                    data_schema=self._login_schema(user_input[PARAM_API_URL]),
+                    errors={"base": _config_flow_error_key(exception)},
+                )
 
-        # Save login data for later entry creation
-        self._login_data = {
-            PARAM_APP_ID: user_input[PARAM_APP_ID],
-            PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-            PARAM_API_URL: user_input[PARAM_API_URL],
-            PARAM_WEBHOOK_ID: uuid.uuid4().hex,
-        }
+            self._login_data = {
+                PARAM_APP_ID: user_input[PARAM_APP_ID],
+                PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+                PARAM_API_URL: user_input[PARAM_API_URL],
+                PARAM_WEBHOOK_ID: uuid.uuid4().hex,
+            }
 
-        # Fetch device list for selection
-        try:
-            self._devices_map = await async_build_device_map(self.hass, api_client)
-        except Exception:
-            _LOGGER.warning(
-                "Failed to fetch device list, creating entry without device selection"
-            )
-            self._devices_map = {}
+            try:
+                self._devices_map = await async_build_device_map(self.hass, api_client)
+            except ConnectFailedException:
+                _LOGGER.warning("Failed to fetch device list: connection error")
+                return self.async_abort(reason="cannot_connect")
+            except RequestFailedException:
+                _LOGGER.warning("Failed to fetch device list: request failed")
+                return self.async_abort(reason="request_failed")
+            except ImouException as exception:
+                _LOGGER.warning("Failed to fetch device list: %s", exception.message)
+                return self.async_abort(reason="cannot_connect")
+            except Exception:
+                _LOGGER.exception("Failed to fetch device list")
+                return self.async_abort(reason="cannot_connect")
+
+            if not self._devices_map:
+                return self.async_abort(reason="no_devices")
+
+            return await self.async_step_select_devices()
         finally:
             await api_client.async_close()
-
-        if not self._devices_map:
-            # No devices found or fetch failed — create entry directly (all devices)
-            return self.async_create_entry(
-                title=DOMAIN,
-                data=self._login_data,
-            )
-
-        return await self.async_step_select_devices()
 
     async def async_step_select_devices(
         self, user_input: dict[str, Any] | None = None
@@ -151,7 +177,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected = user_input.get(PARAM_SELECTED_DEVICES, [])
             return self.async_create_entry(
-                title=DOMAIN,
+                title=_entry_title(self._login_data[PARAM_APP_ID]),
                 data={**self._login_data, PARAM_SELECTED_DEVICES: selected},
             )
 
@@ -168,6 +194,59 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             description_placeholders={
                 "device_count": str(len(self._devices_map)),
+            },
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle reauthentication."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm reauthentication with a new App Secret."""
+        reauth_entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+                description_placeholders={
+                    "app_id": reauth_entry.data[PARAM_APP_ID],
+                },
+            )
+
+        api_client = ImouOpenApiClient(
+            reauth_entry.data[PARAM_APP_ID],
+            user_input[PARAM_APP_SECRET],
+            reauth_entry.data[PARAM_API_URL],
+        )
+        try:
+            await api_client.async_get_token()
+        except InvalidAppIdOrSecretException:
+            errors["base"] = "appIdOrSecret_invalid"
+        except ImouException as exception:
+            errors["base"] = _config_flow_error_key(exception)
+        else:
+            return self.async_update_reload_and_abort(
+                reauth_entry,
+                data={
+                    **reauth_entry.data,
+                    PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
+                },
+            )
+        finally:
+            await api_client.async_close()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+            errors=errors,
+            description_placeholders={
+                "app_id": reauth_entry.data[PARAM_APP_ID],
             },
         )
 

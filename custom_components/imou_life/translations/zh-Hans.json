@@ -15,15 +15,36 @@
         "data": {
           "selected_devices": "设备列表"
         }
+      },
+      "reauth_confirm": {
+        "title": "重新验证 Imou Life",
+        "description": "App Secret 已失效。请为 AppId {app_id} 输入新的 App Secret。",
+        "data": {
+          "app_secret": "AppSecret"
+        }
       }
     },
     "abort": {
-      "already_configured": "该AppId已配置"
+      "already_configured": "该AppId已配置",
+      "no_devices": "该账号下未找到 Imou 设备",
+      "cannot_connect": "无法连接 Imou 开放平台",
+      "request_failed": "从 Imou 加载设备列表失败"
     },
     "error": {
       "appIdOrSecret_invalid": "appId或者appSecret有误",
       "connect_failed": "连接失败",
-      "request_failed": "请求失败"
+      "request_failed": "请求失败",
+      "unknown": "发生未知错误"
+    }
+  },
+  "issues": {
+    "event_push_no_external_url": {
+      "title": "Imou 事件推送缺少回调 URL",
+      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 Imou Life 选项中填写手动回调 URL。"
+    },
+    "event_push_callback_failed": {
+      "title": "Imou 事件推送注册失败",
+      "description": "无法向 Imou 开放平台注册消息回调。请检查回调 URL 与 AppId 资源配额，然后重新加载集成。"
     }
   },
   "options": {
@@ -244,29 +265,13 @@
     }
   },
   "services": {
-    "turn_on": {
-      "name": "打开",
-      "description": "打开"
-    },
-    "turn_off": {
-      "name": "关闭",
-      "description": "关闭"
-    },
-    "restart_device": {
-      "name": "重启",
-      "description": "重启设备"
-    },
-    "select": {
-      "name": "选择",
-      "description": "选择"
-    },
     "control_move_ptz": {
       "name": "转动云台",
       "description": "控制云台转动",
       "fields": {
         "duration": {
           "name": "转动时间",
-          "description": "云台转动时间"
+          "description": "云台转动持续时间"
         }
       }
     }

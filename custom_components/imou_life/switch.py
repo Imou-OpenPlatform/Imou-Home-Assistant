@@ -1,24 +1,26 @@
 from typing import Any
 
-import voluptuous as vol
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    PARAM_ENTITY_ID,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
+    SWITCH_TYPES,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
+
+PARALLEL_UPDATES = 0
+
+SWITCH_DEVICE_CLASS: dict[str, SwitchDeviceClass] = {
+    "light": SwitchDeviceClass.SWITCH,
+    "switch": SwitchDeviceClass.SWITCH,
+}
 
 
 def _iter_switches(
@@ -29,6 +31,7 @@ def _iter_switches(
         (switch_type, device)
         for device in coordinator.devices
         for switch_type in device.switches
+        if switch_type in SWITCH_TYPES
     ]
 
 
@@ -56,25 +59,20 @@ async def async_setup_entry(
     entry.async_on_unload(_remove_new_device_callback)
     _async_add_switches(coordinator.devices)
 
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(
-        SERVICE_TURN_ON,
-        {
-            vol.Required(PARAM_ENTITY_ID): cv.entity_id,
-        },
-        "async_turn_on",
-    )
-    platform.async_register_entity_service(
-        SERVICE_TURN_OFF,
-        {
-            vol.Required(PARAM_ENTITY_ID): cv.entity_id,
-        },
-        "async_turn_off",
-    )
-
 
 class ImouSwitch(ImouEntity, SwitchEntity):
     """Representation of an Imou switch."""
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+        entity_type: str,
+        device: ImouHaDevice,
+    ) -> None:
+        """Initialize ImouSwitch."""
+        super().__init__(coordinator, config_entry, entity_type, device)
+        self._attr_device_class = SWITCH_DEVICE_CLASS.get(entity_type)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         try:
@@ -83,10 +81,9 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 self._entity_type,
                 True,
             )
-            self.device.switches[self._entity_type][PARAM_STATE] = True
-            self.async_write_ha_state()
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         try:
@@ -95,19 +92,11 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 self._entity_type,
                 False,
             )
-            self.device.switches[self._entity_type][PARAM_STATE] = False
-            self.async_write_ha_state()
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
+        await self.coordinator.async_request_refresh()
 
     @property
     def is_on(self) -> bool | None:
         """Return True if the switch is on."""
         return self.device.switches[self._entity_type][PARAM_STATE]
-
-    @property
-    def device_class(self) -> SwitchDeviceClass | None:
-        """Return device class when applicable."""
-        if self._entity_type == "switch":
-            return SwitchDeviceClass.SWITCH
-        return None

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from pyimouapi.exceptions import ImouException
+from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
@@ -95,6 +95,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 fresh_devices = await self._device_manager.async_get_devices()
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
+        except InvalidAppIdOrSecretException as err:
+            self.config_entry.async_start_reauth(self.hass)
+            raise UpdateFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
             raise UpdateFailed(f"Error fetching Imou devices: {err}") from err
 

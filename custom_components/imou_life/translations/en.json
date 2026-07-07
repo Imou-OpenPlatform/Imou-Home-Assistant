@@ -15,15 +15,36 @@
         "data": {
           "selected_devices": "Devices"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Imou Life",
+        "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
+        "data": {
+          "app_secret": "AppSecret"
+        }
       }
     },
     "abort": {
-      "already_configured": "AppId is already configured"
+      "already_configured": "AppId is already configured",
+      "no_devices": "No Imou devices were found on this account",
+      "cannot_connect": "Could not connect to Imou Open Platform",
+      "request_failed": "Failed to load device list from Imou"
     },
     "error": {
       "appIdOrSecret_invalid": "Invalid appId or appSecret",
       "connect_failed": "Failed to connect to Imou",
-      "request_failed": "Request failed"
+      "request_failed": "Request failed",
+      "unknown": "An unknown error occurred"
+    }
+  },
+  "issues": {
+    "event_push_no_external_url": {
+      "title": "Imou event push has no callback URL",
+      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a manual callback URL in Imou Life options."
+    },
+    "event_push_callback_failed": {
+      "title": "Imou event push registration failed",
+      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your AppId resource quota, then reload the integration."
     }
   },
   "options": {
@@ -244,22 +265,6 @@
     }
   },
   "services": {
-    "turn_on": {
-      "name": "Turn On",
-      "description": "Turn on"
-    },
-    "turn_off": {
-      "name": "Turn Off",
-      "description": "Turn off"
-    },
-    "restart_device": {
-      "name": "Restart",
-      "description": "Restart device"
-    },
-    "select": {
-      "name": "Select",
-      "description": "Select option"
-    },
     "control_move_ptz": {
       "name": "Control PTZ",
       "description": "Control PTZ rotation",

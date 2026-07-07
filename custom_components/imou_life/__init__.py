@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -27,6 +28,20 @@ from .runtime_data import ImouRuntimeData
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entries to the current schema."""
+    if entry.version >= 2:
+        return True
+
+    data = dict(entry.data)
+    if not data.get(PARAM_WEBHOOK_ID):
+        data[PARAM_WEBHOOK_ID] = uuid.uuid4().hex
+        _LOGGER.debug("Added missing webhook_id to config entry %s", entry.entry_id)
+
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:
     """Set up Imou Life from a config entry."""
     _LOGGER.debug("Setting up imou_life")
@@ -39,6 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     imou_device_manager = ImouHaDeviceManager(device_manager)
     coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
     runtime = ImouRuntimeData(coordinator=coordinator)
+    entry.runtime_data = runtime
 
     try:
         await async_setup_event_push(hass, entry, imou_client, runtime)
@@ -48,7 +64,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         )
 
     await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = runtime
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
@@ -82,7 +97,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     elif webhook_id:
         await async_teardown_event_push(hass, entry)
 
-    _remove_devices_for_config_entry(hass, entry.entry_id)
     return True
 
 
@@ -90,16 +104,6 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
     _LOGGER.debug("Reloading entry %s", entry.entry_id)
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-def _remove_devices_for_config_entry(hass: HomeAssistant, config_entry_id: str) -> None:
-    """Remove device registry entries tied to this config entry."""
-    device_registry = dr.async_get(hass)
-    for device_entry in device_registry.devices.get_devices_for_config_entry_id(
-        config_entry_id
-    ):
-        _LOGGER.debug("Removing device %s", device_entry.name)
-        device_registry.async_remove_device(device_entry.id)
 
 
 async def async_remove_config_entry_device(

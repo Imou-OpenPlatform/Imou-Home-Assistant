@@ -4,7 +4,7 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from custom_components.imou_life.const import DOMAIN
+from custom_components.imou_life.const import DOMAIN, PARAM_WEBHOOK_ID
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.core import HomeAssistant
 from pyimouapi import InvalidAppIdOrSecretException
@@ -81,12 +81,15 @@ def imou_config_flow_exception() -> Generator[MagicMock]:
 def setup_imou_runtime(
     hass: HomeAssistant,
     *,
+    webhook_id: str = "webhook-id",
     push_enabled: bool = True,
     selected_devices: list[str] | None = None,
     notify_services: list[str] | None = None,
+    app_id: str = "test_app_id",
 ) -> ImouRuntimeData:
     """Attach ImouRuntimeData to a mock config entry for webhook tests."""
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data)
     entry.add_to_hass(hass)
     runtime = ImouRuntimeData(
         coordinator=MagicMock(),

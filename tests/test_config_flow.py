@@ -26,7 +26,7 @@ assert not re.search(r"[\u4e00-\u9fff]", _CONFIG_FLOW_PATH.read_text(encoding="u
 assert "/openapi/" not in _CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
 
-@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     """Test async_step_user with no user input."""
     result = await hass.config_entries.flow.async_init(
@@ -38,13 +38,33 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input=USER_INPUT
         )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "select_devices"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={PARAM_SELECTED_DEVICES: ["device_1", "device_2"]},
+        )
 
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Imou Life Official (test_app_id)"
     assert {key: result["data"][key] for key in USER_INPUT} == USER_INPUT
     assert PARAM_WEBHOOK_ID in result["data"]
     assert len(mock_setup_entry.mock_calls) == 1
     await hass.async_block_till_done()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_async_step_user_aborts_when_no_devices(hass: HomeAssistant) -> None:
+    """Setup aborts when the account has no devices."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=USER_INPUT
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_devices"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")
@@ -109,6 +129,7 @@ async def test_async_step_user_with_device_selection(hass: HomeAssistant) -> Non
 
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Imou Life Official (test_app_id)"
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
     assert PARAM_WEBHOOK_ID in result["data"]
     assert len(mock_setup_entry.mock_calls) == 1

@@ -3,9 +3,16 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from custom_components.imou_life.const import DOMAIN, PARAM_SELECTED_DEVICES
+from custom_components.imou_life.const import (
+    DOMAIN,
+    PARAM_SELECTED_DEVICES,
+    imou_life_device_key,
+)
 from custom_components.imou_life.coordinator import ImouDataUpdateCoordinator
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -86,3 +93,33 @@ async def test_filter_specific_ids(
     )
     assert len(coordinator.devices) == 2
     assert {d.device_id for d in coordinator.devices} == {"d1", "d3"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_coordinator_skips_poll_when_all_entities_disabled(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Skip cloud status poll when every entity for a device is disabled."""
+    devices = [_mock_device("d1")]
+    coordinator = await _run_update(hass, device_manager, devices)
+    device_key = imou_life_device_key(devices[0])
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=coordinator.config_entry.entry_id,
+        identifiers={(DOMAIN, device_key)},
+        name="Test device",
+    )
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        DOMAIN,
+        "sensor",
+        f"{device_key}$status",
+        config_entry=coordinator.config_entry,
+        device_id=device_entry.id,
+        disabled_by=RegistryEntryDisabler.USER,
+    )
+
+    device_manager.async_update_device_status.reset_mock()
+    await coordinator._async_update_data()
+    device_manager.async_update_device_status.assert_not_called()

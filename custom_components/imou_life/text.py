@@ -18,6 +18,8 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity
 
+PARALLEL_UPDATES = 0
+
 
 def _iter_texts(
     coordinator: ImouDataUpdateCoordinator,
@@ -71,9 +73,9 @@ class ImouText(ImouEntity, TextEntity):
                 self._entity_type,
                 value,
             )
-            self.device.texts[self._entity_type][PARAM_STATE] = value
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
+        await self.coordinator.async_request_refresh()
 
     @property
     def pattern(self) -> str | None:

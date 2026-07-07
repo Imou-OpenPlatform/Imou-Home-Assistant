@@ -1,4 +1,25 @@
 # CHANGELOG
+## [1.3.0]
+### Added
+- Reauth flow when App Secret expires
+- Repair issues for event push URL and callback registration failures
+- Config entry diagnostics (redacted secrets)
+- `integration_type: hub` and `quality_scale.yaml`
+
+### Changed
+- Webhook runtime data isolated per config entry; config entry v2 migration adds missing `webhook_id`
+- Config entry titles show readable integration name; abort when device list is empty or unavailable
+- Switch/select/text writes trigger coordinator refresh; switch types whitelisted
+- All platforms declare `PARALLEL_UPDATES = 0`
+
+### Fixed
+- Unload no longer bulk-removes device registry entries
+- Removed unreliable camera `is_recording` / `is_streaming` properties
+- `async_get_cached_translations()` signature compatibility (from v1.2.9 follow-up)
+
+### Breaking
+- Removed custom entity services `imou_life.turn_on`, `turn_off`, `select`, and `restart_device`. Use standard `switch.turn_on`, `select.select_option`, and `button.press` instead.
+
 ## [1.2.9]
 ### Added
 - pyimouapi 1.2.9 dependency for API encapsulation (no direct OpenAPI paths in integration code)
