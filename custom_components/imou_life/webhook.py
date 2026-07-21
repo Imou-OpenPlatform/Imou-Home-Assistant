@@ -35,6 +35,7 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "iotProperty",
         "iotAction",
         "numberstat",
+        "electricity",
         # privacy mask (#66)
         "openCamera",
         "closeCamera",
@@ -124,9 +125,6 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
     content = payload.get("content")
     output_data = None
     if isinstance(content, dict):
-        iot_event = content.get("event")
-        if msg_type == "iotEvent" and iot_event is not None and iot_event != "":
-            msg_type = str(iot_event)
         output_data = content.get("outputData")
         if channel_id is None:
             monitor = content.get("monitor")
@@ -150,6 +148,57 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "raw": payload,
     }
     return event
+
+
+def _is_digit_str(value: Any) -> bool:
+    return isinstance(value, str) and value.isdigit()
+
+
+def _lookup_key_for_event_resolve(
+    msg_type: str | None, raw: dict[str, Any]
+) -> str | None:
+    """Return the product-model event ref to resolve, or None to skip."""
+    if _is_digit_str(msg_type):
+        return msg_type
+    if msg_type == "iotEvent":
+        content = raw.get("content")
+        if isinstance(content, dict):
+            event_ref = content.get("event")
+            if event_ref is None or event_ref == "":
+                return None
+            key = str(event_ref)
+            if key.isdigit():
+                return key
+    return None
+
+
+async def _async_apply_event_identifier(
+    runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> None:
+    """Rewrite outbound msg_type to identifier when resolvable."""
+    product_id = event_data.get("product_id")
+    raw = event_data.get("raw")
+    if not product_id or not isinstance(raw, dict):
+        return
+    lookup_key = _lookup_key_for_event_resolve(event_data.get("msg_type"), raw)
+    if not lookup_key:
+        return
+    try:
+        delegate = runtime.coordinator.device_manager.delegate
+        identifier = await delegate.async_resolve_event_identifier(
+            product_id, lookup_key
+        )
+    except Exception:
+        _LOGGER.warning(
+            "Failed to resolve event identifier for product_id=%s key=%s",
+            product_id,
+            lookup_key,
+            exc_info=True,
+        )
+        return
+    if identifier:
+        event_data["msg_type"] = identifier
+        event_data["msg_type_name"] = identifier
 
 
 async def _async_build_notification_message(
@@ -286,11 +335,14 @@ async def async_handle_imou_webhook(
 
     runtime.record_push_msg(msg_type)
 
+    # Classify on original top-level msgType before outbound identifier rewrite.
+    is_alarm = _is_alarm_msg_type(msg_type)
+    await _async_apply_event_identifier(runtime, event_data)
+
     # Always fire the generic event
     hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
 
     # Fire alarm-specific event + send notifications for security alarms
-    is_alarm = _is_alarm_msg_type(msg_type)
     if is_alarm:
         hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
 
