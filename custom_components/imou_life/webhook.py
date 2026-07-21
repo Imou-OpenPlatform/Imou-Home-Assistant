@@ -261,6 +261,8 @@ async def async_handle_imou_webhook(
         )
         return web.Response(status=200, text="ok")
 
+    runtime.record_push_msg(msg_type)
+
     # Always fire the generic event
     hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
 

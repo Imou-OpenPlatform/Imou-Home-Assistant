@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
 )
+from custom_components.imou_life.runtime_data import ImouRuntimeData
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _is_alarm_msg_type,
@@ -279,3 +281,67 @@ async def test_webhook_missing_msg_type_is_not_alarm(
     assert response.status == 200
     assert len(generic_events) == 1
     assert alarm_events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_records_msg_type_counts(hass: HomeAssistant) -> None:
+    """Accepted pushes increment runtime msgType counters."""
+    runtime = setup_imou_runtime(
+        hass, push_enabled=True, selected_devices=["device_1"]
+    )
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "closeCamera", "deviceId": "device_1"}),
+    )
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "closeCamera", "deviceId": "device_1"}),
+    )
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "abAlarmSound", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done()
+
+    assert runtime.push_msg_type_counts["closeCamera"] == 2
+    assert runtime.push_msg_type_counts["abAlarmSound"] == 1
+    assert runtime.push_last_msg_type == "abAlarmSound"
+    assert runtime.push_last_received_at is not None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_filtered_device_does_not_count(
+    hass: HomeAssistant,
+) -> None:
+    """Unselected devices do not update push counters."""
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["selected_device"],
+    )
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "other_device"}),
+    )
+    await hass.async_block_till_done()
+
+    assert runtime.push_msg_type_counts == {}
+    assert runtime.push_last_msg_type is None
+
+
+def test_record_push_msg_caps_distinct_keys() -> None:
+    """More than 50 distinct msgTypes fold into _other."""
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    for i in range(50):
+        runtime.record_push_msg(f"type_{i}")
+    assert len(runtime.push_msg_type_counts) == 50
+    runtime.record_push_msg("type_extra")
+    assert runtime.push_msg_type_counts["_other"] == 1
+    assert "type_extra" not in runtime.push_msg_type_counts
+    assert runtime.push_last_msg_type == "type_extra"
