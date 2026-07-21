@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import (
@@ -14,6 +14,7 @@ from custom_components.imou_life.runtime_data import ImouRuntimeData
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _is_alarm_msg_type,
+    _load_webhook_strings_file,
     _normalize_event_payload,
     async_handle_imou_webhook,
 )
@@ -173,6 +174,22 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 
     assert title == "Imou alarm: Local alarm"
     assert message == "Device: Front Door\nType: Local alarm"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
+    """Webhook string files must not be read on the event loop (HA blocking I/O)."""
+    _load_webhook_strings_file.cache_clear()
+    with patch.object(
+        hass, "async_add_executor_job", wraps=hass.async_add_executor_job
+    ) as mock_executor:
+        await _async_build_notification_message(
+            hass,
+            {"msg_type": "alarmLocal", "name": "Front Door"},
+        )
+
+    assert mock_executor.call_count >= 1
+    assert mock_executor.call_args.args[0] is _load_webhook_strings_file
 
 
 @pytest.mark.parametrize(

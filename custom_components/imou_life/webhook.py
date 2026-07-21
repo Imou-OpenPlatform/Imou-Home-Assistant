@@ -79,15 +79,27 @@ def _webhook_strings_filename(language: str) -> str:
 
 @lru_cache(maxsize=4)
 def _load_webhook_strings_file(filename: str) -> dict[str, Any]:
+    """Load a webhook strings JSON file (blocking; call via executor)."""
     path = _WEBHOOK_STRINGS_DIR / filename
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _get_webhook_strings(
+_WEBHOOK_STRING_FILES = ("en.json", "zh-Hans.json")
+
+
+async def async_preload_webhook_strings(hass: HomeAssistant) -> None:
+    """Warm webhook string cache off the event loop."""
+    for filename in _WEBHOOK_STRING_FILES:
+        await hass.async_add_executor_job(_load_webhook_strings_file, filename)
+
+
+async def _async_get_webhook_strings(
+    hass: HomeAssistant,
     language: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Load webhook notification templates and alarm type labels."""
-    data = _load_webhook_strings_file(_webhook_strings_filename(language))
+    filename = _webhook_strings_filename(language)
+    data = await hass.async_add_executor_job(_load_webhook_strings_file, filename)
     notification = data.get("notification", {})
     alarm_types = data.get("alarm_types", {})
     return notification, alarm_types
@@ -144,7 +156,7 @@ async def _async_build_notification_message(
     hass: HomeAssistant, event_data: dict[str, Any]
 ) -> tuple[str, str]:
     """Build a notification title and message from an event payload."""
-    notif, alarm_types = _get_webhook_strings(hass.config.language)
+    notif, alarm_types = await _async_get_webhook_strings(hass, hass.config.language)
 
     msg_type = event_data.get("msg_type")
     unknown_device = notif.get("unknown_device", "Unknown device")

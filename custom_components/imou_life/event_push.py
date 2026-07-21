@@ -25,7 +25,11 @@ from .repairs import (
     async_delete_event_push_issues,
 )
 from .runtime_data import ImouRuntimeData
-from .webhook import async_register_imou_webhook, async_unregister_imou_webhook
+from .webhook import (
+    async_preload_webhook_strings,
+    async_register_imou_webhook,
+    async_unregister_imou_webhook,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +57,7 @@ async def async_setup_event_push(
         return webhook_id, ""
 
     generated_url = async_register_imou_webhook(hass, webhook_id)
+    await async_preload_webhook_strings(hass)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         await _async_set_message_callback(hass, entry, imou_client, "on", generated_url)
