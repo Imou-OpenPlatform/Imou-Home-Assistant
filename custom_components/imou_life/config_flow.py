@@ -33,14 +33,12 @@ from .const import (
     CONF_HTTP,
     CONF_HTTPS,
     CONF_SD,
-    DEFAULT_BASE_PUSH,
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_OPTIONS,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
-    PARAM_BASE_PUSH,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -333,14 +331,6 @@ class ImouOptionsFlow(OptionsFlow):
                                 options=list(EVENT_PUSH_TYPE_OPTIONS),
                                 multiple=True,
                                 translation_key="event_push_type",
-                            )
-                        ),
-                        vol.Required(
-                            PARAM_BASE_PUSH, default=DEFAULT_BASE_PUSH
-                        ): SelectSelector(
-                            SelectSelectorConfig(
-                                options=["1", "2"],
-                                translation_key="base_push",
                             )
                         ),
                         # --- Notification settings ---

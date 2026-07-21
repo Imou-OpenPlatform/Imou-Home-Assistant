@@ -58,7 +58,7 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional notify services for alarm messages
-  - Choose push message types; sync to Imou mobile app or HA-only
+  - Choose push message types; messages are also synced to the Imou mobile app
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview
@@ -88,6 +88,10 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
 
 - **Invalid AppId / AppSecret** — Home Assistant opens a **re-authentication** flow; enter a new App Secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
 - **Event push not working** — Check **Settings → System → Network → Home Assistant URL** (external URL required), or set a manual callback URL in **Configure**. Review repair issues under **Settings → System → Repairs**.
+  - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
+  - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
+  - If `videoMotion` / `human` / `mobileDetect` never appear: confirm motion/human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
+  - Confirm event push is enabled in **Configure** and push types include **alarm**.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
 

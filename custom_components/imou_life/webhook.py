@@ -20,19 +20,55 @@ _LOGGER = logging.getLogger(__name__)
 
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
 
-# Message types that are NOT alarm events (status / iot / stats)
-_NON_ALARM_TYPES = frozenset(
+# Status / ops types that must NOT fire imou_life_alarm or notify.
+# Official Imou "Device alarm" list also includes privacy-mask and lifecycle
+# types; we subtract those here. See:
+# https://open.imoulife.com/book/en/push/alarm.html
+_NON_ALARM_MSG_TYPES = frozenset(
     {
+        # deviceStatus
         "online",
         "offline",
         "close",
         "changeDevName",
-        "iotEvent",
+        # iot property/action & stats (iotEvent is an alarm)
         "iotProperty",
         "iotAction",
         "numberstat",
+        # privacy mask (#66)
+        "openCamera",
+        "closeCamera",
+        # light state (sirenOn/sirenOff are alarms)
+        "whiteLightOn",
+        "whiteLightOff",
+        # sleep
+        "sleep",
+        # bind / share / auth / transfer
+        "bindDevice",
+        "unbindDevice",
+        "deviceShare",
+        "deviceShareCancel",
+        "deviceAuthorize",
+        "deviceAuthorizationChanged",
+        "transferDeviceFrom",
+        "transferDeviceTo",
+        "deviceDeletedSharedCancel",
+        # upgrade / storage ops
+        "UpgradeSuccess",
+        "upgradeFail",
+        "apUpgradeSuccess",
+        "apUpgradeFail",
+        "storageRecoverOk",
+        "storageRecoverFail",
+        "storageEmpty",
+        "storageAbnormal",
     }
 )
+
+
+def _is_alarm_msg_type(msg_type: str | None) -> bool:
+    """Return True if this push should fire imou_life_alarm / notify."""
+    return msg_type is not None and msg_type not in _NON_ALARM_MSG_TYPES
 
 
 def _webhook_strings_filename(language: str) -> str:
@@ -43,15 +79,27 @@ def _webhook_strings_filename(language: str) -> str:
 
 @lru_cache(maxsize=4)
 def _load_webhook_strings_file(filename: str) -> dict[str, Any]:
+    """Load a webhook strings JSON file (blocking; call via executor)."""
     path = _WEBHOOK_STRINGS_DIR / filename
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _get_webhook_strings(
+_WEBHOOK_STRING_FILES = ("en.json", "zh-Hans.json")
+
+
+async def async_preload_webhook_strings(hass: HomeAssistant) -> None:
+    """Warm webhook string cache off the event loop."""
+    for filename in _WEBHOOK_STRING_FILES:
+        await hass.async_add_executor_job(_load_webhook_strings_file, filename)
+
+
+async def _async_get_webhook_strings(
+    hass: HomeAssistant,
     language: str,
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Load webhook notification templates and alarm type labels."""
-    data = _load_webhook_strings_file(_webhook_strings_filename(language))
+    filename = _webhook_strings_filename(language)
+    data = await hass.async_add_executor_job(_load_webhook_strings_file, filename)
     notification = data.get("notification", {})
     alarm_types = data.get("alarm_types", {})
     return notification, alarm_types
@@ -73,6 +121,18 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or payload.get("channels")
     )
     msg_type = payload.get("msgType")
+    content = payload.get("content")
+    output_data = None
+    if isinstance(content, dict):
+        iot_event = content.get("event")
+        if msg_type == "iotEvent" and iot_event is not None and iot_event != "":
+            msg_type = str(iot_event)
+        output_data = content.get("outputData")
+        if channel_id is None:
+            monitor = content.get("monitor")
+            if isinstance(monitor, dict) and "channel" in monitor:
+                channel_id = monitor.get("channel")
+
     raw_time = payload.get("time") or payload.get("localTime") or payload.get("utcTime")
 
     event = {
@@ -80,11 +140,13 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "msg_type_name": msg_type,
         "device_id": device_id,
         "channel_id": channel_id,
+        "product_id": payload.get("pid"),
         "time": raw_time,
         "name": payload.get("cname") or payload.get("dname"),
         "alarm_id": payload.get("id") or payload.get("alarmId"),
         "token": payload.get("token"),
         "desc": payload.get("desc"),
+        "outputData": output_data,
         "raw": payload,
     }
     return event
@@ -94,7 +156,7 @@ async def _async_build_notification_message(
     hass: HomeAssistant, event_data: dict[str, Any]
 ) -> tuple[str, str]:
     """Build a notification title and message from an event payload."""
-    notif, alarm_types = _get_webhook_strings(hass.config.language)
+    notif, alarm_types = await _async_get_webhook_strings(hass, hass.config.language)
 
     msg_type = event_data.get("msg_type")
     unknown_device = notif.get("unknown_device", "Unknown device")
@@ -222,11 +284,13 @@ async def async_handle_imou_webhook(
         )
         return web.Response(status=200, text="ok")
 
+    runtime.record_push_msg(msg_type)
+
     # Always fire the generic event
     hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
 
-    # Fire alarm-specific event + send notifications for non-status messages
-    is_alarm = msg_type not in _NON_ALARM_TYPES
+    # Fire alarm-specific event + send notifications for security alarms
+    is_alarm = _is_alarm_msg_type(msg_type)
     if is_alarm:
         hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
 

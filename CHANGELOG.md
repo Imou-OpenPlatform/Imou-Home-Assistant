@@ -1,4 +1,12 @@
 # CHANGELOG
+## [1.3.1]
+### Changed
+- Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
+- Webhook `iotEvent`: promote `content.event` to `msg_type`; expose `product_id` (`pid`) and `outputData`; treat `iotEvent` / `sirenOn` / `sirenOff` as alarms
+
+### Fixed
+- Webhook: treat privacy-mask and other status/ops msgTypes (`openCamera`, `closeCamera`, …) as non-alarm (`imou_life_event` only); expose recent push msgType counts in diagnostics (#66)
+
 ## [1.3.0]
 ### Added
 - Reauth flow when App Secret expires

@@ -41,8 +41,9 @@ PARAM_WEBHOOK_URL = "webhook_url"
 PARAM_SELECTED_DEVICES = "selected_devices"
 PARAM_ENABLE_EVENT_PUSH = "enable_event_push"
 PARAM_EVENT_PUSH_TYPES = "event_push_types"
-PARAM_BASE_PUSH = "base_push"
 PARAM_NOTIFY_SERVICES = "notify_services"
+# Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
+BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
@@ -137,7 +138,6 @@ def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
 
 EVENT_IMOU_EVENT = f"{DOMAIN}_event"
 EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
-DEFAULT_BASE_PUSH = "2"
 
 # service
 SERVICE_CONTROL_MOVE_PTZ = "control_move_ptz"
