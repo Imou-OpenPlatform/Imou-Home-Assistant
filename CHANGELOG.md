@@ -1,4 +1,8 @@
 # CHANGELOG
+## [1.3.1]
+### Fixed
+- Webhook: treat privacy-mask and other status/ops msgTypes (`openCamera`, `closeCamera`, …) as non-alarm (`imou_life_event` only); expose recent push msgType counts in diagnostics (#66)
+
 ## [1.3.0]
 ### Added
 - Reauth flow when App Secret expires

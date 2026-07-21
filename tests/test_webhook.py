@@ -286,9 +286,7 @@ async def test_webhook_missing_msg_type_is_not_alarm(
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_records_msg_type_counts(hass: HomeAssistant) -> None:
     """Accepted pushes increment runtime msgType counters."""
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["device_1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
 
     await async_handle_imou_webhook(
         hass,

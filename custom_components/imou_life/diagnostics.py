@@ -53,9 +53,7 @@ async def async_get_config_entry_diagnostics(
         "recent_msg_type_counts": (
             dict(runtime.push_msg_type_counts) if runtime is not None else {}
         ),
-        "last_msg_type": (
-            runtime.push_last_msg_type if runtime is not None else None
-        ),
+        "last_msg_type": (runtime.push_last_msg_type if runtime is not None else None),
         "last_received_at": last_received,
     }
 
