@@ -193,3 +193,89 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 def test_is_alarm_msg_type(msg_type: str | None, expected: bool) -> None:
     """Hybrid classification: denylist non-alarms; unknown types are alarms."""
     assert _is_alarm_msg_type(msg_type) is expected
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("msg_type", ["closeCamera", "openCamera"])
+async def test_webhook_privacy_mask_is_not_alarm(
+    hass: HomeAssistant, msg_type: str
+) -> None:
+    """Privacy mask open/close fires generic event only."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["device_1"],
+        notify_services=["notify.test"],
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": msg_type,
+                "did": "device_1",
+                "cid": 0,
+                "dname": "Cam",
+                "time": 1783528060,
+            }
+        ),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert generic_events[0].data["msg_type"] == msg_type
+    assert alarm_events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("msg_type", ["videoMotion", "human", "abAlarmSound"])
+async def test_webhook_security_alarms_fire_alarm_event(
+    hass: HomeAssistant, msg_type: str
+) -> None:
+    """Security alarm msgTypes fire both generic and alarm events."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": msg_type, "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert len(alarm_events) == 1
+    assert alarm_events[0].data["msg_type"] == msg_type
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_missing_msg_type_is_not_alarm(
+    hass: HomeAssistant,
+) -> None:
+    """Payload without msgType still fires generic event, not alarm."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert alarm_events == []
