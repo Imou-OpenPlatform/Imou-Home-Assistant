@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    PARAM_BASE_PUSH,
+    BASE_PUSH_ALWAYS,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_SERVICES,
@@ -94,7 +94,6 @@ async def _async_set_message_callback(
     callback_flags = event_push_types_to_callback_flags(
         entry.options.get(PARAM_EVENT_PUSH_TYPES, [])
     )
-    base_push = entry.options.get(PARAM_BASE_PUSH, "2")
     if status == "on":
         if not callback_url:
             _LOGGER.error(
@@ -109,7 +108,7 @@ async def _async_set_message_callback(
                 status="on",
                 callback_url=callback_url,
                 callback_flag=callback_flags if callback_flags else None,
-                base_push=base_push,
+                base_push=BASE_PUSH_ALWAYS,
             )
             _LOGGER.info(
                 "Imou message callback set to %s (url=%s)",
@@ -124,7 +123,7 @@ async def _async_set_message_callback(
         try:
             await imou_client.async_set_message_callback(
                 status="off",
-                base_push=base_push,
+                base_push=BASE_PUSH_ALWAYS,
             )
             _LOGGER.info(
                 "Imou message callback set to %s (url=%s)",

@@ -1,5 +1,8 @@
 # CHANGELOG
 ## [1.3.1]
+### Changed
+- Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
+
 ### Fixed
 - Webhook: treat privacy-mask and other status/ops msgTypes (`openCamera`, `closeCamera`, …) as non-alarm (`imou_life_event` only); expose recent push msgType counts in diagnostics (#66)
 

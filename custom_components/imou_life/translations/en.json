@@ -60,7 +60,6 @@
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
           "event_push_types": "Event push types",
-          "base_push": "Sync to Imou mobile app",
           "notify_services": "Alarm notification services"
         },
         "data_description": {
@@ -69,10 +68,9 @@
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",
           "rotation_duration": "How long a single PTZ button press moves. Default 500ms.",
-          "enable_event_push": "When enabled, Imou cloud will push alarm events to your HA in real time. Requires a publicly accessible URL (domain/DDNS).",
+          "enable_event_push": "When enabled, Imou cloud will push alarm events to your HA in real time. Requires a publicly accessible URL (domain/DDNS). Messages are also synced to the Imou app.",
           "webhook_url": "The URL where Imou cloud sends alarm messages. Leave empty to auto-generate (requires HA external URL configured). To set manually, enter full URL like: https://yourdomain:8123/api/webhook/xxxxx",
           "event_push_types": "Select which message types to receive. alarm = device alarms (smoke/gas/human/motion etc.), deviceStatus = online/offline, iot = IoT device messages, numberstat = people counting, faceAnalysis = face detection.",
-          "base_push": "Whether to also push messages to the Imou APP. 'Push' = Imou APP also receives, 'No push' = HA only.",
           "notify_services": "Where to send alarm notifications. Enter HA action names, separate with commas.\nExample: qiyewechat.send → WeChat Work\nExample: notify.mobile_app_xxx → HA APP push\nBoth: qiyewechat.send,notify.mobile_app_xxx\nLeave empty to skip (alarm events still fire for automations)."
         }
       },
@@ -99,12 +97,6 @@
         "iot": "IoT device messages",
         "numberstat": "People counting",
         "face_analysis": "Face analysis"
-      }
-    },
-    "base_push": {
-      "options": {
-        "1": "Push to Imou app",
-        "2": "Home Assistant only"
       }
     },
     "device_status": {

@@ -58,7 +58,7 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional notify services for alarm messages
-  - Choose push message types; sync to Imou mobile app or HA-only
+  - Choose push message types; messages are also synced to the Imou mobile app
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview

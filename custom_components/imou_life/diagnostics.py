@@ -9,10 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    DEFAULT_BASE_PUSH,
+    BASE_PUSH_ALWAYS,
     PARAM_API_URL,
     PARAM_APP_ID,
-    PARAM_BASE_PUSH,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
@@ -48,7 +47,7 @@ async def async_get_config_entry_diagnostics(
         "enabled": bool(entry.options.get(PARAM_ENABLE_EVENT_PUSH)),
         "webhook_url_configured": bool(webhook_url),
         "event_push_types": list(entry.options.get(PARAM_EVENT_PUSH_TYPES, [])),
-        "base_push": entry.options.get(PARAM_BASE_PUSH, DEFAULT_BASE_PUSH),
+        "base_push": BASE_PUSH_ALWAYS,
         "selected_devices_count": len(selected),
         "recent_msg_type_counts": (
             dict(runtime.push_msg_type_counts) if runtime is not None else {}

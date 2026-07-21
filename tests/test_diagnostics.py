@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
-    PARAM_BASE_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_WEBHOOK_ID,
 )
@@ -52,7 +51,6 @@ async def test_diagnostics_includes_push_msg_counts(hass) -> None:
         options={
             "enable_event_push": True,
             PARAM_EVENT_PUSH_TYPES: ["alarm", "device_status"],
-            PARAM_BASE_PUSH: "2",
             "webhook_url": "https://example.com/hook",
         },
     )
@@ -68,7 +66,7 @@ async def test_diagnostics_includes_push_msg_counts(hass) -> None:
     assert event_push["enabled"] is True
     assert event_push["webhook_url_configured"] is True
     assert event_push["event_push_types"] == ["alarm", "device_status"]
-    assert event_push["base_push"] == "2"
+    assert event_push["base_push"] == "1"
     assert event_push["recent_msg_type_counts"] == {
         "closeCamera": 1,
         "abAlarmSound": 1,
