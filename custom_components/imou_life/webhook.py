@@ -20,19 +20,58 @@ _LOGGER = logging.getLogger(__name__)
 
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
 
-# Message types that are NOT alarm events (status / iot / stats)
-_NON_ALARM_TYPES = frozenset(
+# Status / ops types that must NOT fire imou_life_alarm or notify.
+# Official Imou "Device alarm" list also includes privacy-mask and lifecycle
+# types; we subtract those here. See:
+# https://open.imoulife.com/book/en/push/alarm.html
+_NON_ALARM_MSG_TYPES = frozenset(
     {
+        # deviceStatus
         "online",
         "offline",
         "close",
         "changeDevName",
+        # iot / stats
         "iotEvent",
         "iotProperty",
         "iotAction",
         "numberstat",
+        # privacy mask (#66)
+        "openCamera",
+        "closeCamera",
+        # light / siren state
+        "whiteLightOn",
+        "whiteLightOff",
+        "sirenOn",
+        "sirenOff",
+        # sleep
+        "sleep",
+        # bind / share / auth / transfer
+        "bindDevice",
+        "unbindDevice",
+        "deviceShare",
+        "deviceShareCancel",
+        "deviceAuthorize",
+        "deviceAuthorizationChanged",
+        "transferDeviceFrom",
+        "transferDeviceTo",
+        "deviceDeletedSharedCancel",
+        # upgrade / storage ops
+        "UpgradeSuccess",
+        "upgradeFail",
+        "apUpgradeSuccess",
+        "apUpgradeFail",
+        "storageRecoverOk",
+        "storageRecoverFail",
+        "storageEmpty",
+        "storageAbnormal",
     }
 )
+
+
+def _is_alarm_msg_type(msg_type: str | None) -> bool:
+    """Return True if this push should fire imou_life_alarm / notify."""
+    return msg_type is not None and msg_type not in _NON_ALARM_MSG_TYPES
 
 
 def _webhook_strings_filename(language: str) -> str:
@@ -225,8 +264,8 @@ async def async_handle_imou_webhook(
     # Always fire the generic event
     hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
 
-    # Fire alarm-specific event + send notifications for non-status messages
-    is_alarm = msg_type not in _NON_ALARM_TYPES
+    # Fire alarm-specific event + send notifications for security alarms
+    is_alarm = _is_alarm_msg_type(msg_type)
     if is_alarm:
         hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
 

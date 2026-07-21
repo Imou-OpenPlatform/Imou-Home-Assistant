@@ -11,6 +11,7 @@ from custom_components.imou_life.const import (
 )
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
+    _is_alarm_msg_type,
     async_handle_imou_webhook,
 )
 from homeassistant.core import Event, HomeAssistant
@@ -169,3 +170,26 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 
     assert title == "Imou alarm: Local alarm"
     assert message == "Device: Front Door\nType: Local alarm"
+
+
+@pytest.mark.parametrize(
+    ("msg_type", "expected"),
+    [
+        ("closeCamera", False),
+        ("openCamera", False),
+        ("online", False),
+        ("iotProperty", False),
+        ("whiteLightOn", False),
+        ("bindDevice", False),
+        ("videoMotion", True),
+        ("human", True),
+        ("abAlarmSound", True),
+        ("mobileDetect", True),
+        ("alarmLocal", True),
+        ("totallyUnknownType", True),
+        (None, False),
+    ],
+)
+def test_is_alarm_msg_type(msg_type: str | None, expected: bool) -> None:
+    """Hybrid classification: denylist non-alarms; unknown types are alarms."""
+    assert _is_alarm_msg_type(msg_type) is expected
