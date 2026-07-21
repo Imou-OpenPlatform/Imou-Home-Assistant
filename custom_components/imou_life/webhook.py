@@ -31,19 +31,16 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "offline",
         "close",
         "changeDevName",
-        # iot / stats
-        "iotEvent",
+        # iot property/action & stats (iotEvent is an alarm)
         "iotProperty",
         "iotAction",
         "numberstat",
         # privacy mask (#66)
         "openCamera",
         "closeCamera",
-        # light / siren state
+        # light state (sirenOn/sirenOff are alarms)
         "whiteLightOn",
         "whiteLightOff",
-        "sirenOn",
-        "sirenOff",
         # sleep
         "sleep",
         # bind / share / auth / transfer
@@ -112,6 +109,18 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or payload.get("channels")
     )
     msg_type = payload.get("msgType")
+    content = payload.get("content")
+    output_data = None
+    if isinstance(content, dict):
+        iot_event = content.get("event")
+        if msg_type == "iotEvent" and iot_event is not None and iot_event != "":
+            msg_type = str(iot_event)
+        output_data = content.get("outputData")
+        if channel_id is None:
+            monitor = content.get("monitor")
+            if isinstance(monitor, dict) and "channel" in monitor:
+                channel_id = monitor.get("channel")
+
     raw_time = payload.get("time") or payload.get("localTime") or payload.get("utcTime")
 
     event = {
@@ -119,11 +128,13 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "msg_type_name": msg_type,
         "device_id": device_id,
         "channel_id": channel_id,
+        "product_id": payload.get("pid"),
         "time": raw_time,
         "name": payload.get("cname") or payload.get("dname"),
         "alarm_id": payload.get("id") or payload.get("alarmId"),
         "token": payload.get("token"),
         "desc": payload.get("desc"),
+        "outputData": output_data,
         "raw": payload,
     }
     return event

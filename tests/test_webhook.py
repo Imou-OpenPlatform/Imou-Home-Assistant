@@ -14,6 +14,7 @@ from custom_components.imou_life.runtime_data import ImouRuntimeData
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _is_alarm_msg_type,
+    _normalize_event_payload,
     async_handle_imou_webhook,
 )
 from homeassistant.core import Event, HomeAssistant
@@ -181,13 +182,18 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
         ("openCamera", False),
         ("online", False),
         ("iotProperty", False),
+        ("iotAction", False),
+        ("iotEvent", True),
         ("whiteLightOn", False),
+        ("sirenOn", True),
+        ("sirenOff", True),
         ("bindDevice", False),
         ("videoMotion", True),
         ("human", True),
         ("abAlarmSound", True),
         ("mobileDetect", True),
         ("alarmLocal", True),
+        ("33000", True),
         ("totallyUnknownType", True),
         (None, False),
     ],
@@ -195,6 +201,67 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 def test_is_alarm_msg_type(msg_type: str | None, expected: bool) -> None:
     """Hybrid classification: denylist non-alarms; unknown types are alarms."""
     assert _is_alarm_msg_type(msg_type) is expected
+
+
+def test_normalize_iot_event_promotes_content_fields() -> None:
+    """iotEvent pushes expose content.event as msg_type plus pid/outputData."""
+    event = _normalize_event_payload(
+        {
+            "msgType": "iotEvent",
+            "pid": "mhpf7Dsz",
+            "did": "TESTQWERXXXX",
+            "dname": "Gate",
+            "alarmId": "116257862023505xxxx",
+            "token": "tok",
+            "time": "20230111T111629",
+            "content": {
+                "outputData": {"foo": 1},
+                "event": "33000",
+                "monitor": {"channel": 0, "action": 1},
+            },
+        }
+    )
+
+    assert event["msg_type"] == "33000"
+    assert event["msg_type_name"] == "33000"
+    assert event["product_id"] == "mhpf7Dsz"
+    assert event["device_id"] == "TESTQWERXXXX"
+    assert event["channel_id"] == 0
+    assert event["alarm_id"] == "116257862023505xxxx"
+    assert event["outputData"] == {"foo": 1}
+    assert event["raw"]["msgType"] == "iotEvent"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_event_fires_alarm(hass: HomeAssistant) -> None:
+    """Normalized iotEvent content.event fires imou_life_alarm."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["TESTQWERXXXX"])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "mhpf7Dsz",
+                "did": "TESTQWERXXXX",
+                "dname": "Gate",
+                "content": {"event": "33000", "outputData": {"bar": 2}},
+            }
+        ),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert len(alarm_events) == 1
+    assert alarm_events[0].data["msg_type"] == "33000"
+    assert alarm_events[0].data["product_id"] == "mhpf7Dsz"
+    assert alarm_events[0].data["outputData"] == {"bar": 2}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
