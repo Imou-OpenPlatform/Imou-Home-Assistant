@@ -17,11 +17,11 @@ from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
     DOMAIN,
-    PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
     imou_life_device_key,
 )
+from .helpers import get_selected_device_ids
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,13 +67,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def _filter_devices(self, devices_list: list[ImouHaDevice]) -> list[ImouHaDevice]:
         """Apply selected-devices filter from config entry options or data."""
-        if PARAM_SELECTED_DEVICES in self.config_entry.options:
-            selected_ids = self.config_entry.options[PARAM_SELECTED_DEVICES]
-        elif PARAM_SELECTED_DEVICES in self.config_entry.data:
-            selected_ids = self.config_entry.data[PARAM_SELECTED_DEVICES]
-        else:
-            selected_ids = None
-
+        selected_ids = get_selected_device_ids(self.config_entry)
         if selected_ids is None:
             return devices_list
         if selected_ids:

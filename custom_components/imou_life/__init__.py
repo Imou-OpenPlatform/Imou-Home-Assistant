@@ -7,22 +7,24 @@ import uuid
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
+    DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     PLATFORMS,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
+from .helpers import get_selected_device_ids
 from .runtime_data import ImouRuntimeData
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -72,6 +74,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    async def _async_close_client() -> None:
+        await imou_client.async_close()
+
+    entry.async_on_unload(_async_close_client)
     return True
 
 
@@ -83,17 +90,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH) and webhook_id:
-        imou_client = ImouOpenApiClient(
+        teardown_client = ImouOpenApiClient(
             entry.data[PARAM_APP_ID],
             entry.data[PARAM_APP_SECRET],
             entry.data[PARAM_API_URL],
         )
         try:
-            await async_teardown_event_push(hass, entry, imou_client)
+            await async_teardown_event_push(hass, entry, teardown_client)
         except Exception:
             _LOGGER.exception("Failed to disable Imou message callback during unload")
         finally:
-            await imou_client.async_close()
+            await teardown_client.async_close()
     elif webhook_id:
         await async_teardown_event_push(hass, entry)
 
@@ -106,10 +113,54 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+def _device_id_from_entry(device_entry: DeviceEntry) -> str | None:
+    """Extract Imou device_id from a HA device registry entry."""
+    if device_entry.serial_number:
+        return device_entry.serial_number
+    for domain, ident in device_entry.identifiers:
+        if domain == DOMAIN:
+            return ident.split("_", 1)[0]
+    return None
+
+
 async def async_remove_config_entry_device(
     hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
 ) -> bool:
-    """Handle removal of a single device from a config entry."""
-    _LOGGER.debug("Removing device %s", device_entry.name)
-    dr.async_get(hass).async_remove_device(device_entry.id)
+    """Persist exclusion so the next poll does not re-add the device."""
+    device_id = _device_id_from_entry(device_entry)
+    if not device_id:
+        _LOGGER.warning(
+            "Cannot remove device %s: missing Imou device id", device_entry.name
+        )
+        return False
+
+    selected = get_selected_device_ids(config_entry)
+    if selected is None:
+        runtime = getattr(config_entry, "runtime_data", None)
+        if runtime is None:
+            _LOGGER.warning(
+                "Cannot remove device %s: no runtime to materialize selected_devices",
+                device_entry.name,
+            )
+            return False
+        all_ids = {d.device_id for d in runtime.coordinator.devices_by_key.values()}
+        if not all_ids or device_id not in all_ids:
+            _LOGGER.warning(
+                "Cannot remove device %s: coordinator device map incomplete",
+                device_entry.name,
+            )
+            return False
+        selected = [i for i in sorted(all_ids) if i != device_id]
+    else:
+        selected = [i for i in selected if i != device_id]
+
+    hass.config_entries.async_update_entry(
+        config_entry,
+        options={**config_entry.options, PARAM_SELECTED_DEVICES: selected},
+    )
+    runtime = getattr(config_entry, "runtime_data", None)
+    if runtime is not None:
+        runtime.selected_devices = selected
+
+    _LOGGER.debug("Removed device %s from selected_devices", device_id)
     return True

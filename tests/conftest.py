@@ -91,10 +91,14 @@ def setup_imou_runtime(
     entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data)
     entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    delegate = MagicMock()
+    delegate.async_resolve_event_identifier = AsyncMock(return_value=None)
+    coordinator.device_manager.delegate = delegate
     runtime = ImouRuntimeData(
-        coordinator=MagicMock(),
+        coordinator=coordinator,
         push_enabled=push_enabled,
-        selected_devices=selected_devices or [],
+        selected_devices=selected_devices,
         notify_services=notify_services or [],
     )
     entry.runtime_data = runtime

@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from custom_components.imou_life import async_migrate_entry, async_unload_entry
-from custom_components.imou_life.const import DOMAIN, PARAM_WEBHOOK_ID
+from custom_components.imou_life import (
+    async_migrate_entry,
+    async_remove_config_entry_device,
+    async_unload_entry,
+)
+from custom_components.imou_life.const import (
+    DOMAIN,
+    PARAM_SELECTED_DEVICES,
+    PARAM_WEBHOOK_ID,
+)
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -47,3 +55,97 @@ async def test_unload_keeps_device_registry(hass) -> None:
         assert await async_unload_entry(hass, entry) is True
 
     assert device_registry.async_get(device_entry.id) is not None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_remove_device_updates_selected_devices(hass) -> None:
+    """Removing a device persists exclusion in options so poll won't re-add it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_SELECTED_DEVICES: ["d1", "d2"]},
+        options={PARAM_SELECTED_DEVICES: ["d1", "d2"]},
+    )
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {}
+    entry.runtime_data = ImouRuntimeData(
+        coordinator=coordinator, selected_devices=["d1", "d2"]
+    )
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "d1_0")},
+        serial_number="d1",
+        name="Cam 1",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is True
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["d2"]
+    assert entry.runtime_data.selected_devices == ["d2"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_remove_device_materializes_allow_list_when_all_selected(hass) -> None:
+    """When selection means all devices, remove persists remaining ids as allow-list."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+
+    d1 = MagicMock()
+    d1.device_id = "d1"
+    d2 = MagicMock()
+    d2.device_id = "d2"
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {"d1_0": d1, "d2_0": d2}
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator, selected_devices=None)
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "d1_0")},
+        serial_number="d1",
+        name="Cam 1",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is True
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["d2"]
+    assert entry.runtime_data.selected_devices == ["d2"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_remove_device_without_runtime_refuses(hass) -> None:
+    """Without runtime, do not rewrite 'all' into an empty allow-list."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "d1_0")},
+        serial_number="d1",
+        name="Cam 1",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is False
+    assert PARAM_SELECTED_DEVICES not in entry.options
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_remove_device_refuses_empty_coordinator_map(hass) -> None:
+    """Do not materialize an empty allow-list when devices_by_key is empty."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {}
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator, selected_devices=None)
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "d1_0")},
+        serial_number="d1",
+        name="Cam 1",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is False
+    assert PARAM_SELECTED_DEVICES not in entry.options
