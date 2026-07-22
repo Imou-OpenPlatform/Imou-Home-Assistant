@@ -14,6 +14,7 @@ from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT, PARAM_WEBHOOK_ID
+from .helpers import resolve_ha_device_name
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -211,7 +212,10 @@ async def _async_build_notification_message(
     unknown_device = notif.get("unknown_device", "Unknown device")
     unknown_alarm = notif.get("unknown_alarm", "Alarm")
     device_name = (
-        event_data.get("name") or event_data.get("device_id") or unknown_device
+        event_data.get("device_name")
+        or event_data.get("name")
+        or event_data.get("device_id")
+        or unknown_device
     )
     alarm_type = alarm_types.get(msg_type, msg_type or unknown_alarm)
 
@@ -334,6 +338,13 @@ async def async_handle_imou_webhook(
             selected_devices,
         )
         return web.Response(status=200, text="ok")
+
+    event_data["device_name"] = resolve_ha_device_name(
+        hass,
+        event_data.get("device_id"),
+        channel_id=event_data.get("channel_id"),
+        product_id=event_data.get("product_id"),
+    )
 
     runtime.record_push_msg(msg_type)
 

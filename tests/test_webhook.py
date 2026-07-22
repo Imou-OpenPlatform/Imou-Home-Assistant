@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import (
+    DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
 )
@@ -19,6 +20,7 @@ from custom_components.imou_life.webhook import (
     async_handle_imou_webhook,
 )
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .conftest import setup_imou_runtime
 
@@ -192,6 +194,58 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 
     assert title == "Imou alarm: Local alarm"
     assert message == "Device: Front Door\nType: Local alarm"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notify_prefers_ha_device_name(hass: HomeAssistant) -> None:
+    """Notify body uses HA device_name over push name."""
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "alarmLocal",
+            "device_name": "HA Front",
+            "name": "Cloud Dname",
+            "device_id": "SN1",
+        },
+    )
+    assert "HA Front" in message
+    assert "Cloud Dname" not in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_event_includes_ha_device_name(hass: HomeAssistant) -> None:
+    """Bus events expose registry display name as device_name."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_ALARM, events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["SN1"])
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Cloud",
+    )
+    registry.async_update_device(device.id, name_by_user="HA Front")
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "alarmLocal",
+                "deviceId": "SN1",
+                "channelId": "0",
+                "dname": "Cloud Dname",
+            }
+        ),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert len(events) == 1
+    assert events[0].data["device_name"] == "HA Front"
+    assert events[0].data["name"] == "Cloud Dname"
+    assert events[0].data["device_id"] == "SN1"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
