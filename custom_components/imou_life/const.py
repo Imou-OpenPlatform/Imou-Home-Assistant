@@ -9,7 +9,30 @@ UPDATE_TIMEOUT = 300
 
 def imou_life_device_key(device: ImouHaDevice) -> str:
     """Stable device registry / unique_id prefix (legacy semantics)."""
-    return f"{device.device_id}_{device.channel_id or device.product_id}"
+    key = imou_life_device_key_from_ids(
+        device.device_id, device.channel_id, device.product_id
+    )
+    if key is None:
+        return f"{device.device_id}_{device.channel_id or device.product_id}"
+    return key
+
+
+def imou_life_device_key_from_ids(
+    device_id: str | None,
+    channel_id: object | None,
+    product_id: str | None,
+) -> str | None:
+    """Build the device registry identifier key from push / API ids.
+
+    Same format as ``imou_life_device_key``: ``{device_id}_{channel_id|product_id}``.
+    Uses ``is not None`` for channel so channel 0 is kept.
+    """
+    if not device_id:
+        return None
+    suffix = channel_id if channel_id is not None else product_id
+    if suffix is None:
+        return None
+    return f"{device_id}_{suffix}"
 
 
 # Configuration definitions
