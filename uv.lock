@@ -1916,14 +1916,14 @@ wheels = [
 [[package]]
 name = "pyimouapi"
 version = "1.3.1"
-source = { registry = "/home/open/projects/Py-Imou-Open-Api/dist" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "simpleeval" },
 ]
-sdist = { path = "/home/open/projects/Py-Imou-Open-Api/dist/pyimouapi-1.3.1.tar.gz" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/5d/f56fdc7bd6f1399d596d6893a85b401d72e004e3aa053b1ed080057b6db7/pyimouapi-1.3.1.tar.gz", hash = "sha256:9a0eed654a7f10f961bec3ebff37203d0940f7405b1b7c53e3d56a566f578a8b", size = 26750, upload-time = "2026-07-22T01:49:26.544Z" }
 wheels = [
-    { path = "/home/open/projects/Py-Imou-Open-Api/dist/pyimouapi-1.3.1-py3-none-any.whl" },
+    { url = "https://files.pythonhosted.org/packages/31/6f/fd60433053c1194b5ae710a44376b22dc513c439c28ec91aaa66415ce744/pyimouapi-1.3.1-py3-none-any.whl", hash = "sha256:4ccd2b50fb12153c8ea38d9325f51dc722b6ec41535406c4ddd23f889f1264bb", size = 23001, upload-time = "2026-07-22T01:49:25.424Z" },
 ]
 
 [[package]]
