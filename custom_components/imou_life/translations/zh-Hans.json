@@ -50,7 +50,7 @@
   "options": {
     "step": {
       "init": {
-        "description": "当前真实 Webhook ID：{webhook_id}\n\n建议回调地址：{suggested_webhook_url}\n\n当前填写地址：{current_webhook_url}\n\n请确保上面的『消息回调地址』填写为建议回调地址；如果留空，则使用集成自动生成的地址。",
+        "description": "当前 Webhook ID：{webhook_id}\n\n建议回调地址：{suggested_webhook_url}\n\n当前填写地址：{current_webhook_url}\n\n『消息回调地址』留空则使用上方建议地址。若该地址外网无法访问，请改为填写实际可用的完整公网 URL。",
         "data": {
           "update_interval": "自动刷新间隔（秒）",
           "download_snap_wait_time": "抓图等待时间（秒）",
@@ -87,7 +87,7 @@
     "webhook_placeholder": {
       "options": {
         "not_generated": "未生成",
-        "not_set_use_suggested": "未填写，将使用上方建议地址/自动生成地址"
+        "not_set_use_suggested": "未填写 — 将使用上方建议地址"
       }
     },
     "event_push_type": {

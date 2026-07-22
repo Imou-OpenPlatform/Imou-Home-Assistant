@@ -50,7 +50,7 @@
   "options": {
     "step": {
       "init": {
-        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nEnsure the 'Callback URL' field above matches the suggested URL; if left empty, the integration will use the auto-generated URL.",
+        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nLeave Callback URL empty to use the suggested URL. If that address is not reachable from the internet, enter your real public webhook URL instead.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
@@ -87,7 +87,7 @@
     "webhook_placeholder": {
       "options": {
         "not_generated": "Not generated",
-        "not_set_use_suggested": "Not set — the suggested URL above will be used"
+        "not_set_use_suggested": "Not set — will use the suggested URL above"
       }
     },
     "event_push_type": {

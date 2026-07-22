@@ -291,7 +291,7 @@ class ImouOptionsFlow(OptionsFlow):
         not_set_use_suggested = _options_placeholder(
             self.hass,
             "not_set_use_suggested",
-            "Not set — the suggested URL above will be used",
+            "Not set — will use the suggested URL above",
         )
 
         suggested_options = dict(self.config_entry.options)
