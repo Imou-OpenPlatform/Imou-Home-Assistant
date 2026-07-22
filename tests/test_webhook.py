@@ -140,6 +140,24 @@ async def test_webhook_filters_unselected_device(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_empty_selection_rejects_all(hass: HomeAssistant) -> None:
+    """Explicit empty selected_devices must not fall back to accepting all."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=[])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done()
+
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_iot_property_is_not_alarm(hass: HomeAssistant) -> None:
     """iotProperty push should fire generic event but not alarm event."""
     generic_events: list[Event] = []

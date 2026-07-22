@@ -98,7 +98,7 @@ def setup_imou_runtime(
     runtime = ImouRuntimeData(
         coordinator=coordinator,
         push_enabled=push_enabled,
-        selected_devices=selected_devices or [],
+        selected_devices=selected_devices,
         notify_services=notify_services or [],
     )
     entry.runtime_data = runtime

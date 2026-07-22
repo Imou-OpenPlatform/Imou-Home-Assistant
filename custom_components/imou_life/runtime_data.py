@@ -18,7 +18,8 @@ class ImouRuntimeData:
 
     coordinator: ImouDataUpdateCoordinator
     push_enabled: bool = False
-    selected_devices: list[str] = field(default_factory=list)
+    # None = all devices; [] = none; non-empty = allow-list
+    selected_devices: list[str] | None = None
     notify_services: list[str] = field(default_factory=list)
     push_msg_type_counts: dict[str, int] = field(default_factory=dict)
     push_last_msg_type: str | None = None

@@ -14,10 +14,10 @@ from .const import (
     PARAM_APP_ID,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
-    PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
 )
+from .helpers import get_selected_device_ids
 
 
 async def async_get_config_entry_diagnostics(
@@ -27,9 +27,8 @@ async def async_get_config_entry_diagnostics(
     app_id = entry.data.get(PARAM_APP_ID, "")
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     webhook_url = entry.options.get(PARAM_WEBHOOK_URL, "")
-    selected = entry.options.get(PARAM_SELECTED_DEVICES) or entry.data.get(
-        PARAM_SELECTED_DEVICES, []
-    )
+    selected = get_selected_device_ids(entry)
+    selected_count = None if selected is None else len(selected)
 
     runtime = entry.runtime_data
     coordinator = runtime.coordinator if runtime is not None else None
@@ -48,7 +47,7 @@ async def async_get_config_entry_diagnostics(
         "webhook_url_configured": bool(webhook_url),
         "event_push_types": list(entry.options.get(PARAM_EVENT_PUSH_TYPES, [])),
         "base_push": BASE_PUSH_ALWAYS,
-        "selected_devices_count": len(selected),
+        "selected_devices_count": selected_count,
         "recent_msg_type_counts": (
             dict(runtime.push_msg_type_counts) if runtime is not None else {}
         ),
@@ -59,7 +58,7 @@ async def async_get_config_entry_diagnostics(
     return {
         "app_id": f"{app_id[:4]}…" if len(app_id) > 4 else app_id,
         "api_url": entry.data.get(PARAM_API_URL),
-        "selected_devices_count": len(selected),
+        "selected_devices_count": selected_count,
         "event_push_enabled": bool(entry.options.get(PARAM_ENABLE_EVENT_PUSH)),
         "webhook_id": f"{webhook_id[:8]}…" if len(webhook_id) > 8 else webhook_id,
         "webhook_url_configured": bool(webhook_url),

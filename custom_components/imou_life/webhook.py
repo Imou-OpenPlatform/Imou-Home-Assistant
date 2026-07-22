@@ -323,9 +323,11 @@ async def async_handle_imou_webhook(
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 
-    # Filter: only process events from selected devices (if device selection is active)
+    # Filter: None = all devices; [] = none; otherwise allow-list
     selected_devices = runtime.selected_devices
-    if selected_devices and device_id and device_id not in selected_devices:
+    if selected_devices is not None and (
+        not device_id or device_id not in selected_devices
+    ):
         _LOGGER.debug(
             "Ignoring push from unselected device %s (selected: %s)",
             device_id,

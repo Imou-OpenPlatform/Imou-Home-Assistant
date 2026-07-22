@@ -384,12 +384,13 @@ class ImouOptionsFlow(OptionsFlow):
                 errors=errors,
             )
 
-        # Preselect currently active devices
-        current_selected = (
-            self.config_entry.options.get(PARAM_SELECTED_DEVICES)
-            or self.config_entry.data.get(PARAM_SELECTED_DEVICES)
-            or list(self._devices_map.keys())
-        )
+        # Preselect currently active devices (preserve explicit empty selection)
+        if PARAM_SELECTED_DEVICES in self.config_entry.options:
+            current_selected = self.config_entry.options[PARAM_SELECTED_DEVICES]
+        elif PARAM_SELECTED_DEVICES in self.config_entry.data:
+            current_selected = self.config_entry.data[PARAM_SELECTED_DEVICES]
+        else:
+            current_selected = list(self._devices_map.keys())
 
         return self.async_show_form(
             step_id="devices",
