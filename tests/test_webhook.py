@@ -254,9 +254,7 @@ async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> No
     """HTTP 200 must not wait on cold getProductModel resolve."""
     events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["SN1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["SN1"])
     gate = asyncio.Event()
 
     async def _slow_resolve(_product_id: str, _key: str) -> str | None:
