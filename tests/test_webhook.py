@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -246,6 +247,46 @@ async def test_webhook_event_includes_ha_device_name(hass: HomeAssistant) -> Non
     assert events[0].data["device_name"] == "HA Front"
     assert events[0].data["name"] == "Cloud Dname"
     assert events[0].data["device_id"] == "SN1"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> None:
+    """HTTP 200 must not wait on cold getProductModel resolve."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass, push_enabled=True, selected_devices=["SN1"]
+    )
+    gate = asyncio.Event()
+
+    async def _slow_resolve(_product_id: str, _key: str) -> str | None:
+        await gate.wait()
+        return "human"
+
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(side_effect=_slow_resolve)
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "33000",
+                "pid": "mhpf7Dsz",
+                "deviceId": "SN1",
+            }
+        ),
+    )
+
+    assert response.status == 200
+    assert events == []
+
+    gate.set()
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == "human"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

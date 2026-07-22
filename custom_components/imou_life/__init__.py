@@ -144,6 +144,12 @@ async def async_remove_config_entry_device(
             )
             return False
         all_ids = {d.device_id for d in runtime.coordinator.devices_by_key.values()}
+        if not all_ids or device_id not in all_ids:
+            _LOGGER.warning(
+                "Cannot remove device %s: coordinator device map incomplete",
+                device_entry.name,
+            )
+            return False
         selected = [i for i in sorted(all_ids) if i != device_id]
     else:
         selected = [i for i in selected if i != device_id]

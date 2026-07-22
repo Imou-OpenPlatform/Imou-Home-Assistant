@@ -300,6 +300,26 @@ def _get_runtime_data_for_webhook(
     return None
 
 
+async def _async_dispatch_imou_push(
+    hass: HomeAssistant,
+    runtime: ImouRuntimeData,
+    event_data: dict[str, Any],
+    *,
+    is_alarm: bool,
+) -> None:
+    """Resolve identifiers, fire events, and notify after webhook ACK."""
+    try:
+        await _async_apply_event_identifier(runtime, event_data)
+        hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
+        if is_alarm:
+            hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
+            notify_services = runtime.notify_services
+            if notify_services:
+                await _async_send_notifications(hass, event_data, notify_services)
+    except Exception:
+        _LOGGER.exception("Failed while processing accepted Imou webhook push")
+
+
 async def async_handle_imou_webhook(
     hass: HomeAssistant,
     webhook_id: str,
@@ -350,21 +370,12 @@ async def async_handle_imou_webhook(
 
     # Classify on original top-level msgType before outbound identifier rewrite.
     is_alarm = _is_alarm_msg_type(msg_type)
-    await _async_apply_event_identifier(runtime, event_data)
 
-    # Always fire the generic event
-    hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
-
-    # Fire alarm-specific event + send notifications for security alarms
-    if is_alarm:
-        hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
-
-    # Send notifications if configured
-    notify_services = runtime.notify_services
-    if is_alarm and notify_services:
-        await _async_send_notifications(hass, event_data, notify_services)
-
-    # Imou explicitly requires HTTP 200, otherwise it may stop pushing messages.
+    # ACK first so Imou does not stop pushing while we resolve/notify.
+    hass.async_create_task(
+        _async_dispatch_imou_push(hass, runtime, event_data, is_alarm=is_alarm),
+        name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
+    )
     return web.Response(status=200, text="ok")
 
 

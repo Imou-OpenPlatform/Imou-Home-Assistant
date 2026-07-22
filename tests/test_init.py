@@ -128,3 +128,24 @@ async def test_remove_device_without_runtime_refuses(hass) -> None:
 
     assert await async_remove_config_entry_device(hass, entry, device_entry) is False
     assert PARAM_SELECTED_DEVICES not in entry.options
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_remove_device_refuses_empty_coordinator_map(hass) -> None:
+    """Do not materialize an empty allow-list when devices_by_key is empty."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {}
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator, selected_devices=None)
+
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "d1_0")},
+        serial_number="d1",
+        name="Cam 1",
+    )
+
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is False
+    assert PARAM_SELECTED_DEVICES not in entry.options
