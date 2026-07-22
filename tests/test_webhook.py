@@ -311,9 +311,7 @@ async def test_webhook_resolves_numeric_msg_type(hass: HomeAssistant) -> None:
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
     hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
 
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["device_1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
     runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
         AsyncMock(return_value="doorOpen")
     )
@@ -382,9 +380,7 @@ async def test_webhook_skips_resolve_for_string_msg_type(hass: HomeAssistant) ->
     """Non-numeric string msgTypes are not resolved via product model."""
     generic_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["device_1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
     runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
         AsyncMock(return_value="shouldNotMatter")
     )
@@ -407,9 +403,7 @@ async def test_webhook_resolve_failure_keeps_original_msg_type(
     """Resolve errors keep original msg_type and still fire events."""
     generic_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["device_1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
     runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
         AsyncMock(side_effect=RuntimeError("api down"))
     )
