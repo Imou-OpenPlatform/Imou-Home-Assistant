@@ -2,10 +2,12 @@
 ## [1.3.1]
 ### Changed
 - Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
-- Webhook `iotEvent`: promote `content.event` to `msg_type`; expose `product_id` (`pid`) and `outputData`; treat `iotEvent` / `sirenOn` / `sirenOff` as alarms
+- Webhook `msg_type` uses top-level `msgType` only; still expose `product_id` (`pid`) and `outputData`; treat `iotEvent` / `sirenOn` / `sirenOff` as alarms
+- Webhook: resolve numeric / `iotEvent` push types to product-model event identifiers via pyimouapi 1.3.1 (alarm classification still uses top-level `msgType`)
+- Depend on `pyimouapi==1.3.1`
 
 ### Fixed
-- Webhook: treat privacy-mask and other status/ops msgTypes (`openCamera`, `closeCamera`, …) as non-alarm (`imou_life_event` only); expose recent push msgType counts in diagnostics (#66)
+- Webhook: treat privacy-mask and other status/ops msgTypes (`openCamera`, `closeCamera`, `electricity`, …) as non-alarm (`imou_life_event` only); expose recent push msgType counts in diagnostics (#66)
 
 ## [1.3.0]
 ### Added

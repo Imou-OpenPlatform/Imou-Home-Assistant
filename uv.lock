@@ -1237,7 +1237,7 @@ dev = [
     { name = "codespell", specifier = ">=2.3.0" },
     { name = "homeassistant", specifier = "==2025.1.4" },
     { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pyimouapi", specifier = "==1.2.9" },
+    { name = "pyimouapi", specifier = "==1.3.1" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.205" },
     { name = "pytest-timeout", specifier = ">=2.3.0" },
@@ -1915,15 +1915,15 @@ wheels = [
 
 [[package]]
 name = "pyimouapi"
-version = "1.2.9"
+version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "simpleeval" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/dd/69add8b71cb0855b1fe0396b77d88275dcc27867cf2c063e999702c2df21/pyimouapi-1.2.9.tar.gz", hash = "sha256:19fc7cac2239c981e5e34843d986d712c6aa19b9adde87474c5fef54c70149d8", size = 23971, upload-time = "2026-07-02T11:51:07.609Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/5d/f56fdc7bd6f1399d596d6893a85b401d72e004e3aa053b1ed080057b6db7/pyimouapi-1.3.1.tar.gz", hash = "sha256:9a0eed654a7f10f961bec3ebff37203d0940f7405b1b7c53e3d56a566f578a8b", size = 26750, upload-time = "2026-07-22T01:49:26.544Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/07/707e62b9a389a738eb37523fda3d0e7ab2bfbd9d5d0c0915d37479cb9bd6/pyimouapi-1.2.9-py3-none-any.whl", hash = "sha256:040e6b10ce02fec60a4e4c38235b76b15a448724dd4a8e260d0953e1da7116f0", size = 21172, upload-time = "2026-07-02T11:51:06.369Z" },
+    { url = "https://files.pythonhosted.org/packages/31/6f/fd60433053c1194b5ae710a44376b22dc513c439c28ec91aaa66415ce744/pyimouapi-1.3.1-py3-none-any.whl", hash = "sha256:4ccd2b50fb12153c8ea38d9325f51dc722b6ec41535406c4ddd23f889f1264bb", size = 23001, upload-time = "2026-07-22T01:49:25.424Z" },
 ]
 
 [[package]]
@@ -2484,8 +2484,8 @@ name = "standard-aifc"
 version = "3.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "audioop-lts", marker = "python_full_version >= '3.13'" },
-    { name = "standard-chunk", marker = "python_full_version >= '3.13'" },
+    { name = "audioop-lts" },
+    { name = "standard-chunk" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/53/6050dc3dde1671eb3db592c13b55a8005e5040131f7509cef0215212cb84/standard_aifc-3.13.0.tar.gz", hash = "sha256:64e249c7cb4b3daf2fdba4e95721f811bde8bdfc43ad9f936589b7bb2fae2e43", size = 15240, upload-time = "2024-10-30T16:01:31.772Z" }
 wheels = [
