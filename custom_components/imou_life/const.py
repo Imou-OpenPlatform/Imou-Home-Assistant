@@ -71,6 +71,15 @@ PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
+PARAM_AB_ALARM_SOUND = "ab_alarm_sound"
+PARAM_CLOSE_CAMERA = "close_camera"
+PARAM_WHITE_LIGHT = "white_light"
+PARAM_AUDIO_ENCODE_CONTROL = "audio_encode_control"
+PARAM_LIGHT = "light"
+PARAM_PLUG_SWITCH = "switch"
+PARAM_NIGHT_VISION_MODE = "night_vision_mode"
+PARAM_MODE = "mode"
+PARAM_DEVICE_VOLUME = "device_volume"
 PARAM_CURRENT_OPTION = "current_option"
 PARAM_OPTIONS = "options"
 PARAM_RESTART_DEVICE = "restart_device"
@@ -82,17 +91,6 @@ PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
-
-SWITCH_TYPES = (
-    PARAM_MOTION_DETECT,
-    "ab_alarm_sound",
-    "close_camera",
-    "white_light",
-    "audio_encode_control",
-    PARAM_HEADER_DETECT,
-    "light",
-    "switch",
-)
 
 # event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
 EVENT_PUSH_TYPE_ALARM = "alarm"
