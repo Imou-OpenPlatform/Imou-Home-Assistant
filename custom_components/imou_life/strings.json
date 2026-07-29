@@ -153,64 +153,64 @@
       }
     },
     "select": {
-      "night_vision_mode": {
-        "name": "Night Vision Mode",
+      "device_volume": {
+        "name": "Volume",
         "state": {
-          "intelligent": "Smart Night Vision",
-          "fullcolor": "Bright Color Night Vision",
-          "infrared": "Infrared Night Vision",
-          "off": "Off",
-          "lowlight": "Low Light Night Vision",
-          "smartlowlight": "Smart Low Light Night Vision",
-          "0": "Smart Night Vision",
-          "1": "Bright Color Night Vision",
-          "2": "Infrared Night Vision",
-          "3": "Off",
-          "4": "Custom Mode"
+          "0": "[%key:common::state::low%]",
+          "1": "[%key:common::state::medium%]",
+          "2": "[%key:common::state::high%]",
+          "99": "Mute"
         }
       },
       "mode": {
         "name": "Mode",
         "state": {
-          "0": "Home",
-          "1": "Away",
+          "0": "[%key:common::state::home%]",
+          "1": "[%key:common::state::not_home%]",
           "2": "Disarm"
         }
       },
-      "device_volume": {
-        "name": "Volume",
+      "night_vision_mode": {
+        "name": "Night vision mode",
         "state": {
-          "99": "Mute",
-          "0": "Low",
-          "1": "Medium",
-          "2": "High"
+          "0": "Smart night vision",
+          "1": "Bright color night vision",
+          "2": "Infrared night vision",
+          "3": "[%key:common::state::off%]",
+          "4": "Custom mode",
+          "fullcolor": "Bright color night vision",
+          "infrared": "Infrared night vision",
+          "intelligent": "Smart night vision",
+          "lowlight": "Low light night vision",
+          "off": "[%key:common::state::off%]",
+          "smartlowlight": "Smart low light night vision"
         }
       }
     },
     "switch": {
-      "motion_detect": {
-        "name": "Motion Detect"
-      },
       "ab_alarm_sound": {
-        "name": "Abnormal sound detection"
+        "name": "Abnormal sound alarm"
+      },
+      "audio_encode_control": {
+        "name": "Audio recording"
       },
       "close_camera": {
         "name": "Privacy mode"
       },
-      "white_light": {
-        "name": "White Light"
-      },
-      "audio_encode_control": {
-        "name": "Audio Encode Control"
-      },
       "header_detect": {
-        "name": "Human Detect"
+        "name": "Human detection"
       },
       "light": {
-        "name": "Light"
+        "name": "Indicator light"
+      },
+      "motion_detect": {
+        "name": "Motion detection"
       },
       "switch": {
-        "name": "Plug Switch"
+        "name": "Plug switch"
+      },
+      "white_light": {
+        "name": "White light"
       }
     },
     "button": {
