@@ -108,39 +108,17 @@
   },
   "entity": {
     "sensor": {
-      "storage_used": {
-        "name": "存储使用率",
-        "state": {
-          "e1": "无存储介质",
-          "e2": "设备异常"
-        }
-      },
       "status": {
         "name": "状态",
         "state": {
-          "online": "在线",
-          "offline": "离线",
-          "sleep": "休眠",
+          "offline": "[%key:common::state::disconnected%]",
+          "online": "[%key:common::state::connected%]",
+          "sleep": "[%key:common::state::standby%]",
           "upgrading": "升级中"
         }
       },
-      "battery": {
-        "name": "电量"
-      },
-      "temperature_current": {
-        "name": "当前温度"
-      },
-      "humidity_current": {
-        "name": "当前湿度"
-      },
-      "power": {
-        "name": "当前功率"
-      },
-      "voltage": {
-        "name": "当前电压"
-      },
-      "current": {
-        "name": "当前电流"
+      "storage_used": {
+        "name": "存储使用率"
       },
       "switch_cnt": {
         "name": "今日开关次数"
@@ -149,7 +127,7 @@
         "name": "用电量"
       },
       "use_time": {
-        "name": "开启时长"
+        "name": "使用时长"
       }
     },
     "select": {
