@@ -102,16 +102,14 @@ def _config_flow_error_key(exception: ImouException) -> str:
     return "unknown"
 
 
-def _event_push_step_placeholder(
-    hass: HomeAssistant, language: str, key: str, fallback: str
+def _selector_option_label(
+    hass: HomeAssistant, language: str, selector: str, key: str, fallback: str
 ) -> str:
-    """Load event-push step text from config flow translations."""
+    """Load a selector option label for config flow placeholders."""
     translations = translation.async_get_cached_translations(
-        hass, language, "config_flow", DOMAIN
+        hass, language, "selector", DOMAIN
     )
-    translation_key = (
-        f"component.{DOMAIN}.options.step.event_push.placeholder.{key}"
-    )
+    translation_key = f"component.{DOMAIN}.selector.{selector}.options.{key}"
     return translations.get(translation_key, fallback)
 
 
@@ -318,8 +316,8 @@ class ImouOptionsFlow(OptionsFlow):
             except Exception:
                 suggested_webhook_url = f"/api/webhook/{webhook_id}"
 
-        not_generated = _event_push_step_placeholder(
-            self.hass, language, "not_generated", "Not generated"
+        not_generated = _selector_option_label(
+            self.hass, language, "webhook_placeholder", "not_generated", "Not generated"
         )
         return {
             "webhook_id": webhook_id or not_generated,

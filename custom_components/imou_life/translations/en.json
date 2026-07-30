@@ -109,9 +109,6 @@
               "notify_services": "Comma-separated HA actions, e.g. notify.mobile_app_phone. Leave empty to use automations only."
             }
           }
-        },
-        "placeholder": {
-          "not_generated": "Not generated"
         }
       },
       "devices": {
@@ -130,6 +127,11 @@
         "eu": "Europe",
         "na": "North America",
         "sg": "Singapore (Asia-Pacific)"
+      }
+    },
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "Not generated"
       }
     },
     "event_push_type": {

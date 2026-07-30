@@ -109,9 +109,6 @@
               "notify_services": "英文逗号分隔的 HA 动作，如 notify.mobile_app_phone。留空则仅通过自动化处理。"
             }
           }
-        },
-        "placeholder": {
-          "not_generated": "未生成"
         }
       },
       "devices": {
@@ -130,6 +127,11 @@
         "eu": "欧洲",
         "na": "北美",
         "sg": "新加坡（亚太）"
+      }
+    },
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "未生成"
       }
     },
     "event_push_type": {
