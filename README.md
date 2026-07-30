@@ -40,7 +40,7 @@ Register on the portal for your region, then open **My App** in the console to c
 
 Then select which devices to add. Unselected devices are not polled (saves API quota).
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/select_devices.png" width="70%" alt="Select devices during setup">
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Select devices during setup">
 
 ### 4. Done
 
@@ -60,7 +60,9 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 
 <img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
 
-3. **Manage devices** — choose which devices to poll (same device picker as at setup)
+3. **Manage devices** — choose which devices to poll
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
