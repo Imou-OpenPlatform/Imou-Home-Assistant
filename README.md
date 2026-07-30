@@ -1,6 +1,6 @@
 # Imou Home Assistant Component Integration
 
-**English | [简体中文](README.zh-CN.md)**
+**English | [简体中文](README.zh-Hans.md)**
 
 [![HACS Default][hacs-badge]][hacs-url]
 [![GitHub Release][release-badge]][release-url]
