@@ -5,15 +5,18 @@ from pathlib import Path
 
 import pytest
 from custom_components.imou_life.const import (
+    CONF_API_URL_SG,
     DOMAIN,
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
+    api_url_from_region,
+    api_url_region_from_value,
 )
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from . import USER_INPUT, patch_async_setup_entry
+from . import LOGIN_INPUT, USER_INPUT, patch_async_setup_entry
 
 _CONFIG_FLOW_PATH = (
     Path(__file__).resolve().parents[1]
@@ -26,6 +29,13 @@ assert not re.search(r"[\u4e00-\u9fff]", _CONFIG_FLOW_PATH.read_text(encoding="u
 assert "/openapi/" not in _CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
 
+def test_api_url_region_mapping() -> None:
+    """Login region keys map to stored hostnames and back."""
+    assert api_url_from_region("sg") == CONF_API_URL_SG
+    assert api_url_region_from_value(CONF_API_URL_SG) == "sg"
+    assert api_url_region_from_value("sg") == "sg"
+
+
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     """Test async_step_user with no user input."""
@@ -33,10 +43,10 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
         DOMAIN, context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
+    assert result["step_id"] == "user"
     with patch_async_setup_entry() as mock_setup_entry:
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input=USER_INPUT
+            result["flow_id"], user_input=LOGIN_INPUT
         )
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "select_devices"
@@ -61,7 +71,7 @@ async def test_async_step_user_aborts_when_no_devices(hass: HomeAssistant) -> No
         DOMAIN, context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=USER_INPUT
+        result["flow_id"], user_input=LOGIN_INPUT
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_devices"
@@ -74,35 +84,35 @@ async def test_async_step_user_with_user_input_fail(hass: HomeAssistant) -> None
         DOMAIN, context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
+    assert result["step_id"] == "user"
     with patch_async_setup_entry():
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input=USER_INPUT
+            result["flow_id"], user_input=LOGIN_INPUT
         )
 
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
-    assert result["errors"]["base"] == "appIdOrSecret_invalid"
+    assert result["step_id"] == "user"
+    assert result["errors"]["base"] == "invalid_auth"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")
 async def test_async_step_user_with_user_input(hass: HomeAssistant) -> None:
     """Test async_step_user with user input success."""
     result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}, data=USER_INPUT
+        DOMAIN, context={"source": SOURCE_USER}, data=LOGIN_INPUT
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
+    assert result["step_id"] == "user"
     with patch_async_setup_entry():
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input=USER_INPUT
+            result["flow_id"], user_input=LOGIN_INPUT
         )
 
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
-    assert result["errors"]["base"] == "appIdOrSecret_invalid"
+    assert result["step_id"] == "user"
+    assert result["errors"]["base"] == "invalid_auth"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -112,10 +122,10 @@ async def test_async_step_user_with_device_selection(hass: HomeAssistant) -> Non
         DOMAIN, context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "login"
+    assert result["step_id"] == "user"
 
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=USER_INPUT
+        result["flow_id"], user_input=LOGIN_INPUT
     )
 
     assert result["type"] is FlowResultType.FORM

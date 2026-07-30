@@ -41,12 +41,31 @@ CONF_API_URL_OR = "openapi-or.easy4ip.com"
 CONF_API_URL_FK = "openapi-fk.easy4ip.com"
 CONF_API_URL_HZ = "openapi.lechange.cn"
 
-API_URL_OPTIONS = (
-    CONF_API_URL_SG,
-    CONF_API_URL_OR,
-    CONF_API_URL_FK,
-    CONF_API_URL_HZ,
-)
+API_URL_REGIONS: dict[str, str] = {
+    "sg": CONF_API_URL_SG,
+    "eu": CONF_API_URL_OR,
+    "na": CONF_API_URL_FK,
+    "cn": CONF_API_URL_HZ,
+}
+
+_API_URL_REGION_BY_HOSTNAME = {
+    hostname: region for region, hostname in API_URL_REGIONS.items()
+}
+
+DEFAULT_API_URL_REGION = "sg"
+
+
+def api_url_from_region(region: str) -> str:
+    """Map a config-flow region key to the stored API hostname."""
+    return API_URL_REGIONS.get(region, CONF_API_URL_SG)
+
+
+def api_url_region_from_value(value: str) -> str:
+    """Return a region key for the login selector from stored or submitted value."""
+    if value in API_URL_REGIONS:
+        return value
+    return _API_URL_REGION_BY_HOSTNAME.get(value, DEFAULT_API_URL_REGION)
+
 
 CONF_HD = "HD"
 CONF_SD = "SD"

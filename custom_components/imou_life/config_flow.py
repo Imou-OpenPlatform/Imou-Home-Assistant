@@ -10,13 +10,14 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import webhook
-from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
 )
 from pyimouapi.exceptions import (
     ConnectFailedException,
@@ -27,12 +28,12 @@ from pyimouapi.exceptions import (
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    API_URL_OPTIONS,
-    CONF_API_URL_SG,
+    API_URL_REGIONS,
     CONF_HD,
     CONF_HTTP,
     CONF_HTTPS,
     CONF_SD,
+    DEFAULT_API_URL_REGION,
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_OPTIONS,
@@ -50,6 +51,8 @@ from .const import (
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
+    api_url_from_region,
+    api_url_region_from_value,
     callback_flags_to_event_push_types,
 )
 from .helpers import async_build_device_map
@@ -68,13 +71,12 @@ def _entry_title(app_id: str) -> str:
 def _config_flow_error_key(exception: ImouException) -> str:
     """Map pyimouapi exceptions to config flow error translation keys."""
     if isinstance(exception, InvalidAppIdOrSecretException):
-        return "appIdOrSecret_invalid"
+        return "invalid_auth"
     if isinstance(exception, ConnectFailedException):
-        return "connect_failed"
+        return "cannot_connect"
     if isinstance(exception, RequestFailedException):
         return "request_failed"
-    title = exception.get_title()
-    return title if title != "generic_error" else "unknown"
+    return "unknown"
 
 
 def _options_placeholder(hass, key: str, fallback: str) -> str:
@@ -86,7 +88,7 @@ def _options_placeholder(hass, key: str, fallback: str) -> str:
     return translations.get(translation_key, fallback)
 
 
-class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Imou Life."""
 
     VERSION = 2
@@ -97,14 +99,18 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._login_data: dict[str, Any] = {}
 
     @staticmethod
-    def _login_schema(default_api_url: str = CONF_API_URL_SG) -> vol.Schema:
-        """Schema for App Id / Secret / API region."""
+    def _user_schema(default_region: str = DEFAULT_API_URL_REGION) -> vol.Schema:
+        """Schema for App ID / secret / server region."""
         return vol.Schema(
             {
                 vol.Required(PARAM_APP_ID): str,
                 vol.Required(PARAM_APP_SECRET): str,
-                vol.Required(PARAM_API_URL, default=default_api_url): vol.In(
-                    API_URL_OPTIONS
+                vol.Required(PARAM_API_URL, default=default_region): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(API_URL_REGIONS),
+                        translation_key="api_url",
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
                 ),
             }
         )
@@ -112,37 +118,37 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Step when user starts adding the integration."""
+        """Handle the initial login step."""
         if user_input is None:
             return self.async_show_form(
-                step_id="login",
-                data_schema=self._login_schema(),
+                step_id="user",
+                data_schema=self._user_schema(),
             )
-        return await self.async_step_login(user_input)
 
-    async def async_step_login(self, user_input: dict[str, Any]) -> ConfigFlowResult:
-        """Validate credentials, then fetch device list for selection."""
         await self.async_set_unique_id(user_input[PARAM_APP_ID])
         self._abort_if_unique_id_configured()
+
+        api_region = api_url_region_from_value(user_input[PARAM_API_URL])
+        api_hostname = api_url_from_region(api_region)
         api_client = ImouOpenApiClient(
             user_input[PARAM_APP_ID],
             user_input[PARAM_APP_SECRET],
-            user_input[PARAM_API_URL],
+            api_hostname,
         )
         try:
             try:
                 await api_client.async_get_token()
             except ImouException as exception:
                 return self.async_show_form(
-                    step_id="login",
-                    data_schema=self._login_schema(user_input[PARAM_API_URL]),
+                    step_id="user",
+                    data_schema=self._user_schema(api_region),
                     errors={"base": _config_flow_error_key(exception)},
                 )
 
             self._login_data = {
                 PARAM_APP_ID: user_input[PARAM_APP_ID],
                 PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-                PARAM_API_URL: user_input[PARAM_API_URL],
+                PARAM_API_URL: api_hostname,
                 PARAM_WEBHOOK_ID: uuid.uuid4().hex,
             }
 
@@ -179,7 +185,6 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data={**self._login_data, PARAM_SELECTED_DEVICES: selected},
             )
 
-        # Default: all devices preselected
         return self.async_show_form(
             step_id="select_devices",
             data_schema=vol.Schema(
@@ -225,7 +230,7 @@ class ImouConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             await api_client.async_get_token()
         except InvalidAppIdOrSecretException:
-            errors["base"] = "appIdOrSecret_invalid"
+            errors["base"] = "invalid_auth"
         except ImouException as exception:
             errors["base"] = _config_flow_error_key(exception)
         else:
@@ -270,7 +275,6 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — general settings page."""
         if user_input is not None:
-            # Stash general options, then move to device selection step
             self._general_options = user_input
             return await self.async_step_devices()
 
@@ -320,7 +324,6 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
                             vol.Coerce(int), vol.Range(min=100, max=10000)
                         ),
-                        # --- Event push settings ---
                         vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
                         vol.Optional(PARAM_WEBHOOK_URL, default=""): str,
                         vol.Required(
@@ -333,7 +336,6 @@ class ImouOptionsFlow(OptionsFlow):
                                 translation_key="event_push_type",
                             )
                         ),
-                        # --- Notification settings ---
                         vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
                     }
                 ),
@@ -353,11 +355,9 @@ class ImouOptionsFlow(OptionsFlow):
         """Manage device selection — add/remove devices without re-setup."""
         if user_input is not None:
             selected = user_input.get(PARAM_SELECTED_DEVICES, [])
-            # Merge general options + device selection into one options dict
             merged = {**self._general_options, PARAM_SELECTED_DEVICES: selected}
             return self.async_create_entry(data=merged)
 
-        # Fetch current device list from API
         errors: dict[str, str] = {}
         try:
             api_client = ImouOpenApiClient(
@@ -377,14 +377,12 @@ class ImouOptionsFlow(OptionsFlow):
             errors["base"] = "request_failed"
 
         if errors:
-            # Can't fetch devices, show error and let user go back
             return self.async_show_form(
                 step_id="devices",
                 data_schema=vol.Schema({}),
                 errors=errors,
             )
 
-        # Preselect currently active devices (preserve explicit empty selection)
         if PARAM_SELECTED_DEVICES in self.config_entry.options:
             current_selected = self.config_entry.options[PARAM_SELECTED_DEVICES]
         elif PARAM_SELECTED_DEVICES in self.config_entry.data:

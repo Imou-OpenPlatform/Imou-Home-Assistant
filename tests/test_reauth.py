@@ -58,5 +58,5 @@ async def test_reauth_rejects_invalid_secret(hass) -> None:
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
-    assert result["errors"]["base"] == "appIdOrSecret_invalid"
+    assert result["errors"]["base"] == "invalid_auth"
     assert entry.data[PARAM_APP_SECRET] == USER_INPUT["app_secret"]

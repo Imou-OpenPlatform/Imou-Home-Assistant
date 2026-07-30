@@ -1,12 +1,29 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "no_devices": "No Imou devices were found on this account",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "request_failed": "Failed to load device list from Imou"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "request_failed": "Request failed",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
     "step": {
-      "login": {
-        "title": "Login to IMOU Cloud",
+      "user": {
+        "title": "Log in to Imou cloud",
         "data": {
-          "app_id": "AppId",
-          "app_secret": "AppSecret",
-          "api_url": "url"
+          "api_url": "Server region",
+          "app_id": "App ID",
+          "app_secret": "App secret"
+        },
+        "data_description": {
+          "api_url": "Select the server region closest to your location",
+          "app_id": "The app ID obtained from the Imou cloud platform",
+          "app_secret": "The app secret obtained from the Imou cloud platform"
         }
       },
       "select_devices": {
@@ -20,21 +37,9 @@
         "title": "Re-authenticate Imou Life",
         "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
         "data": {
-          "app_secret": "AppSecret"
+          "app_secret": "App secret"
         }
       }
-    },
-    "abort": {
-      "already_configured": "AppId is already configured",
-      "no_devices": "No Imou devices were found on this account",
-      "cannot_connect": "Could not connect to Imou Open Platform",
-      "request_failed": "Failed to load device list from Imou"
-    },
-    "error": {
-      "appIdOrSecret_invalid": "Invalid appId or appSecret",
-      "connect_failed": "Failed to connect to Imou",
-      "request_failed": "Request failed",
-      "unknown": "An unknown error occurred"
     }
   },
   "issues": {
@@ -84,6 +89,14 @@
     }
   },
   "selector": {
+    "api_url": {
+      "options": {
+        "cn": "China",
+        "eu": "Europe",
+        "na": "North America",
+        "sg": "Singapore (Asia-Pacific)"
+      }
+    },
     "webhook_placeholder": {
       "options": {
         "not_generated": "Not generated",

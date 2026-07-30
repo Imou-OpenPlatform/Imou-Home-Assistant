@@ -1,12 +1,29 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "no_devices": "该账号下未找到 Imou 设备",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "request_failed": "从 Imou 加载设备列表失败"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "request_failed": "请求失败",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
     "step": {
-      "login": {
-        "title": "连接至IMOU云",
+      "user": {
+        "title": "登录 Imou 云",
         "data": {
-          "app_id": "AppId",
-          "app_secret": "AppSecret",
-          "api_url": "网址"
+          "api_url": "服务器区域",
+          "app_id": "App ID",
+          "app_secret": "App secret"
+        },
+        "data_description": {
+          "api_url": "选择离你最近的服务器区域",
+          "app_id": "在 Imou 开放平台创建应用后获得的 App ID",
+          "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
       },
       "select_devices": {
@@ -20,21 +37,9 @@
         "title": "重新验证 Imou Life",
         "description": "App Secret 已失效。请为 AppId {app_id} 输入新的 App Secret。",
         "data": {
-          "app_secret": "AppSecret"
+          "app_secret": "App secret"
         }
       }
-    },
-    "abort": {
-      "already_configured": "该AppId已配置",
-      "no_devices": "该账号下未找到 Imou 设备",
-      "cannot_connect": "无法连接 Imou 开放平台",
-      "request_failed": "从 Imou 加载设备列表失败"
-    },
-    "error": {
-      "appIdOrSecret_invalid": "appId或者appSecret有误",
-      "connect_failed": "连接失败",
-      "request_failed": "请求失败",
-      "unknown": "发生未知错误"
     }
   },
   "issues": {
@@ -84,6 +89,14 @@
     }
   },
   "selector": {
+    "api_url": {
+      "options": {
+        "cn": "中国",
+        "eu": "欧洲",
+        "na": "北美",
+        "sg": "新加坡（亚太）"
+      }
+    },
     "webhook_placeholder": {
       "options": {
         "not_generated": "未生成",
