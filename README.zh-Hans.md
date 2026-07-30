@@ -37,7 +37,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 <b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 AppId、AppSecret，服务器区域选择 **中国**（须与在 open.imou.com 创建应用时使用的区域一致）。
 
-<img src="assets/images/login.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
+<img src="assets/images/login_new.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
 然后选择要添加的设备。未勾选的设备不会被轮询（可节省 API 配额）。
 

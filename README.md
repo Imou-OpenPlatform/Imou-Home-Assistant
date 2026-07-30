@@ -37,7 +37,7 @@ Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App*
 
 <b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (**Europe / North America / Singapore**). The region must match the international portal where the app was created.
 
-<img src="assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
+<img src="assets/images/login_new.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
 Then select which devices to add. Unselected devices are not polled (saves API quota).
 
