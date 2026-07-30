@@ -1,12 +1,29 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "no_devices": "该账号下未找到 Imou 设备",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "request_failed": "从 Imou 加载设备列表失败"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "request_failed": "请求失败",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
     "step": {
-      "login": {
-        "title": "连接至IMOU云",
+      "user": {
+        "title": "登录 Imou 云",
         "data": {
-          "app_id": "AppId",
-          "app_secret": "AppSecret",
-          "api_url": "网址"
+          "api_url": "服务器区域",
+          "app_id": "App ID",
+          "app_secret": "App secret"
+        },
+        "data_description": {
+          "api_url": "选择离你最近的服务器区域",
+          "app_id": "在 Imou 开放平台创建应用后获得的 App ID",
+          "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
       },
       "select_devices": {
@@ -20,21 +37,9 @@
         "title": "重新验证 Imou Life",
         "description": "App Secret 已失效。请为 AppId {app_id} 输入新的 App Secret。",
         "data": {
-          "app_secret": "AppSecret"
+          "app_secret": "App secret"
         }
       }
-    },
-    "abort": {
-      "already_configured": "该AppId已配置",
-      "no_devices": "该账号下未找到 Imou 设备",
-      "cannot_connect": "无法连接 Imou 开放平台",
-      "request_failed": "从 Imou 加载设备列表失败"
-    },
-    "error": {
-      "appIdOrSecret_invalid": "appId或者appSecret有误",
-      "connect_failed": "连接失败",
-      "request_failed": "请求失败",
-      "unknown": "发生未知错误"
     }
   },
   "issues": {
@@ -50,28 +55,60 @@
   "options": {
     "step": {
       "init": {
-        "description": "当前 Webhook ID：{webhook_id}\n\n建议回调地址：{suggested_webhook_url}\n\n当前填写地址：{current_webhook_url}\n\n『消息回调地址』留空则使用上方建议地址。若该地址外网无法访问，请改为填写实际可用的完整公网 URL。",
+        "title": "常规设置",
+        "description": "轮询间隔与摄像头默认参数。设备选择在后续步骤中完成。",
         "data": {
           "update_interval": "自动刷新间隔（秒）",
           "download_snap_wait_time": "抓图等待时间（秒）",
           "live_resolution": "视频分辨率",
           "live_protocol": "视频协议",
-          "rotation_duration": "云台转动时间（毫秒）",
-          "enable_event_push": "启用消息推送",
-          "webhook_url": "消息回调地址",
-          "event_push_types": "推送消息类型",
-          "notify_services": "报警通知服务"
+          "rotation_duration": "云台转动时间（毫秒）"
         },
         "data_description": {
-          "update_interval": "集成多久去乐橙云拉一次设备状态，默认60秒，范围30-900秒",
-          "download_snap_wait_time": "抓取摄像头截图前等待的秒数，默认3秒",
-          "live_resolution": "摄像头直播的分辨率，HD=高清，SD=标清",
-          "live_protocol": "视频流协议，一般用https即可",
-          "rotation_duration": "按一次云台方向按钮转多久，默认500毫秒",
-          "enable_event_push": "打开后，乐橙云会把设备报警消息实时推送到你的HA，并同步推送到乐橙APP。需要HA有公网可访问的地址（域名/DDNS均可）",
-          "webhook_url": "乐橙云把报警消息推到哪个地址。留空会自动生成（前提是HA已配置外部URL）。如果自动生成不对，手动填完整URL，格式如：https://你的域名:8123/api/webhook/xxxxx",
-          "event_push_types": "选择要接收哪些类型的消息。alarm=设备报警（烟感/燃气/人形/动检等），deviceStatus=设备上下线，iot=物联网设备消息，numberstat=客流统计，faceAnalysis=人脸智能分析",
-          "notify_services": "收到报警后自动发通知到哪里。填HA的动作名称，多个用英文逗号分隔。\n\n查找方法：HA → 开发者工具 → 动作 → 搜索你要用的通知服务\n\n例如：qiyewechat.send  →  企业微信通知\n例如：notify.mobile_app_xxx  →  HA APP弹窗通知\n同时推两个：qiyewechat.send,notify.mobile_app_xxx\n\n留空则不自动发通知（但报警事件仍会触发，可在自动化中使用）"
+          "update_interval": "集成多久去乐橙云拉一次设备状态，默认 60 秒，范围 30–900 秒",
+          "download_snap_wait_time": "抓取摄像头截图前等待的秒数，默认 3 秒",
+          "live_resolution": "摄像头直播分辨率，HD=高清，SD=标清",
+          "live_protocol": "视频流协议，一般用 https 即可",
+          "rotation_duration": "按一次云台方向按钮转多久，默认 500 毫秒"
+        }
+      },
+      "event_push": {
+        "title": "消息推送",
+        "description": "让乐橙云把报警事件实时推送到 Home Assistant。\n\nWebhook ID：{webhook_id}\n建议回调地址：{suggested_url}",
+        "data": {
+          "enable_event_push": "启用消息推送"
+        },
+        "data_description": {
+          "enable_event_push": "向乐橙云注册回调地址；报警消息也会同步推送到乐橙 App。"
+        },
+        "sections": {
+          "callback": {
+            "name": "回调地址",
+            "description": "『自定义回调地址』留空则使用上方建议地址；仅当建议地址外网不可达时再填写公网 URL。",
+            "data": {
+              "webhook_url": "自定义回调地址"
+            },
+            "data_description": {
+              "webhook_url": "可选。示例：https://你的域名:8123/api/webhook/xxxxx"
+            }
+          },
+          "subscriptions": {
+            "name": "消息类型",
+            "description": "开启消息推送后，选择 Home Assistant 要接收哪些乐橙云消息。",
+            "data": {
+              "event_push_types": "订阅类型"
+            }
+          },
+          "notifications": {
+            "name": "报警通知",
+            "description": "可选：收到报警后自动发送通知。",
+            "data": {
+              "notify_services": "通知服务"
+            },
+            "data_description": {
+              "notify_services": "英文逗号分隔的 HA 动作，如 notify.mobile_app_phone。留空则仅通过自动化处理。"
+            }
+          }
         }
       },
       "devices": {
@@ -84,10 +121,17 @@
     }
   },
   "selector": {
+    "api_url": {
+      "options": {
+        "cn": "中国",
+        "eu": "欧洲",
+        "na": "北美",
+        "sg": "新加坡（亚太）"
+      }
+    },
     "webhook_placeholder": {
       "options": {
-        "not_generated": "未生成",
-        "not_set_use_suggested": "未填写 — 将使用上方建议地址"
+        "not_generated": "未生成"
       }
     },
     "event_push_type": {
@@ -108,39 +152,17 @@
   },
   "entity": {
     "sensor": {
-      "storage_used": {
-        "name": "存储使用率",
-        "state": {
-          "e1": "无存储介质",
-          "e2": "设备异常"
-        }
-      },
       "status": {
         "name": "状态",
         "state": {
-          "online": "在线",
-          "offline": "离线",
-          "sleep": "休眠",
+          "offline": "[%key:common::state::disconnected%]",
+          "online": "[%key:common::state::connected%]",
+          "sleep": "[%key:common::state::standby%]",
           "upgrading": "升级中"
         }
       },
-      "battery": {
-        "name": "电量"
-      },
-      "temperature_current": {
-        "name": "当前温度"
-      },
-      "humidity_current": {
-        "name": "当前湿度"
-      },
-      "power": {
-        "name": "当前功率"
-      },
-      "voltage": {
-        "name": "当前电压"
-      },
-      "current": {
-        "name": "当前电流"
+      "storage_used": {
+        "name": "存储使用率"
       },
       "switch_cnt": {
         "name": "今日开关次数"
@@ -149,68 +171,68 @@
         "name": "用电量"
       },
       "use_time": {
-        "name": "开启时长"
+        "name": "使用时长"
       }
     },
     "select": {
-      "night_vision_mode": {
-        "name": "夜视模式",
+      "device_volume": {
+        "name": "音量",
         "state": {
-          "intelligent": "智能夜视",
-          "fullcolor": "全彩夜视",
-          "infrared": "红外夜视",
-          "off": "关闭",
-          "lowlight": "微光夜视",
-          "smartlowlight": "智能微光夜视",
-          "0": "智能夜视",
-          "1": "全彩夜视",
-          "2": "红外夜视",
-          "3": "关闭",
-          "4": "自定义夜视"
+          "0": "[%key:common::state::low%]",
+          "1": "[%key:common::state::medium%]",
+          "2": "[%key:common::state::high%]",
+          "99": "静音"
         }
       },
       "mode": {
         "name": "模式",
         "state": {
-          "0": "在家",
-          "1": "离家",
+          "0": "[%key:common::state::home%]",
+          "1": "[%key:common::state::not_home%]",
           "2": "撤防"
         }
       },
-      "device_volume": {
-        "name": "音量",
+      "night_vision_mode": {
+        "name": "夜视模式",
         "state": {
-          "99": "静音",
-          "0": "低",
-          "1": "中",
-          "2": "高"
+          "0": "智能夜视",
+          "1": "全彩夜视",
+          "2": "红外夜视",
+          "3": "[%key:common::state::off%]",
+          "4": "自定义夜视",
+          "fullcolor": "全彩夜视",
+          "infrared": "红外夜视",
+          "intelligent": "智能夜视",
+          "lowlight": "微光夜视",
+          "off": "[%key:common::state::off%]",
+          "smartlowlight": "智能微光夜视"
         }
       }
     },
     "switch": {
-      "motion_detect": {
-        "name": "移动检测"
-      },
       "ab_alarm_sound": {
         "name": "异常音告警"
       },
+      "audio_encode_control": {
+        "name": "音频录制"
+      },
       "close_camera": {
         "name": "隐私模式"
-      },
-      "white_light": {
-        "name": "白光灯"
-      },
-      "audio_encode_control": {
-        "name": "音频编码"
       },
       "header_detect": {
         "name": "人形检测"
       },
       "light": {
-        "name": "设备指示灯"
+        "name": "指示灯"
+      },
+      "motion_detect": {
+        "name": "移动检测"
       },
       "switch": {
         "name": "插座开关"
+      },
+      "white_light": {
+        "name": "白光灯"
       }
     },
     "button": {

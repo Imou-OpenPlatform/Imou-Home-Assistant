@@ -12,6 +12,12 @@ USER_INPUT = {
     "api_url": "openapi-sg.easy4ip.com",
 }
 
+LOGIN_INPUT = {
+    "app_id": "test_app_id",
+    "app_secret": "test_app_secret",
+    "api_url": "sg",
+}
+
 
 def patch_async_setup_entry() -> _patch:
     """Mock the async_setup_entry function of the imou_life component."""

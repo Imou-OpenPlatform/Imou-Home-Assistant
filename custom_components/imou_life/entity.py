@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, override
+from typing import override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -62,12 +62,3 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         return (
             self.device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
         )
-
-    @staticmethod
-    def is_non_negative_number(value: Any) -> bool:
-        """Return True if value parses as a non-negative number."""
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            return False
-        return number >= 0

@@ -1,12 +1,29 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "no_devices": "No Imou devices were found on this account",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "request_failed": "Failed to load device list from Imou"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "request_failed": "Request failed",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
     "step": {
-      "login": {
-        "title": "Login to IMOU Cloud",
+      "user": {
+        "title": "Log in to Imou cloud",
         "data": {
-          "app_id": "AppId",
-          "app_secret": "AppSecret",
-          "api_url": "url"
+          "api_url": "Server region",
+          "app_id": "App ID",
+          "app_secret": "App secret"
+        },
+        "data_description": {
+          "api_url": "Select the server region closest to your location",
+          "app_id": "The app ID obtained from the Imou cloud platform",
+          "app_secret": "The app secret obtained from the Imou cloud platform"
         }
       },
       "select_devices": {
@@ -20,21 +37,9 @@
         "title": "Re-authenticate Imou Life",
         "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
         "data": {
-          "app_secret": "AppSecret"
+          "app_secret": "App secret"
         }
       }
-    },
-    "abort": {
-      "already_configured": "AppId is already configured",
-      "no_devices": "No Imou devices were found on this account",
-      "cannot_connect": "Could not connect to Imou Open Platform",
-      "request_failed": "Failed to load device list from Imou"
-    },
-    "error": {
-      "appIdOrSecret_invalid": "Invalid appId or appSecret",
-      "connect_failed": "Failed to connect to Imou",
-      "request_failed": "Request failed",
-      "unknown": "An unknown error occurred"
     }
   },
   "issues": {
@@ -50,28 +55,60 @@
   "options": {
     "step": {
       "init": {
-        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nLeave Callback URL empty to use the suggested URL. If that address is not reachable from the internet, enter your real public webhook URL instead.",
+        "title": "General",
+        "description": "Polling interval and camera defaults. Device selection is on the next steps.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
           "live_resolution": "Video resolution",
           "live_protocol": "Video protocol",
-          "rotation_duration": "PTZ rotation duration (ms)",
-          "enable_event_push": "Enable event push",
-          "webhook_url": "Callback URL",
-          "event_push_types": "Event push types",
-          "notify_services": "Alarm notification services"
+          "rotation_duration": "PTZ rotation duration (ms)"
         },
         "data_description": {
-          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30-900s.",
+          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s.",
           "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",
-          "rotation_duration": "How long a single PTZ button press moves. Default 500ms.",
-          "enable_event_push": "When enabled, Imou cloud will push alarm events to your HA in real time. Requires a publicly accessible URL (domain/DDNS). Messages are also synced to the Imou app.",
-          "webhook_url": "The URL where Imou cloud sends alarm messages. Leave empty to auto-generate (requires HA external URL configured). To set manually, enter full URL like: https://yourdomain:8123/api/webhook/xxxxx",
-          "event_push_types": "Select which message types to receive. alarm = device alarms (smoke/gas/human/motion etc.), deviceStatus = online/offline, iot = IoT device messages, numberstat = people counting, faceAnalysis = face detection.",
-          "notify_services": "Where to send alarm notifications. Enter HA action names, separate with commas.\nExample: qiyewechat.send → WeChat Work\nExample: notify.mobile_app_xxx → HA APP push\nBoth: qiyewechat.send,notify.mobile_app_xxx\nLeave empty to skip (alarm events still fire for automations)."
+          "rotation_duration": "How long a single PTZ button press moves. Default 500ms."
+        }
+      },
+      "event_push": {
+        "title": "Event push",
+        "description": "Receive Imou alarm events in Home Assistant in real time.\n\nWebhook ID: {webhook_id}\nSuggested callback URL: {suggested_url}",
+        "data": {
+          "enable_event_push": "Enable event push"
+        },
+        "data_description": {
+          "enable_event_push": "Registers the callback URL with Imou cloud. Alarm events also sync to the Imou app."
+        },
+        "sections": {
+          "callback": {
+            "name": "Callback URL",
+            "description": "Leave **Custom callback URL** empty to use the suggested URL above. Enter a public URL only if the suggested address is not reachable from the internet.",
+            "data": {
+              "webhook_url": "Custom callback URL"
+            },
+            "data_description": {
+              "webhook_url": "Optional. Example: https://yourdomain:8123/api/webhook/xxxxx"
+            }
+          },
+          "subscriptions": {
+            "name": "Message types",
+            "description": "Choose which Imou cloud messages to receive after event push is enabled.",
+            "data": {
+              "event_push_types": "Subscribe to"
+            }
+          },
+          "notifications": {
+            "name": "Alarm notifications",
+            "description": "Optional automatic notifications when an alarm arrives.",
+            "data": {
+              "notify_services": "Notify services"
+            },
+            "data_description": {
+              "notify_services": "Comma-separated HA actions, e.g. notify.mobile_app_phone. Leave empty to use automations only."
+            }
+          }
         }
       },
       "devices": {
@@ -84,10 +121,17 @@
     }
   },
   "selector": {
+    "api_url": {
+      "options": {
+        "cn": "China",
+        "eu": "Europe",
+        "na": "North America",
+        "sg": "Singapore (Asia-Pacific)"
+      }
+    },
     "webhook_placeholder": {
       "options": {
-        "not_generated": "Not generated",
-        "not_set_use_suggested": "Not set — will use the suggested URL above"
+        "not_generated": "Not generated"
       }
     },
     "event_push_type": {
@@ -108,109 +152,87 @@
   },
   "entity": {
     "sensor": {
-      "storage_used": {
-        "name": "Storage Used",
-        "state": {
-          "e1": "No Storage Medium",
-          "e2": "Abnormal"
-        }
-      },
       "status": {
         "name": "Status",
         "state": {
-          "online": "Online",
-          "offline": "Offline",
-          "sleep": "Sleep",
+          "offline": "[%key:common::state::disconnected%]",
+          "online": "[%key:common::state::connected%]",
+          "sleep": "[%key:common::state::standby%]",
           "upgrading": "Upgrading"
         }
       },
-      "battery": {
-        "name": "Battery"
-      },
-      "temperature_current": {
-        "name": "Temperature"
-      },
-      "humidity_current": {
-        "name": "Humidity"
-      },
-      "power": {
-        "name": "Power"
-      },
-      "voltage": {
-        "name": "Voltage"
-      },
-      "current": {
-        "name": "Current"
+      "storage_used": {
+        "name": "Storage used"
       },
       "switch_cnt": {
-        "name": "Switch cycles today"
+        "name": "Cycles today"
       },
       "use_electricity": {
-        "name": "Consumption"
+        "name": "Energy consumption"
       },
       "use_time": {
-        "name": "Runtime"
+        "name": "Usage duration"
       }
     },
     "select": {
-      "night_vision_mode": {
-        "name": "Night Vision Mode",
+      "device_volume": {
+        "name": "Volume",
         "state": {
-          "intelligent": "Smart Night Vision",
-          "fullcolor": "Bright Color Night Vision",
-          "infrared": "Infrared Night Vision",
-          "off": "Off",
-          "lowlight": "Low Light Night Vision",
-          "smartlowlight": "Smart Low Light Night Vision",
-          "0": "Smart Night Vision",
-          "1": "Bright Color Night Vision",
-          "2": "Infrared Night Vision",
-          "3": "Off",
-          "4": "Custom Mode"
+          "0": "[%key:common::state::low%]",
+          "1": "[%key:common::state::medium%]",
+          "2": "[%key:common::state::high%]",
+          "99": "Mute"
         }
       },
       "mode": {
         "name": "Mode",
         "state": {
-          "0": "Home",
-          "1": "Away",
+          "0": "[%key:common::state::home%]",
+          "1": "[%key:common::state::not_home%]",
           "2": "Disarm"
         }
       },
-      "device_volume": {
-        "name": "Volume",
+      "night_vision_mode": {
+        "name": "Night vision mode",
         "state": {
-          "99": "Mute",
-          "0": "Low",
-          "1": "Medium",
-          "2": "High"
+          "0": "Smart night vision",
+          "1": "Bright color night vision",
+          "2": "Infrared night vision",
+          "3": "[%key:common::state::off%]",
+          "4": "Custom mode",
+          "fullcolor": "Bright color night vision",
+          "infrared": "Infrared night vision",
+          "intelligent": "Smart night vision",
+          "lowlight": "Low light night vision",
+          "off": "[%key:common::state::off%]",
+          "smartlowlight": "Smart low light night vision"
         }
       }
     },
     "switch": {
-      "motion_detect": {
-        "name": "Motion Detect"
-      },
       "ab_alarm_sound": {
-        "name": "Abnormal sound detection"
+        "name": "Abnormal sound alarm"
+      },
+      "audio_encode_control": {
+        "name": "Audio recording"
       },
       "close_camera": {
         "name": "Privacy mode"
       },
-      "white_light": {
-        "name": "White Light"
-      },
-      "audio_encode_control": {
-        "name": "Audio Encode Control"
-      },
       "header_detect": {
-        "name": "Human Detect"
+        "name": "Human detection"
       },
       "light": {
-        "name": "Light"
+        "name": "Indicator light"
+      },
+      "motion_detect": {
+        "name": "Motion detection"
       },
       "switch": {
-        "name": "Plug Switch"
+        "name": "Plug switch"
+      },
+      "white_light": {
+        "name": "White light"
       }
     },
     "button": {

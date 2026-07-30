@@ -24,7 +24,7 @@ Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 d
 | --- | --- | --- |
 | Portal | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
 | Console | [My App](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| API region URL (HA login) | `openapi.lechange.cn` | See [API domains](https://open.imoulife.com/book/http/develop.html) — e.g. `openapi-sg.easy4ip.com`, `openapi-or.easy4ip.com`, `openapi-fk.easy4ip.com` |
+| Server region (HA login) | China | Singapore / Europe / North America (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
 | API domain doc | [develop.html](https://open.imou.com/book/http/develop.html) | [develop.html](https://open.imoulife.com/book/http/develop.html) |
 | My Resources | [Resource manage](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
 
@@ -34,15 +34,35 @@ Register on the portal for your region, then open **My App** in the console to c
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **API region URL** from the table above (must match the portal where the app was created). After login you can select which devices to add; unselected devices are not polled (saves API quota).
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (China / Europe / North America / Singapore). The region must match the portal where the app was created.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%">
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
+
+Then select which devices to add. Unselected devices are not polled (saves API quota).
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Select devices during setup">
 
 ### 4. Done
 
-Devices under your Imou account should appear in Home Assistant. Use **Configure** on the integration entry to adjust polling, device selection, live stream settings, or event push.
+Devices under your Imou account should appear in Home Assistant.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/list.png" width="70%">
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
+
+Use **Configure** on the integration entry to adjust settings in three steps:
+
+1. **General** — polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_general.png" width="70%" alt="Configure — General settings">
+
+2. **Event push** — enable webhook callback, optional custom callback URL, message types, and alarm notifications  
+
+On this step the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
+
+3. **Manage devices** — choose which devices to poll
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
@@ -50,15 +70,18 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
 
 ## Features
 * **Integration & account**
-  - Device selection at setup and in **Options → Manage devices** (poll only chosen devices)
-  - Polling interval, snapshot wait time, live resolution/protocol, PTZ duration
+  - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
+  - **Configure** wizard: **General** (polling, camera, PTZ) → **Event push** → **Manage devices**
+  - Login aligned with Home Assistant Core: **server region** dropdown (China / Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.2 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
+  - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, and notifications
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
-  - Optional notify services for alarm messages
+  - Optional notify services for alarm messages (standard HA actions, comma-separated)
   - Choose push message types; messages are also synced to the Imou mobile app
+  - Alarm images in push payloads are encrypted — use automations with `camera.snapshot` / `camera_proxy` if you need notification thumbnails
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview
@@ -87,7 +110,7 @@ Devices under your Imou account should appear in Home Assistant. Use **Configure
 ## Troubleshooting
 
 - **Invalid AppId / AppSecret** — Home Assistant opens a **re-authentication** flow; enter a new App Secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
-- **Event push not working** — Check **Settings → System → Network → Home Assistant URL** (external URL required), or set a manual callback URL in **Configure**. Review repair issues under **Settings → System → Repairs**.
+- **Event push not working** — Open **Configure → Event push**. Confirm **Enable event push** is on; note the **Webhook ID** and **Suggested callback URL** at the top. Leave **Custom callback URL** empty unless you need a different public URL. Also check **Settings → System → Network → Home Assistant URL** (external URL required). Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm motion/human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
