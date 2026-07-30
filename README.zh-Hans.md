@@ -13,29 +13,29 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 本集成通过 Imou 开放平台 API，实现 Home Assistant 与 Imou 生态设备之间的双向通信。
 
-> **开放平台入口：** [国内 — open.imou.com](https://open.imou.com/) · [国际 — open.imoulife.com](https://open.imoulife.com/)
+> **开放平台入口：** [open.imou.com](https://open.imou.com/) — 海外用户请参阅 [English](README.md)。
 
 ## 安装
 
-请先选择对应的**开放平台入口**，再通过 HACS 安装。步骤 1–2 因地区而异；步骤 3–4 相同。
+在 **Imou 国内开放平台** 注册并创建应用，再通过 HACS 安装。
 
 ### 1–2. 注册并创建 AppId / AppSecret
 
-| | **国内** | **国际** |
-| --- | --- | --- |
-| 平台入口 | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
-| 控制台 | [我的应用](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| 服务器区域（HA 登录） | 中国 | 新加坡 / 欧洲 / 北美（参见 [API 域名说明](https://open.imoulife.com/book/http/develop.html)） |
-| API 域名文档 | [develop.html](https://open.imou.com/book/http/develop.html) | [develop.html](https://open.imoulife.com/book/http/develop.html) |
-| 我的资源 | [资源管理](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
+| | |
+| --- | --- |
+| 平台入口 | [open.imou.com](https://open.imou.com/) |
+| 控制台 | [我的应用](https://open.imou.com/consoleNew/myApp/appInfo) |
+| 服务器区域（HA 登录） | **中国** |
+| API 域名文档 | [develop.html](https://open.imou.com/book/http/develop.html) |
+| 我的资源 | [资源管理](https://open.imou.com/consoleNew/resourceManage/myResource) |
 
-在对应地区的平台注册账号，进入控制台 **我的应用**，创建应用并获取 **AppId** 与 **AppSecret**。
+在 [open.imou.com](https://open.imou.com/) 注册账号，进入控制台 **我的应用**，创建应用并获取 **AppId** 与 **AppSecret**。
 
 <img src="assets/images/appMsg.png" width="70%" alt="Imou 开放平台 — 创建 AppId 与 AppSecret">
 
 ### 3. 通过 HACS 安装
 
-<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 AppId、AppSecret，并选择离您账号最近的**服务器区域**（中国 / 欧洲 / 北美 / 新加坡）。区域须与创建应用时使用的平台一致。
+<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 AppId、AppSecret，服务器区域选择 **中国**（须与在 open.imou.com 创建应用时使用的区域一致）。
 
 <img src="assets/images/login.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
@@ -67,14 +67,14 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
->云端 API 调用与视频播放会消耗 AppId 账号的资源配额 — 请在对应地区控制台的 **我的资源** 中查看（见上表）。
+>云端 API 调用与视频播放会消耗 AppId 账号的资源配额 — 请在 [国内控制台](https://open.imou.com/consoleNew/resourceManage/myResource) 的 **我的资源** 中查看。
 
 ## 功能
 
 * **集成与账号**
   - 安装时及 **配置 → 管理设备** 中可选择设备（仅轮询已选设备）
   - **配置** 向导：**常规**（轮询、摄像头、云台）→ **事件推送** → **管理设备**
-  - 登录界面与 Home Assistant Core 对齐：**服务器区域** 下拉（中国 / 欧洲 / 北美 / 新加坡）
+  - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.2 访问开放平台 API
 * **事件推送与自动化**

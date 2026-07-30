@@ -13,29 +13,29 @@ Imou Open Platform offers an open-source Imou python component. By integrating t
 
 This integration enables bidirectional communication between Home Assistant and Imou ecosystem devices via the Imou Open Platform API.
 
-> **Open Platform portals:** [China — open.imou.com](https://open.imou.com/) · [International — open.imoulife.com](https://open.imoulife.com/)
+> **Open Platform portal:** [open.imoulife.com](https://open.imoulife.com/) — China users, see [简体中文](README.zh-Hans.md).
 
 ## Installation
 
-Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 differ by region; steps 3–4 are the same.
+Register on the **international** Open Platform, then install via HACS.
 
 ### 1–2. Register & create AppId / AppSecret
 
-| | **China** | **International** |
-| --- | --- | --- |
-| Portal | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
-| Console | [My App](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| Server region (HA login) | China | Singapore / Europe / North America (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
-| API domain doc | [develop.html](https://open.imou.com/book/http/develop.html) | [develop.html](https://open.imoulife.com/book/http/develop.html) |
-| My Resources | [Resource manage](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
+| | |
+| --- | --- |
+| Portal | [open.imoulife.com](https://open.imoulife.com/) |
+| Console | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
+| Server region (HA login) | Singapore / Europe / North America (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
+| API domain doc | [develop.html](https://open.imoulife.com/book/http/develop.html) |
+| My Resources | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
 
-Register on the portal for your region, then open **My App** in the console to create an application and obtain **AppId** and **AppSecret**.
+Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App** in the console to create an application and obtain **AppId** and **AppSecret**.
 
 <img src="assets/images/appMsg.png" width="70%" alt="Imou Open Platform — create AppId and AppSecret">
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (China / Europe / North America / Singapore). The region must match the portal where the app was created.
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (**Europe / North America / Singapore**). The region must match the international portal where the app was created.
 
 <img src="assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
@@ -67,13 +67,13 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
->Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the console for your region (see table above).
+>Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the [international console](https://open.imoulife.com/consoleNew/resourceManage/myResource).
 
 ## Features
 * **Integration & account**
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
   - **Configure** wizard: **General** (polling, camera, PTZ) → **Event push** → **Manage devices**
-  - Login aligned with Home Assistant Core: **server region** dropdown (China / Europe / North America / Singapore)
+  - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.2 for Open Platform API access
 * **Event push & automations**
