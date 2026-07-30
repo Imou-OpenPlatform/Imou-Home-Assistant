@@ -24,7 +24,7 @@ Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 d
 | --- | --- | --- |
 | Portal | [open.imou.com](https://open.imou.com/) | [open.imoulife.com](https://open.imoulife.com/) |
 | Console | [My App](https://open.imou.com/consoleNew/myApp/appInfo) | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| API region URL (HA login) | `openapi.lechange.cn` | See [API domains](https://open.imoulife.com/book/http/develop.html) — e.g. `openapi-sg.easy4ip.com`, `openapi-or.easy4ip.com`, `openapi-fk.easy4ip.com` |
+| Server region (HA login) | China | Singapore / Europe / North America (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
 | API domain doc | [develop.html](https://open.imou.com/book/http/develop.html) | [develop.html](https://open.imoulife.com/book/http/develop.html) |
 | My Resources | [Resource manage](https://open.imou.com/consoleNew/resourceManage/myResource) | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
 
@@ -34,21 +34,33 @@ Register on the portal for your region, then open **My App** in the console to c
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (China / Europe / North America / Singapore). The region must match the portal where the app was created. After login you can select which devices to add; unselected devices are not polled (saves API quota).
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (China / Europe / North America / Singapore). The region must match the portal where the app was created.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%">
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
+
+Then select which devices to add. Unselected devices are not polled (saves API quota).
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/select_devices.png" width="70%" alt="Select devices during setup">
 
 ### 4. Done
 
-Devices under your Imou account should appear in Home Assistant. Use **Configure** on the integration entry to adjust settings in three steps:
+Devices under your Imou account should appear in Home Assistant.
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
+
+Use **Configure** on the integration entry to adjust settings in three steps:
 
 1. **General** — polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_general.png" width="70%" alt="Configure — General settings">
+
 2. **Event push** — enable webhook callback, optional custom callback URL, message types, and alarm notifications  
-3. **Manage devices** — choose which devices to poll
 
-On the **Event push** step, the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
+On this step the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/list.png" width="70%">
+<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
+
+3. **Manage devices** — choose which devices to poll (same device picker as at setup)
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
