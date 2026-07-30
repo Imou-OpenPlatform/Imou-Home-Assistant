@@ -3,7 +3,6 @@
 [![HACS Default][hacs-badge]][hacs-url]
 [![GitHub Release][release-badge]][release-url]
 [![HACS Downloads][downloads-badge]][release-url]
-[![GitHub Stars][stars-badge]][repo-url]
 [![Active Installs][installs-badge]][analytics-url]
 
 ## Introduction
@@ -30,39 +29,39 @@ Choose your **Open Platform portal** first, then install via HACS. Steps 1–2 d
 
 Register on the portal for your region, then open **My App** in the console to create an application and obtain **AppId** and **AppSecret**.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/appMsg.png" width="70%">
+<img src="assets/images/appMsg.png" width="70%" alt="Imou Open Platform — create AppId and AppSecret">
 
 ### 3. Install via HACS
 
 <b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (China / Europe / North America / Singapore). The region must match the portal where the app was created.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
+<img src="assets/images/login.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
 Then select which devices to add. Unselected devices are not polled (saves API quota).
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Select devices during setup">
+<img src="assets/images/configure_devices.png" width="70%" alt="Select devices during setup">
 
 ### 4. Done
 
 Devices under your Imou account should appear in Home Assistant.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
+<img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
 Use **Configure** on the integration entry to adjust settings in three steps:
 
 1. **General** — polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_general.png" width="70%" alt="Configure — General settings">
+<img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
 2. **Event push** — enable webhook callback, optional custom callback URL, message types, and alarm notifications  
 
 On this step the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
+<img src="assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
 
 3. **Manage devices** — choose which devices to poll
 
-<img src="https://raw.githubusercontent.com/Imou-OpenPlatform/Imou-Home-Assistant/refs/heads/main/assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
+<img src="assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
@@ -132,23 +131,12 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 | --- | --- | --- |
 | **Active installs** | [Home Assistant Analytics](https://analytics.home-assistant.io/custom_integrations.json) | Live HA instances reporting `imou_life` (opt-in analytics only) |
 | **HACS downloads** | GitHub Releases | Total downloads of `imou_life.zip` (HACS install + update) |
-| **GitHub stars** | GitHub | Repository stargazers |
-
-### Star History
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Imou-OpenPlatform/Imou-Home-Assistant&type=Date" />
-</picture>
 
 <!-- Badge references -->
 [hacs-badge]: https://img.shields.io/badge/HACS-Default-orange.svg?logo=HomeAssistantCommunityStore&logoColor=white&style=flat-square
 [release-badge]: https://img.shields.io/github/v/release/Imou-OpenPlatform/Imou-Home-Assistant?style=flat-square&label=Release
 [downloads-badge]: https://img.shields.io/github/downloads/Imou-OpenPlatform/Imou-Home-Assistant/total.svg?style=flat-square&label=HACS%20downloads
-[stars-badge]: https://img.shields.io/github/stars/Imou-OpenPlatform/Imou-Home-Assistant?style=flat-square
 [installs-badge]: https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=Active%20installs&suffix=%20installs&cacheSeconds=21600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.imou_life.total
 [hacs-url]: https://github.com/hacs/integration
 [release-url]: https://github.com/Imou-OpenPlatform/Imou-Home-Assistant/releases
-[repo-url]: https://github.com/Imou-OpenPlatform/Imou-Home-Assistant
 [analytics-url]: https://analytics.home-assistant.io/custom_integrations.json
