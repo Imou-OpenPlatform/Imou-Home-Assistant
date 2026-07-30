@@ -11,13 +11,17 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 from pyimouapi.exceptions import (
     ConnectFailedException,
@@ -61,6 +65,25 @@ _LOGGER = logging.getLogger(__name__)
 
 _ENTRY_NAME = "Imou Life Official"
 
+_GENERAL_OPTION_KEYS = (
+    PARAM_UPDATE_INTERVAL,
+    PARAM_DOWNLOAD_SNAP_WAIT_TIME,
+    PARAM_LIVE_RESOLUTION,
+    PARAM_LIVE_PROTOCOL,
+    PARAM_ROTATION_DURATION,
+)
+
+_EVENT_PUSH_OPTION_KEYS = (
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_WEBHOOK_URL,
+    PARAM_EVENT_PUSH_TYPES,
+    PARAM_NOTIFY_SERVICES,
+)
+
+SECTION_EVENT_PUSH_CALLBACK = "callback"
+SECTION_EVENT_PUSH_SUBSCRIPTIONS = "subscriptions"
+SECTION_EVENT_PUSH_NOTIFICATIONS = "notifications"
+
 
 def _entry_title(app_id: str) -> str:
     """Build a readable config entry title."""
@@ -79,12 +102,16 @@ def _config_flow_error_key(exception: ImouException) -> str:
     return "unknown"
 
 
-def _options_placeholder(hass, key: str, fallback: str) -> str:
-    """Load webhook placeholder label from selector translations."""
+def _event_push_step_placeholder(
+    hass: HomeAssistant, language: str, key: str, fallback: str
+) -> str:
+    """Load event-push step text from config flow translations."""
     translations = translation.async_get_cached_translations(
-        hass, hass.config.language, "selector", DOMAIN
+        hass, language, "config_flow", DOMAIN
     )
-    translation_key = f"component.{DOMAIN}.selector.webhook_placeholder.options.{key}"
+    translation_key = (
+        f"component.{DOMAIN}.options.step.event_push.placeholder.{key}"
+    )
     return translations.get(translation_key, fallback)
 
 
@@ -269,15 +296,18 @@ class ImouOptionsFlow(OptionsFlow):
         """Initialize options flow."""
         self._devices_map: dict[str, str] = {}
         self._general_options: dict[str, Any] = {}
+        self._event_push_options: dict[str, Any] = {}
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Manage options — general settings page."""
-        if user_input is not None:
-            self._general_options = user_input
-            return await self.async_step_devices()
+    @staticmethod
+    def _suggested_option_subset(
+        options: Mapping[str, Any], keys: tuple[str, ...]
+    ) -> dict[str, Any]:
+        """Return suggested values for a subset of option keys."""
+        return {key: options[key] for key in keys if key in options}
 
+    def _event_push_webhook_placeholders(self) -> dict[str, str]:
+        """Return webhook reference values for the step description."""
+        language = self.context.get("language") or self.hass.config.language
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
         suggested_webhook_url = ""
         if webhook_id:
@@ -287,22 +317,110 @@ class ImouOptionsFlow(OptionsFlow):
                 )
             except Exception:
                 suggested_webhook_url = f"/api/webhook/{webhook_id}"
-        current_webhook_url = self.config_entry.options.get(PARAM_WEBHOOK_URL, "")
 
-        not_generated = _options_placeholder(
-            self.hass, "not_generated", "Not generated"
+        not_generated = _event_push_step_placeholder(
+            self.hass, language, "not_generated", "Not generated"
         )
-        not_set_use_suggested = _options_placeholder(
-            self.hass,
-            "not_set_use_suggested",
-            "Not set — will use the suggested URL above",
-        )
+        return {
+            "webhook_id": webhook_id or not_generated,
+            "suggested_url": suggested_webhook_url or not_generated,
+        }
 
-        suggested_options = dict(self.config_entry.options)
-        if stored_types := suggested_options.get(PARAM_EVENT_PUSH_TYPES):
-            suggested_options[PARAM_EVENT_PUSH_TYPES] = (
-                callback_flags_to_event_push_types(stored_types)
+    def _nested_event_push_suggestions(
+        self, options: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Map flat stored options to a section-based suggested values dict."""
+        flat = self._suggested_option_subset(options, _EVENT_PUSH_OPTION_KEYS)
+        enable_push = bool(flat.get(PARAM_ENABLE_EVENT_PUSH, False))
+        event_push_types = flat.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
+        if isinstance(event_push_types, list):
+            event_push_types = callback_flags_to_event_push_types(event_push_types)
+
+        nested: dict[str, Any] = {
+            PARAM_ENABLE_EVENT_PUSH: enable_push,
+            SECTION_EVENT_PUSH_CALLBACK: {
+                PARAM_WEBHOOK_URL: flat.get(PARAM_WEBHOOK_URL, ""),
+            },
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: event_push_types,
+            },
+            SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                PARAM_NOTIFY_SERVICES: flat.get(PARAM_NOTIFY_SERVICES, ""),
+            },
+        }
+        return nested
+
+    @staticmethod
+    def _flatten_event_push_input(
+        user_input: dict[str, Any], stored_options: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Flatten section-based event push input back to stored option keys."""
+        callback = user_input.get(SECTION_EVENT_PUSH_CALLBACK, {})
+        flat: dict[str, Any] = {
+            PARAM_ENABLE_EVENT_PUSH: user_input[PARAM_ENABLE_EVENT_PUSH],
+            PARAM_WEBHOOK_URL: callback.get(PARAM_WEBHOOK_URL, ""),
+        }
+        if SECTION_EVENT_PUSH_SUBSCRIPTIONS in user_input:
+            flat.update(user_input[SECTION_EVENT_PUSH_SUBSCRIPTIONS])
+        else:
+            flat[PARAM_EVENT_PUSH_TYPES] = stored_options.get(
+                PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES
             )
+        if SECTION_EVENT_PUSH_NOTIFICATIONS in user_input:
+            flat.update(user_input[SECTION_EVENT_PUSH_NOTIFICATIONS])
+        else:
+            flat[PARAM_NOTIFY_SERVICES] = stored_options.get(PARAM_NOTIFY_SERVICES, "")
+        return flat
+
+    @staticmethod
+    def _event_push_schema() -> vol.Schema:
+        """Build the event push options form."""
+        return vol.Schema(
+            {
+                vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
+                vol.Required(SECTION_EVENT_PUSH_CALLBACK): section(
+                    vol.Schema(
+                        {
+                            vol.Optional(PARAM_WEBHOOK_URL, default=""): TextSelector(
+                                TextSelectorConfig(type=TextSelectorType.URL)
+                            ),
+                        }
+                    ),
+                ),
+                vol.Required(SECTION_EVENT_PUSH_SUBSCRIPTIONS): section(
+                    vol.Schema(
+                        {
+                            vol.Required(
+                                PARAM_EVENT_PUSH_TYPES,
+                                default=DEFAULT_EVENT_PUSH_TYPES,
+                            ): SelectSelector(
+                                SelectSelectorConfig(
+                                    options=list(EVENT_PUSH_TYPE_OPTIONS),
+                                    multiple=True,
+                                    translation_key="event_push_type",
+                                )
+                            ),
+                        }
+                    ),
+                ),
+                vol.Optional(SECTION_EVENT_PUSH_NOTIFICATIONS): section(
+                    vol.Schema(
+                        {
+                            vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
+                        }
+                    ),
+                    {"collapsed": True},
+                ),
+            }
+        )
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage options — polling, camera, and PTZ settings."""
+        if user_input is not None:
+            self._general_options = user_input
+            return await self.async_step_event_push()
 
         return self.async_show_form(
             step_id="init",
@@ -324,28 +442,36 @@ class ImouOptionsFlow(OptionsFlow):
                         vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
                             vol.Coerce(int), vol.Range(min=100, max=10000)
                         ),
-                        vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
-                        vol.Optional(PARAM_WEBHOOK_URL, default=""): str,
-                        vol.Required(
-                            PARAM_EVENT_PUSH_TYPES,
-                            default=DEFAULT_EVENT_PUSH_TYPES,
-                        ): SelectSelector(
-                            SelectSelectorConfig(
-                                options=list(EVENT_PUSH_TYPE_OPTIONS),
-                                multiple=True,
-                                translation_key="event_push_type",
-                            )
-                        ),
-                        vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
                     }
                 ),
+                self._suggested_option_subset(
+                    self.config_entry.options, _GENERAL_OPTION_KEYS
+                ),
+            ),
+            last_step=False,
+        )
+
+    async def async_step_event_push(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage options — event push and alarm notifications."""
+        if user_input is not None:
+            self._event_push_options = self._flatten_event_push_input(
+                user_input, self.config_entry.options
+            )
+            return await self.async_step_devices()
+
+        suggested_options = self._nested_event_push_suggestions(
+            self.config_entry.options
+        )
+
+        return self.async_show_form(
+            step_id="event_push",
+            data_schema=self.add_suggested_values_to_schema(
+                self._event_push_schema(),
                 suggested_options,
             ),
-            description_placeholders={
-                "webhook_id": webhook_id or not_generated,
-                "suggested_webhook_url": suggested_webhook_url or not_generated,
-                "current_webhook_url": current_webhook_url or not_set_use_suggested,
-            },
+            description_placeholders=self._event_push_webhook_placeholders(),
             last_step=False,
         )
 
@@ -355,7 +481,11 @@ class ImouOptionsFlow(OptionsFlow):
         """Manage device selection — add/remove devices without re-setup."""
         if user_input is not None:
             selected = user_input.get(PARAM_SELECTED_DEVICES, [])
-            merged = {**self._general_options, PARAM_SELECTED_DEVICES: selected}
+            merged = {
+                **self._general_options,
+                **self._event_push_options,
+                PARAM_SELECTED_DEVICES: selected,
+            }
             return self.async_create_entry(data=merged)
 
         errors: dict[str, str] = {}

@@ -55,28 +55,63 @@
   "options": {
     "step": {
       "init": {
-        "description": "Current Webhook ID: {webhook_id}\n\nSuggested callback URL: {suggested_webhook_url}\n\nCurrent configured URL: {current_webhook_url}\n\nLeave Callback URL empty to use the suggested URL. If that address is not reachable from the internet, enter your real public webhook URL instead.",
+        "title": "General",
+        "description": "Polling interval and camera defaults. Device selection is on the next steps.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
           "live_resolution": "Video resolution",
           "live_protocol": "Video protocol",
-          "rotation_duration": "PTZ rotation duration (ms)",
-          "enable_event_push": "Enable event push",
-          "webhook_url": "Callback URL",
-          "event_push_types": "Event push types",
-          "notify_services": "Alarm notification services"
+          "rotation_duration": "PTZ rotation duration (ms)"
         },
         "data_description": {
-          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30-900s.",
+          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s.",
           "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",
-          "rotation_duration": "How long a single PTZ button press moves. Default 500ms.",
-          "enable_event_push": "When enabled, Imou cloud will push alarm events to your HA in real time. Requires a publicly accessible URL (domain/DDNS). Messages are also synced to the Imou app.",
-          "webhook_url": "The URL where Imou cloud sends alarm messages. Leave empty to auto-generate (requires HA external URL configured). To set manually, enter full URL like: https://yourdomain:8123/api/webhook/xxxxx",
-          "event_push_types": "Select which message types to receive. alarm = device alarms (smoke/gas/human/motion etc.), deviceStatus = online/offline, iot = IoT device messages, numberstat = people counting, faceAnalysis = face detection.",
-          "notify_services": "Where to send alarm notifications. Enter HA action names, separate with commas.\nExample: qiyewechat.send → WeChat Work\nExample: notify.mobile_app_xxx → HA APP push\nBoth: qiyewechat.send,notify.mobile_app_xxx\nLeave empty to skip (alarm events still fire for automations)."
+          "rotation_duration": "How long a single PTZ button press moves. Default 500ms."
+        }
+      },
+      "event_push": {
+        "title": "Event push",
+        "description": "Receive Imou alarm events in Home Assistant in real time.\n\nWebhook ID: {webhook_id}\nSuggested callback URL: {suggested_url}",
+        "data": {
+          "enable_event_push": "Enable event push"
+        },
+        "data_description": {
+          "enable_event_push": "Registers the callback URL with Imou cloud. Alarm events also sync to the Imou app."
+        },
+        "sections": {
+          "callback": {
+            "name": "Callback URL",
+            "description": "Leave **Custom callback URL** empty to use the suggested URL above. Enter a public URL only if the suggested address is not reachable from the internet.",
+            "data": {
+              "webhook_url": "Custom callback URL"
+            },
+            "data_description": {
+              "webhook_url": "Optional. Example: https://yourdomain:8123/api/webhook/xxxxx"
+            }
+          },
+          "subscriptions": {
+            "name": "Message types",
+            "description": "Choose which Imou cloud messages to receive after event push is enabled.",
+            "data": {
+              "event_push_types": "Subscribe to"
+            }
+          },
+          "notifications": {
+            "name": "Alarm notifications",
+            "description": "Optional automatic notifications when an alarm arrives.",
+            "data": {
+              "notify_services": "Notify services"
+            },
+            "data_description": {
+              "notify_services": "Comma-separated HA actions, e.g. notify.mobile_app_phone. Leave empty to use automations only."
+            }
+          }
+        },
+        "placeholder": {
+          "not_generated": "Not generated"
         }
       },
       "devices": {
@@ -95,12 +130,6 @@
         "eu": "Europe",
         "na": "North America",
         "sg": "Singapore (Asia-Pacific)"
-      }
-    },
-    "webhook_placeholder": {
-      "options": {
-        "not_generated": "Not generated",
-        "not_set_use_suggested": "Not set — will use the suggested URL above"
       }
     },
     "event_push_type": {

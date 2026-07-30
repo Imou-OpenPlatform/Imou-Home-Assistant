@@ -1,4 +1,10 @@
 # CHANGELOG
+## [1.3.2]
+### Changed
+- Options flow: split Configure into General, Event push, and Devices steps; group event push settings (callback URL, message types, notifications)
+- Config flow login step aligned with Core imou (region dropdown, shared error keys)
+- Sensor, select, and switch platforms use EntityDescription whitelists aligned with Core
+
 ## [1.3.1]
 ### Changed
 - Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
