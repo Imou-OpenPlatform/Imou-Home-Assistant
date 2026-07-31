@@ -77,6 +77,12 @@
 			},
 			"restart_device": {
 				"default": "mdi:restart"
+			},
+			"siren_start": {
+				"default": "mdi:bullhorn"
+			},
+			"siren_stop": {
+				"default": "mdi:bullhorn-outline"
 			}
 		},
 		"camera": {

@@ -25,6 +25,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: Py-Imou-Open-Api
+          ref: dev
+      - name: Link pyimouapi for uv path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -53,6 +60,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: Py-Imou-Open-Api
+          ref: dev
+      - name: Link pyimouapi for uv path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --dev
       - uses: reviewdog/action-setup@v1
@@ -76,6 +90,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: Py-Imou-Open-Api
+          ref: dev
+      - name: Link pyimouapi for uv path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --dev
       - run: |
@@ -111,6 +132,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: Py-Imou-Open-Api
+          ref: dev
+      - name: Link pyimouapi for uv path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --dev
       - name: Verify manifest, hacs.json, and dev dependencies align

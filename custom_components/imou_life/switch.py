@@ -149,4 +149,4 @@ class ImouSwitch(ImouEntity, SwitchEntity):
             )
         except ImouException as err:
             raise HomeAssistantError(err.message) from err
-        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()

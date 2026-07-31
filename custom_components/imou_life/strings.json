@@ -207,6 +207,12 @@
           "off": "[%key:common::state::off%]",
           "smartlowlight": "Smart low light night vision"
         }
+      },
+      "collection_point": {
+        "name": "Collection point",
+        "state": {
+          "select_collection_point": "Select a preset…"
+        }
       }
     },
     "switch": {
@@ -253,6 +259,12 @@
       },
       "mute": {
         "name": "Mute"
+      },
+      "siren_start": {
+        "name": "Start Siren"
+      },
+      "siren_stop": {
+        "name": "Stop Siren"
       }
     },
     "camera": {

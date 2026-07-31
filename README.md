@@ -77,7 +77,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - **Configure** wizard: **General** (polling, camera, PTZ) → **Event push** → **Manage devices**
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.2 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.3 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, and notifications
@@ -88,7 +88,8 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview
-  - PTZ control
+  - PTZ control (direction buttons and duration in **Configure → General**)
+  - **Collection points** — `select.collection_point` lists presets from the device/app; choose a preset to move the camera (requires `CollectionPoint` capability; no read-back of current position)
   - Motion detection configuration
   - Human detection configuration
   - Privacy mode configuration
@@ -119,6 +120,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm motion/human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
+- **PTZ presets** — use `select.select_option` on `select.<device>_collection_point` with the preset name (as shown in the Imou app). The select shows **Select a preset…** when the camera is not at a known preset position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
 
 ## Contributing
@@ -211,7 +213,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
   - **配置** 向导：**常规**（轮询、摄像头、云台）→ **事件推送** → **管理设备**
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.2 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.3 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 事件推送** 显示 Webhook ID 与建议回调 URL；回调、消息类型、通知分组设置
@@ -222,7 +224,8 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 * **摄像头功能**
   - 信息与状态（设备名称、在线状态、存储状态、电量等）
   - 实时视频预览
-  - 云台控制
+  - 云台控制（方向按钮；时长在 **配置 → 常规** 中设置）
+  - **收藏点** — `select.collection_point` 列出设备/App 中的预置位，选择后跳转（需 `CollectionPoint` 能力；无法读取当前是否在某一收藏点）
   - 移动侦测配置
   - 人形检测配置
   - 隐私模式配置
@@ -253,6 +256,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启移动/人形侦测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。
+- **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填 Imou App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
 
 ## 贡献

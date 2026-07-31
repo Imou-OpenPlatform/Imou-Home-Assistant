@@ -13,6 +13,7 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
     PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
@@ -35,6 +36,10 @@ SELECT_TYPES: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key=PARAM_NIGHT_VISION_MODE,
         translation_key=PARAM_NIGHT_VISION_MODE,
+    ),
+    SelectEntityDescription(
+        key=PARAM_COLLECTION_POINT,
+        translation_key=PARAM_COLLECTION_POINT,
     ),
 )
 
@@ -115,4 +120,4 @@ class ImouSelect(ImouEntity, SelectEntity):
             )
         except ImouException as err:
             raise HomeAssistantError(err.message) from err
-        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
