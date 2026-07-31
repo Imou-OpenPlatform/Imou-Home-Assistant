@@ -211,7 +211,7 @@
       "collection_point": {
         "name": "Collection point",
         "state": {
-          "__select_collection_point__": "Select a preset…"
+          "select_collection_point": "Select a preset…"
         }
       }
     },

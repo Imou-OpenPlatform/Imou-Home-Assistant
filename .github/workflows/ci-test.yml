@@ -22,6 +22,11 @@ jobs:
       TZ: UTC
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: ../Py-Imou-Open-Api
+          ref: dev
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true

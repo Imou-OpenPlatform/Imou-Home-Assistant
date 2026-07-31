@@ -211,7 +211,7 @@
       "collection_point": {
         "name": "收藏点",
         "state": {
-          "__select_collection_point__": "选择收藏点…"
+          "select_collection_point": "选择收藏点…"
         }
       }
     },
