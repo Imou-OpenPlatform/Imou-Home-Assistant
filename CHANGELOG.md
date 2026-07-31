@@ -2,15 +2,11 @@
 ## [1.3.3]
 ### Added
 - `select.collection_point` for PTZ preset query and goto (#53, #71) — lists presets from the cloud/device; placeholder **Select a preset…** / **选择收藏点…** when current position is unknown; use standard `select.select_option` in automations
-- `button.siren_start` and `button.siren_stop` for devices with Siren capability or IoT refs `25500`/`22200` (#23)
+- `button.siren_start` and `button.siren_stop` for devices with Siren capability or IoT refs `25500`/`22200`
 
 ### Changed
 - Depend on `pyimouapi==1.3.3`
 - Select and switch commands no longer trigger an immediate full cloud poll; UI updates from optimistic local state (saves API quota)
-
-### Fixed
-- CI: checkout and symlink `Py-Imou-Open-Api` sibling repo for `uv sync` on GitHub Actions
-- Hassfest: collection point placeholder translation key aligned with pyimouapi (`select_collection_point`)
 
 ## [1.3.2]
 ### Changed
