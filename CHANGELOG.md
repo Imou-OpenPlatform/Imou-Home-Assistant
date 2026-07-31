@@ -1,14 +1,8 @@
 # CHANGELOG
-## [1.3.4]
-### Added
-- `button.siren_start` and `button.siren_stop` for devices with Siren capability or IoT refs `25500`/`22200`
-
-### Changed
-- Depend on `pyimouapi==1.3.4`
-
 ## [1.3.3]
 ### Added
 - `select.collection_point` for PTZ preset query and goto (#53, #71) — lists presets from the cloud/device; placeholder **Select a preset…** / **选择收藏点…** when current position is unknown; use standard `select.select_option` in automations
+- `button.siren_start` and `button.siren_stop` for devices with Siren capability or IoT refs `25500`/`22200`
 
 ### Changed
 - Depend on `pyimouapi==1.3.3`
