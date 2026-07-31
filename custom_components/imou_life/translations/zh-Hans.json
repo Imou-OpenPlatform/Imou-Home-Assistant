@@ -259,6 +259,12 @@
       },
       "mute": {
         "name": "一键消音"
+      },
+      "siren_start": {
+        "name": "开启警笛"
+      },
+      "siren_stop": {
+        "name": "关闭警笛"
       }
     },
     "camera": {

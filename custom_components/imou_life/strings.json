@@ -259,6 +259,12 @@
       },
       "mute": {
         "name": "Mute"
+      },
+      "siren_start": {
+        "name": "Start Siren"
+      },
+      "siren_stop": {
+        "name": "Stop Siren"
       }
     },
     "camera": {
