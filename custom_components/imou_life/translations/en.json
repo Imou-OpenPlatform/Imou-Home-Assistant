@@ -229,6 +229,12 @@
           "1": "Medium",
           "2": "High"
         }
+      },
+      "collection_point": {
+        "name": "Collection Point",
+        "state": {
+          "__select_collection_point__": "Select a preset…"
+        }
       }
     },
     "switch": {

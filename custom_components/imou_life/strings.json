@@ -207,6 +207,12 @@
           "off": "[%key:common::state::off%]",
           "smartlowlight": "Smart low light night vision"
         }
+      },
+      "collection_point": {
+        "name": "Collection point",
+        "state": {
+          "__select_collection_point__": "Select a preset…"
+        }
       }
     },
     "switch": {

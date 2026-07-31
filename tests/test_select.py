@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.imou_life.const import (
+    PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
     PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
@@ -27,7 +28,7 @@ def _mock_device(selects: dict[str, dict]) -> ImouHaDevice:
 
 
 def test_iter_selects_whitelist_only() -> None:
-    """Only the three supported select types are exposed."""
+    """Only supported select types are exposed."""
     device = _mock_device(
         {
             PARAM_NIGHT_VISION_MODE: {
@@ -52,6 +53,7 @@ def test_iter_selects_whitelist_only() -> None:
 def test_select_types_match_core_whitelist() -> None:
     """Supported select keys stay aligned with Core imou."""
     assert {description.key for description in SELECT_TYPES} == {
+        PARAM_COLLECTION_POINT,
         PARAM_DEVICE_VOLUME,
         PARAM_MODE,
         PARAM_NIGHT_VISION_MODE,
