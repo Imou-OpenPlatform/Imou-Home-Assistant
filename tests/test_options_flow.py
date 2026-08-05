@@ -10,6 +10,7 @@ from custom_components.imou_life.config_flow import (
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_URL,
@@ -31,6 +32,7 @@ async def test_options_flow_init_shows_general_settings(hass) -> None:
     assert result["step_id"] == "init"
     schema = result.get("data_schema") or result.get("schema")
     assert schema is not None
+    assert PARAM_ENABLE_POLLING in schema.schema
     assert PARAM_UPDATE_INTERVAL in schema.schema
     assert PARAM_ENABLE_EVENT_PUSH not in schema.schema
 

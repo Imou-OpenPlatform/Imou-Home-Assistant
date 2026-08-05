@@ -17,6 +17,7 @@ from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
     DOMAIN,
+    PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
     imou_life_device_key,
@@ -37,13 +38,17 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         config_entry: ConfigEntry,
     ) -> None:
         """Initialize ImouDataUpdateCoordinator."""
-        update_interval = config_entry.options.get(PARAM_UPDATE_INTERVAL, 60)
+        enable_polling = config_entry.options.get(PARAM_ENABLE_POLLING, True)
+        update_interval_seconds = config_entry.options.get(PARAM_UPDATE_INTERVAL, 60)
+        update_interval = (
+            timedelta(seconds=update_interval_seconds) if enable_polling else None
+        )
         super().__init__(
             hass,
             _LOGGER,
             config_entry=config_entry,
             name=DOMAIN,
-            update_interval=timedelta(seconds=update_interval),
+            update_interval=update_interval,
             always_update=True,
         )
         self._device_manager = device_manager
@@ -93,7 +98,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             self.config_entry.async_start_reauth(self.hass)
             raise UpdateFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
-            raise UpdateFailed(f"Error fetching Imou devices: {err}") from err
+            raise UpdateFailed(
+                f"Error fetching Imou devices: {err.message or err}"
+            ) from err
 
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}

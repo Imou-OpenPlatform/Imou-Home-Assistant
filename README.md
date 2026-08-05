@@ -53,7 +53,7 @@ Devices under your Imou account should appear in Home Assistant.
 
 Use **Configure** on the integration entry to adjust settings in three steps:
 
-1. **General** — polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+1. **General** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
@@ -74,7 +74,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 ## Features
 * **Integration & account**
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
-  - **Configure** wizard: **General** (polling, camera, PTZ) → **Event push** → **Manage devices**
+  - **Configure** wizard: **General** (enable polling, interval, camera, PTZ) → **Event push** → **Manage devices**
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.3 for Open Platform API access
@@ -188,7 +188,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 在集成条目上点击 **配置（Configure）**，可按三步调整设置：
 
-1. **常规（General）** — 轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
+1. **常规（General）** — 启用/关闭状态轮询、轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 

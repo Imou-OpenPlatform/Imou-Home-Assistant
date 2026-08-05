@@ -111,7 +111,7 @@ This package is installed for end users via `manifest.json` and for local/CI tes
 | Label | Use |
 |-------|-----|
 | `bug` | Bug fix |
-| `enhancement` | New feature |
+| `feature` | New feature |
 | `breaking-change` | Breaking user-facing change |
 | `needs-tests` | Missing or insufficient tests |
 | `ci-failure` | CI needs contributor attention |

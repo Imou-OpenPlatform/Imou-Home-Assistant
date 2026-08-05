@@ -46,6 +46,7 @@ from .const import (
     PARAM_APP_SECRET,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
@@ -66,6 +67,7 @@ _LOGGER = logging.getLogger(__name__)
 _ENTRY_NAME = "Imou Life Official"
 
 _GENERAL_OPTION_KEYS = (
+    PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_LIVE_RESOLUTION,
@@ -100,6 +102,14 @@ def _config_flow_error_key(exception: ImouException) -> str:
     if isinstance(exception, RequestFailedException):
         return "request_failed"
     return "unknown"
+
+
+def _api_error_placeholder(exception: BaseException) -> str:
+    """Return the Imou API / exception message for UI placeholders."""
+    if isinstance(exception, ImouException) and exception.message:
+        return exception.message
+    text = str(exception).strip()
+    return text or exception.__class__.__name__
 
 
 def _selector_option_label(
@@ -168,6 +178,9 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                     step_id="user",
                     data_schema=self._user_schema(api_region),
                     errors={"base": _config_flow_error_key(exception)},
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
                 )
 
             self._login_data = {
@@ -179,18 +192,38 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
 
             try:
                 self._devices_map = await async_build_device_map(self.hass, api_client)
-            except ConnectFailedException:
-                _LOGGER.warning("Failed to fetch device list: connection error")
-                return self.async_abort(reason="cannot_connect")
-            except RequestFailedException:
-                _LOGGER.warning("Failed to fetch device list: request failed")
-                return self.async_abort(reason="request_failed")
+            except ConnectFailedException as exception:
+                _LOGGER.warning("Failed to fetch device list: %s", exception.message)
+                return self.async_abort(
+                    reason="cannot_connect",
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
+            except RequestFailedException as exception:
+                _LOGGER.warning("Failed to fetch device list: %s", exception.message)
+                return self.async_abort(
+                    reason="request_failed",
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
             except ImouException as exception:
                 _LOGGER.warning("Failed to fetch device list: %s", exception.message)
-                return self.async_abort(reason="cannot_connect")
-            except Exception:
+                return self.async_abort(
+                    reason="request_failed",
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
+            except Exception as exception:
                 _LOGGER.exception("Failed to fetch device list")
-                return self.async_abort(reason="cannot_connect")
+                return self.async_abort(
+                    reason="request_failed",
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
 
             if not self._devices_map:
                 return self.async_abort(reason="no_devices")
@@ -237,6 +270,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm reauthentication with a new App Secret."""
         reauth_entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
+        error_detail = ""
 
         if user_input is None:
             return self.async_show_form(
@@ -244,6 +278,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                 data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
                 description_placeholders={
                     "app_id": reauth_entry.data[PARAM_APP_ID],
+                    "error": "",
                 },
             )
 
@@ -254,10 +289,12 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         try:
             await api_client.async_get_token()
-        except InvalidAppIdOrSecretException:
+        except InvalidAppIdOrSecretException as exception:
             errors["base"] = "invalid_auth"
+            error_detail = _api_error_placeholder(exception)
         except ImouException as exception:
             errors["base"] = _config_flow_error_key(exception)
+            error_detail = _api_error_placeholder(exception)
         else:
             return self.async_update_reload_and_abort(
                 reauth_entry,
@@ -275,6 +312,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "app_id": reauth_entry.data[PARAM_APP_ID],
+                "error": error_detail,
             },
         )
 
@@ -425,6 +463,7 @@ class ImouOptionsFlow(OptionsFlow):
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
+                        vol.Optional(PARAM_ENABLE_POLLING, default=True): bool,
                         vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
                             vol.Coerce(int), vol.Range(min=30, max=900)
                         ),
@@ -487,6 +526,7 @@ class ImouOptionsFlow(OptionsFlow):
             return self.async_create_entry(data=merged)
 
         errors: dict[str, str] = {}
+        error_detail = ""
         try:
             api_client = ImouOpenApiClient(
                 self.config_entry.data[PARAM_APP_ID],
@@ -497,18 +537,30 @@ class ImouOptionsFlow(OptionsFlow):
                 self._devices_map = await async_build_device_map(self.hass, api_client)
             finally:
                 await api_client.async_close()
-        except Exception:
+        except ImouException as exception:
+            _LOGGER.warning(
+                "Failed to fetch device list for options: %s", exception.message
+            )
+            errors["base"] = "request_failed"
+            error_detail = _api_error_placeholder(exception)
+        except Exception as exception:
             _LOGGER.exception("Failed to fetch device list for options")
             errors["base"] = "request_failed"
+            error_detail = _api_error_placeholder(exception)
 
         if not self._devices_map and not errors:
             errors["base"] = "request_failed"
+            error_detail = "No devices returned"
 
         if errors:
             return self.async_show_form(
                 step_id="devices",
                 data_schema=vol.Schema({}),
                 errors=errors,
+                description_placeholders={
+                    "device_count": "0",
+                    "error": error_detail,
+                },
             )
 
         if PARAM_SELECTED_DEVICES in self.config_entry.options:

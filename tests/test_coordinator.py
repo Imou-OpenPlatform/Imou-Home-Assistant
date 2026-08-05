@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
+    PARAM_ENABLE_POLLING,
     PARAM_SELECTED_DEVICES,
+    PARAM_UPDATE_INTERVAL,
     imou_life_device_key,
 )
 from custom_components.imou_life.coordinator import ImouDataUpdateCoordinator
@@ -123,3 +125,34 @@ async def test_coordinator_skips_poll_when_all_entities_disabled(
     device_manager.async_update_device_status.reset_mock()
     await coordinator._async_update_data()
     device_manager.async_update_device_status.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_coordinator_no_interval_when_polling_disabled(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """When enable_polling is false, coordinator has no scheduled interval."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_POLLING: False, PARAM_UPDATE_INTERVAL: 120},
+    )
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    assert coordinator.update_interval is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_coordinator_interval_when_polling_enabled(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """When enable_polling is true, coordinator uses update_interval option."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_POLLING: True, PARAM_UPDATE_INTERVAL: 120},
+    )
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    assert coordinator.update_interval is not None
+    assert coordinator.update_interval.total_seconds() == 120

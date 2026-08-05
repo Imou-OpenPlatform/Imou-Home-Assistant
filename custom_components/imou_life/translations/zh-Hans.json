@@ -3,14 +3,14 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
       "no_devices": "该账号下未找到 Imou 设备",
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "request_failed": "从 Imou 加载设备列表失败"
+      "cannot_connect": "无法连接 Imou：{error}",
+      "request_failed": "从 Imou 加载设备列表失败：{error}"
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "cannot_connect": "连接失败：{error}",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "request_failed": "请求失败",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "request_failed": "请求失败：{error}",
+      "unknown": "意外错误：{error}"
     },
     "step": {
       "user": {
@@ -53,11 +53,15 @@
     }
   },
   "options": {
+    "error": {
+      "request_failed": "加载设备列表失败：{error}"
+    },
     "step": {
       "init": {
         "title": "常规设置",
         "description": "轮询间隔与摄像头默认参数。设备选择在后续步骤中完成。",
         "data": {
+          "enable_polling": "启用状态轮询",
           "update_interval": "自动刷新间隔（秒）",
           "download_snap_wait_time": "抓图等待时间（秒）",
           "live_resolution": "视频分辨率",
@@ -65,7 +69,8 @@
           "rotation_duration": "云台转动时间（毫秒）"
         },
         "data_description": {
-          "update_interval": "集成多久去乐橙云拉一次设备状态，默认 60 秒，范围 30–900 秒",
+          "enable_polling": "关闭后，集成不会定期从乐橙云刷新设备状态。若仅需按需控制（如警笛、收藏点）可关闭以节省 API 配额。实体状态可能不再更新。安装与重载时仍会拉取一次设备列表。",
+          "update_interval": "集成多久去乐橙云拉一次设备状态，默认 60 秒，范围 30–900 秒。关闭状态轮询时不生效。",
           "download_snap_wait_time": "抓取摄像头截图前等待的秒数，默认 3 秒",
           "live_resolution": "摄像头直播分辨率，HD=高清，SD=标清",
           "live_protocol": "视频流协议，一般用 https 即可",
