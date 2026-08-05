@@ -76,6 +76,7 @@ class ImouText(ImouEntity, TextEntity):
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
         self.async_write_ha_state()
+
     @property
     def pattern(self) -> str | None:
         """Optional regex validation pattern."""
