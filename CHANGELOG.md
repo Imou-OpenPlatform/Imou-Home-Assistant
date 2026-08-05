@@ -5,6 +5,8 @@
 
 ### Changed
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
+- All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
+- Depend on `pyimouapi==1.3.4`
 - Issue templates: expand Feature request and Question forms; use `feature` label aligned with `[Feature]` titles
 
 ## [1.3.3]

@@ -12,7 +12,6 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     PARAM_COUNT_DOWN_SWITCH,
-    PARAM_ENABLE_POLLING,
     PARAM_OVERCHARGE_SWITCH,
     imou_life_device_key,
 )
@@ -76,9 +75,7 @@ class ImouText(ImouEntity, TextEntity):
             )
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
-        if self._config_entry.options.get(PARAM_ENABLE_POLLING, True):
-            await self.coordinator.async_request_refresh()
-
+        self.async_write_ha_state()
     @property
     def pattern(self) -> str | None:
         """Optional regex validation pattern."""

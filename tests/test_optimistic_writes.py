@@ -1,4 +1,4 @@
-"""Tests for refresh behaviour when status polling is disabled."""
+"""Tests for optimistic entity writes (no post-write coordinator refresh)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import pytest
 from custom_components.imou_life.button import ImouButton
 from custom_components.imou_life.const import (
     DOMAIN,
-    PARAM_ENABLE_POLLING,
     PARAM_RESTART_DEVICE,
     imou_life_device_key,
 )
@@ -45,15 +44,11 @@ def _mock_coordinator(device: MagicMock) -> MagicMock:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_button_skips_refresh_when_polling_disabled(hass) -> None:
-    """Button press does not refresh coordinator when enable_polling is false."""
+async def test_button_press_does_not_refresh(hass) -> None:
+    """Button press does not trigger a coordinator refresh."""
     device = _mock_device()
     coordinator = _mock_coordinator(device)
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=USER_INPUT,
-        options={PARAM_ENABLE_POLLING: False},
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
 
     button = ImouButton(coordinator, entry, PARAM_RESTART_DEVICE, device)
@@ -64,37 +59,17 @@ async def test_button_skips_refresh_when_polling_disabled(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_button_refreshes_when_polling_enabled(hass) -> None:
-    """Button press refreshes coordinator when enable_polling is true."""
+async def test_text_set_value_does_not_refresh(hass) -> None:
+    """Text write updates HA state without a coordinator refresh."""
     device = _mock_device()
     coordinator = _mock_coordinator(device)
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=USER_INPUT,
-        options={PARAM_ENABLE_POLLING: True},
-    )
-    entry.add_to_hass(hass)
-
-    button = ImouButton(coordinator, entry, PARAM_RESTART_DEVICE, device)
-    await button._async_do_press(500)
-
-    coordinator.async_request_refresh.assert_awaited_once()
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_text_skips_refresh_when_polling_disabled(hass) -> None:
-    """Text write does not refresh coordinator when enable_polling is false."""
-    device = _mock_device()
-    coordinator = _mock_coordinator(device)
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=USER_INPUT,
-        options={PARAM_ENABLE_POLLING: False},
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
 
     text = ImouText(coordinator, entry, "count_down_switch", device)
+    text.async_write_ha_state = MagicMock()
     await text.async_set_value("10")
 
     coordinator.device_manager.async_set_text_value.assert_awaited_once()
     coordinator.async_request_refresh.assert_not_awaited()
+    text.async_write_ha_state.assert_called_once()

@@ -16,7 +16,6 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    PARAM_ENABLE_POLLING,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
     PARAM_ROTATION_DURATION,
@@ -114,5 +113,3 @@ class ImouButton(ImouEntity, ButtonEntity):
             )
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
-        if self._config_entry.options.get(PARAM_ENABLE_POLLING, True):
-            await self.coordinator.async_request_refresh()
