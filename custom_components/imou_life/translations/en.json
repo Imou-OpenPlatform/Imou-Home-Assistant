@@ -3,14 +3,14 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
       "no_devices": "No Imou devices were found on this account",
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "request_failed": "Failed to load device list from Imou"
+      "cannot_connect": "Failed to connect to Imou: {error}",
+      "request_failed": "Failed to load device list from Imou: {error}"
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "cannot_connect": "Failed to connect: {error}",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "request_failed": "Request failed",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "request_failed": "Request failed: {error}",
+      "unknown": "Unexpected error: {error}"
     },
     "step": {
       "user": {
@@ -53,11 +53,15 @@
     }
   },
   "options": {
+    "error": {
+      "request_failed": "Failed to load device list: {error}"
+    },
     "step": {
       "init": {
         "title": "General",
         "description": "Polling interval and camera defaults. Device selection is on the next steps.",
         "data": {
+          "enable_polling": "Enable status polling",
           "update_interval": "Polling interval (seconds)",
           "download_snap_wait_time": "Snapshot wait time (seconds)",
           "live_resolution": "Video resolution",
@@ -65,7 +69,8 @@
           "rotation_duration": "PTZ rotation duration (ms)"
         },
         "data_description": {
-          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s.",
+          "enable_polling": "When disabled, the integration does not periodically refresh device status from Imou cloud. Use this if you only need on-demand controls (e.g. siren, collection point). Entity states may become outdated. Setup and reload still fetch the device list once.",
+          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s. Ignored when status polling is disabled.",
           "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",

@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import (
@@ -15,6 +16,7 @@ from custom_components.imou_life.const import (
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pyimouapi.exceptions import RequestFailedException
 
 from . import LOGIN_INPUT, USER_INPUT, patch_async_setup_entry
 
@@ -75,6 +77,42 @@ async def test_async_step_user_aborts_when_no_devices(hass: HomeAssistant) -> No
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_devices"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_async_step_user_aborts_with_api_error_detail(
+    hass: HomeAssistant,
+) -> None:
+    """Device-list API errors are shown in the abort placeholders."""
+    with (
+        patch(
+            "custom_components.imou_life.config_flow.ImouOpenApiClient",
+        ) as mock_client,
+        patch(
+            "custom_components.imou_life.config_flow.async_build_device_map",
+            AsyncMock(
+                side_effect=RequestFailedException(
+                    "OP1013:Call interface times exceed limit (total)."
+                )
+            ),
+        ),
+    ):
+        instance = MagicMock()
+        instance.async_get_token = AsyncMock()
+        instance.async_close = AsyncMock()
+        mock_client.return_value = instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=LOGIN_INPUT
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "request_failed"
+    assert "OP1013" in result["description_placeholders"]["error"]
+    assert "exceed limit" in result["description_placeholders"]["error"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_exception")

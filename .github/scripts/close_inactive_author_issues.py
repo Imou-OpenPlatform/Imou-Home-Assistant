@@ -16,7 +16,7 @@
   STALE_AFTER_DAYS — 打 stale 标签的天数阈值，默认 21
   INACTIVE_DAYS — 关闭的天数阈值，默认 30（应 ≥ STALE_AFTER_DAYS）
   STALE_LABEL — 标签名，默认 stale（请在本仓库预先创建该 label，或首次在网页上建同名标签）
-  INACTIVE_EXCLUDE_LABELS — 逗号分隔，命中则跳过（默认含 no-auto-close, enhancement）
+  INACTIVE_EXCLUDE_LABELS — 逗号分隔，命中则跳过（默认含 no-auto-close, feature）
   DRY_RUN — 设为 1 时只打印，不修改 Issue
 
 本地未设置 GITHUB_TOKEN 时，会读取
@@ -137,7 +137,7 @@ def _stale_label_name() -> str:
 
 
 def _exclude_labels() -> frozenset[str]:
-    raw = (os.environ.get("INACTIVE_EXCLUDE_LABELS") or "no-auto-close,enhancement").strip()
+    raw = (os.environ.get("INACTIVE_EXCLUDE_LABELS") or "no-auto-close,feature").strip()
     return frozenset(x.strip().lower() for x in raw.split(",") if x.strip())
 
 

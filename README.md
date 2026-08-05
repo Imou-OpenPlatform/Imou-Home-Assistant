@@ -53,7 +53,7 @@ Devices under your Imou account should appear in Home Assistant.
 
 Use **Configure** on the integration entry to adjust settings in three steps:
 
-1. **General** — polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+1. **General** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
@@ -74,10 +74,10 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 ## Features
 * **Integration & account**
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
-  - **Configure** wizard: **General** (polling, camera, PTZ) → **Event push** → **Manage devices**
+  - **Configure** wizard: **General** (enable polling, interval, camera, PTZ) → **Event push** → **Manage devices**
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.3 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.4 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, and notifications
@@ -188,7 +188,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 在集成条目上点击 **配置（Configure）**，可按三步调整设置：
 
-1. **常规（General）** — 轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
+1. **常规（General）** — 启用/关闭状态轮询、轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
@@ -213,7 +213,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
   - **配置** 向导：**常规**（轮询、摄像头、云台）→ **事件推送** → **管理设备**
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.3 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.4 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 事件推送** 显示 Webhook ID 与建议回调 URL；回调、消息类型、通知分组设置

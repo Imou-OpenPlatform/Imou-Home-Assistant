@@ -113,4 +113,3 @@ class ImouButton(ImouEntity, ButtonEntity):
             )
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
-        await self.coordinator.async_request_refresh()

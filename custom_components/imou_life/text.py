@@ -75,7 +75,7 @@ class ImouText(ImouEntity, TextEntity):
             )
         except ImouException as e:
             raise HomeAssistantError(e.message) from e
-        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
 
     @property
     def pattern(self) -> str | None:
