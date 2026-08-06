@@ -32,12 +32,12 @@ def test_iter_selects_whitelist_only() -> None:
     device = _mock_device(
         {
             PARAM_NIGHT_VISION_MODE: {
-                PARAM_OPTIONS: ["0", "1"],
-                PARAM_CURRENT_OPTION: "0",
+                PARAM_OPTIONS: ["intelligent", "fullcolor"],
+                PARAM_CURRENT_OPTION: "intelligent",
             },
             PARAM_MODE: {
-                PARAM_OPTIONS: ["0", "1", "2"],
-                PARAM_CURRENT_OPTION: "0",
+                PARAM_OPTIONS: ["home", "away", "disarm"],
+                PARAM_CURRENT_OPTION: "home",
             },
             "legacy_unknown_select": {
                 PARAM_OPTIONS: ["x"],
