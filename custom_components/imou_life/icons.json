@@ -24,18 +24,18 @@
 			"mode": {
 				"default": "mdi:auto-mode",
 				"state": {
-					"0": "mdi:home-account",
-					"1": "mdi:exit-run",
-					"2": "mdi:shield-off"
+					"away": "mdi:exit-run",
+					"disarm": "mdi:shield-off",
+					"home": "mdi:home-account"
 				}
 			},
 			"device_volume": {
 				"default": "mdi:volume-high",
 				"state": {
-					"99": "mdi:volume-off",
-					"0": "mdi:volume-low",
-					"1": "mdi:volume-medium",
-					"2": "mdi:volume-high"
+					"high": "mdi:volume-high",
+					"low": "mdi:volume-low",
+					"medium": "mdi:volume-medium",
+					"mute": "mdi:volume-off"
 				}
 			}
 		},

@@ -1,14 +1,14 @@
 {
   "config": {
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "already_configured": "Account is already configured",
       "no_devices": "No Imou devices were found on this account",
       "cannot_connect": "Failed to connect to Imou: {error}",
       "request_failed": "Failed to load device list from Imou: {error}"
     },
     "error": {
       "cannot_connect": "Failed to connect: {error}",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_auth": "Invalid authentication",
       "request_failed": "Request failed: {error}",
       "unknown": "Unexpected error: {error}"
     },
@@ -205,34 +205,30 @@
       "night_vision_mode": {
         "name": "Night Vision Mode",
         "state": {
-          "intelligent": "Smart Night Vision",
+          "custom": "Custom Mode",
           "fullcolor": "Bright Color Night Vision",
           "infrared": "Infrared Night Vision",
-          "off": "Off",
+          "intelligent": "Smart Night Vision",
           "lowlight": "Low Light Night Vision",
-          "smartlowlight": "Smart Low Light Night Vision",
-          "0": "Smart Night Vision",
-          "1": "Bright Color Night Vision",
-          "2": "Infrared Night Vision",
-          "3": "Off",
-          "4": "Custom Mode"
+          "off": "Off",
+          "smartlowlight": "Smart Low Light Night Vision"
         }
       },
       "mode": {
         "name": "Mode",
         "state": {
-          "0": "Home",
-          "1": "Away",
-          "2": "Disarm"
+          "away": "Away",
+          "disarm": "Disarm",
+          "home": "Home"
         }
       },
       "device_volume": {
         "name": "Volume",
         "state": {
-          "99": "Mute",
-          "0": "Low",
-          "1": "Medium",
-          "2": "High"
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "mute": "Mute"
         }
       },
       "collection_point": {
