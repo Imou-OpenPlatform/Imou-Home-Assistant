@@ -1,14 +1,14 @@
 {
   "config": {
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "already_configured": "Account is already configured",
       "no_devices": "No Imou devices were found on this account",
       "cannot_connect": "Failed to connect to Imou: {error}",
       "request_failed": "Failed to load device list from Imou: {error}"
     },
     "error": {
       "cannot_connect": "Failed to connect: {error}",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_auth": "Invalid authentication",
       "request_failed": "Request failed: {error}",
       "unknown": "Unexpected error: {error}"
     },

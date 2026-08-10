@@ -1,14 +1,14 @@
 {
   "config": {
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "already_configured": "账号已配置",
       "no_devices": "该账号下未找到 Imou 设备",
       "cannot_connect": "无法连接 Imou：{error}",
       "request_failed": "从 Imou 加载设备列表失败：{error}"
     },
     "error": {
       "cannot_connect": "连接失败：{error}",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "invalid_auth": "身份验证无效",
       "request_failed": "请求失败：{error}",
       "unknown": "意外错误：{error}"
     },
@@ -160,9 +160,9 @@
       "status": {
         "name": "状态",
         "state": {
-          "offline": "[%key:common::state::disconnected%]",
-          "online": "[%key:common::state::connected%]",
-          "sleep": "[%key:common::state::standby%]",
+          "offline": "离线",
+          "online": "在线",
+          "sleep": "休眠",
           "upgrading": "升级中"
         }
       },
@@ -183,17 +183,17 @@
       "device_volume": {
         "name": "音量",
         "state": {
-          "0": "[%key:common::state::low%]",
-          "1": "[%key:common::state::medium%]",
-          "2": "[%key:common::state::high%]",
+          "0": "低",
+          "1": "中",
+          "2": "高",
           "99": "静音"
         }
       },
       "mode": {
         "name": "模式",
         "state": {
-          "0": "[%key:common::state::home%]",
-          "1": "[%key:common::state::not_home%]",
+          "0": "在家",
+          "1": "离家",
           "2": "撤防"
         }
       },
@@ -203,13 +203,13 @@
           "0": "智能夜视",
           "1": "全彩夜视",
           "2": "红外夜视",
-          "3": "[%key:common::state::off%]",
+          "3": "关闭",
           "4": "自定义夜视",
           "fullcolor": "全彩夜视",
           "infrared": "红外夜视",
           "intelligent": "智能夜视",
           "lowlight": "微光夜视",
-          "off": "[%key:common::state::off%]",
+          "off": "关闭",
           "smartlowlight": "智能微光夜视"
         }
       },
