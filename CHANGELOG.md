@@ -1,6 +1,7 @@
 # CHANGELOG
 ## [1.3.4]
 ### Added
+- Bind devices to the open-platform account from Configure → Manage devices (serial + verification code); setup no longer aborts when the account has zero devices (bind now or finish with an empty selection)
 - **Enable status polling** option in Configure → General; disable to stop background status refreshes and save Open API quota (#15)
 
 ### Changed

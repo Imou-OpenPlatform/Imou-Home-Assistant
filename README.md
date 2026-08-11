@@ -73,6 +73,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 
 ## Features
 * **Integration & account**
+  - Bind devices to your open-platform account from **Configure → Manage devices** (device serial + verification code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
   - **Configure** wizard: **General** (enable polling, interval, camera, PTZ) → **Event push** → **Manage devices**
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
@@ -211,6 +212,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 ## 功能
 
 * **集成与账号**
+  - 在 **配置 → 管理设备** 中将设备绑定到开放平台账号（设备序列号 + 验证码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
   - 安装时及 **配置 → 管理设备** 中可选择设备（仅轮询已选设备）
   - **配置** 向导：**常规**（轮询、摄像头、云台）→ **事件推送** → **管理设备**
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
