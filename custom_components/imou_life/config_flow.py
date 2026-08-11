@@ -113,6 +113,26 @@ def _api_error_placeholder(exception: BaseException) -> str:
     return text or exception.__class__.__name__
 
 
+_BIND_DEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required("device_id"): str,
+        vol.Optional("code", default=""): str,
+    }
+)
+
+
+async def _async_run_bind(
+    hass: HomeAssistant,
+    api_client: ImouOpenApiClient,
+    device_id: str,
+    code: str,
+) -> dict[str, str]:
+    """Bind a device and return the refreshed device map."""
+    manager = ImouDeviceManager(api_client)
+    await manager.async_bind_device(device_id, code)
+    return await async_build_device_map(hass, api_client)
+
+
 def _selector_option_label(
     hass: HomeAssistant, language: str, selector: str, key: str, fallback: str
 ) -> str:
@@ -261,12 +281,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(
                 step_id="bind_device",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required("device_id"): str,
-                        vol.Optional("code", default=""): str,
-                    }
-                ),
+                data_schema=_BIND_DEVICE_SCHEMA,
             )
 
         api_client = ImouOpenApiClient(
@@ -276,22 +291,16 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         try:
             try:
-                manager = ImouDeviceManager(api_client)
-                await manager.async_bind_device(
-                    user_input["device_id"], user_input.get("code", "")
-                )
-                self._devices_map = await async_build_device_map(
-                    self.hass, api_client
+                self._devices_map = await _async_run_bind(
+                    self.hass,
+                    api_client,
+                    user_input["device_id"],
+                    user_input.get("code", ""),
                 )
             except ImouException as exception:
                 return self.async_show_form(
                     step_id="bind_device",
-                    data_schema=vol.Schema(
-                        {
-                            vol.Required("device_id"): str,
-                            vol.Optional("code", default=""): str,
-                        }
-                    ),
+                    data_schema=_BIND_DEVICE_SCHEMA,
                     errors={"base": _config_flow_error_key(exception)},
                     description_placeholders={
                         "error": _api_error_placeholder(exception)
@@ -403,6 +412,7 @@ class ImouOptionsFlow(OptionsFlow):
         self._devices_map: dict[str, str] = {}
         self._general_options: dict[str, Any] = {}
         self._event_push_options: dict[str, Any] = {}
+        self._pending_selected: list[str] | None = None
 
     @staticmethod
     def _suggested_option_subset(
@@ -587,6 +597,10 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage device selection — add/remove devices without re-setup."""
         if user_input is not None:
+            if user_input.get("bind_new_device"):
+                self._pending_selected = user_input.get(PARAM_SELECTED_DEVICES, [])
+                return await self.async_step_bind_device()
+
             selected = user_input.get(PARAM_SELECTED_DEVICES, [])
             merged = {
                 **self._general_options,
@@ -618,10 +632,6 @@ class ImouOptionsFlow(OptionsFlow):
             errors["base"] = "request_failed"
             error_detail = _api_error_placeholder(exception)
 
-        if not self._devices_map and not errors:
-            errors["base"] = "request_failed"
-            error_detail = "No devices returned"
-
         if errors:
             return self.async_show_form(
                 step_id="devices",
@@ -632,6 +642,19 @@ class ImouOptionsFlow(OptionsFlow):
                     "error": error_detail,
                 },
             )
+
+        if not self._devices_map:
+            if PARAM_SELECTED_DEVICES in self.config_entry.options:
+                self._pending_selected = list(
+                    self.config_entry.options[PARAM_SELECTED_DEVICES]
+                )
+            elif PARAM_SELECTED_DEVICES in self.config_entry.data:
+                self._pending_selected = list(
+                    self.config_entry.data[PARAM_SELECTED_DEVICES]
+                )
+            else:
+                self._pending_selected = []
+            return await self.async_step_bind_device()
 
         if PARAM_SELECTED_DEVICES in self.config_entry.options:
             current_selected = self.config_entry.options[PARAM_SELECTED_DEVICES]
@@ -648,9 +671,54 @@ class ImouOptionsFlow(OptionsFlow):
                         PARAM_SELECTED_DEVICES,
                         default=[d for d in current_selected if d in self._devices_map],
                     ): cv.multi_select(self._devices_map),
+                    vol.Optional("bind_new_device", default=False): bool,
                 }
             ),
             description_placeholders={
                 "device_count": str(len(self._devices_map)),
             },
         )
+
+    async def async_step_bind_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Bind a device from options and merge into the selection."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="bind_device",
+                data_schema=_BIND_DEVICE_SCHEMA,
+            )
+
+        api_client = ImouOpenApiClient(
+            self.config_entry.data[PARAM_APP_ID],
+            self.config_entry.data[PARAM_APP_SECRET],
+            self.config_entry.data[PARAM_API_URL],
+        )
+        try:
+            try:
+                self._devices_map = await _async_run_bind(
+                    self.hass,
+                    api_client,
+                    user_input["device_id"],
+                    user_input.get("code", ""),
+                )
+            except ImouException as exception:
+                return self.async_show_form(
+                    step_id="bind_device",
+                    data_schema=_BIND_DEVICE_SCHEMA,
+                    errors={"base": _config_flow_error_key(exception)},
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
+        finally:
+            await api_client.async_close()
+
+        pending = self._pending_selected if self._pending_selected is not None else []
+        selected = list(dict.fromkeys([*pending, user_input["device_id"]]))
+        merged = {
+            **self._general_options,
+            **self._event_push_options,
+            PARAM_SELECTED_DEVICES: selected,
+        }
+        return self.async_create_entry(data=merged)

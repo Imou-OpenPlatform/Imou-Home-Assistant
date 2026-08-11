@@ -140,7 +140,23 @@
         "title": "Manage Devices",
         "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices will be removed on next reload, saving API quota.",
         "data": {
-          "selected_devices": "Devices"
+          "selected_devices": "Devices",
+          "bind_new_device": "Bind a new device"
+        },
+        "data_description": {
+          "bind_new_device": "Bind another Imou device to this account before saving your selection"
+        }
+      },
+      "bind_device": {
+        "title": "Bind device",
+        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "data": {
+          "device_id": "Device serial number",
+          "code": "Binding code"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "code": "Optional. Leave empty if the device does not require a binding code"
         }
       }
     }

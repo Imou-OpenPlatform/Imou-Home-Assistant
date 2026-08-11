@@ -140,7 +140,23 @@
         "title": "管理设备",
         "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
         "data": {
-          "selected_devices": "设备列表"
+          "selected_devices": "设备列表",
+          "bind_new_device": "绑定新设备"
+        },
+        "data_description": {
+          "bind_new_device": "保存选择前，先将另一台乐橙设备绑定到此账号"
+        }
+      },
+      "bind_device": {
+        "title": "绑定设备",
+        "description": "输入设备序列号及乐橙 App 或设备标签上的绑定码。",
+        "data": {
+          "device_id": "设备序列号",
+          "code": "绑定码"
+        },
+        "data_description": {
+          "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看",
+          "code": "可选。若设备不需要绑定码可留空"
         }
       }
     }
