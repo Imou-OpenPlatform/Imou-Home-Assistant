@@ -2,7 +2,6 @@
   "config": {
     "abort": {
       "already_configured": "账号已配置",
-      "no_devices": "该账号下未找到 Imou 设备",
       "cannot_connect": "无法连接 Imou：{error}",
       "request_failed": "从 Imou 加载设备列表失败：{error}"
     },
@@ -10,6 +9,7 @@
       "cannot_connect": "连接失败：{error}",
       "invalid_auth": "身份验证无效",
       "request_failed": "请求失败：{error}",
+      "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。",
       "unknown": "意外错误：{error}"
     },
     "step": {
@@ -145,6 +145,14 @@
         },
         "data_description": {
           "bind_new_device": "保存选择前，先将另一台乐橙设备绑定到此账号"
+        }
+      },
+      "no_devices_menu": {
+        "title": "未找到设备",
+        "description": "该账号下尚无乐橙设备。可立即绑定设备，或在不绑定的情况下保存其他选项更改。",
+        "menu_options": {
+          "bind_device": "绑定设备",
+          "finish_without_bind": "不绑定并保存"
         }
       },
       "bind_device": {

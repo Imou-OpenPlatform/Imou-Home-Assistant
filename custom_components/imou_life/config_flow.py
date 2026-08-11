@@ -257,9 +257,6 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Offer bind or finish when the account has no devices."""
-        if user_input is not None:
-            return await getattr(self, f"async_step_{user_input['next_step_id']}")()
-
         return self.async_show_menu(
             step_id="no_devices_menu",
             menu_options=["bind_device", "finish_without_devices"],
@@ -308,6 +305,13 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
         finally:
             await api_client.async_close()
+
+        if not self._devices_map:
+            return self.async_show_form(
+                step_id="bind_device",
+                data_schema=_BIND_DEVICE_SCHEMA,
+                errors={"base": "bind_device_not_listed"},
+            )
 
         return await self.async_step_select_devices()
 
@@ -654,7 +658,7 @@ class ImouOptionsFlow(OptionsFlow):
                 )
             else:
                 self._pending_selected = []
-            return await self.async_step_bind_device()
+            return await self.async_step_no_devices_menu()
 
         if PARAM_SELECTED_DEVICES in self.config_entry.options:
             current_selected = self.config_entry.options[PARAM_SELECTED_DEVICES]
@@ -678,6 +682,27 @@ class ImouOptionsFlow(OptionsFlow):
                 "device_count": str(len(self._devices_map)),
             },
         )
+
+    async def async_step_no_devices_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer bind or save options when the account has no devices."""
+        return self.async_show_menu(
+            step_id="no_devices_menu",
+            menu_options=["bind_device", "finish_without_bind"],
+        )
+
+    async def async_step_finish_without_bind(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Save options without binding a device."""
+        pending = self._pending_selected if self._pending_selected is not None else []
+        merged = {
+            **self._general_options,
+            **self._event_push_options,
+            PARAM_SELECTED_DEVICES: pending,
+        }
+        return self.async_create_entry(data=merged)
 
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None

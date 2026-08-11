@@ -2,7 +2,6 @@
   "config": {
     "abort": {
       "already_configured": "Account is already configured",
-      "no_devices": "No Imou devices were found on this account",
       "cannot_connect": "Failed to connect to Imou: {error}",
       "request_failed": "Failed to load device list from Imou: {error}"
     },
@@ -10,6 +9,7 @@
       "cannot_connect": "Failed to connect: {error}",
       "invalid_auth": "Invalid authentication",
       "request_failed": "Request failed: {error}",
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
       "unknown": "Unexpected error: {error}"
     },
     "step": {
@@ -145,6 +145,14 @@
         },
         "data_description": {
           "bind_new_device": "Bind another Imou device to this account before saving your selection"
+        }
+      },
+      "no_devices_menu": {
+        "title": "No devices found",
+        "description": "This account has no Imou devices yet. Bind a device now or save your other option changes without binding.",
+        "menu_options": {
+          "bind_device": "Bind a device",
+          "finish_without_bind": "Save without binding"
         }
       },
       "bind_device": {
