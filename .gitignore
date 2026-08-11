@@ -168,6 +168,7 @@ requirements.txt
 
 # Local planning docs / Superpowers (canonical copy lives in workspace .doc/)
 docs/
+.superpowers
 .superpowers/
 
 # Local release notes drafts (publish via GitHub Releases; use skill imou-ha-release-notes)
