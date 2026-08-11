@@ -26,9 +26,29 @@
           "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
       },
+      "no_devices_menu": {
+        "title": "未找到设备",
+        "description": "该账号下暂无 Imou 设备。你可以现在绑定设备，或先完成配置，稍后在集成选项中添加设备。",
+        "menu_options": {
+          "bind_device": "绑定设备",
+          "finish_without_devices": "暂不添加设备"
+        }
+      },
+      "bind_device": {
+        "title": "绑定设备",
+        "description": "输入设备序列号和绑定码（可在 Imou App 或设备标签上查看）。",
+        "data": {
+          "device_id": "设备序列号",
+          "code": "绑定码"
+        },
+        "data_description": {
+          "device_id": "设备上印制的序列号（SN），或在 Imou App 中查看",
+          "code": "可选。若设备不需要绑定码可留空"
+        }
+      },
       "select_devices": {
         "title": "选择设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。",
+        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。稍后可前往 设置 → 设备与服务 → Imou Life → 配置 → 管理设备 绑定更多设备。",
         "data": {
           "selected_devices": "设备列表"
         }

@@ -67,16 +67,108 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
-async def test_async_step_user_aborts_when_no_devices(hass: HomeAssistant) -> None:
-    """Setup aborts when the account has no devices."""
+async def test_async_step_user_empty_devices_offers_bind_menu(
+    hass: HomeAssistant,
+) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=LOGIN_INPUT
     )
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "no_devices"
+    assert result["type"] is FlowResultType.MENU
+    assert set(result["menu_options"]) >= {"bind_device", "finish_without_devices"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_finish_without_devices_creates_empty_selection(
+    hass: HomeAssistant,
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=LOGIN_INPUT
+    )
+    with patch_async_setup_entry() as mock_setup_entry:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"next_step_id": "finish_without_devices"},
+        )
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_SELECTED_DEVICES] == []
+    assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_bind_device_success_goes_to_select_devices(
+    hass: HomeAssistant,
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=LOGIN_INPUT
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "bind_device"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "bind_device"
+
+    with (
+        patch(
+            "custom_components.imou_life.config_flow.ImouDeviceManager",
+        ) as mock_mgr_cls,
+        patch(
+            "custom_components.imou_life.config_flow.async_build_device_map",
+            AsyncMock(
+                return_value={"SN001": "Camera SN001 [Online]"},
+            ),
+        ),
+    ):
+        mock_mgr_cls.return_value.async_bind_device = AsyncMock()
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"device_id": "SN001", "code": "123456"},
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "select_devices"
+    mock_mgr_cls.return_value.async_bind_device.assert_awaited_once_with(
+        "SN001", "123456"
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_bind_device_failure_stays_on_form(
+    hass: HomeAssistant,
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=LOGIN_INPUT
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "bind_device"},
+    )
+    with patch(
+        "custom_components.imou_life.config_flow.ImouDeviceManager",
+    ) as mock_mgr_cls:
+        mock_mgr_cls.return_value.async_bind_device = AsyncMock(
+            side_effect=RequestFailedException("OP1009:device already bound")
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"device_id": "SN001", "code": "bad"},
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "bind_device"
+    assert result["errors"]["base"] == "request_failed"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

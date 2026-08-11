@@ -26,9 +26,29 @@
           "app_secret": "The app secret obtained from the Imou cloud platform"
         }
       },
+      "no_devices_menu": {
+        "title": "No devices found",
+        "description": "This account has no Imou devices yet. Bind a device now or finish setup and add devices later from integration options.",
+        "menu_options": {
+          "bind_device": "Bind a device",
+          "finish_without_devices": "Continue without devices"
+        }
+      },
+      "bind_device": {
+        "title": "Bind device",
+        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "data": {
+          "device_id": "Device serial number",
+          "code": "Binding code"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "code": "Optional. Leave empty if the device does not require a binding code"
+        }
+      },
       "select_devices": {
         "title": "Select Devices",
-        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will NOT be polled, saving API quota.",
+        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will NOT be polled, saving API quota. You can bind more devices later under Settings → Devices & services → Imou Life → Configure → Manage Devices.",
         "data": {
           "selected_devices": "Devices"
         }

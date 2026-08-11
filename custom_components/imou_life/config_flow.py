@@ -23,6 +23,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from pyimouapi.device import ImouDeviceManager
 from pyimouapi.exceptions import (
     ConnectFailedException,
     ImouException,
@@ -226,11 +227,80 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
             if not self._devices_map:
-                return self.async_abort(reason="no_devices")
+                return await self.async_step_no_devices_menu()
 
             return await self.async_step_select_devices()
         finally:
             await api_client.async_close()
+
+    async def async_step_no_devices_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer bind or finish when the account has no devices."""
+        if user_input is not None:
+            return await getattr(self, f"async_step_{user_input['next_step_id']}")()
+
+        return self.async_show_menu(
+            step_id="no_devices_menu",
+            menu_options=["bind_device", "finish_without_devices"],
+        )
+
+    async def async_step_finish_without_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create entry with no devices selected."""
+        return self.async_create_entry(
+            title=_entry_title(self._login_data[PARAM_APP_ID]),
+            data={**self._login_data, PARAM_SELECTED_DEVICES: []},
+        )
+
+    async def async_step_bind_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Bind a device by serial number and optional code."""
+        if user_input is None:
+            return self.async_show_form(
+                step_id="bind_device",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("device_id"): str,
+                        vol.Optional("code", default=""): str,
+                    }
+                ),
+            )
+
+        api_client = ImouOpenApiClient(
+            self._login_data[PARAM_APP_ID],
+            self._login_data[PARAM_APP_SECRET],
+            self._login_data[PARAM_API_URL],
+        )
+        try:
+            try:
+                manager = ImouDeviceManager(api_client)
+                await manager.async_bind_device(
+                    user_input["device_id"], user_input.get("code", "")
+                )
+                self._devices_map = await async_build_device_map(
+                    self.hass, api_client
+                )
+            except ImouException as exception:
+                return self.async_show_form(
+                    step_id="bind_device",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required("device_id"): str,
+                            vol.Optional("code", default=""): str,
+                        }
+                    ),
+                    errors={"base": _config_flow_error_key(exception)},
+                    description_placeholders={
+                        "error": _api_error_placeholder(exception)
+                    },
+                )
+        finally:
+            await api_client.async_close()
+
+        return await self.async_step_select_devices()
 
     async def async_step_select_devices(
         self, user_input: dict[str, Any] | None = None
