@@ -138,13 +138,21 @@
       },
       "devices": {
         "title": "管理设备",
+        "description": "无法加载设备列表。{error}"
+      },
+      "devices_menu": {
+        "title": "管理设备",
+        "description": "请选择：调整要轮询的设备，或将另一台乐橙设备绑定到此账号。",
+        "menu_options": {
+          "select_poll_devices": "选择要轮询的设备",
+          "bind_device": "绑定新设备"
+        }
+      },
+      "select_poll_devices": {
+        "title": "选择要轮询的设备",
         "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
         "data": {
-          "selected_devices": "设备列表",
-          "bind_new_device": "绑定新设备"
-        },
-        "data_description": {
-          "bind_new_device": "保存选择前，先将另一台乐橙设备绑定到此账号"
+          "selected_devices": "设备列表"
         }
       },
       "no_devices_menu": {

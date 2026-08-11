@@ -138,13 +138,21 @@
       },
       "devices": {
         "title": "Manage Devices",
+        "description": "Could not load the device list. {error}"
+      },
+      "devices_menu": {
+        "title": "Manage Devices",
+        "description": "Choose whether to change which devices are polled, or bind another Imou device to this account.",
+        "menu_options": {
+          "select_poll_devices": "Select devices to poll",
+          "bind_device": "Bind a new device"
+        }
+      },
+      "select_poll_devices": {
+        "title": "Select devices to poll",
         "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices will be removed on next reload.",
         "data": {
-          "selected_devices": "Devices",
-          "bind_new_device": "Bind a new device"
-        },
-        "data_description": {
-          "bind_new_device": "Bind another Imou device to this account before saving your selection"
+          "selected_devices": "Devices"
         }
       },
       "no_devices_menu": {

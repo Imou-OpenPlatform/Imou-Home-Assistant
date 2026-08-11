@@ -596,23 +596,20 @@ class ImouOptionsFlow(OptionsFlow):
             last_step=False,
         )
 
+    def _options_current_selected(self) -> list[str]:
+        """Return the current selected_devices list for options binding/selection."""
+        if PARAM_SELECTED_DEVICES in self.config_entry.options:
+            return list(self.config_entry.options[PARAM_SELECTED_DEVICES])
+        if PARAM_SELECTED_DEVICES in self.config_entry.data:
+            return list(self.config_entry.data[PARAM_SELECTED_DEVICES])
+        if self._devices_map:
+            return list(self._devices_map.keys())
+        return []
+
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage device selection — add/remove devices without re-setup."""
-        if user_input is not None:
-            if user_input.get("bind_new_device"):
-                self._pending_selected = user_input.get(PARAM_SELECTED_DEVICES, [])
-                return await self.async_step_bind_device()
-
-            selected = user_input.get(PARAM_SELECTED_DEVICES, [])
-            merged = {
-                **self._general_options,
-                **self._event_push_options,
-                PARAM_SELECTED_DEVICES: selected,
-            }
-            return self.async_create_entry(data=merged)
-
+        """Fetch account devices, then menu for poll selection or bind."""
         errors: dict[str, str] = {}
         error_detail = ""
         try:
@@ -647,35 +644,46 @@ class ImouOptionsFlow(OptionsFlow):
                 },
             )
 
+        self._pending_selected = self._options_current_selected()
         if not self._devices_map:
-            if PARAM_SELECTED_DEVICES in self.config_entry.options:
-                self._pending_selected = list(
-                    self.config_entry.options[PARAM_SELECTED_DEVICES]
-                )
-            elif PARAM_SELECTED_DEVICES in self.config_entry.data:
-                self._pending_selected = list(
-                    self.config_entry.data[PARAM_SELECTED_DEVICES]
-                )
-            else:
-                self._pending_selected = []
             return await self.async_step_no_devices_menu()
 
-        if PARAM_SELECTED_DEVICES in self.config_entry.options:
-            current_selected = self.config_entry.options[PARAM_SELECTED_DEVICES]
-        elif PARAM_SELECTED_DEVICES in self.config_entry.data:
-            current_selected = self.config_entry.data[PARAM_SELECTED_DEVICES]
-        else:
-            current_selected = list(self._devices_map.keys())
+        return await self.async_step_devices_menu()
 
+    async def async_step_devices_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose poll selection or bind when the account already has devices."""
+        return self.async_show_menu(
+            step_id="devices_menu",
+            menu_options=["select_poll_devices", "bind_device"],
+        )
+
+    async def async_step_select_poll_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Select which account devices to poll."""
+        if user_input is not None:
+            selected = user_input.get(PARAM_SELECTED_DEVICES, [])
+            merged = {
+                **self._general_options,
+                **self._event_push_options,
+                PARAM_SELECTED_DEVICES: selected,
+            }
+            return self.async_create_entry(data=merged)
+
+        if not self._devices_map:
+            return await self.async_step_devices()
+
+        current_selected = self._options_current_selected()
         return self.async_show_form(
-            step_id="devices",
+            step_id="select_poll_devices",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         PARAM_SELECTED_DEVICES,
                         default=[d for d in current_selected if d in self._devices_map],
                     ): cv.multi_select(self._devices_map),
-                    vol.Optional("bind_new_device", default=False): bool,
                 }
             ),
             description_placeholders={
@@ -739,7 +747,11 @@ class ImouOptionsFlow(OptionsFlow):
         finally:
             await api_client.async_close()
 
-        pending = self._pending_selected if self._pending_selected is not None else []
+        pending = (
+            self._pending_selected
+            if self._pending_selected is not None
+            else self._options_current_selected()
+        )
         selected = list(dict.fromkeys([*pending, user_input["device_id"]]))
         merged = {
             **self._general_options,
