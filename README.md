@@ -85,6 +85,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - Optional notify services for alarm messages (standard HA actions, comma-separated)
   - Choose push message types; messages are also synced to the Imou mobile app
   - Alarm images in push payloads are encrypted — use automations with `camera.snapshot` / `camera_proxy` if you need notification thumbnails
+  - **Local event recording (workaround)** — save short post-alarm clips with `camera.record`; native support planned later. See [docs/local-event-recording.md](docs/local-event-recording.md#english)
 * **Camera Function Management**
   - Information and status display (device name, online status, storage status, battery level, etc.)
   - Live video preview
@@ -122,6 +123,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
 - **PTZ presets** — use `select.select_option` on `select.<device>_collection_point` with the preset name (as shown in the Imou app). The select shows **Select a preset…** when the camera is not at a known preset position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
+- **Local recording / `camera.record`** — Stream not set up, path access errors, or unavailable camera entities: see [Local event recording (workaround)](docs/local-event-recording.md#english).
 
 ## Contributing
 
@@ -221,6 +223,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
   - 可选告警消息通知服务（标准 HA action，逗号分隔）
   - 可选择推送消息类型；消息也会同步到 Imou 手机 App
   - 推送载荷中的告警图片为加密格式 — 若需通知缩略图，请在自动化中使用 `camera.snapshot` / `camera_proxy`
+  - **本地事件录像（临时方案）** — 用 `camera.record` 保存告警后短视频；后续版本计划原生支持。见 [docs/local-event-recording.md](docs/local-event-recording.md#zh-hans)
 * **摄像头功能**
   - 信息与状态（设备名称、在线状态、存储状态、电量等）
   - 实时视频预览
@@ -258,6 +261,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填 Imou App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
+- **本地录像 / `camera.record`** — Stream 未启用、路径无权访问、相机实体 unavailable 等：见 [本地事件录像（临时方案）](docs/local-event-recording.md#zh-hans)。
 
 ## 贡献
 
