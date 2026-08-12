@@ -731,13 +731,8 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_save_without_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Save the other options and leave the device selection untouched.
-
-        The selection is deliberately not written back: an absent key means no
-        filtering, so writing an empty list here would silently stop polling
-        every device.
-        """
-        return self.async_create_entry(data=self._merge_options())
+        """Keep current options when the account cannot be listed."""
+        return self.async_create_entry(data=dict(self.config_entry.options))
 
     async def async_step_no_devices_menu(
         self, user_input: dict[str, Any] | None = None
@@ -770,9 +765,12 @@ class ImouOptionsFlow(OptionsFlow):
                     if key != PARAM_SELECTED_DEVICES
                 },
             )
-        options = self._merge_options()
-        options.pop(PARAM_SELECTED_DEVICES, None)
-        return self.async_create_entry(data=options)
+        merged = {
+            key: value
+            for key, value in self.config_entry.options.items()
+            if key != PARAM_SELECTED_DEVICES
+        }
+        return self.async_create_entry(data=merged)
 
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None

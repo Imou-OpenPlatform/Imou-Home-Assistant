@@ -30,12 +30,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
 
-_MIN_EVENT_PUSH_INPUT = {
-    PARAM_ENABLE_EVENT_PUSH: False,
-    SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
-    SECTION_EVENT_PUSH_SUBSCRIPTIONS: {PARAM_EVENT_PUSH_TYPES: ["alarm"]},
-}
-
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_flow_init_shows_menu(hass) -> None:
@@ -246,11 +240,7 @@ async def test_options_devices_empty_shows_menu(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
+        {"next_step_id": "devices"},
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "no_devices_menu"
@@ -259,17 +249,20 @@ async def test_options_devices_empty_shows_menu(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_finish_without_bind_saves_options(hass) -> None:
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_UPDATE_INTERVAL: 120,
+            PARAM_ENABLE_EVENT_PUSH: False,
+        },
+    )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
+        {"next_step_id": "devices"},
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -300,10 +293,7 @@ async def test_saving_with_no_devices_clears_a_stale_selection(hass) -> None:
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], _MIN_EVENT_PUSH_INPUT
+        result["flow_id"], {"next_step_id": "devices"}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
@@ -324,10 +314,7 @@ async def test_saving_with_no_devices_clears_selection_stored_in_data(hass) -> N
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], _MIN_EVENT_PUSH_INPUT
+        result["flow_id"], {"next_step_id": "devices"}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
@@ -347,20 +334,20 @@ async def test_unreachable_cloud_still_lets_the_other_options_be_saved(hass) -> 
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
-        options={PARAM_SELECTED_DEVICES: ["device_1"]},
+        options={
+            PARAM_UPDATE_INTERVAL: 120,
+            PARAM_SELECTED_DEVICES: ["device_1"],
+        },
     )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
-    )
     with patch(
         "custom_components.imou_life.config_flow.async_build_device_map",
         AsyncMock(side_effect=RequestFailedException("cloud down")),
     ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _MIN_EVENT_PUSH_INPUT
+            result["flow_id"], {"next_step_id": "devices"}
         )
         assert result["type"] is FlowResultType.MENU
         assert result["step_id"] == "devices_unavailable"
@@ -371,7 +358,6 @@ async def test_unreachable_cloud_still_lets_the_other_options_be_saved(hass) -> 
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
-    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is False
     # Nothing was learned about the account, so the selection is left as it was.
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
 
@@ -383,15 +369,12 @@ async def test_retrying_after_an_unreachable_cloud_reaches_the_devices(hass) -> 
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
-    )
     with patch(
         "custom_components.imou_life.config_flow.async_build_device_map",
         AsyncMock(side_effect=RequestFailedException("cloud down")),
     ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _MIN_EVENT_PUSH_INPUT
+            result["flow_id"], {"next_step_id": "devices"}
         )
     assert result["step_id"] == "devices_unavailable"
 
@@ -497,11 +480,7 @@ async def test_options_bind_device_failure_stays_on_form(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
+        {"next_step_id": "devices"},
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
