@@ -101,7 +101,7 @@ async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
+        {"next_step_id": "event_push"},
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "event_push"
@@ -128,7 +128,7 @@ async def test_options_flow_event_push_step_when_enabled(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
+        {"next_step_id": "event_push"},
     )
     schema = result.get("data_schema") or result.get("schema")
     assert schema is not None
@@ -144,7 +144,7 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
+        {"next_step_id": "event_push"},
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -158,8 +158,45 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
             },
         },
     )
-    assert result["step_id"] == "devices_menu"
-    assert set(result["menu_options"]) >= {"select_poll_devices", "bind_device"}
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
+    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/hook"
+    assert result["data"][PARAM_EVENT_PUSH_TYPES] == ["alarm"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_preserves_general_and_devices(hass) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_UPDATE_INTERVAL: 90,
+            PARAM_SELECTED_DEVICES: ["device_1"],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_EVENT_PUSH: True,
+            SECTION_EVENT_PUSH_CALLBACK: {
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
+            },
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: ["alarm"],
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
+    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/hook"
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 90
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
