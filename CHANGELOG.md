@@ -1,5 +1,9 @@
 # CHANGELOG
 ## [1.3.4]
+### Breaking
+- Home Assistant 2025.4 or newer is required. Cores below that no longer see this integration in HACS
+- Select option states use friendly keys (`home`/`away`/`disarm`, `mute`/`low`/`medium`/`high`, night-vision string keys) matching pyimouapi 1.3.4. Automations calling `select.select_option` with the old numeric values (`"0"`, `"1"`, …) must be updated
+
 ### Added
 - Bind devices to the open-platform account from Configure → Manage devices (serial + verification code); setup no longer aborts when the account has zero devices (bind now or finish with an empty selection)
 - **Enable status polling** option in Configure → General; disable to stop background status refreshes and save Open API quota (#15)
@@ -7,9 +11,17 @@
 ### Changed
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
-- Select option states use friendly keys (`home`/`away`/`disarm`, `mute`/`low`/`medium`/`high`, night-vision string keys) matching pyimouapi 1.3.4 (breaking for automations that used numeric option values)
-- Depend on `pyimouapi==1.3.4.1` (IoT `motion_detect` skips unusable refs `14800`/`305000` for product_id `FKX9UYL4`)
+- Errors raised while operating a device are translated, so the UI shows them in your language instead of the raw English message from the API
+- Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou app appears within ten minutes
+- Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls
+- Depend on `pyimouapi==1.3.5`, which brings concurrent status reads, one shared HTTP connection pool, credentials kept out of debug logs, and several connection-leak and paging fixes
+- Less log noise: the device filter, and devices that are asleep, are logged at debug rather than info
 - Issue templates: expand Feature request and Question forms; use `feature` label aligned with `[Feature]` titles
+
+### Fixed
+- The `webhook` component is declared in the manifest. Event push registers a webhook and the config flow generates its URL, so on an installation that did not already load `webhook` for another reason this could fail
+- The API session and the webhook registration are released when setup fails or is retried, instead of leaking across the retry
+- `control_move_ptz` accepts a target entity and its `duration` limit matches what the service actually allows
 
 ## [1.3.3]
 ### Added
