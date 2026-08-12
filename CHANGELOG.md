@@ -17,6 +17,7 @@
 
 #### Changed
 
+- Options flow: top-level menu for General, Event push, and Manage devices; General and Event push save independently without changing device selection; Manage devices applies changes with Save and finish
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
 - Errors raised while operating a device are translated, so the UI shows them in your language instead of the raw English message from the API
@@ -217,6 +218,7 @@
 
 #### 变更
 
+- 选项流程：顶层菜单分为常规、事件推送、管理设备；常规与事件推送可独立保存且不影响设备选择；管理设备需「保存并完成」才落盘
 - 配置/选项流程在界面展示开放平台 `code`/`msg`（如 `OP1013` 配额超限），而不再只显示笼统的「请求失败」（#67）
 - 所有实体写入（switch、select、button、text）改为乐观本地更新，不再立即触发整次云端轮询
 - 操作设备时的错误会走翻译，界面按你的语言显示，而不再是 API 原始英文

@@ -326,10 +326,10 @@ async def test_saving_with_no_devices_clears_selection_stored_in_data(hass) -> N
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_unreachable_cloud_still_lets_the_other_options_be_saved(hass) -> None:
-    """Listing the account is the last step, and it must not hold the rest hostage.
+    """Unreachable cloud in Manage devices must still allow save without devices.
 
-    A dead cloud is exactly when someone wants to slow polling down or turn
-    event push off, so failing here has to leave a way to save.
+    Listing failure must not trap the user; existing general options stay intact
+    when they choose save without fetching the device list.
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
