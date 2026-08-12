@@ -128,6 +128,62 @@ async def test_coordinator_skips_poll_when_all_entities_disabled(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_first_discovery_purges_registry_devices_gone_from_account(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Reload starts uninitialized; an empty account must still drop stale devices.
+
+    Unload deliberately leaves registry entries alone. The next setup's first
+    discovery used to assign an empty map and return without cleaning, so
+    devices deleted in the Imou app kept showing after Configure → save.
+    """
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    stale_key = "gone_prod_gone"
+    device_registry = dr.async_get(hass)
+    stale = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, stale_key)},
+        name="Deleted camera",
+    )
+
+    device_manager.async_get_devices.return_value = []
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    await coordinator._async_update_data()
+
+    assert coordinator.devices == []
+    assert (
+        device_registry.async_get(stale.id) is None
+        or entry.entry_id not in device_registry.async_get(stale.id).config_entries
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_first_discovery_keeps_registry_devices_still_on_account(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """First discovery must not detach devices that are still listed."""
+    devices = [_mock_device("d1")]
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    device_key = imou_life_device_key(devices[0])
+    device_registry = dr.async_get(hass)
+    kept = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, device_key)},
+        name="Still here",
+    )
+
+    device_manager.async_get_devices.return_value = devices
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    await coordinator._async_update_data()
+
+    assert len(coordinator.devices) == 1
+    assert device_registry.async_get(kept.id) is not None
+    assert entry.entry_id in device_registry.async_get(kept.id).config_entries
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_coordinator_no_interval_when_polling_disabled(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

@@ -188,6 +188,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if not self._devices_initialized:
             self.devices_by_key = fresh_by_key
             self._devices_initialized = True
+            # Unload leaves registry entries in place by design. After reload the
+            # coordinator starts empty, so the first discovery must still detach
+            # devices that are no longer on the account (or filtered out).
+            self._async_detach_registry_devices_missing_from(fresh_by_key)
             return
 
         current_keys = set(fresh_by_key)
@@ -198,16 +202,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         if removed_keys := known_keys - current_keys:
             _LOGGER.debug("Removed Imou device(s): %s", ", ".join(removed_keys))
-            device_registry = dr.async_get(self.hass)
             for device_key in removed_keys:
                 del self.devices_by_key[device_key]
-                if device := device_registry.async_get_device(
-                    identifiers={(DOMAIN, device_key)}
-                ):
-                    device_registry.async_update_device(
-                        device_id=device.id,
-                        remove_config_entry_id=self.config_entry.entry_id,
-                    )
+            self._async_detach_registry_devices_missing_from(fresh_by_key)
 
         if new_keys := current_keys - known_keys:
             _LOGGER.debug("New Imou device(s) found: %s", ", ".join(new_keys))
@@ -217,6 +214,26 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 new_devices.append(fresh_by_key[device_key])
             for callback in self.new_device_callbacks:
                 callback(new_devices)
+
+    def _async_detach_registry_devices_missing_from(
+        self, fresh_by_key: dict[str, ImouHaDevice]
+    ) -> None:
+        """Detach config-entry devices whose Imou keys are not in fresh_by_key."""
+        device_registry = dr.async_get(self.hass)
+        for device in dr.async_entries_for_config_entry(
+            device_registry, self.config_entry.entry_id
+        ):
+            imou_keys = [
+                ident for domain, ident in device.identifiers if domain == DOMAIN
+            ]
+            if not imou_keys:
+                continue
+            if any(key in fresh_by_key for key in imou_keys):
+                continue
+            device_registry.async_update_device(
+                device_id=device.id,
+                remove_config_entry_id=self.config_entry.entry_id,
+            )
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""

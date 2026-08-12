@@ -737,15 +737,26 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_finish_without_bind(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Save options without binding a device."""
-        pending = self._pending_selected if self._pending_selected is not None else []
+        """Save options without binding when the account list is empty.
+
+        The account was listed successfully and holds nothing, so any previous
+        selected_devices whitelist is stale (e.g. devices deleted in the Imou
+        app). Omitting the key means "no filter" — same as first-time setup —
+        so a device bound later from the app is picked up. Setup may have stored
+        the whitelist in entry.data; clear that too or get_selected_device_ids
+        would fall back to it. Cloud failures that cannot list the account use
+        save_without_devices and keep the selection.
+        """
+        if PARAM_SELECTED_DEVICES in self.config_entry.data:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={
+                    key: value
+                    for key, value in self.config_entry.data.items()
+                    if key != PARAM_SELECTED_DEVICES
+                },
+            )
         merged = {**self._general_options, **self._event_push_options}
-        # An empty list means "poll nothing", which is not what an account with
-        # nothing in it yet should be locked into: a device bound later from
-        # the Imou app would be filtered out with no hint as to why. Leaving
-        # the key out keeps it meaning "no filter".
-        if pending or PARAM_SELECTED_DEVICES in self.config_entry.options:
-            merged[PARAM_SELECTED_DEVICES] = pending
         return self.async_create_entry(data=merged)
 
     async def async_step_bind_device(

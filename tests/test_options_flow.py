@@ -191,8 +191,13 @@ async def test_options_finish_without_bind_saves_options(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
-async def test_saving_with_no_devices_keeps_an_existing_selection(hass) -> None:
-    """A selection already made must survive a save from the no-devices menu."""
+async def test_saving_with_no_devices_clears_a_stale_selection(hass) -> None:
+    """Account listed empty: drop the old whitelist (devices deleted in the app).
+
+    Keeping the previous ids would leave ghost devices after save/reload, and
+    would also filter out anything bound later from the Imou app. Cloud failures
+    still preserve the selection via save_without_devices.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
@@ -211,7 +216,32 @@ async def test_saving_with_no_devices_keeps_an_existing_selection(hass) -> None:
         result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
     )
 
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+    assert PARAM_SELECTED_DEVICES not in result["data"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_saving_with_no_devices_clears_selection_stored_in_data(hass) -> None:
+    """Setup stores the whitelist in entry.data; options must clear that too."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_SELECTED_DEVICES: ["device_1"]},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _MIN_EVENT_PUSH_INPUT
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
+    )
+
+    assert PARAM_SELECTED_DEVICES not in result["data"]
+    assert PARAM_SELECTED_DEVICES not in entry.data
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
