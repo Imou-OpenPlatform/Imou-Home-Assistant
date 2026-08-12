@@ -82,8 +82,17 @@
     },
     "step": {
       "init": {
+        "title": "Configure Imou Life",
+        "description": "Choose which settings to change. Each section saves on its own.",
+        "menu_options": {
+          "general_settings": "General settings",
+          "event_push": "Event push",
+          "devices": "Manage devices"
+        }
+      },
+      "general_settings": {
         "title": "General",
-        "description": "Polling interval and camera defaults. Device selection is on the next steps.",
+        "description": "Polling interval and camera defaults.",
         "data": {
           "enable_polling": "Enable status polling",
           "update_interval": "Polling interval (seconds)",
@@ -145,11 +154,12 @@
         "description": "Could not load the device list. {error}"
       },
       "devices_menu": {
-        "title": "Manage Devices",
-        "description": "Choose whether to change which devices are polled, or bind another Imou device to this account.",
+        "title": "Manage devices",
+        "description": "Adjust which devices to poll or bind another Imou device. Changes apply only after Save and finish.",
         "menu_options": {
           "select_poll_devices": "Select devices to poll",
-          "bind_device": "Bind a new device"
+          "bind_device": "Bind new device",
+          "save_and_finish": "Save and finish"
         }
       },
       "select_poll_devices": {

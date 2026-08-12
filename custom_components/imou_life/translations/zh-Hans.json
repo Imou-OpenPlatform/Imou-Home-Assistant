@@ -82,8 +82,17 @@
     },
     "step": {
       "init": {
+        "title": "配置 Imou Life",
+        "description": "请选择要修改的设置。每一项可单独保存。",
+        "menu_options": {
+          "general_settings": "常规设置",
+          "event_push": "消息推送",
+          "devices": "管理设备"
+        }
+      },
+      "general_settings": {
         "title": "常规设置",
-        "description": "轮询间隔与摄像头默认参数。设备选择在后续步骤中完成。",
+        "description": "轮询间隔与摄像头默认参数。",
         "data": {
           "enable_polling": "启用状态轮询",
           "update_interval": "自动刷新间隔（秒）",
@@ -146,10 +155,11 @@
       },
       "devices_menu": {
         "title": "管理设备",
-        "description": "请选择：调整要轮询的设备，或将另一台乐橙设备绑定到此账号。",
+        "description": "可调整要轮询的设备或绑定新设备。需点击「保存并完成」后才会生效。",
         "menu_options": {
           "select_poll_devices": "选择要轮询的设备",
-          "bind_device": "绑定新设备"
+          "bind_device": "绑定新设备",
+          "save_and_finish": "保存并完成"
         }
       },
       "select_poll_devices": {
