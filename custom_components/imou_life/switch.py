@@ -9,6 +9,7 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -32,14 +33,20 @@ from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
+# Detection, recording and indicator toggles are device settings rather than
+# controls, so they belong under the device's configuration section. Privacy
+# mode, the white light and the plug relay stay primary: those are operated,
+# not configured.
 SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_AB_ALARM_SOUND,
         translation_key=PARAM_AB_ALARM_SOUND,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_AUDIO_ENCODE_CONTROL,
         translation_key=PARAM_AUDIO_ENCODE_CONTROL,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_CLOSE_CAMERA,
@@ -48,15 +55,18 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_HEADER_DETECT,
         translation_key=PARAM_HEADER_DETECT,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_LIGHT,
         translation_key=PARAM_LIGHT,
         device_class=SwitchDeviceClass.SWITCH,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_MOTION_DETECT,
         translation_key=PARAM_MOTION_DETECT,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_PLUG_SWITCH,

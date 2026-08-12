@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.text import TextEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -43,6 +44,9 @@ async def async_setup_entry(
 
 class ImouText(ImouEntity, TextEntity):
     """Representation of an Imou text entity."""
+
+    # Every text entity here is a threshold or timer stored on the device.
+    _attr_entity_category = EntityCategory.CONFIG
 
     @property
     def native_value(self) -> str | None:

@@ -6,6 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_platform
@@ -74,6 +75,13 @@ class ImouButton(ImouEntity, ButtonEntity):
         """Return restart class for the reboot button."""
         if self._entity_type == PARAM_RESTART_DEVICE:
             return ButtonDeviceClass.RESTART
+        return None
+
+    @property
+    def entity_category(self) -> EntityCategory | None:
+        """Keep the reboot button out of the way of the PTZ and siren controls."""
+        if self._entity_type == PARAM_RESTART_DEVICE:
+            return EntityCategory.CONFIG
         return None
 
     async def async_handle_control_move_ptz(self, duration: int) -> None:

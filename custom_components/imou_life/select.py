@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import override
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -24,18 +25,23 @@ from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
+# The collection point recalls a PTZ preset, which is an action on the camera;
+# the rest set how the device behaves and belong under configuration.
 SELECT_TYPES: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key=PARAM_DEVICE_VOLUME,
         translation_key=PARAM_DEVICE_VOLUME,
+        entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
         key=PARAM_MODE,
         translation_key=PARAM_MODE,
+        entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
         key=PARAM_NIGHT_VISION_MODE,
         translation_key=PARAM_NIGHT_VISION_MODE,
+        entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
         key=PARAM_COLLECTION_POINT,
