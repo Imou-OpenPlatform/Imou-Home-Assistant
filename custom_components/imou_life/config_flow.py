@@ -601,9 +601,7 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — event push and alarm notifications."""
         if user_input is not None:
-            flat = self._flatten_event_push_input(
-                user_input, self.config_entry.options
-            )
+            flat = self._flatten_event_push_input(user_input, self.config_entry.options)
             return self.async_create_entry(data=self._merge_options(**flat))
 
         suggested_options = self._nested_event_push_suggestions(
