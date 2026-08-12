@@ -16,6 +16,7 @@ from custom_components.imou_life.const import (
     PARAM_WEBHOOK_ID,
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -147,7 +148,9 @@ async def test_removing_one_channel_does_not_take_its_siblings(hass) -> None:
         name="Driveway",
     )
 
-    assert await async_remove_config_entry_device(hass, entry, channel_0) is False
+    with pytest.raises(HomeAssistantError) as err:
+        await async_remove_config_entry_device(hass, entry, channel_0)
+    assert "Driveway" in str(err.value)
     assert entry.options[PARAM_SELECTED_DEVICES] == ["nvr1", "d2"]
     assert entry.runtime_data.selected_devices == ["nvr1", "d2"]
 
@@ -199,13 +202,18 @@ async def test_remove_device_without_runtime_refuses(hass) -> None:
         name="Cam 1",
     )
 
-    assert await async_remove_config_entry_device(hass, entry, device_entry) is False
+    with pytest.raises(HomeAssistantError):
+        await async_remove_config_entry_device(hass, entry, device_entry)
     assert PARAM_SELECTED_DEVICES not in entry.options
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_remove_device_refuses_empty_coordinator_map(hass) -> None:
-    """Do not materialize an empty allow-list when devices_by_key is empty."""
+async def test_remove_ghost_device_when_coordinator_map_is_empty(hass) -> None:
+    """A device already gone from the account must still be removable in HA.
+
+    selected_devices is unset (poll all). The coordinator no longer lists the
+    device, so there is nothing to materialize — just allow the registry drop.
+    """
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
     coordinator = MagicMock()
@@ -220,5 +228,5 @@ async def test_remove_device_refuses_empty_coordinator_map(hass) -> None:
         name="Cam 1",
     )
 
-    assert await async_remove_config_entry_device(hass, entry, device_entry) is False
+    assert await async_remove_config_entry_device(hass, entry, device_entry) is True
     assert PARAM_SELECTED_DEVICES not in entry.options

@@ -34,6 +34,8 @@
 
 - Saving options with **Save without binding** when the account has no devices clears the old device selection (including one stored from setup in entry data). Previously the previous whitelist was written back, so devices deleted in the Imou app kept showing after save, and a device bound later from the app could stay filtered out
 - After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status
+- Refusing to delete a multi-channel camera/NVR channel raises a clear error in the UI instead of a silent rejection that the frontend showed as `[object Object]`. Devices already gone from the account can be removed from Home Assistant again
+- Device **Download diagnostics** now includes that device's ids, model, status, and entity summaries (secrets still redacted). Previously only account-level diagnostics existed, so the device-page download had almost nothing useful for a single camera
 - The `webhook` component is declared in the manifest. Event push registers a webhook and the config flow generates its URL, so on an installation that did not already load `webhook` for another reason this could fail
 - The API session and the webhook registration are released when setup fails or is retried, instead of leaking across the retry
 - `control_move_ptz` accepts a target entity and its `duration` limit matches what the service actually allows
@@ -232,6 +234,8 @@
 
 - 账号无设备时用 **不绑定并保存** 会清除旧的设备选择（含初次配置写在 entry data 中的白名单）。原先会写回旧白名单，App 已删设备保存后仍显示，且之后在 App 绑定的新设备可能一直被过滤
 - 重新加载后，首次拉取账号列表会卸掉账号上已不存在的 Home Assistant 设备。卸载故意保留注册表条目；下次 setup 若从空 map 起步会跳过清理，已删设备仍以最后状态显示
+- 拒绝删除多通道/NVR 某一通道时，在界面抛出可读错误，而不再是前端显示成 `[object Object]` 的静默拒绝。账号上已不存在的设备也可以再次从 Home Assistant 中删除
+- 设备页 **下载诊断信息** 现包含该设备的 ID、型号、状态与实体摘要（密钥仍脱敏）。原先只有账号级诊断，设备页下载对单台相机几乎没用
 - manifest 声明 `webhook` 组件。事件推送会注册 webhook 且配置流程会生成 URL；若安装尚未因其他原因加载 `webhook`，此前可能失败
 - setup 失败或重试时会释放 API session 与 webhook 注册，而不再泄漏到下一次重试
 - `control_move_ptz` 接受目标实体，且 `duration` 上限与服务实际允许范围一致

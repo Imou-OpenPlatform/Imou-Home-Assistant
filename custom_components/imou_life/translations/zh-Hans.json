@@ -388,6 +388,15 @@
     },
     "not_a_ptz_button": {
       "message": "{entity_id} 不是云台按钮，无法转动。请改为选择云台方向按钮。"
+    },
+    "remove_device_missing_id": {
+      "message": "无法删除设备 {name}：缺少 Imou 设备 ID。"
+    },
+    "remove_device_has_siblings": {
+      "message": "无法删除 {name}：它是 Imou 设备 {device_id} 的其中一个通道，该设备还包含 {siblings}。要停止轮询整台设备，请在集成选项中取消勾选；要隐藏此通道，请禁用其实体。"
+    },
+    "remove_device_no_runtime": {
+      "message": "无法删除设备 {name}：集成未加载。"
     }
   }
 }

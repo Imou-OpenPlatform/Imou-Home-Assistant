@@ -388,6 +388,15 @@
     },
     "not_a_ptz_button": {
       "message": "{entity_id} is not a PTZ button, so it cannot be moved. Target a PTZ direction button instead."
+    },
+    "remove_device_missing_id": {
+      "message": "Cannot remove device {name}: missing Imou device id."
+    },
+    "remove_device_has_siblings": {
+      "message": "Cannot remove {name}: it is one channel of Imou device {device_id}, which also covers {siblings}. Deselect the whole device in the integration options to stop polling it, or disable this channel's entities to hide it."
+    },
+    "remove_device_no_runtime": {
+      "message": "Cannot remove device {name}: integration is not loaded."
     }
   }
 }

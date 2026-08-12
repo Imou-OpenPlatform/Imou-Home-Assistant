@@ -7,6 +7,7 @@ import uuid
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
@@ -161,12 +162,15 @@ async def async_remove_config_entry_device(
     hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
 ) -> bool:
     """Persist exclusion so the next poll does not re-add the device."""
+    device_name = device_entry.name_by_user or device_entry.name or device_entry.id
     device_id = _device_id_from_entry(device_entry)
     if not device_id:
-        _LOGGER.warning(
-            "Cannot remove device %s: missing Imou device id", device_entry.name
+        raise HomeAssistantError(
+            f"Cannot remove device {device_name}: missing Imou device id",
+            translation_domain=DOMAIN,
+            translation_key="remove_device_missing_id",
+            translation_placeholders={"name": device_name},
         )
-        return False
 
     # Exclusion is recorded per account device, which is the granularity the
     # cloud and the push messages use. One channel of a multi-channel device
@@ -174,33 +178,36 @@ async def async_remove_config_entry_device(
     # take its sibling channels out of Home Assistant along with whatever the
     # user had named or automated on them.
     if siblings := _sibling_channel_names(hass, config_entry, device_entry, device_id):
-        _LOGGER.warning(
-            "Cannot remove device %s: it is one channel of Imou device %s, which also "
-            "covers %s. Removing it would remove those as well. To stop polling the "
-            "whole device, deselect it in the integration options; to hide this "
-            "channel, disable its entities",
-            device_entry.name,
-            device_id,
-            ", ".join(siblings),
+        siblings_text = ", ".join(siblings)
+        raise HomeAssistantError(
+            f"Cannot remove {device_name}: it is one channel of Imou device "
+            f"{device_id}, which also covers {siblings_text}. Deselect the whole "
+            "device in the integration options to stop polling it, or disable "
+            "this channel's entities to hide it",
+            translation_domain=DOMAIN,
+            translation_key="remove_device_has_siblings",
+            translation_placeholders={
+                "name": device_name,
+                "device_id": device_id,
+                "siblings": siblings_text,
+            },
         )
-        return False
 
     selected = get_selected_device_ids(config_entry)
     if selected is None:
         runtime = get_runtime_data(config_entry)
         if runtime is None:
-            _LOGGER.warning(
-                "Cannot remove device %s: no runtime to materialize selected_devices",
-                device_entry.name,
+            raise HomeAssistantError(
+                f"Cannot remove device {device_name}: integration is not loaded",
+                translation_domain=DOMAIN,
+                translation_key="remove_device_no_runtime",
+                translation_placeholders={"name": device_name},
             )
-            return False
         all_ids = {d.device_id for d in runtime.coordinator.devices_by_key.values()}
-        if not all_ids or device_id not in all_ids:
-            _LOGGER.warning(
-                "Cannot remove device %s: coordinator device map incomplete",
-                device_entry.name,
-            )
-            return False
+        # Already absent from the live map (deleted in the Imou app, or never
+        # discovered this session): nothing to exclude — allow the registry drop.
+        if device_id not in all_ids:
+            return True
         selected = [i for i in sorted(all_ids) if i != device_id]
     else:
         selected = [i for i in selected if i != device_id]
