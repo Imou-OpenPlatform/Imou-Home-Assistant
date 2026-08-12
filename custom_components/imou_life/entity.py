@@ -33,6 +33,7 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._entity_type = entity_type
+        self._last_known_device = device
         self._device_key = imou_life_device_key(device)
         self._attr_unique_id = f"{self._device_key}${entity_type}"
         self._attr_translation_key = entity_type
@@ -47,8 +48,18 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
 
     @property
     def device(self) -> ImouHaDevice:
-        """Return the live device from the coordinator."""
-        return self.coordinator.devices_by_key[self._device_key]
+        """Return the live device from the coordinator.
+
+        A device dropped from the account leaves its entities behind until the
+        registry catches up, and HA reads capability attributes before it reads
+        `available`, so raising here would break the update for every entity
+        after this one. The last known device keeps those reads answerable;
+        `available` is what reports the device as gone.
+        """
+        device = self.coordinator.devices_by_key.get(self._device_key)
+        if device is not None:
+            self._last_known_device = device
+        return self._last_known_device
 
     @property
     @override
