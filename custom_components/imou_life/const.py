@@ -1,5 +1,6 @@
 """Constants."""
 
+from homeassistant.const import Platform
 from pyimouapi.ha_device import ImouHaDevice
 
 # Internal constants
@@ -185,4 +186,12 @@ EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
 SERVICE_CONTROL_MOVE_PTZ = "control_move_ptz"
 
 
-PLATFORMS = ["select", "sensor", "switch", "camera", "button", "binary_sensor", "text"]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.CAMERA,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.TEXT,
+]
