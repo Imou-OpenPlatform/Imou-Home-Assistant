@@ -32,6 +32,9 @@ src = ["custom_components", "tests"]
 [tool.ruff.lint]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+  # Entities run on the event loop: ASYNC catches work that would block it, and
+  # G/LOG keep per-poll logs from formatting messages nobody will read.
+  "ASYNC", "G", "LOG",
 ]
 
 [tool.ruff.format]
