@@ -434,6 +434,34 @@ class ImouOptionsFlow(OptionsFlow):
         """Return suggested values for a subset of option keys."""
         return {key: options[key] for key in keys if key in options}
 
+    def _merge_options(self, **updates: Any) -> dict[str, Any]:
+        """Replace options wholesale while keeping untouched keys."""
+        return {**dict(self.config_entry.options), **updates}
+
+    @staticmethod
+    def _general_settings_schema() -> vol.Schema:
+        """Build the general options form."""
+        return vol.Schema(
+            {
+                vol.Optional(PARAM_ENABLE_POLLING, default=True): bool,
+                vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
+                    vol.Coerce(int), vol.Range(min=30, max=900)
+                ),
+                vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=9)
+                ),
+                vol.Required(PARAM_LIVE_RESOLUTION, default=CONF_HD): vol.In(
+                    [CONF_HD, CONF_SD]
+                ),
+                vol.Required(PARAM_LIVE_PROTOCOL, default=CONF_HTTPS): vol.In(
+                    [CONF_HTTPS, CONF_HTTP]
+                ),
+                vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
+                    vol.Coerce(int), vol.Range(min=100, max=10000)
+                ),
+            }
+        )
+
     def _event_push_webhook_placeholders(self) -> dict[str, str]:
         """Return webhook reference values for the step description."""
         language = self.hass.config.language
@@ -546,39 +574,28 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Choose which options section to edit."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["general_settings", "event_push", "devices"],
+        )
+
+    async def async_step_general_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Manage options — polling, camera, and PTZ settings."""
         if user_input is not None:
-            self._general_options = user_input
-            return await self.async_step_event_push()
+            return self.async_create_entry(data=self._merge_options(**user_input))
 
         return self.async_show_form(
-            step_id="init",
+            step_id="general_settings",
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema(
-                    {
-                        vol.Optional(PARAM_ENABLE_POLLING, default=True): bool,
-                        vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
-                            vol.Coerce(int), vol.Range(min=30, max=900)
-                        ),
-                        vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
-                            vol.Coerce(int), vol.Range(min=1, max=9)
-                        ),
-                        vol.Required(PARAM_LIVE_RESOLUTION, default=CONF_HD): vol.In(
-                            [CONF_HD, CONF_SD]
-                        ),
-                        vol.Required(PARAM_LIVE_PROTOCOL, default=CONF_HTTPS): vol.In(
-                            [CONF_HTTPS, CONF_HTTP]
-                        ),
-                        vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
-                            vol.Coerce(int), vol.Range(min=100, max=10000)
-                        ),
-                    }
-                ),
+                self._general_settings_schema(),
                 self._suggested_option_subset(
                     self.config_entry.options, _GENERAL_OPTION_KEYS
                 ),
             ),
-            last_step=False,
+            last_step=True,
         )
 
     async def async_step_event_push(

@@ -10,10 +10,16 @@ from custom_components.imou_life.config_flow import (
     SECTION_EVENT_PUSH_SUBSCRIPTIONS,
 )
 from custom_components.imou_life.const import (
+    CONF_HD,
+    CONF_HTTPS,
     DOMAIN,
+    PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_LIVE_PROTOCOL,
+    PARAM_LIVE_RESOLUTION,
+    PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_URL,
@@ -32,19 +38,58 @@ _MIN_EVENT_PUSH_INPUT = {
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_options_flow_init_shows_general_settings(hass) -> None:
-    """Options init step exposes polling and camera settings only."""
+async def test_options_flow_init_shows_menu(hass) -> None:
+    """Options init is a menu to pick which settings to edit."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "init"
-    schema = result.get("data_schema") or result.get("schema")
-    assert schema is not None
-    assert PARAM_ENABLE_POLLING in schema.schema
-    assert PARAM_UPDATE_INTERVAL in schema.schema
-    assert PARAM_ENABLE_EVENT_PUSH not in schema.schema
+    assert set(result["menu_options"]) >= {
+        "general_settings",
+        "event_push",
+        "devices",
+    }
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_general_settings_saves_without_devices(hass) -> None:
+    """Editing general settings alone must not require the devices steps."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_SELECTED_DEVICES: ["device_1"],
+            PARAM_UPDATE_INTERVAL: 60,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"next_step_id": "general_settings"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "general_settings"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_POLLING: True,
+            PARAM_UPDATE_INTERVAL: 120,
+            PARAM_DOWNLOAD_SNAP_WAIT_TIME: 3,
+            PARAM_LIVE_RESOLUTION: CONF_HD,
+            PARAM_LIVE_PROTOCOL: CONF_HTTPS,
+            PARAM_ROTATION_DURATION: 500,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 120
+    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
