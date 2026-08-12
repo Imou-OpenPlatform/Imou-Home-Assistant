@@ -87,7 +87,9 @@ async def test_unload_reuses_runtime_client(hass: HomeAssistant) -> None:
     """Disabling the cloud callback reuses the client that already holds a token."""
     entry = _entry(hass, options={PARAM_ENABLE_EVENT_PUSH: True})
     client = MagicMock()
-    entry.runtime_data = ImouRuntimeData(coordinator=AsyncMock(), client=client)
+    entry.runtime_data = ImouRuntimeData(
+        coordinator=AsyncMock(), client=client, push_enabled=True
+    )
 
     with (
         patch(

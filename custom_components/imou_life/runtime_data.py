@@ -47,9 +47,13 @@ class ImouRuntimeData:
 
 
 def get_runtime_data(entry: ConfigEntry) -> ImouRuntimeData | None:
-    """Return runtime data, or None when the entry is not set up.
+    """Return runtime data, or None when the entry never finished setting up.
 
-    Home Assistant deletes ``runtime_data`` on unload, so for entries that are
-    not currently loaded the attribute is absent rather than None.
+    Home Assistant deletes ``runtime_data`` only when an entry unloads
+    cleanly, so the attribute is still there while unloading, which is when
+    the client is needed to switch event push off. A setup that raised
+    ``ConfigEntryNotReady`` also leaves it behind, holding a closed client;
+    callers reached only from a loaded entry, which is all of them today, do
+    not see that.
     """
     return getattr(entry, "runtime_data", None)

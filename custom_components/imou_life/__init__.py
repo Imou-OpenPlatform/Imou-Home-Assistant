@@ -17,7 +17,6 @@ from .const import (
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
-    PARAM_ENABLE_EVENT_PUSH,
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     PLATFORMS,
@@ -89,14 +88,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     if not webhook_id:
         return True
 
-    if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
+    # Turning event push off in the options saves them before the reload, so
+    # entry.options already says "off" by the time we get here. What has to be
+    # switched off in the cloud is what setup actually turned on, which is the
+    # only thing the runtime records.
+    runtime = get_runtime_data(entry)
+    if runtime is None or not runtime.push_enabled:
         await async_teardown_event_push(hass, entry)
         return True
 
     # Reuse the setup client so its accessToken is still valid; a fresh client
     # would have to fetch a token before it could disable the callback.
-    runtime = get_runtime_data(entry)
-    client = runtime.client if runtime is not None else None
+    client = runtime.client
     spare_client = None
     if client is None:
         spare_client = client = ImouOpenApiClient(
