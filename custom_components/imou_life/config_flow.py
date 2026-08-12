@@ -658,10 +658,9 @@ class ImouOptionsFlow(OptionsFlow):
             error_detail = _api_error_placeholder(exception)
 
         if errors:
-            # Reaching the device step is the last thing the options flow does,
-            # so failing here would otherwise throw away everything the user
-            # just changed, and the cloud being down is exactly when they want
-            # to turn polling down or event push off.
+            # General and Event push already save on their own; when listing
+            # fails here, save_without_devices keeps existing options (including
+            # selected_devices) instead of trapping the user.
             self._devices_error = error_detail
             return await self.async_step_devices_unavailable()
 
@@ -729,7 +728,10 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_save_without_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Keep current options when the account cannot be listed."""
+        """Keep current options when the account cannot be listed.
+
+        Missing selected_devices means no filter — do not write an empty list.
+        """
         return self.async_create_entry(data=dict(self.config_entry.options))
 
     async def async_step_no_devices_menu(

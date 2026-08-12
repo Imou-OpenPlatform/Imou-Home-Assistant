@@ -51,19 +51,19 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry to adjust settings in three steps:
+Use **Configure** on the integration entry to open a menu: **General**, **Event push**, or **Manage devices**. **General** and **Event push** each save on their own when you submit that form; you do not need to visit the other sections in the same session.
 
-1. **General** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+- **General** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
-2. **Event push** — enable webhook callback, optional custom callback URL, message types, and alarm notifications  
+- **Event push** — enable webhook callback, optional custom callback URL, message types, and alarm notifications  
 
 On this step the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
 
-3. **Manage devices** — choose which devices to poll
+- **Manage devices** — choose which devices to poll or bind a new device, then use **Save and finish** to persist device selection
 
 <img src="assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
 
@@ -75,7 +75,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Manage devices** (device serial + verification code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
-  - **Configure** wizard: **General** (enable polling, interval, camera, PTZ) → **Event push** → **Manage devices**
+  - **Configure** menu: **General** (enable polling, interval, camera, PTZ), **Event push**, and **Manage devices** (select/bind, then **Save and finish**); General and Event push save independently
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.5 for Open Platform API access
@@ -189,19 +189,19 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点击 **配置（Configure）**，可按三步调整设置：
+在集成条目上点击 **配置（Configure）** 会打开菜单：**常规（General）**、**事件推送（Event push）** 或 **管理设备（Manage devices）**。**常规** 与 **事件推送** 各自提交表单即保存，同一次会话中无需依次进入其他分区。
 
-1. **常规（General）** — 启用/关闭状态轮询、轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
+- **常规（General）** — 启用/关闭状态轮询、轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
-2. **事件推送（Event push）** — 启用 Webhook 回调、可选自定义回调 URL、消息类型与告警通知  
+- **事件推送（Event push）** — 启用 Webhook 回调、可选自定义回调 URL、消息类型与告警通知  
 
 此步骤会显示 **Webhook ID** 与**建议回调 URL**。**自定义回调 URL** 留空即使用建议地址；仅当建议地址无法从公网访问时再填写公网 URL。
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
 
-3. **管理设备（Manage devices）** — 选择要轮询的设备
+- **管理设备（Manage devices）** — 选择要轮询的设备或绑定新设备，完成后使用 **保存并完成（Save and finish）** 保存设备选择
 
 <img src="assets/images/configure_devices.png" width="70%" alt="配置 — 管理设备">
 
@@ -214,7 +214,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 * **集成与账号**
   - 在 **配置 → 管理设备** 中将设备绑定到开放平台账号（设备序列号 + 验证码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
   - 安装时及 **配置 → 管理设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 向导：**常规**（轮询、摄像头、云台）→ **事件推送** → **管理设备**
+  - **配置** 菜单：**常规**（轮询、摄像头、云台）、**事件推送**、**管理设备**（选择/绑定后 **保存并完成**）；常规与事件推送各自独立保存
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.5 访问开放平台 API
