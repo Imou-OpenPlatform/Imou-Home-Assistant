@@ -14,7 +14,9 @@
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
 - Errors raised while operating a device are translated, so the UI shows them in your language instead of the raw English message from the API
 - Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou app appears within ten minutes
-- Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls
+- Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls. Entities in that section are hidden from auto-generated dashboards and are not exposed to Assist by default; the entities themselves are unchanged, so anything referring to them by entity id keeps working
+- Invalid credentials now end the polling and ask you to sign in again, rather than retrying a secret the integration already knows is refused
+- Setting up an account that holds no devices records no device filter at all, instead of an empty one. A device bound later from the Imou app is picked up automatically; previously it was filtered out for good with nothing to indicate why
 - Depend on `pyimouapi==1.3.5`, which brings concurrent status reads, a per-host connection cap so snapshot downloads cannot stall status polling, credentials kept out of debug logs, and several connection-leak and paging fixes
 - A camera that cannot produce a snapshot reports why, in your language, instead of showing a blank tile
 - One unreadable accessory no longer leaves the whole account showing as unavailable
@@ -25,6 +27,11 @@
 - The `webhook` component is declared in the manifest. Event push registers a webhook and the config flow generates its URL, so on an installation that did not already load `webhook` for another reason this could fail
 - The API session and the webhook registration are released when setup fails or is retried, instead of leaking across the retry
 - `control_move_ptz` accepts a target entity and its `duration` limit matches what the service actually allows
+- A rotated or revoked App Secret is noticed on the next status poll and opens the re-authentication prompt. Because listing the account moved to a ten minute clock, and because the library logged credential errors rather than reporting them, this could otherwise go unnoticed for ten minutes — or indefinitely with status polling turned off — while every entity kept showing its last known value as current
+- Turning event push off in the options now tells the Imou cloud to stop pushing. The new setting was already saved by the time the integration reloaded, so it concluded push had never been on and left the cloud callback registered, spending Open API quota on messages that were then discarded
+- The options can be saved when the device list cannot be fetched. Listing the account was the last step and had no way past it, so a quota-exceeded or unreachable account discarded every change — including the polling interval and event push settings you would want to change in exactly that situation
+- A device removed from the account no longer breaks the update for the remaining entities. Its select and text entities raised while Home Assistant collected their attributes, which happens before availability is checked
+- Re-authenticating successfully shows a confirmation instead of a blank message
 
 ## [1.3.3]
 ### Added
