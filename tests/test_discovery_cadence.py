@@ -10,8 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from custom_components.imou_life.const import DISCOVERY_INTERVAL, DOMAIN
 from custom_components.imou_life.coordinator import ImouDataUpdateCoordinator
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pyimouapi.exceptions import InvalidAppIdOrSecretException
+from homeassistant.exceptions import ConfigEntryNotReady
+from pyimouapi.exceptions import (
+    InvalidAppIdOrSecretException,
+    RequestFailedException,
+)
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -36,10 +41,16 @@ def device_manager() -> MagicMock:
 
 
 def _make_coordinator(
-    hass: HomeAssistant, device_manager: MagicMock
+    hass: HomeAssistant,
+    device_manager: MagicMock,
+    *,
+    setting_up: bool = False,
 ) -> ImouDataUpdateCoordinator:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
+    if setting_up:
+        # async_config_entry_first_refresh refuses to run outside setup.
+        entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
     return ImouDataUpdateCoordinator(hass, device_manager, entry)
 
 
@@ -120,8 +131,10 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
     device_manager.async_update_device_status.side_effect = (
         InvalidAppIdOrSecretException("bad secret")
     )
-    with pytest.raises(Exception, match="bad secret"):
-        await coordinator._async_update_data()
+    # Going through the public refresh is the point: reporting the refusal as
+    # ConfigEntryAuthFailed is what makes HA open the flow and stop polling,
+    # and calling the private method would prove neither.
+    await coordinator.async_refresh()
     await hass.async_block_till_done()
 
     flows = hass.config_entries.flow.async_progress()
@@ -129,3 +142,69 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
     assert flows[0]["context"]["source"] == "reauth"
     assert flows[0]["step_id"] == "reauth_confirm"
     assert flows[0]["context"]["entry_id"] == coordinator.config_entry.entry_id
+    assert not coordinator.last_update_success
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_bad_credentials_stop_the_polling_instead_of_retrying(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Retrying a known-bad secret every minute only burns the account's quota."""
+    coordinator = _make_coordinator(hass, device_manager, setting_up=True)
+    await coordinator.async_config_entry_first_refresh()
+    unsubscribe = coordinator.async_add_listener(lambda: None)
+
+    device_manager.async_update_device_status.side_effect = (
+        InvalidAppIdOrSecretException("bad secret")
+    )
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator._unsub_refresh is None
+    unsubscribe()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_a_failed_listing_leaves_known_devices_alone(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A blip on the slow discovery clock must not blank every entity."""
+    coordinator = _make_coordinator(hass, device_manager, setting_up=True)
+    with patch(
+        "custom_components.imou_life.coordinator.monotonic", return_value=1000.0
+    ):
+        await coordinator.async_config_entry_first_refresh()
+    known = dict(coordinator.devices_by_key)
+
+    device_manager.async_get_devices.side_effect = RequestFailedException("cloud down")
+    with patch(
+        "custom_components.imou_life.coordinator.monotonic",
+        return_value=1000.0 + DISCOVERY_INTERVAL,
+    ):
+        await coordinator.async_refresh()
+
+    assert coordinator.last_update_success
+    assert coordinator.devices_by_key == known
+    assert device_manager.async_update_device_status.await_count == 2
+
+    # The clock stayed put, so the next poll retries rather than waiting out
+    # the rest of the interval.
+    device_manager.async_get_devices.side_effect = None
+    with patch(
+        "custom_components.imou_life.coordinator.monotonic",
+        return_value=1000.0 + DISCOVERY_INTERVAL + 1,
+    ):
+        await coordinator.async_refresh()
+    assert device_manager.async_get_devices.await_count == 3
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_a_first_listing_failure_still_defers_setup(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """With nothing known yet there is nothing to keep, so setup must retry."""
+    coordinator = _make_coordinator(hass, device_manager, setting_up=True)
+    device_manager.async_get_devices.side_effect = RequestFailedException("cloud down")
+
+    with pytest.raises(ConfigEntryNotReady):
+        await coordinator.async_config_entry_first_refresh()

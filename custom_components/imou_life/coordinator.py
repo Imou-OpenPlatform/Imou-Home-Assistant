@@ -10,6 +10,7 @@ from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -108,12 +109,18 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
-            self.config_entry.async_start_reauth(self.hass)
-            raise UpdateFailed(f"Invalid Imou credentials: {err}") from err
+            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
-            raise UpdateFailed(
-                f"Error fetching Imou devices: {err.message or err}"
-            ) from err
+            if not self._devices_initialized:
+                raise UpdateFailed(
+                    f"Error fetching Imou devices: {err.message or err}"
+                ) from err
+            # Discovery runs on its own slow clock, so a blip here says nothing
+            # about the devices already known. Leaving the clock untouched
+            # retries on the next poll instead of blanking every entity for
+            # the rest of the interval.
+            _LOGGER.warning("Could not list Imou devices: %s", err.message or err)
+            return
 
         self._last_discovery = monotonic()
         filtered_list = self._filter_devices(fresh_devices)
@@ -165,10 +172,12 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             )
             failures.append(result)
         # Credentials can be revoked between two listings, and the status calls
-        # are what notice it first now that listing is on a slow clock. Asking
-        # again is harmless; HA drops the request if a reauth flow is open.
-        if any(isinstance(err, InvalidAppIdOrSecretException) for err in failures):
-            self.config_entry.async_start_reauth(self.hass)
+        # are what notice it first now that listing is on a slow clock.
+        for failure in failures:
+            if isinstance(failure, InvalidAppIdOrSecretException):
+                raise ConfigEntryAuthFailed(
+                    f"Invalid Imou credentials: {failure}"
+                ) from failure
         if failures and len(failures) == len(devices_to_update):
             raise UpdateFailed(
                 f"Error updating Imou devices: {failures[0]}"
