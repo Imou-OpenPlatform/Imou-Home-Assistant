@@ -422,8 +422,6 @@ class ImouOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         """Initialize options flow."""
         self._devices_map: dict[str, str] = {}
-        self._general_options: dict[str, Any] = {}
-        self._event_push_options: dict[str, Any] = {}
         self._pending_selected: list[str] | None = None
         self._devices_error: str = ""
 
@@ -681,7 +679,16 @@ class ImouOptionsFlow(OptionsFlow):
         """Choose poll selection or bind when the account already has devices."""
         return self.async_show_menu(
             step_id="devices_menu",
-            menu_options=["select_poll_devices", "bind_device"],
+            menu_options=["select_poll_devices", "bind_device", "save_and_finish"],
+        )
+
+    async def async_step_save_and_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Persist pending device selection and leave other options untouched."""
+        selected = self._options_current_selected()
+        return self.async_create_entry(
+            data=self._merge_options(**{PARAM_SELECTED_DEVICES: selected})
         )
 
     async def async_step_select_poll_devices(
@@ -689,13 +696,8 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Select which account devices to poll."""
         if user_input is not None:
-            selected = user_input.get(PARAM_SELECTED_DEVICES, [])
-            merged = {
-                **self._general_options,
-                **self._event_push_options,
-                PARAM_SELECTED_DEVICES: selected,
-            }
-            return self.async_create_entry(data=merged)
+            self._pending_selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
+            return await self.async_step_devices_menu()
 
         if not self._devices_map:
             return await self.async_step_devices()
@@ -735,12 +737,7 @@ class ImouOptionsFlow(OptionsFlow):
         filtering, so writing an empty list here would silently stop polling
         every device.
         """
-        merged = {**self._general_options, **self._event_push_options}
-        if PARAM_SELECTED_DEVICES in self.config_entry.options:
-            merged[PARAM_SELECTED_DEVICES] = list(
-                self.config_entry.options[PARAM_SELECTED_DEVICES]
-            )
-        return self.async_create_entry(data=merged)
+        return self.async_create_entry(data=self._merge_options())
 
     async def async_step_no_devices_menu(
         self, user_input: dict[str, Any] | None = None
@@ -773,8 +770,9 @@ class ImouOptionsFlow(OptionsFlow):
                     if key != PARAM_SELECTED_DEVICES
                 },
             )
-        merged = {**self._general_options, **self._event_push_options}
-        return self.async_create_entry(data=merged)
+        options = self._merge_options()
+        options.pop(PARAM_SELECTED_DEVICES, None)
+        return self.async_create_entry(data=options)
 
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None

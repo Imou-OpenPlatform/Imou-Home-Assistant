@@ -200,31 +200,42 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
-async def test_options_devices_menu_select_poll_saves(hass) -> None:
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+async def test_options_select_poll_returns_to_menu_then_save_and_finish(hass) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_UPDATE_INTERVAL: 60},
+    )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
+        result["flow_id"], {"next_step_id": "devices"}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
+    assert set(result["menu_options"]) >= {
+        "select_poll_devices",
+        "bind_device",
+        "save_and_finish",
+    }
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "select_poll_devices"}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
+        {PARAM_SELECTED_DEVICES: ["device_1"]},
     )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
+
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"next_step_id": "select_poll_devices"},
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "select_poll_devices"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={PARAM_SELECTED_DEVICES: ["device_1"]},
+        result["flow_id"], {"next_step_id": "save_and_finish"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 60
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -402,12 +413,7 @@ async def test_options_bind_from_devices_menu(hass) -> None:
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
+        result["flow_id"], {"next_step_id": "devices"}
     )
     assert result["step_id"] == "devices_menu"
     result = await hass.config_entries.options.async_configure(
@@ -438,12 +444,10 @@ async def test_options_bind_from_devices_menu(hass) -> None:
     assert result["step_id"] == "devices_menu"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"next_step_id": "select_poll_devices"},
+        user_input={"next_step_id": "save_and_finish"},
     )
-    assert result["step_id"] == "select_poll_devices"
-    schema = result["data_schema"].schema
-    selected_key = next(iter(schema))
-    assert selected_key.default() == ["device_1", "SN001"]
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -453,13 +457,9 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {PARAM_UPDATE_INTERVAL: 120},
+        result["flow_id"], {"next_step_id": "devices"}
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _MIN_EVENT_PUSH_INPUT,
-    )
+    assert result["step_id"] == "no_devices_menu"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={"next_step_id": "bind_device"},
@@ -483,12 +483,10 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
     assert result["step_id"] == "devices_menu"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={"next_step_id": "select_poll_devices"},
+        user_input={"next_step_id": "save_and_finish"},
     )
-    assert result["step_id"] == "select_poll_devices"
-    schema = result["data_schema"].schema
-    selected_key = next(iter(schema))
-    assert "SN001" in selected_key.default()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["SN001"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
