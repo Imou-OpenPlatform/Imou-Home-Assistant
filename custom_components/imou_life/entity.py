@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import override
+from collections.abc import Callable, Iterable
+from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
 from .const import DOMAIN, PARAM_STATUS, imou_life_device_key
-from .coordinator import ImouDataUpdateCoordinator
+from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 
 
 class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
@@ -62,3 +65,40 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         return (
             self.device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
         )
+
+
+@callback
+def async_add_imou_entities(
+    entry: ImouConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+    entity_class: type[ImouEntity],
+    iter_pairs: Callable[
+        [ImouDataUpdateCoordinator], Iterable[tuple[Any, ImouHaDevice]]
+    ],
+) -> None:
+    """Add entities for the known devices and for any discovered later.
+
+    ``iter_pairs`` yields (entity type or description, device) for everything the
+    platform supports; entities are then built only for the devices the
+    coordinator has just reported, so a later discovery does not re-add the ones
+    already present.
+    """
+    coordinator = entry.runtime_data.coordinator
+
+    def _async_add(new_devices: list[ImouHaDevice]) -> None:
+        device_keys = {imou_life_device_key(device) for device in new_devices}
+        async_add_entities(
+            entity_class(coordinator, entry, entity_key, device)
+            for entity_key, device in iter_pairs(coordinator)
+            if imou_life_device_key(device) in device_keys
+        )
+
+    coordinator.new_device_callbacks.append(_async_add)
+
+    @callback
+    def _remove_new_device_callback() -> None:
+        if _async_add in coordinator.new_device_callbacks:
+            coordinator.new_device_callbacks.remove(_async_add)
+
+    entry.async_on_unload(_remove_new_device_callback)
+    _async_add(coordinator.devices)

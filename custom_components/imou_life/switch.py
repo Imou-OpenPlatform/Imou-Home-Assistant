@@ -9,7 +9,7 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_STATE
@@ -25,10 +25,9 @@ from .const import (
     PARAM_MOTION_DETECT,
     PARAM_PLUG_SWITCH,
     PARAM_WHITE_LIGHT,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
@@ -86,25 +85,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou switch entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_switches(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouSwitch(coordinator, entry, description, device)
-            for description, device in _iter_switches(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_switches)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_switches in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_switches)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_switches(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouSwitch, _iter_switches)
 
 
 class ImouSwitch(ImouEntity, SwitchEntity):

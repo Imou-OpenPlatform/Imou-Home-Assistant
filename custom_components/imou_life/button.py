@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,10 +19,9 @@ from .const import (
     PARAM_RESTART_DEVICE,
     PARAM_ROTATION_DURATION,
     SERVICE_CONTROL_MOVE_PTZ,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 _LOGGER = logging.getLogger(__package__)
 
@@ -44,25 +43,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou button entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_buttons(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouButton(coordinator, entry, button_type, device)
-            for button_type, device in _iter_buttons(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_buttons)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_buttons in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_buttons)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_buttons(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouButton, _iter_buttons)
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(

@@ -4,14 +4,13 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import imou_life_device_key
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
@@ -31,25 +30,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou binary_sensor entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_binary_sensors(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouBinarySensor(coordinator, entry, binary_sensor_type, device)
-            for binary_sensor_type, device in _iter_binary_sensors(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_binary_sensors)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_binary_sensors in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_binary_sensors)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_binary_sensors(coordinator.devices)
+    async_add_imou_entities(
+        entry, async_add_entities, ImouBinarySensor, _iter_binary_sensors
+    )
 
 
 class ImouBinarySensor(ImouEntity, BinarySensorEntity):

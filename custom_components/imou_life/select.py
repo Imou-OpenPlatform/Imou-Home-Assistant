@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import override
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
@@ -17,10 +17,9 @@ from .const import (
     PARAM_DEVICE_VOLUME,
     PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
@@ -60,25 +59,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Imou select entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_selects(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouSelect(coordinator, entry, description, device)
-            for description, device in _iter_selects(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_selects)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_selects in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_selects)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_selects(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouSelect, _iter_selects)
 
 
 class ImouSelect(ImouEntity, SelectEntity):
