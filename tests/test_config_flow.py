@@ -145,6 +145,41 @@ async def test_bind_device_success_goes_to_select_devices(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_bind_that_did_not_take_stays_on_the_form(
+    hass: HomeAssistant,
+) -> None:
+    """Other devices in the account must not stand in for the one being bound."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=LOGIN_INPUT
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": "bind_device"}
+    )
+
+    with (
+        patch(
+            "custom_components.imou_life.config_flow.ImouDeviceManager",
+        ) as mock_mgr_cls,
+        patch(
+            "custom_components.imou_life.config_flow.async_build_device_map",
+            AsyncMock(return_value={"SN999": "Someone else's camera [Online]"}),
+        ),
+    ):
+        mock_mgr_cls.return_value.async_bind_device = AsyncMock()
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"device_id": "SN001", "code": "123456"},
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "bind_device"
+    assert result["errors"] == {"base": "bind_device_not_listed"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_bind_device_success_empty_map_stays_on_form(
     hass: HomeAssistant,
 ) -> None:

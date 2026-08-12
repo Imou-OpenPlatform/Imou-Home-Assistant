@@ -311,7 +311,10 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         finally:
             await api_client.async_close()
 
-        if not self._devices_map:
+        # The bind is only done once the device actually shows up in the
+        # account. An account that already holds other devices would otherwise
+        # report a bind that did not take as successful.
+        if user_input["device_id"] not in self._devices_map:
             return self.async_show_form(
                 step_id="bind_device",
                 data_schema=_BIND_DEVICE_SCHEMA,
