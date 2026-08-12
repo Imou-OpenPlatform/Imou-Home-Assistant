@@ -8,7 +8,6 @@ import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyimouapi.const import PARAM_DURATION
@@ -69,7 +68,6 @@ async def async_setup_entry(
     platform.async_register_entity_service(
         SERVICE_CONTROL_MOVE_PTZ,
         {
-            vol.Required("entity_id"): cv.entity_id,
             vol.Required(PARAM_DURATION, default=500): vol.All(
                 vol.Coerce(int), vol.Range(min=100, max=10000)
             ),
