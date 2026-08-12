@@ -3,6 +3,7 @@
     "abort": {
       "already_configured": "账号已配置",
       "cannot_connect": "无法连接 Imou：{error}",
+      "reauth_successful": "重新认证成功",
       "request_failed": "从 Imou 加载设备列表失败：{error}"
     },
     "error": {
@@ -164,6 +165,14 @@
         "menu_options": {
           "bind_device": "绑定设备",
           "finish_without_bind": "不绑定并保存"
+        }
+      },
+      "devices_unavailable": {
+        "title": "无法连接萤石云端",
+        "description": "获取设备列表失败：{error}\n\n你可以重试，或者保存其他修改并保持设备选择不变。",
+        "menu_options": {
+          "devices": "重试",
+          "save_without_devices": "保存，不修改设备选择"
         }
       },
       "bind_device": {

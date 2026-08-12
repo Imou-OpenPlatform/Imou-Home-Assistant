@@ -265,10 +265,15 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_finish_without_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Create entry with no devices selected."""
+        """Create the entry for an account that holds no devices yet.
+
+        The selection is left unset rather than stored as an empty list, which
+        would read as "poll nothing" and quietly ignore the first device the
+        user binds from the Imou app.
+        """
         return self.async_create_entry(
             title=_entry_title(self._login_data[PARAM_APP_ID]),
-            data={**self._login_data, PARAM_SELECTED_DEVICES: []},
+            data=dict(self._login_data),
         )
 
     async def async_step_bind_device(
@@ -417,6 +422,7 @@ class ImouOptionsFlow(OptionsFlow):
         self._general_options: dict[str, Any] = {}
         self._event_push_options: dict[str, Any] = {}
         self._pending_selected: list[str] | None = None
+        self._devices_error: str = ""
 
     @staticmethod
     def _suggested_option_subset(
@@ -636,15 +642,12 @@ class ImouOptionsFlow(OptionsFlow):
             error_detail = _api_error_placeholder(exception)
 
         if errors:
-            return self.async_show_form(
-                step_id="devices",
-                data_schema=vol.Schema({}),
-                errors=errors,
-                description_placeholders={
-                    "device_count": "0",
-                    "error": error_detail,
-                },
-            )
+            # Reaching the device step is the last thing the options flow does,
+            # so failing here would otherwise throw away everything the user
+            # just changed, and the cloud being down is exactly when they want
+            # to turn polling down or event push off.
+            self._devices_error = error_detail
+            return await self.async_step_devices_unavailable()
 
         self._pending_selected = self._options_current_selected()
         if not self._devices_map:
@@ -693,6 +696,32 @@ class ImouOptionsFlow(OptionsFlow):
             },
         )
 
+    async def async_step_devices_unavailable(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer retry or saving the rest when the account cannot be listed."""
+        return self.async_show_menu(
+            step_id="devices_unavailable",
+            menu_options=["devices", "save_without_devices"],
+            description_placeholders={"error": self._devices_error},
+        )
+
+    async def async_step_save_without_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Save the other options and leave the device selection untouched.
+
+        The selection is deliberately not written back: an absent key means no
+        filtering, so writing an empty list here would silently stop polling
+        every device.
+        """
+        merged = {**self._general_options, **self._event_push_options}
+        if PARAM_SELECTED_DEVICES in self.config_entry.options:
+            merged[PARAM_SELECTED_DEVICES] = list(
+                self.config_entry.options[PARAM_SELECTED_DEVICES]
+            )
+        return self.async_create_entry(data=merged)
+
     async def async_step_no_devices_menu(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -707,11 +736,13 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Save options without binding a device."""
         pending = self._pending_selected if self._pending_selected is not None else []
-        merged = {
-            **self._general_options,
-            **self._event_push_options,
-            PARAM_SELECTED_DEVICES: pending,
-        }
+        merged = {**self._general_options, **self._event_push_options}
+        # An empty list means "poll nothing", which is not what an account with
+        # nothing in it yet should be locked into: a device bound later from
+        # the Imou app would be filtered out with no hint as to why. Leaving
+        # the key out keeps it meaning "no filter".
+        if pending or PARAM_SELECTED_DEVICES in self.config_entry.options:
+            merged[PARAM_SELECTED_DEVICES] = pending
         return self.async_create_entry(data=merged)
 
     async def async_step_bind_device(

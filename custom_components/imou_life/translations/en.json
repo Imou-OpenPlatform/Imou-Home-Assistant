@@ -3,6 +3,7 @@
     "abort": {
       "already_configured": "Account is already configured",
       "cannot_connect": "Failed to connect to Imou: {error}",
+      "reauth_successful": "Re-authentication was successful",
       "request_failed": "Failed to load device list from Imou: {error}"
     },
     "error": {
@@ -164,6 +165,14 @@
         "menu_options": {
           "bind_device": "Bind a device",
           "finish_without_bind": "Save without binding"
+        }
+      },
+      "devices_unavailable": {
+        "title": "Could not reach the Imou cloud",
+        "description": "The device list could not be fetched: {error}\n\nYou can try again, or save your other changes and leave the device selection as it is.",
+        "menu_options": {
+          "devices": "Try again",
+          "save_without_devices": "Save without changing device selection"
         }
       },
       "bind_device": {

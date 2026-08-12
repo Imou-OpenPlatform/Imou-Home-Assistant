@@ -185,7 +185,98 @@ async def test_options_finish_without_bind_saves_options(hass) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is False
-    assert result["data"][PARAM_SELECTED_DEVICES] == []
+    # The account holds nothing yet, so no filter is recorded; storing an empty
+    # list would keep a device bound later from ever being polled.
+    assert PARAM_SELECTED_DEVICES not in result["data"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_saving_with_no_devices_keeps_an_existing_selection(hass) -> None:
+    """A selection already made must survive a save from the no-devices menu."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_SELECTED_DEVICES: ["device_1"]},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _MIN_EVENT_PUSH_INPUT
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
+    )
+
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_unreachable_cloud_still_lets_the_other_options_be_saved(hass) -> None:
+    """Listing the account is the last step, and it must not hold the rest hostage.
+
+    A dead cloud is exactly when someone wants to slow polling down or turn
+    event push off, so failing here has to leave a way to save.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_SELECTED_DEVICES: ["device_1"]},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
+    )
+    with patch(
+        "custom_components.imou_life.config_flow.async_build_device_map",
+        AsyncMock(side_effect=RequestFailedException("cloud down")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], _MIN_EVENT_PUSH_INPUT
+        )
+        assert result["type"] is FlowResultType.MENU
+        assert result["step_id"] == "devices_unavailable"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"next_step_id": "save_without_devices"}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 120
+    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is False
+    # Nothing was learned about the account, so the selection is left as it was.
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_retrying_after_an_unreachable_cloud_reaches_the_devices(hass) -> None:
+    """The retry option has to actually go back and list the account."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {PARAM_UPDATE_INTERVAL: 120}
+    )
+    with patch(
+        "custom_components.imou_life.config_flow.async_build_device_map",
+        AsyncMock(side_effect=RequestFailedException("cloud down")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], _MIN_EVENT_PUSH_INPUT
+        )
+    assert result["step_id"] == "devices_unavailable"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"next_step_id": "devices"}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
