@@ -7,6 +7,12 @@ from pyimouapi.ha_device import ImouHaDevice
 DOMAIN = "imou_life"
 UPDATE_TIMEOUT = 300
 
+# Listing the account costs a paged request plus one detail round trip per iot
+# device, and every object it builds is dropped for devices we already know. It
+# only exists to notice devices being added or removed, so it runs on its own
+# slow clock instead of on every status poll.
+DISCOVERY_INTERVAL = 600
+
 
 def imou_life_device_key(device: ImouHaDevice) -> str:
     """Stable device registry / unique_id prefix (legacy semantics)."""

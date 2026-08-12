@@ -6,6 +6,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import timedelta
+from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -16,6 +17,7 @@ from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
+    DISCOVERY_INTERVAL,
     DOMAIN,
     PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
@@ -54,6 +56,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self._device_manager = device_manager
         self.devices_by_key: dict[str, ImouHaDevice] = {}
         self._devices_initialized = False
+        self._last_discovery: float | None = None
         self.new_device_callbacks: list[Callable[[list[ImouHaDevice]], None]] = []
 
     @property
@@ -86,9 +89,15 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return filtered
         return []
 
-    async def _async_update_data(self) -> None:
-        """Fetch latest device status from Imou cloud."""
-        _LOGGER.debug("Polling Imou device status")
+    def _discovery_is_due(self) -> bool:
+        """Whether it is time to look for devices added to or gone from the account."""
+        if self._last_discovery is None:
+            return True
+        return monotonic() - self._last_discovery >= DISCOVERY_INTERVAL
+
+    async def _async_discover_devices(self) -> None:
+        """Refresh which devices the account holds."""
+        _LOGGER.debug("Listing Imou devices")
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fresh_devices = await self._device_manager.async_get_devices()
@@ -102,9 +111,16 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 f"Error fetching Imou devices: {err.message or err}"
             ) from err
 
+        self._last_discovery = monotonic()
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
         self._async_add_remove_devices(fresh_by_key)
+
+    async def _async_update_data(self) -> None:
+        """Fetch latest device status from Imou cloud."""
+        _LOGGER.debug("Polling Imou device status")
+        if self._discovery_is_due():
+            await self._async_discover_devices()
 
         devices_to_update = [
             device
@@ -144,6 +160,11 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 result,
             )
             failures.append(result)
+        # Credentials can be revoked between two listings, and the status calls
+        # are what notice it first now that listing is on a slow clock. Asking
+        # again is harmless; HA drops the request if a reauth flow is open.
+        if any(isinstance(err, InvalidAppIdOrSecretException) for err in failures):
+            self.config_entry.async_start_reauth(self.hass)
         if failures and len(failures) == len(devices_to_update):
             raise UpdateFailed(
                 f"Error updating Imou devices: {failures[0]}"
