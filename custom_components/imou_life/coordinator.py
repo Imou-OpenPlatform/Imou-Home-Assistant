@@ -78,7 +78,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if selected_ids:
             selected_set = set(selected_ids)
             filtered = [d for d in devices_list if d.device_id in selected_set]
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Device filter active: %d/%d devices selected for polling",
                 len(filtered),
                 len(devices_list),
