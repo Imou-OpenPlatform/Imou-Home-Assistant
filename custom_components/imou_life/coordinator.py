@@ -33,6 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     """Coordinates polling Imou device status from the cloud."""
 
+    # The base class allows a coordinator without an entry; this one is always
+    # built for one, and everything below reads it.
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -207,8 +211,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""
-        if self.config_entry is None:
-            return False
         entry_id = self.config_entry.entry_id
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)

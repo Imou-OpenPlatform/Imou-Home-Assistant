@@ -427,7 +427,7 @@ class ImouOptionsFlow(OptionsFlow):
 
     def _event_push_webhook_placeholders(self) -> dict[str, str]:
         """Return webhook reference values for the step description."""
-        language = self.context.get("language") or self.hass.config.language
+        language = self.hass.config.language
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
         suggested_webhook_url = ""
         if webhook_id:

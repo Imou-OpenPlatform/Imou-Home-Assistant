@@ -218,7 +218,7 @@ async def _async_build_notification_message(
         or event_data.get("device_id")
         or unknown_device
     )
-    alarm_type = alarm_types.get(msg_type, msg_type or unknown_alarm)
+    alarm_type = alarm_types.get(msg_type, msg_type) if msg_type else unknown_alarm
 
     raw_time = event_data.get("time")
     if isinstance(raw_time, (int, float)) and raw_time > 1000000000:
