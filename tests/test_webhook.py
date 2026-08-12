@@ -73,7 +73,7 @@ async def test_webhook_respects_matching_config_entry_only(
         "wh-a",
         MockRequest({"msgType": "alarmLocal", "deviceId": "dev-b"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert response.status == 200
     assert events == []
 
@@ -82,7 +82,7 @@ async def test_webhook_respects_matching_config_entry_only(
         "wh-a",
         MockRequest({"msgType": "alarmLocal", "deviceId": "dev-a"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert response.status == 200
     assert len(events) == 1
 
@@ -99,7 +99,7 @@ async def test_webhook_unknown_webhook_id_returns_ok(hass: HomeAssistant) -> Non
         "unknown-id",
         MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert events == []
@@ -114,7 +114,7 @@ async def test_webhook_ignores_invalid_json(hass: HomeAssistant) -> None:
     response = await async_handle_imou_webhook(
         hass, "webhook-id", MockRequest(None, raises=ValueError("bad json"))
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert events == []
@@ -136,7 +136,7 @@ async def test_webhook_filters_unselected_device(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest({"msgType": "alarmLocal", "deviceId": "other_device"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert events == []
@@ -154,7 +154,7 @@ async def test_webhook_empty_selection_rejects_all(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert events == []
@@ -178,7 +178,7 @@ async def test_webhook_iot_property_is_not_alarm(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest({"msgType": "iotProperty", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -240,7 +240,7 @@ async def test_webhook_event_includes_ha_device_name(hass: HomeAssistant) -> Non
             }
         ),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(events) == 1
@@ -281,7 +281,7 @@ async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> No
     assert events == []
 
     gate.set()
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert len(events) == 1
     assert events[0].data["msg_type"] == "human"
@@ -382,7 +382,7 @@ async def test_webhook_iot_event_fires_alarm(hass: HomeAssistant) -> None:
             }
         ),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -406,7 +406,7 @@ async def test_webhook_electricity_is_not_alarm(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest({"msgType": "electricity", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -438,7 +438,7 @@ async def test_webhook_resolves_numeric_msg_type(hass: HomeAssistant) -> None:
             }
         ),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -476,7 +476,7 @@ async def test_webhook_resolves_iot_event_content_event(hass: HomeAssistant) -> 
             }
         ),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(alarm_events) == 1
@@ -501,7 +501,7 @@ async def test_webhook_skips_resolve_for_string_msg_type(hass: HomeAssistant) ->
         "webhook-id",
         MockRequest({"msgType": "videoMotion", "pid": "pid1", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert generic_events[0].data["msg_type"] == "videoMotion"
     runtime.coordinator.device_manager.delegate.async_resolve_event_identifier.assert_not_awaited()
@@ -524,7 +524,7 @@ async def test_webhook_resolve_failure_keeps_original_msg_type(
         "webhook-id",
         MockRequest({"msgType": "123900", "pid": "pid1", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert generic_events[0].data["msg_type"] == "123900"
 
@@ -559,7 +559,7 @@ async def test_webhook_privacy_mask_is_not_alarm(
             }
         ),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -584,7 +584,7 @@ async def test_webhook_security_alarms_fire_alarm_event(
         "webhook-id",
         MockRequest({"msgType": msg_type, "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -608,7 +608,7 @@ async def test_webhook_missing_msg_type_is_not_alarm(
         "webhook-id",
         MockRequest({"deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert len(generic_events) == 1
@@ -635,7 +635,7 @@ async def test_webhook_records_msg_type_counts(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest({"msgType": "abAlarmSound", "deviceId": "device_1"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert runtime.push_msg_type_counts["closeCamera"] == 2
     assert runtime.push_msg_type_counts["abAlarmSound"] == 1
@@ -659,7 +659,7 @@ async def test_webhook_filtered_device_does_not_count(
         "webhook-id",
         MockRequest({"msgType": "alarmLocal", "deviceId": "other_device"}),
     )
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     assert runtime.push_msg_type_counts == {}
     assert runtime.push_last_msg_type is None

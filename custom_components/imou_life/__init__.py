@@ -25,7 +25,7 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import get_selected_device_ids
-from .runtime_data import ImouRuntimeData
+from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -52,10 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         entry.data[PARAM_APP_SECRET],
         entry.data[PARAM_API_URL],
     )
+    # Registered before anything can fail so a retried setup never leaks a session.
+    entry.async_on_unload(imou_client.async_close)
     device_manager = ImouDeviceManager(imou_client)
     imou_device_manager = ImouHaDeviceManager(device_manager)
     coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
-    runtime = ImouRuntimeData(coordinator=coordinator)
+    runtime = ImouRuntimeData(coordinator=coordinator, client=imou_client)
     entry.runtime_data = runtime
 
     try:
@@ -74,11 +76,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-
-    async def _async_close_client() -> None:
-        await imou_client.async_close()
-
-    entry.async_on_unload(_async_close_client)
     return True
 
 
@@ -89,20 +86,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
         return False
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
-    if entry.options.get(PARAM_ENABLE_EVENT_PUSH) and webhook_id:
-        teardown_client = ImouOpenApiClient(
+    if not webhook_id:
+        return True
+
+    if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
+        await async_teardown_event_push(hass, entry)
+        return True
+
+    # Reuse the setup client so its accessToken is still valid; a fresh client
+    # would have to fetch a token before it could disable the callback.
+    runtime = get_runtime_data(entry)
+    client = runtime.client if runtime is not None else None
+    spare_client = None
+    if client is None:
+        spare_client = client = ImouOpenApiClient(
             entry.data[PARAM_APP_ID],
             entry.data[PARAM_APP_SECRET],
             entry.data[PARAM_API_URL],
         )
-        try:
-            await async_teardown_event_push(hass, entry, teardown_client)
-        except Exception:
-            _LOGGER.exception("Failed to disable Imou message callback during unload")
-        finally:
-            await teardown_client.async_close()
-    elif webhook_id:
-        await async_teardown_event_push(hass, entry)
+    try:
+        await async_teardown_event_push(hass, entry, client)
+    except Exception:
+        _LOGGER.exception("Failed to disable Imou message callback during unload")
+    finally:
+        if spare_client is not None:
+            await spare_client.async_close()
 
     return True
 
@@ -136,7 +144,7 @@ async def async_remove_config_entry_device(
 
     selected = get_selected_device_ids(config_entry)
     if selected is None:
-        runtime = getattr(config_entry, "runtime_data", None)
+        runtime = get_runtime_data(config_entry)
         if runtime is None:
             _LOGGER.warning(
                 "Cannot remove device %s: no runtime to materialize selected_devices",
@@ -158,7 +166,7 @@ async def async_remove_config_entry_device(
         config_entry,
         options={**config_entry.options, PARAM_SELECTED_DEVICES: selected},
     )
-    runtime = getattr(config_entry, "runtime_data", None)
+    runtime = get_runtime_data(config_entry)
     if runtime is not None:
         runtime.selected_devices = selected
 

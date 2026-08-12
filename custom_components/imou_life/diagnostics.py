@@ -18,6 +18,11 @@ from .const import (
     PARAM_WEBHOOK_URL,
 )
 from .helpers import get_selected_device_ids
+from .runtime_data import get_runtime_data
+
+# Resolved at import time: reading package metadata touches the filesystem and
+# must not run inside the event loop.
+_PYIMOUAPI_VERSION = version("pyimouapi")
 
 
 async def async_get_config_entry_diagnostics(
@@ -30,7 +35,7 @@ async def async_get_config_entry_diagnostics(
     selected = get_selected_device_ids(entry)
     selected_count = None if selected is None else len(selected)
 
-    runtime = entry.runtime_data
+    runtime = get_runtime_data(entry)
     coordinator = runtime.coordinator if runtime is not None else None
     last_update_success = (
         coordinator.last_update_success if coordinator is not None else None
@@ -63,6 +68,6 @@ async def async_get_config_entry_diagnostics(
         "webhook_id": f"{webhook_id[:8]}…" if len(webhook_id) > 8 else webhook_id,
         "webhook_url_configured": bool(webhook_url),
         "last_update_success": last_update_success,
-        "pyimouapi_version": version("pyimouapi"),
+        "pyimouapi_version": _PYIMOUAPI_VERSION,
         "event_push": event_push,
     }

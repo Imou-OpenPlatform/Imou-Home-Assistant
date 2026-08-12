@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Literal
 
 from homeassistant.config_entries import ConfigEntry
@@ -55,6 +56,7 @@ async def async_setup_event_push(
         return webhook_id, ""
 
     generated_url = async_register_imou_webhook(hass, webhook_id)
+    entry.async_on_unload(partial(async_unregister_imou_webhook, hass, webhook_id))
     await async_preload_webhook_strings(hass)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):

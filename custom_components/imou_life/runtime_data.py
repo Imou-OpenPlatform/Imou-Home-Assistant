@@ -6,7 +6,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
+
 if TYPE_CHECKING:
+    from pyimouapi.openapi import ImouOpenApiClient
+
     from .coordinator import ImouDataUpdateCoordinator
 
 _MAX_PUSH_MSG_TYPE_KEYS = 50
@@ -17,6 +21,7 @@ class ImouRuntimeData:
     """Data attached to a config entry at runtime."""
 
     coordinator: ImouDataUpdateCoordinator
+    client: ImouOpenApiClient | None = None
     push_enabled: bool = False
     # None = all devices; [] = none; non-empty = allow-list
     selected_devices: list[str] | None = None
@@ -39,3 +44,12 @@ class ImouRuntimeData:
         )
         self.push_last_msg_type = display
         self.push_last_received_at = datetime.now(UTC)
+
+
+def get_runtime_data(entry: ConfigEntry) -> ImouRuntimeData | None:
+    """Return runtime data, or None when the entry is not set up.
+
+    Home Assistant deletes ``runtime_data`` on unload, so for entries that are
+    not currently loaded the attribute is absent rather than None.
+    """
+    return getattr(entry, "runtime_data", None)

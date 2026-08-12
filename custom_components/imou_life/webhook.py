@@ -11,11 +11,12 @@ from typing import Any
 
 from aiohttp import web
 from homeassistant.components import webhook
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT, PARAM_WEBHOOK_ID
 from .helpers import resolve_ha_device_name
-from .runtime_data import ImouRuntimeData
+from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -286,17 +287,16 @@ async def _async_send_notifications(
             )
 
 
-def _get_runtime_data_for_webhook(
+def _get_entry_and_runtime(
     hass: HomeAssistant, webhook_id: str
-) -> ImouRuntimeData | None:
-    """Return runtime data for the config entry that owns webhook_id."""
+) -> tuple[ConfigEntry, ImouRuntimeData] | None:
+    """Return the loaded config entry and runtime data owning webhook_id."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.data.get(PARAM_WEBHOOK_ID) != webhook_id:
             continue
-        runtime = entry.runtime_data
-        if runtime is not None:
-            return runtime
-    _LOGGER.debug("No Imou config entry for webhook_id %s", webhook_id)
+        if (runtime := get_runtime_data(entry)) is not None:
+            return entry, runtime
+    _LOGGER.debug("No loaded Imou config entry for webhook_id %s", webhook_id)
     return None
 
 
@@ -342,8 +342,11 @@ async def async_handle_imou_webhook(
     _LOGGER.debug("Received Imou push event: %s", event_data)
 
     # Check: is push enabled? If user disabled it, silently ignore.
-    runtime = _get_runtime_data_for_webhook(hass, webhook_id)
-    if runtime is None or not runtime.push_enabled:
+    entry_and_runtime = _get_entry_and_runtime(hass, webhook_id)
+    if entry_and_runtime is None:
+        return web.Response(status=200, text="ok")
+    entry, runtime = entry_and_runtime
+    if not runtime.push_enabled:
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 
@@ -371,8 +374,10 @@ async def async_handle_imou_webhook(
     # Classify on original top-level msgType before outbound identifier rewrite.
     is_alarm = _is_alarm_msg_type(msg_type)
 
-    # ACK first so Imou does not stop pushing while we resolve/notify.
-    hass.async_create_task(
+    # ACK first so Imou does not stop pushing while we resolve/notify. The task is
+    # tied to the entry so it cannot outlive the runtime data it holds.
+    entry.async_create_background_task(
+        hass,
         _async_dispatch_imou_push(hass, runtime, event_data, is_alarm=is_alarm),
         name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
     )
@@ -381,6 +386,9 @@ async def async_handle_imou_webhook(
 
 def async_register_imou_webhook(hass: HomeAssistant, webhook_id: str) -> str:
     """Register HA webhook and return the external URL."""
+    # A setup attempt that failed after registering leaves the handler behind,
+    # and re-registering the same id raises. Drop any stale handler first.
+    webhook.async_unregister(hass, webhook_id)
     webhook.async_register(
         hass,
         DOMAIN,
