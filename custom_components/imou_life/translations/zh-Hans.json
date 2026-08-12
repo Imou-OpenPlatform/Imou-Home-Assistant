@@ -357,5 +357,28 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "switch_operation_failed": {
+      "message": "Imou 拒绝了此开关操作：{error}"
+    },
+    "select_option_failed": {
+      "message": "Imou 拒绝了此选项：{error}"
+    },
+    "set_text_value_failed": {
+      "message": "Imou 拒绝了此数值：{error}"
+    },
+    "button_press_failed": {
+      "message": "Imou 拒绝了此按钮操作：{error}"
+    },
+    "stream_source_failed": {
+      "message": "无法从 Imou 获取直播地址：{error}"
+    },
+    "camera_image_failed": {
+      "message": "无法从 Imou 获取快照：{error}"
+    },
+    "not_a_ptz_button": {
+      "message": "{entity_id} 不是云台按钮，无法转动。请改为选择云台方向按钮。"
+    }
   }
 }

@@ -11,6 +11,7 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_COUNT_DOWN_SWITCH,
     PARAM_OVERCHARGE_SWITCH,
 )
@@ -55,7 +56,11 @@ class ImouText(ImouEntity, TextEntity):
                 value,
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_text_value_failed",
+                translation_placeholders={"error": e.message},
+            ) from e
         self.async_write_ha_state()
 
     @property

@@ -13,6 +13,7 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
     PARAM_MODE,
@@ -100,5 +101,9 @@ class ImouSelect(ImouEntity, SelectEntity):
                 option,
             )
         except ImouException as err:
-            raise HomeAssistantError(err.message) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="select_option_failed",
+                translation_placeholders={"error": err.message},
+            ) from err
         self.async_write_ha_state()

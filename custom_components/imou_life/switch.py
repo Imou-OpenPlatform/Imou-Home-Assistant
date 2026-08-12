@@ -17,6 +17,7 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_AB_ALARM_SOUND,
     PARAM_AUDIO_ENCODE_CONTROL,
     PARAM_CLOSE_CAMERA,
@@ -129,5 +130,9 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 enable,
             )
         except ImouException as err:
-            raise HomeAssistantError(err.message) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="switch_operation_failed",
+                translation_placeholders={"error": err.message},
+            ) from err
         self.async_write_ha_state()

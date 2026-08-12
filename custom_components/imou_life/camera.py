@@ -12,6 +12,7 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
     PARAM_LIVE_PROTOCOL,
@@ -65,7 +66,11 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_LIVE_PROTOCOL, "https"),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="stream_source_failed",
+                translation_placeholders={"error": e.message},
+            ) from e
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -77,7 +82,11 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="camera_image_failed",
+                translation_placeholders={"error": e.message},
+            ) from e
 
     @property
     def motion_detection_enabled(self) -> bool:
