@@ -298,7 +298,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_show_form(
                     step_id="bind_device",
                     data_schema=_BIND_DEVICE_SCHEMA,
-                    errors={"base": _config_flow_error_key(exception)},
+                    errors={"base": "bind_failed"},
                     description_placeholders={
                         "error": _api_error_placeholder(exception)
                     },
@@ -598,6 +598,8 @@ class ImouOptionsFlow(OptionsFlow):
 
     def _options_current_selected(self) -> list[str]:
         """Return the current selected_devices list for options binding/selection."""
+        if self._pending_selected is not None:
+            return list(self._pending_selected)
         if PARAM_SELECTED_DEVICES in self.config_entry.options:
             return list(self.config_entry.options[PARAM_SELECTED_DEVICES])
         if PARAM_SELECTED_DEVICES in self.config_entry.data:
@@ -739,7 +741,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return self.async_show_form(
                     step_id="bind_device",
                     data_schema=_BIND_DEVICE_SCHEMA,
-                    errors={"base": _config_flow_error_key(exception)},
+                    errors={"base": "bind_failed"},
                     description_placeholders={
                         "error": _api_error_placeholder(exception)
                     },
@@ -747,15 +749,23 @@ class ImouOptionsFlow(OptionsFlow):
         finally:
             await api_client.async_close()
 
-        pending = (
-            self._pending_selected
-            if self._pending_selected is not None
-            else self._options_current_selected()
-        )
-        selected = list(dict.fromkeys([*pending, user_input["device_id"]]))
-        merged = {
-            **self._general_options,
-            **self._event_push_options,
-            PARAM_SELECTED_DEVICES: selected,
-        }
-        return self.async_create_entry(data=merged)
+        if user_input["device_id"] not in self._devices_map:
+            return self.async_show_form(
+                step_id="bind_device",
+                data_schema=_BIND_DEVICE_SCHEMA,
+                errors={"base": "bind_device_not_listed"},
+            )
+
+        pending = [
+            device_id
+            for device_id in (
+                self._pending_selected
+                if self._pending_selected is not None
+                else self._options_current_selected()
+            )
+            if device_id in self._devices_map
+        ]
+        if user_input["device_id"] not in pending:
+            pending.append(user_input["device_id"])
+        self._pending_selected = pending
+        return await self.async_step_devices_menu()

@@ -9,6 +9,7 @@
       "cannot_connect": "连接失败：{error}",
       "invalid_auth": "身份验证无效",
       "request_failed": "请求失败：{error}",
+      "bind_failed": "绑定设备失败：{error}",
       "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。",
       "unknown": "意外错误：{error}"
     },
@@ -74,7 +75,9 @@
   },
   "options": {
     "error": {
-      "request_failed": "加载设备列表失败：{error}"
+      "request_failed": "加载设备列表失败：{error}",
+      "bind_failed": "绑定设备失败：{error}",
+      "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。"
     },
     "step": {
       "init": {

@@ -231,8 +231,16 @@ async def test_options_bind_from_devices_menu(hass) -> None:
             result["flow_id"],
             user_input={"device_id": "SN001", "code": "123456"},
         )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "select_poll_devices"},
+    )
+    assert result["step_id"] == "select_poll_devices"
+    schema = result["data_schema"].schema
+    selected_key = next(iter(schema))
+    assert selected_key.default() == ["device_1", "SN001"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -268,8 +276,16 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
             result["flow_id"],
             user_input={"device_id": "SN001", "code": "123456"},
         )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert "SN001" in result["data"][PARAM_SELECTED_DEVICES]
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "select_poll_devices"},
+    )
+    assert result["step_id"] == "select_poll_devices"
+    schema = result["data_schema"].schema
+    selected_key = next(iter(schema))
+    assert "SN001" in selected_key.default()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -302,4 +318,4 @@ async def test_options_bind_device_failure_stays_on_form(hass) -> None:
         )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "bind_device"
-    assert result["errors"]["base"] == "request_failed"
+    assert result["errors"]["base"] == "bind_failed"

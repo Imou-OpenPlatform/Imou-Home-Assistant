@@ -9,6 +9,7 @@
       "cannot_connect": "Failed to connect: {error}",
       "invalid_auth": "Invalid authentication",
       "request_failed": "Request failed: {error}",
+      "bind_failed": "Failed to bind device: {error}",
       "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
       "unknown": "Unexpected error: {error}"
     },
@@ -74,7 +75,9 @@
   },
   "options": {
     "error": {
-      "request_failed": "Failed to load device list: {error}"
+      "request_failed": "Failed to load device list: {error}",
+      "bind_failed": "Failed to bind device: {error}",
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment."
     },
     "step": {
       "init": {

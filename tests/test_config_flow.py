@@ -203,7 +203,7 @@ async def test_bind_device_failure_stays_on_form(
         )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "bind_device"
-    assert result["errors"]["base"] == "request_failed"
+    assert result["errors"]["base"] == "bind_failed"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
