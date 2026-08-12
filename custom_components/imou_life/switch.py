@@ -11,7 +11,7 @@ from homeassistant.components.switch import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
@@ -83,7 +83,9 @@ def _iter_switches(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou switch entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSwitch, _iter_switches)

@@ -5,7 +5,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
@@ -27,7 +27,9 @@ def _iter_binary_sensors(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou binary_sensor entities."""
     async_add_imou_entities(

@@ -8,7 +8,7 @@ from typing import Any, override
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
@@ -70,7 +70,7 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
 @callback
 def async_add_imou_entities(
     entry: ImouConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
     entity_class: type[ImouEntity],
     iter_pairs: Callable[
         [ImouDataUpdateCoordinator], Iterable[tuple[Any, ImouHaDevice]]

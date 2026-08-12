@@ -7,7 +7,7 @@ from typing import override
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
@@ -57,7 +57,9 @@ def _iter_selects(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou select entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSelect, _iter_selects)
