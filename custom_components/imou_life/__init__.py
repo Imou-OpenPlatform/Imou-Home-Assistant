@@ -7,6 +7,7 @@ import uuid
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDeviceManager
@@ -134,6 +135,28 @@ def _device_id_from_entry(device_entry: DeviceEntry) -> str | None:
     return None
 
 
+def _sibling_channel_names(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    device_entry: DeviceEntry,
+    device_id: str,
+) -> list[str]:
+    """Return the other Home Assistant devices sharing one Imou device id.
+
+    An NVR, and a camera with more than one lens, is reported by the account
+    as one device carrying several channels, and each channel becomes its own
+    device here.
+    """
+    device_registry = dr.async_get(hass)
+    return sorted(
+        entry.name_by_user or entry.name or entry.id
+        for entry in dr.async_entries_for_config_entry(
+            device_registry, config_entry.entry_id
+        )
+        if entry.id != device_entry.id and _device_id_from_entry(entry) == device_id
+    )
+
+
 async def async_remove_config_entry_device(
     hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
 ) -> bool:
@@ -142,6 +165,23 @@ async def async_remove_config_entry_device(
     if not device_id:
         _LOGGER.warning(
             "Cannot remove device %s: missing Imou device id", device_entry.name
+        )
+        return False
+
+    # Exclusion is recorded per account device, which is the granularity the
+    # cloud and the push messages use. One channel of a multi-channel device
+    # cannot be expressed in it, and removing the whole device id here would
+    # take its sibling channels out of Home Assistant along with whatever the
+    # user had named or automated on them.
+    if siblings := _sibling_channel_names(hass, config_entry, device_entry, device_id):
+        _LOGGER.warning(
+            "Cannot remove device %s: it is one channel of Imou device %s, which also "
+            "covers %s. Removing it would remove those as well. To stop polling the "
+            "whole device, deselect it in the integration options; to hide this "
+            "channel, disable its entities",
+            device_entry.name,
+            device_id,
+            ", ".join(siblings),
         )
         return False
 

@@ -32,6 +32,7 @@
 - The options can be saved when the device list cannot be fetched. Listing the account was the last step and had no way past it, so a quota-exceeded or unreachable account discarded every change — including the polling interval and event push settings you would want to change in exactly that situation
 - A device removed from the account no longer breaks the update for the remaining entities. Its select and text entities raised while Home Assistant collected their attributes, which happens before availability is checked
 - Re-authenticating successfully shows a confirmation instead of a blank message
+- Deleting one camera of an NVR, or one lens of a multi-lens camera, no longer removes the others. Those arrive from the account as one device carrying several channels, and each channel becomes its own device here; the exclusion recorded on deletion is per account device, so it took the siblings with it along with any names, areas, and automations attached to them. Deleting a single channel is now refused with an explanation in the log — deselect the device in the options to stop polling it, or disable the channel's entities to hide it
 
 ## [1.3.3]
 ### Added
