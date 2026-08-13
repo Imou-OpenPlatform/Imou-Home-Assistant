@@ -83,7 +83,7 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "请选择要修改的设置。每一项可单独保存。",
+        "description": "请选择要修改的设置。每一项点提交即保存并关闭。",
         "menu_options": {
           "general_settings": "常规设置",
           "event_push": "消息推送",
@@ -151,27 +151,28 @@
       },
       "devices": {
         "title": "管理设备",
-        "description": "无法加载设备列表。{error}"
-      },
-      "devices_menu": {
-        "title": "管理设备",
-        "description": "可调整要轮询的设备或绑定新设备。需点击「保存并完成」后才会生效。",
-        "menu_options": {
-          "select_poll_devices": "选择要轮询的设备",
-          "bind_device": "绑定新设备",
-          "save_and_finish": "保存并完成"
-        }
-      },
-      "select_poll_devices": {
-        "title": "选择要轮询的设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备；取消勾选的设备仍留在 Home Assistant，只是不再轮询，以节省 API 调用次数。",
+        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备；取消勾选的仍留在 Home Assistant，只是不再轮询。点提交即保存并关闭。",
         "data": {
           "selected_devices": "设备列表"
+        },
+        "sections": {
+          "bind_new_device": {
+            "name": "绑定新设备",
+            "description": "可选。将另一台设备绑定到本账号后，会加入轮询列表。",
+            "data": {
+              "device_id": "设备序列号",
+              "code": "绑定码"
+            },
+            "data_description": {
+              "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看。留空则跳过绑定。",
+              "code": "可选。若设备不需要绑定码可留空"
+            }
+          }
         }
       },
       "no_devices_menu": {
         "title": "未找到设备",
-        "description": "该账号下尚无乐橙设备。可立即绑定设备，或在不绑定的情况下保存其他选项更改。",
+        "description": "该账号下尚无乐橙设备。可立即绑定设备，或不绑定并保存。",
         "menu_options": {
           "bind_device": "绑定设备",
           "finish_without_bind": "不绑定并保存"

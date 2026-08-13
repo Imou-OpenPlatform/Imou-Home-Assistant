@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from custom_components.imou_life.config_flow import (
+    SECTION_BIND_DEVICE,
     SECTION_EVENT_PUSH_CALLBACK,
     SECTION_EVENT_PUSH_SUBSCRIPTIONS,
 )
@@ -40,7 +41,7 @@ async def test_options_flow_init_shows_menu(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "init"
-    assert set(result["menu_options"]) >= {
+    assert set(result["menu_options"]) == {
         "general_settings",
         "event_push",
         "devices",
@@ -194,7 +195,7 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
-async def test_options_select_poll_returns_to_menu_then_save_and_finish(hass) -> None:
+async def test_options_select_poll_submits_and_saves(hass) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
@@ -206,57 +207,15 @@ async def test_options_select_poll_returns_to_menu_then_save_and_finish(hass) ->
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "devices"}
     )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "devices_menu"
-    assert set(result["menu_options"]) >= {
-        "select_poll_devices",
-        "bind_device",
-        "save_and_finish",
-    }
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "devices"
 
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "select_poll_devices"}
-    )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {PARAM_SELECTED_DEVICES: ["device_1"]},
     )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "devices_menu"
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "save_and_finish"}
-    )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
-    assert result["data"][PARAM_UPDATE_INTERVAL] == 60
-
-
-@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
-async def test_save_and_finish_without_picking_devices_keeps_no_filter(
-    hass,
-) -> None:
-    """Opening Manage devices and saving must not snapshot the account list.
-
-    No selected_devices key means poll everything, including a device bound
-    later from the Imou app. Writing the current map would freeze a whitelist.
-    """
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=USER_INPUT,
-        options={PARAM_UPDATE_INTERVAL: 60},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "devices"}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "save_and_finish"}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert PARAM_SELECTED_DEVICES not in result["data"]
     assert result["data"][PARAM_UPDATE_INTERVAL] == 60
 
 
@@ -409,12 +368,12 @@ async def test_retrying_after_an_unreachable_cloud_reaches_the_devices(hass) -> 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "devices"}
     )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "devices_menu"
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "devices"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
-async def test_options_bind_from_devices_menu(hass) -> None:
+async def test_options_bind_from_devices_form(hass) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
@@ -426,12 +385,7 @@ async def test_options_bind_from_devices_menu(hass) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "devices"}
     )
-    assert result["step_id"] == "devices_menu"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"next_step_id": "bind_device"},
-    )
-    assert result["step_id"] == "bind_device"
+    assert result["step_id"] == "devices"
     with (
         patch(
             "custom_components.imou_life.config_flow.ImouDeviceManager",
@@ -449,14 +403,11 @@ async def test_options_bind_from_devices_menu(hass) -> None:
         mock_mgr_cls.return_value.async_bind_device = AsyncMock()
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"device_id": "SN001", "code": "123456"},
+            user_input={
+                PARAM_SELECTED_DEVICES: ["device_1"],
+                SECTION_BIND_DEVICE: {"device_id": "SN001", "code": "123456"},
+            },
         )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "devices_menu"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"next_step_id": "save_and_finish"},
-    )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
 
@@ -490,12 +441,6 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
             result["flow_id"],
             user_input={"device_id": "SN001", "code": "123456"},
         )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "devices_menu"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={"next_step_id": "save_and_finish"},
-    )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     # Binding from Manage devices records the new device for polling.
     assert result["data"][PARAM_SELECTED_DEVICES] == ["SN001"]
