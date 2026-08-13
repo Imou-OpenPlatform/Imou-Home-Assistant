@@ -103,7 +103,7 @@
         },
         "data_description": {
           "enable_polling": "When disabled, the integration does not periodically refresh device status from Imou cloud. Use this if you only need on-demand controls (e.g. siren, collection point). Entity states may become outdated. Setup and reload still fetch the device list once.",
-          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s. Ignored when status polling is disabled.",
+          "update_interval": "How often to poll device status from Imou cloud. Default 300s (5 minutes), range 30–900s. Ignored when status polling is disabled.",
           "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",

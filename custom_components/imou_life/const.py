@@ -112,6 +112,7 @@ PARAM_OPTIONS = "options"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_ENABLE_POLLING = "enable_polling"
 PARAM_UPDATE_INTERVAL = "update_interval"
+DEFAULT_UPDATE_INTERVAL = 300
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
 PARAM_LIVE_PROTOCOL = "live_protocol"

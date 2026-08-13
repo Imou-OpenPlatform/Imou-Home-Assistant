@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     PARAM_ENABLE_POLLING,
     PARAM_SELECTED_DEVICES,
@@ -249,3 +250,15 @@ async def test_coordinator_interval_when_polling_enabled(
     coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
     assert coordinator.update_interval is not None
     assert coordinator.update_interval.total_seconds() == 120
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_coordinator_default_interval_is_five_minutes(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Unset update_interval falls back to 300 seconds."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    assert coordinator.update_interval is not None
+    assert coordinator.update_interval.total_seconds() == DEFAULT_UPDATE_INTERVAL

@@ -40,6 +40,7 @@ from .const import (
     CONF_SD,
     DEFAULT_API_URL_REGION,
     DEFAULT_EVENT_PUSH_TYPES,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EVENT_PUSH_TYPE_OPTIONS,
     PARAM_API_URL,
@@ -442,9 +443,9 @@ class ImouOptionsFlow(OptionsFlow):
         return vol.Schema(
             {
                 vol.Optional(PARAM_ENABLE_POLLING, default=True): bool,
-                vol.Required(PARAM_UPDATE_INTERVAL, default=60): vol.All(
-                    vol.Coerce(int), vol.Range(min=30, max=900)
-                ),
+                vol.Required(
+                    PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
                 vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=9)
                 ),
@@ -717,9 +718,7 @@ class ImouOptionsFlow(OptionsFlow):
 
     def _merge_bound_device(self, device_id: str, selected: list[str]) -> list[str]:
         """Keep still-listed ids and append the newly bound serial."""
-        pending = [
-            item for item in selected if item in self._devices_map
-        ]
+        pending = [item for item in selected if item in self._devices_map]
         if device_id not in pending:
             pending.append(device_id)
         return pending
@@ -838,7 +837,5 @@ class ImouOptionsFlow(OptionsFlow):
                 description_placeholders={"error": self._devices_error},
             )
 
-        selected = self._merge_bound_device(
-            device_id, self._options_current_selected()
-        )
+        selected = self._merge_bound_device(device_id, self._options_current_selected())
         return self._create_selected_entry(selected)

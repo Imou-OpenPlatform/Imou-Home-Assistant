@@ -18,6 +18,7 @@ from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
+    DEFAULT_UPDATE_INTERVAL,
     DISCOVERY_INTERVAL,
     DOMAIN,
     PARAM_ENABLE_POLLING,
@@ -46,7 +47,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         """Initialize ImouDataUpdateCoordinator."""
         enable_polling = config_entry.options.get(PARAM_ENABLE_POLLING, True)
-        update_interval_seconds = config_entry.options.get(PARAM_UPDATE_INTERVAL, 60)
+        update_interval_seconds = config_entry.options.get(
+            PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
         update_interval = (
             timedelta(seconds=update_interval_seconds) if enable_polling else None
         )
