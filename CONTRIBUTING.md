@@ -4,7 +4,7 @@ Thank you for contributing to the Imou Life HACS integration. This guide explain
 
 ## Prerequisites
 
-- Python 3.12 or newer
+- Python 3.13 or newer (required by the minimum supported Home Assistant)
 - [git](https://git-scm.com/)
 - [uv](https://github.com/astral-sh/uv) (installed automatically by `script/setup` if missing)
 

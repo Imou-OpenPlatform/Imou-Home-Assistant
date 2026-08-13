@@ -2,14 +2,16 @@
   "config": {
     "abort": {
       "already_configured": "Account is already configured",
-      "no_devices": "No Imou devices were found on this account",
       "cannot_connect": "Failed to connect to Imou: {error}",
+      "reauth_successful": "Re-authentication was successful",
       "request_failed": "Failed to load device list from Imou: {error}"
     },
     "error": {
       "cannot_connect": "Failed to connect: {error}",
       "invalid_auth": "Invalid authentication",
       "request_failed": "Request failed: {error}",
+      "bind_failed": "Failed to bind device: {error}",
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
       "unknown": "Unexpected error: {error}"
     },
     "step": {
@@ -26,9 +28,29 @@
           "app_secret": "The app secret obtained from the Imou cloud platform"
         }
       },
+      "no_devices_menu": {
+        "title": "No devices found",
+        "description": "This account has no Imou devices yet. Bind a device now, or finish setup. Devices bound later in the Imou app are not polled until you select them under Configure → Manage devices.",
+        "menu_options": {
+          "bind_device": "Bind a device",
+          "finish_without_devices": "Continue without devices"
+        }
+      },
+      "bind_device": {
+        "title": "Bind device",
+        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "data": {
+          "device_id": "Device serial number",
+          "code": "Binding code"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "code": "Optional. Leave empty if the device does not require a binding code"
+        }
+      },
       "select_devices": {
         "title": "Select Devices",
-        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will NOT be polled, saving API quota.",
+        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will NOT be polled, saving API quota. You can bind more devices later under Settings → Devices & services → Imou Life → Configure → Manage Devices.",
         "data": {
           "selected_devices": "Devices"
         }
@@ -54,12 +76,23 @@
   },
   "options": {
     "error": {
-      "request_failed": "Failed to load device list: {error}"
+      "request_failed": "Failed to load device list: {error}",
+      "bind_failed": "Failed to bind device: {error}",
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment."
     },
     "step": {
       "init": {
+        "title": "Configure Imou Life",
+        "description": "Choose which settings to change. Each section saves when you submit that form.",
+        "menu_options": {
+          "general_settings": "General settings",
+          "event_push": "Event push",
+          "devices": "Manage devices"
+        }
+      },
+      "general_settings": {
         "title": "General",
-        "description": "Polling interval and camera defaults. Device selection is on the next steps.",
+        "description": "Polling interval and camera defaults.",
         "data": {
           "enable_polling": "Enable status polling",
           "update_interval": "Polling interval (seconds)",
@@ -70,7 +103,7 @@
         },
         "data_description": {
           "enable_polling": "When disabled, the integration does not periodically refresh device status from Imou cloud. Use this if you only need on-demand controls (e.g. siren, collection point). Entity states may become outdated. Setup and reload still fetch the device list once.",
-          "update_interval": "How often to poll device status from Imou cloud. Default 60s, range 30–900s. Ignored when status polling is disabled.",
+          "update_interval": "How often to poll device status from Imou cloud. Default 300s (5 minutes), range 30–900s. Ignored when status polling is disabled.",
           "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",
@@ -117,10 +150,52 @@
         }
       },
       "devices": {
-        "title": "Manage Devices",
-        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices will be removed on next reload, saving API quota.",
+        "title": "Manage devices",
+        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices stay in Home Assistant but are not polled, saving API quota. Submit saves and closes.",
         "data": {
           "selected_devices": "Devices"
+        },
+        "sections": {
+          "bind_new_device": {
+            "name": "Bind a new device",
+            "description": "Optional. Bind another camera to this account, then it is added to the poll list.",
+            "data": {
+              "device_id": "Device serial number",
+              "code": "Binding code"
+            },
+            "data_description": {
+              "device_id": "Serial number (SN) printed on the device or shown in the Imou app. Leave empty to skip binding.",
+              "code": "Optional. Leave empty if the device does not require a binding code"
+            }
+          }
+        }
+      },
+      "no_devices_menu": {
+        "title": "No devices found",
+        "description": "This account has no Imou devices yet. Bind a device now, or save without binding.",
+        "menu_options": {
+          "bind_device": "Bind a device",
+          "finish_without_bind": "Continue without binding"
+        }
+      },
+      "devices_unavailable": {
+        "title": "Could not reach the Imou cloud",
+        "description": "The device list could not be fetched: {error}\n\nYou can try again, or save your other changes and leave the device selection as it is.",
+        "menu_options": {
+          "devices": "Try again",
+          "save_without_devices": "Save without changing device selection"
+        }
+      },
+      "bind_device": {
+        "title": "Bind device",
+        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "data": {
+          "device_id": "Device serial number",
+          "code": "Binding code"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "code": "Optional. Leave empty if the device does not require a binding code"
         }
       }
     }
@@ -301,6 +376,38 @@
           "description": "PTZ rotation duration"
         }
       }
+    }
+  },
+  "exceptions": {
+    "switch_operation_failed": {
+      "message": "Imou rejected the switch change: {error}"
+    },
+    "select_option_failed": {
+      "message": "Imou rejected the new option: {error}"
+    },
+    "set_text_value_failed": {
+      "message": "Imou rejected the new value: {error}"
+    },
+    "button_press_failed": {
+      "message": "Imou rejected the button press: {error}"
+    },
+    "stream_source_failed": {
+      "message": "Could not get the live stream URL from Imou: {error}"
+    },
+    "camera_image_failed": {
+      "message": "Could not get a snapshot from Imou: {error}"
+    },
+    "not_a_ptz_button": {
+      "message": "{entity_id} is not a PTZ button, so it cannot be moved. Target a PTZ direction button instead."
+    },
+    "remove_device_missing_id": {
+      "message": "Cannot remove device {name}: missing Imou device id."
+    },
+    "remove_device_has_siblings": {
+      "message": "Cannot remove {name}: it is one channel of Imou device {device_id}, which also covers {siblings}. Deselect the whole device in the integration options to stop polling it, or disable this channel's entities to hide it."
+    },
+    "remove_device_no_runtime": {
+      "message": "Cannot remove device {name}: integration is not loaded."
     }
   }
 }

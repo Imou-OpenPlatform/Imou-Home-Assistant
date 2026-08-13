@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_MOTION_DETECT,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
@@ -37,28 +37,12 @@ def _iter_cameras(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou camera entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_cameras(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouCamera(coordinator, entry, entity_type, device)
-            for entity_type, device in _iter_cameras(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_cameras)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_cameras in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_cameras)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_cameras(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouCamera, _iter_cameras)
 
 
 class ImouCamera(ImouEntity, Camera):
@@ -84,7 +68,11 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_LIVE_PROTOCOL, "https"),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="stream_source_failed",
+                translation_placeholders={"error": e.message},
+            ) from e
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -96,7 +84,11 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="camera_image_failed",
+                translation_placeholders={"error": e.message},
+            ) from e
 
     @property
     def motion_detection_enabled(self) -> bool:

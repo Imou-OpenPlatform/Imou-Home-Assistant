@@ -6,9 +6,11 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import timedelta
+from time import monotonic
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -16,6 +18,8 @@ from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
+    DEFAULT_UPDATE_INTERVAL,
+    DISCOVERY_INTERVAL,
     DOMAIN,
     PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
@@ -31,6 +35,10 @@ _LOGGER = logging.getLogger(__name__)
 class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     """Coordinates polling Imou device status from the cloud."""
 
+    # The base class allows a coordinator without an entry; this one is always
+    # built for one, and everything below reads it.
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -39,7 +47,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         """Initialize ImouDataUpdateCoordinator."""
         enable_polling = config_entry.options.get(PARAM_ENABLE_POLLING, True)
-        update_interval_seconds = config_entry.options.get(PARAM_UPDATE_INTERVAL, 60)
+        update_interval_seconds = config_entry.options.get(
+            PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
         update_interval = (
             timedelta(seconds=update_interval_seconds) if enable_polling else None
         )
@@ -54,6 +64,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self._device_manager = device_manager
         self.devices_by_key: dict[str, ImouHaDevice] = {}
         self._devices_initialized = False
+        self._last_discovery: float | None = None
         self.new_device_callbacks: list[Callable[[list[ImouHaDevice]], None]] = []
 
     @property
@@ -78,7 +89,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if selected_ids:
             selected_set = set(selected_ids)
             filtered = [d for d in devices_list if d.device_id in selected_set]
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Device filter active: %d/%d devices selected for polling",
                 len(filtered),
                 len(devices_list),
@@ -86,25 +97,45 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return filtered
         return []
 
-    async def _async_update_data(self) -> None:
-        """Fetch latest device status from Imou cloud."""
-        _LOGGER.debug("Polling Imou device status")
+    def _discovery_is_due(self) -> bool:
+        """Whether it is time to look for devices added to or gone from the account."""
+        if self._last_discovery is None:
+            return True
+        return monotonic() - self._last_discovery >= DISCOVERY_INTERVAL
+
+    async def _async_discover_devices(self) -> None:
+        """Refresh which devices the account holds."""
+        _LOGGER.debug("Listing Imou devices")
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fresh_devices = await self._device_manager.async_get_devices()
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
-            self.config_entry.async_start_reauth(self.hass)
-            raise UpdateFailed(f"Invalid Imou credentials: {err}") from err
+            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
-            raise UpdateFailed(
-                f"Error fetching Imou devices: {err.message or err}"
-            ) from err
+            if not self._devices_initialized:
+                raise UpdateFailed(
+                    f"Error fetching Imou devices: {err.message or err}"
+                ) from err
+            # Discovery runs on its own slow clock, so a blip here says nothing
+            # about the devices already known. Leaving the clock untouched
+            # retries on the next poll instead of blanking every entity for
+            # the rest of the interval.
+            _LOGGER.warning("Could not list Imou devices: %s", err.message or err)
+            return
 
+        self._last_discovery = monotonic()
+        account_by_key = {imou_life_device_key(d): d for d in fresh_devices}
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
-        self._async_add_remove_devices(fresh_by_key)
+        self._async_add_remove_devices(fresh_by_key, account_by_key)
+
+    async def _async_update_data(self) -> None:
+        """Fetch latest device status from Imou cloud."""
+        _LOGGER.debug("Polling Imou device status")
+        if self._discovery_is_due():
+            await self._async_discover_devices()
 
         devices_to_update = [
             device
@@ -144,16 +175,35 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 result,
             )
             failures.append(result)
+        # Credentials can be revoked between two listings, and the status calls
+        # are what notice it first now that listing is on a slow clock.
+        for failure in failures:
+            if isinstance(failure, InvalidAppIdOrSecretException):
+                raise ConfigEntryAuthFailed(
+                    f"Invalid Imou credentials: {failure}"
+                ) from failure
         if failures and len(failures) == len(devices_to_update):
             raise UpdateFailed(
                 f"Error updating Imou devices: {failures[0]}"
             ) from failures[0]
 
-    def _async_add_remove_devices(self, fresh_by_key: dict[str, ImouHaDevice]) -> None:
-        """Add new devices and remove devices no longer in the account."""
+    def _async_add_remove_devices(
+        self,
+        fresh_by_key: dict[str, ImouHaDevice],
+        account_by_key: dict[str, ImouHaDevice],
+    ) -> None:
+        """Add new devices and drop ones no longer selected for polling.
+
+        Registry detach uses the unfiltered account list: deselecting a device
+        only stops polling. Devices deleted in the Imou app are still removed.
+        """
         if not self._devices_initialized:
             self.devices_by_key = fresh_by_key
             self._devices_initialized = True
+            # Unload leaves registry entries in place by design. After reload the
+            # coordinator starts empty, so the first discovery must still detach
+            # devices that are no longer on the account.
+            self._async_detach_registry_devices_missing_from(account_by_key)
             return
 
         current_keys = set(fresh_by_key)
@@ -164,16 +214,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         if removed_keys := known_keys - current_keys:
             _LOGGER.debug("Removed Imou device(s): %s", ", ".join(removed_keys))
-            device_registry = dr.async_get(self.hass)
             for device_key in removed_keys:
                 del self.devices_by_key[device_key]
-                if device := device_registry.async_get_device(
-                    identifiers={(DOMAIN, device_key)}
-                ):
-                    device_registry.async_update_device(
-                        device_id=device.id,
-                        remove_config_entry_id=self.config_entry.entry_id,
-                    )
+            self._async_detach_registry_devices_missing_from(account_by_key)
 
         if new_keys := current_keys - known_keys:
             _LOGGER.debug("New Imou device(s) found: %s", ", ".join(new_keys))
@@ -184,10 +227,28 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             for callback in self.new_device_callbacks:
                 callback(new_devices)
 
+    def _async_detach_registry_devices_missing_from(
+        self, account_by_key: dict[str, ImouHaDevice]
+    ) -> None:
+        """Detach config-entry devices whose Imou keys are not on the account."""
+        device_registry = dr.async_get(self.hass)
+        for device in dr.async_entries_for_config_entry(
+            device_registry, self.config_entry.entry_id
+        ):
+            imou_keys = [
+                ident for domain, ident in device.identifiers if domain == DOMAIN
+            ]
+            if not imou_keys:
+                continue
+            if any(key in account_by_key for key in imou_keys):
+                continue
+            device_registry.async_update_device(
+                device_id=device.id,
+                remove_config_entry_id=self.config_entry.entry_id,
+            )
+
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""
-        if self.config_entry is None:
-            return False
         entry_id = self.config_entry.entry_id
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)

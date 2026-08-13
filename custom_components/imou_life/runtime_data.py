@@ -6,7 +6,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
+
 if TYPE_CHECKING:
+    from pyimouapi.openapi import ImouOpenApiClient
+
     from .coordinator import ImouDataUpdateCoordinator
 
 _MAX_PUSH_MSG_TYPE_KEYS = 50
@@ -17,6 +21,7 @@ class ImouRuntimeData:
     """Data attached to a config entry at runtime."""
 
     coordinator: ImouDataUpdateCoordinator
+    client: ImouOpenApiClient | None = None
     push_enabled: bool = False
     # None = all devices; [] = none; non-empty = allow-list
     selected_devices: list[str] | None = None
@@ -39,3 +44,16 @@ class ImouRuntimeData:
         )
         self.push_last_msg_type = display
         self.push_last_received_at = datetime.now(UTC)
+
+
+def get_runtime_data(entry: ConfigEntry) -> ImouRuntimeData | None:
+    """Return runtime data, or None when the entry never finished setting up.
+
+    Home Assistant deletes ``runtime_data`` only when an entry unloads
+    cleanly, so the attribute is still there while unloading, which is when
+    the client is needed to switch event push off. A setup that raised
+    ``ConfigEntryNotReady`` also leaves it behind, holding a closed client;
+    callers reached only from a loaded entry, which is all of them today, do
+    not see that.
+    """
+    return getattr(entry, "runtime_data", None)

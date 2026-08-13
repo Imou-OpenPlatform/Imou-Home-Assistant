@@ -1,11 +1,9 @@
 control_move_ptz:
+  target:
+    entity:
+      domain: button
+      integration: imou_life
   fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          domain: button
-          integration: imou_life
     duration:
       required: false
       default: 500
@@ -13,4 +11,5 @@ control_move_ptz:
       selector:
         number:
           min: 100
-          max: 5000
+          max: 10000
+          unit_of_measurement: ms

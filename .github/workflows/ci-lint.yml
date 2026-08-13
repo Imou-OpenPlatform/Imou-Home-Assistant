@@ -29,7 +29,7 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: dev
+          ref: main
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
@@ -52,6 +52,24 @@ jobs:
           fi
       - run: uv run ruff format --check custom_components tests
 
+  mypy:
+    name: Types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: Imou-OpenPlatform/Py-Imou-Open-Api
+          path: Py-Imou-Open-Api
+          ref: main
+      - name: Link pyimouapi for uv path dependency
+        run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      - run: uv run mypy
+
   spell:
     name: Spell
     runs-on: ubuntu-latest
@@ -64,7 +82,7 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: dev
+          ref: main
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
@@ -94,7 +112,7 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: dev
+          ref: main
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
@@ -136,7 +154,7 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: dev
+          ref: main
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7

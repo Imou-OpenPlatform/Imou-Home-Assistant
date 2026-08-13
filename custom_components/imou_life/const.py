@@ -1,10 +1,17 @@
 """Constants."""
 
+from homeassistant.const import Platform
 from pyimouapi.ha_device import ImouHaDevice
 
 # Internal constants
 DOMAIN = "imou_life"
 UPDATE_TIMEOUT = 300
+
+# Listing the account costs a paged request plus one detail round trip per iot
+# device, and every object it builds is dropped for devices we already know. It
+# only exists to notice devices being added or removed, so it runs on its own
+# slow clock instead of on every status poll.
+DISCOVERY_INTERVAL = 600
 
 
 def imou_life_device_key(device: ImouHaDevice) -> str:
@@ -105,6 +112,7 @@ PARAM_OPTIONS = "options"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_ENABLE_POLLING = "enable_polling"
 PARAM_UPDATE_INTERVAL = "update_interval"
+DEFAULT_UPDATE_INTERVAL = 300
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
 PARAM_LIVE_PROTOCOL = "live_protocol"
@@ -185,4 +193,12 @@ EVENT_IMOU_ALARM = f"{DOMAIN}_alarm"
 SERVICE_CONTROL_MOVE_PTZ = "control_move_ptz"
 
 
-PLATFORMS = ["select", "sensor", "switch", "camera", "button", "binary_sensor", "text"]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.CAMERA,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.TEXT,
+]

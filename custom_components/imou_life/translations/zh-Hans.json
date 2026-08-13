@@ -2,14 +2,16 @@
   "config": {
     "abort": {
       "already_configured": "账号已配置",
-      "no_devices": "该账号下未找到 Imou 设备",
       "cannot_connect": "无法连接 Imou：{error}",
+      "reauth_successful": "重新认证成功",
       "request_failed": "从 Imou 加载设备列表失败：{error}"
     },
     "error": {
       "cannot_connect": "连接失败：{error}",
       "invalid_auth": "身份验证无效",
       "request_failed": "请求失败：{error}",
+      "bind_failed": "绑定设备失败：{error}",
+      "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。",
       "unknown": "意外错误：{error}"
     },
     "step": {
@@ -26,9 +28,29 @@
           "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
       },
+      "no_devices_menu": {
+        "title": "未找到设备",
+        "description": "该账号下暂无 Imou 设备。你可以现在绑定，或先完成配置。之后在乐橙 App 绑定的设备不会自动轮询，需到「配置 → 管理设备」中勾选。",
+        "menu_options": {
+          "bind_device": "绑定设备",
+          "finish_without_devices": "暂不添加设备"
+        }
+      },
+      "bind_device": {
+        "title": "绑定设备",
+        "description": "输入设备序列号和绑定码（可在 Imou App 或设备标签上查看）。",
+        "data": {
+          "device_id": "设备序列号",
+          "code": "绑定码"
+        },
+        "data_description": {
+          "device_id": "设备上印制的序列号（SN），或在 Imou App 中查看",
+          "code": "可选。若设备不需要绑定码可留空"
+        }
+      },
       "select_devices": {
         "title": "选择设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。",
+        "description": "账号下共找到 {device_count} 个设备。勾选你要添加到 Home Assistant 的设备，未勾选的设备不会轮询，可节省 API 调用次数。稍后可前往 设置 → 设备与服务 → Imou Life → 配置 → 管理设备 绑定更多设备。",
         "data": {
           "selected_devices": "设备列表"
         }
@@ -54,12 +76,23 @@
   },
   "options": {
     "error": {
-      "request_failed": "加载设备列表失败：{error}"
+      "request_failed": "加载设备列表失败：{error}",
+      "bind_failed": "绑定设备失败：{error}",
+      "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。"
     },
     "step": {
       "init": {
+        "title": "配置 Imou Life",
+        "description": "请选择要修改的设置。每一项点提交即保存并关闭。",
+        "menu_options": {
+          "general_settings": "常规设置",
+          "event_push": "消息推送",
+          "devices": "管理设备"
+        }
+      },
+      "general_settings": {
         "title": "常规设置",
-        "description": "轮询间隔与摄像头默认参数。设备选择在后续步骤中完成。",
+        "description": "轮询间隔与摄像头默认参数。",
         "data": {
           "enable_polling": "启用状态轮询",
           "update_interval": "自动刷新间隔（秒）",
@@ -70,7 +103,7 @@
         },
         "data_description": {
           "enable_polling": "关闭后，集成不会定期从乐橙云刷新设备状态。若仅需按需控制（如警笛、收藏点）可关闭以节省 API 配额。实体状态可能不再更新。安装与重载时仍会拉取一次设备列表。",
-          "update_interval": "集成多久去乐橙云拉一次设备状态，默认 60 秒，范围 30–900 秒。关闭状态轮询时不生效。",
+          "update_interval": "集成多久去乐橙云拉一次设备状态，默认 300 秒（5 分钟），范围 30–900 秒。关闭状态轮询时不生效。",
           "download_snap_wait_time": "抓取摄像头截图前等待的秒数，默认 3 秒",
           "live_resolution": "摄像头直播分辨率，HD=高清，SD=标清",
           "live_protocol": "视频流协议，一般用 https 即可",
@@ -118,9 +151,51 @@
       },
       "devices": {
         "title": "管理设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
+        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备；取消勾选的仍留在 Home Assistant，只是不再轮询。点提交即保存并关闭。",
         "data": {
           "selected_devices": "设备列表"
+        },
+        "sections": {
+          "bind_new_device": {
+            "name": "绑定新设备",
+            "description": "可选。将另一台设备绑定到本账号后，会加入轮询列表。",
+            "data": {
+              "device_id": "设备序列号",
+              "code": "绑定码"
+            },
+            "data_description": {
+              "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看。留空则跳过绑定。",
+              "code": "可选。若设备不需要绑定码可留空"
+            }
+          }
+        }
+      },
+      "no_devices_menu": {
+        "title": "未找到设备",
+        "description": "该账号下尚无乐橙设备。可立即绑定设备，或不绑定并保存。",
+        "menu_options": {
+          "bind_device": "绑定设备",
+          "finish_without_bind": "不绑定并保存"
+        }
+      },
+      "devices_unavailable": {
+        "title": "无法连接萤石云端",
+        "description": "获取设备列表失败：{error}\n\n你可以重试，或者保存其他修改并保持设备选择不变。",
+        "menu_options": {
+          "devices": "重试",
+          "save_without_devices": "保存，不修改设备选择"
+        }
+      },
+      "bind_device": {
+        "title": "绑定设备",
+        "description": "输入设备序列号及乐橙 App 或设备标签上的绑定码。",
+        "data": {
+          "device_id": "设备序列号",
+          "code": "绑定码"
+        },
+        "data_description": {
+          "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看",
+          "code": "可选。若设备不需要绑定码可留空"
         }
       }
     }
@@ -301,6 +376,38 @@
           "description": "云台转动持续时间"
         }
       }
+    }
+  },
+  "exceptions": {
+    "switch_operation_failed": {
+      "message": "Imou 拒绝了此开关操作：{error}"
+    },
+    "select_option_failed": {
+      "message": "Imou 拒绝了此选项：{error}"
+    },
+    "set_text_value_failed": {
+      "message": "Imou 拒绝了此数值：{error}"
+    },
+    "button_press_failed": {
+      "message": "Imou 拒绝了此按钮操作：{error}"
+    },
+    "stream_source_failed": {
+      "message": "无法从 Imou 获取直播地址：{error}"
+    },
+    "camera_image_failed": {
+      "message": "无法从 Imou 获取快照：{error}"
+    },
+    "not_a_ptz_button": {
+      "message": "{entity_id} 不是云台按钮，无法转动。请改为选择云台方向按钮。"
+    },
+    "remove_device_missing_id": {
+      "message": "无法删除设备 {name}：缺少 Imou 设备 ID。"
+    },
+    "remove_device_has_siblings": {
+      "message": "无法删除 {name}：它是 Imou 设备 {device_id} 的其中一个通道，该设备还包含 {siblings}。要停止轮询整台设备，请在集成选项中取消勾选；要隐藏此通道，请禁用其实体。"
+    },
+    "remove_device_no_runtime": {
+      "message": "无法删除设备 {name}：集成未加载。"
     }
   }
 }

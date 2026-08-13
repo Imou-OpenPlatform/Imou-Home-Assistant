@@ -9,14 +9,16 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_AB_ALARM_SOUND,
     PARAM_AUDIO_ENCODE_CONTROL,
     PARAM_CLOSE_CAMERA,
@@ -25,21 +27,26 @@ from .const import (
     PARAM_MOTION_DETECT,
     PARAM_PLUG_SWITCH,
     PARAM_WHITE_LIGHT,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
 
+# Detection, recording and indicator toggles are device settings rather than
+# controls, so they belong under the device's configuration section. Privacy
+# mode, the white light and the plug relay stay primary: those are operated,
+# not configured.
 SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_AB_ALARM_SOUND,
         translation_key=PARAM_AB_ALARM_SOUND,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_AUDIO_ENCODE_CONTROL,
         translation_key=PARAM_AUDIO_ENCODE_CONTROL,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_CLOSE_CAMERA,
@@ -48,15 +55,18 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_HEADER_DETECT,
         translation_key=PARAM_HEADER_DETECT,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_LIGHT,
         translation_key=PARAM_LIGHT,
         device_class=SwitchDeviceClass.SWITCH,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_MOTION_DETECT,
         translation_key=PARAM_MOTION_DETECT,
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key=PARAM_PLUG_SWITCH,
@@ -83,28 +93,12 @@ def _iter_switches(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou switch entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_switches(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouSwitch(coordinator, entry, description, device)
-            for description, device in _iter_switches(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_switches)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_switches in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_switches)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_switches(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouSwitch, _iter_switches)
 
 
 class ImouSwitch(ImouEntity, SwitchEntity):
@@ -148,5 +142,9 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 enable,
             )
         except ImouException as err:
-            raise HomeAssistantError(err.message) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="switch_operation_failed",
+                translation_placeholders={"error": err.message},
+            ) from err
         self.async_write_ha_state()
