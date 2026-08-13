@@ -8,7 +8,6 @@
 
 - Home Assistant 2025.4 or newer is required. Cores below that no longer see this integration in HACS
 - Select option states use friendly keys (`home`/`away`/`disarm`, `mute`/`low`/`medium`/`high`, night-vision string keys) matching pyimouapi 1.3.4. Automations calling `select.select_option` with the old numeric values (`"0"`, `"1"`, …) must be updated
-- The motion detection switch is removed for product_id `FKX9UYL4`. That model advertises the capability but cannot serve it, so the entity never worked; it will show as unavailable and can be deleted. `camera.motion_detection_enabled` for those devices now reflects only human detection
 
 #### Added
 
@@ -18,6 +17,7 @@
 #### Changed
 
 - Default status polling interval is 300 seconds (5 minutes), was 60 seconds. Existing entries keep the interval already saved in options
+- For product_id `FKX9UYL4`, `motion_detect` skips advertised but unusable refs `14800` and `305000` and binds `108800` instead. The switch remains
 - Options flow: top-level menu for General, Event push, and Manage devices; each section saves on Submit without changing the other sections. Bind a new device lives under Manage devices
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
@@ -211,7 +211,6 @@
 
 - 需要 Home Assistant 2025.4 或更新版本。更低版本的 Core 在 HACS 中将看不到本集成
 - Select 选项状态改为友好键（`home`/`away`/`disarm`、`mute`/`low`/`medium`/`high`、夜视字符串键），与 pyimouapi 1.3.4 一致。仍用旧数字值（`"0"`、`"1"`…）调用 `select.select_option` 的自动化需更新
-- 产品 `FKX9UYL4` 移除移动侦测开关。该型号宣称有此能力但实际不可用，实体从未工作；会显示不可用，可手动删除。此类设备的 `camera.motion_detection_enabled` 现仅反映人形侦测
 
 #### 新增
 
@@ -221,6 +220,7 @@
 #### 变更
 
 - 状态轮询默认间隔改为 300 秒（5 分钟），原先为 60 秒。已保存过间隔的条目仍用原来的值
+- 产品 `FKX9UYL4` 的 `motion_detect` 会跳过宣称但不可用的 refs `14800`、`305000`，改绑 `108800`。开关本身还在
 - 选项流程：顶层菜单分为常规、事件推送、管理设备；每一项点提交即保存且不影响其他分区。绑定新设备放在管理设备页内
 - 配置/选项流程在界面展示开放平台 `code`/`msg`（如 `OP1013` 配额超限），而不再只显示笼统的「请求失败」（#67）
 - 所有实体写入（switch、select、button、text）改为乐观本地更新，不再立即触发整次云端轮询
