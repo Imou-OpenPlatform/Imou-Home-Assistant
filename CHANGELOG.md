@@ -2,6 +2,12 @@
 
 ## English
 
+### [1.3.4.1]
+
+#### Fixed
+
+- Event-push webhook accepts GET probes from Imou cloud when enabling the callback. Home Assistant allows only POST and PUT by default and answers a GET on a registered webhook with `405`, which made `setMessageCallback` fail with `OP1003` (#88)
+
 ### [1.3.4]
 
 #### Breaking
@@ -204,6 +210,12 @@
 ---
 
 ## 中文
+
+### [1.3.4.1]
+
+#### 修复
+
+- 事件推送 webhook 接受乐橙云打开回调时的 GET 探测。Home Assistant 默认只允许 POST 与 PUT，对已注册 webhook 的 GET 返回 `405`，导致 `setMessageCallback` 报 `OP1003` 失败（#88）
 
 ### [1.3.4]
 

@@ -29,8 +29,15 @@ from .conftest import setup_imou_runtime
 class MockRequest:
     """Minimal aiohttp request mock for webhook tests."""
 
-    def __init__(self, payload: Any, *, raises: Exception | None = None) -> None:
+    def __init__(
+        self,
+        payload: Any,
+        *,
+        raises: Exception | None = None,
+        method: str = "POST",
+    ) -> None:
         """Initialize the request mock."""
+        self.method = method
         self._payload = payload
         self._raises = raises
 
@@ -98,6 +105,27 @@ async def test_webhook_unknown_webhook_id_returns_ok(hass: HomeAssistant) -> Non
         hass,
         "unknown-id",
         MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_get_probe_acks_without_events(hass: HomeAssistant) -> None:
+    """GET is a URL probe from Imou cloud, not an event push."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(hass)
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {"msgType": "alarmLocal", "deviceId": "device_1"},
+            method="GET",
+        ),
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 

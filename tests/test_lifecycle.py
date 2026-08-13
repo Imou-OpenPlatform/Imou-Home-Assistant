@@ -18,6 +18,7 @@ from custom_components.imou_life.webhook import (
     async_handle_imou_webhook,
     async_register_imou_webhook,
 )
+from homeassistant.components.webhook import DOMAIN as WEBHOOK_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pyimouapi.exceptions import ConnectFailedException
@@ -80,6 +81,16 @@ async def test_webhook_registration_survives_setup_retry(hass: HomeAssistant) ->
     assert async_register_imou_webhook(hass, "wh-retry") is not None
     # A previous failed setup leaves the handler behind; HA raises on duplicates.
     async_register_imou_webhook(hass, "wh-retry")
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_registration_allows_get_probe(hass: HomeAssistant) -> None:
+    """Imou cloud probes the callback URL with GET when enabling event push."""
+    async_register_imou_webhook(hass, "wh-get")
+
+    hook = hass.data[WEBHOOK_DOMAIN]["wh-get"]
+    assert "GET" in hook["allowed_methods"]
+    assert "POST" in hook["allowed_methods"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

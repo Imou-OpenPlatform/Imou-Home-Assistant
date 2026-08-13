@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aiohttp import web
+from aiohttp.hdrs import METH_GET, METH_POST, METH_PUT
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -326,6 +327,10 @@ async def async_handle_imou_webhook(
     request: web.Request,
 ) -> web.Response:
     """Handle alarm/event push messages from Imou Open Platform."""
+    # Imou cloud probes the callback URL with GET when enabling the switch.
+    if getattr(request, "method", METH_POST) == METH_GET:
+        return web.Response(status=200, text="ok")
+
     try:
         payload = await request.json()
     except Exception as err:
@@ -395,6 +400,7 @@ def async_register_imou_webhook(hass: HomeAssistant, webhook_id: str) -> str:
         "Imou Life Event Push",
         webhook_id,
         async_handle_imou_webhook,
+        allowed_methods=[METH_GET, METH_POST, METH_PUT],
     )
     try:
         return webhook.async_generate_url(hass, webhook_id)
