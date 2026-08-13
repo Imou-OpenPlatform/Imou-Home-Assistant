@@ -17,7 +17,6 @@
 #### Changed
 
 - Default status polling interval is 300 seconds (5 minutes), was 60 seconds. Existing entries keep the interval already saved in options
-- For product_id `FKX9UYL4`, `motion_detect` skips advertised but unusable refs `14800` and `305000` and binds `108800` instead. The switch remains
 - Options flow: top-level menu for General, Event push, and Manage devices; each section saves on Submit without changing the other sections. Bind a new device lives under Manage devices
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
@@ -34,6 +33,7 @@
 
 #### Fixed
 
+- On IPC-K7C (product_id `FKX9UYL4`), `motion_detect` skips advertised but unusable refs `14800` and `305000` and binds `108800`, so `switch.turn_on` / `turn_off` no longer returns `40999` (#77). The switch remains
 - Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
 - Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou app
 - After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status. Deselecting a device in options only stops polling — it does not remove the Home Assistant device
@@ -220,7 +220,6 @@
 #### 变更
 
 - 状态轮询默认间隔改为 300 秒（5 分钟），原先为 60 秒。已保存过间隔的条目仍用原来的值
-- 产品 `FKX9UYL4` 的 `motion_detect` 会跳过宣称但不可用的 refs `14800`、`305000`，改绑 `108800`。开关本身还在
 - 选项流程：顶层菜单分为常规、事件推送、管理设备；每一项点提交即保存且不影响其他分区。绑定新设备放在管理设备页内
 - 配置/选项流程在界面展示开放平台 `code`/`msg`（如 `OP1013` 配额超限），而不再只显示笼统的「请求失败」（#67）
 - 所有实体写入（switch、select、button、text）改为乐观本地更新，不再立即触发整次云端轮询
@@ -237,6 +236,7 @@
 
 #### 修复
 
+- IPC-K7C（产品 `FKX9UYL4`）的 `motion_detect` 会跳过宣称但不可用的 refs `14800`、`305000`，改绑 `108800`，开关 `turn_on`/`turn_off` 不再返回 `40999`（#77）。开关本身还在
 - 账号无设备时用 **不绑定并保存** 会把旧的设备选择换成空列表（含初次配置写在 entry data 中的名单）。原先会写回旧 id，App 已删设备保存后仍显示
 - 提交 **常规** 或 **事件推送** 不会写入设备白名单。只有在 **管理设备** 提交（或在该页绑定）时才保存名单。旧版选项向导总是以设备列表收尾，可能把当时账号快照写成过滤，之后在 App 绑定的设备会被滤掉
 - 重新加载后，首次拉取账号列表会卸掉账号上已不存在的 Home Assistant 设备。卸载故意保留注册表条目；下次 setup 若从空 map 起步会跳过清理，已删设备仍以最后状态显示。在选项中取消勾选只停止轮询，不会从 Home Assistant 设备注册表移除该设备
