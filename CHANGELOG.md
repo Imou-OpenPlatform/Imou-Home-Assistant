@@ -33,8 +33,8 @@
 
 #### Fixed
 
-- Saving options with **Save without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
-- **Save and finish** in Manage devices does not write a device whitelist unless you chose one (or already had one). Opening the page and saving used to snapshot the current account list, so a device bound later from the Imou app was filtered out
+- Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
+- Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou app
 - After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status. Deselecting a device in options only stops polling — it does not remove the Home Assistant device
 - Refusing to delete a multi-channel camera/NVR channel raises a clear error in the UI instead of a silent rejection that the frontend showed as `[object Object]`. Devices already gone from the account can be removed from Home Assistant again
 - Device **Download diagnostics** now includes that device's ids, model, status, and entity summaries (secrets still redacted). Previously only account-level diagnostics existed, so the device-page download had almost nothing useful for a single camera
@@ -236,7 +236,7 @@
 #### 修复
 
 - 账号无设备时用 **不绑定并保存** 会把旧的设备选择换成空列表（含初次配置写在 entry data 中的名单）。原先会写回旧 id，App 已删设备保存后仍显示
-- **保存并完成** 仅在你勾选过轮询列表（或本来就有白名单）时才写入设备过滤。只打开管理设备再保存，过去会把当前账号快照写成白名单，之后在 App 绑定的设备会被滤掉
+- 提交 **常规** 或 **事件推送** 不会写入设备白名单。只有在 **管理设备** 提交（或在该页绑定）时才保存名单。旧版选项向导总是以设备列表收尾，可能把当时账号快照写成过滤，之后在 App 绑定的设备会被滤掉
 - 重新加载后，首次拉取账号列表会卸掉账号上已不存在的 Home Assistant 设备。卸载故意保留注册表条目；下次 setup 若从空 map 起步会跳过清理，已删设备仍以最后状态显示。在选项中取消勾选只停止轮询，不会从 Home Assistant 设备注册表移除该设备
 - 拒绝删除多通道/NVR 某一通道时，在界面抛出可读错误，而不再是前端显示成 `[object Object]` 的静默拒绝。账号上已不存在的设备也可以再次从 Home Assistant 中删除
 - 设备页 **下载诊断信息** 现包含该设备的 ID、型号、状态与实体摘要（密钥仍脱敏）。原先只有账号级诊断，设备页下载对单台相机几乎没用
