@@ -184,6 +184,43 @@ async def test_first_discovery_keeps_registry_devices_still_on_account(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Polling filter must not remove Home Assistant device registry entries.
+
+    Deselecting in options only stops polling. Names, areas, and automations
+    stay. Devices gone from the Imou account are still detached.
+    """
+    devices = [_mock_device("d1"), _mock_device("d2")]
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_SELECTED_DEVICES: ["d1"]},
+    )
+    entry.add_to_hass(hass)
+    device_registry = dr.async_get(hass)
+    kept = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, imou_life_device_key(devices[0]))},
+        name="Still polled",
+    )
+    filtered = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, imou_life_device_key(devices[1]))},
+        name="Stopped polling",
+    )
+
+    device_manager.async_get_devices.return_value = devices
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    await coordinator._async_update_data()
+
+    assert {d.device_id for d in coordinator.devices} == {"d1"}
+    assert entry.entry_id in device_registry.async_get(kept.id).config_entries
+    assert entry.entry_id in device_registry.async_get(filtered.id).config_entries
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_coordinator_no_interval_when_polling_disabled(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

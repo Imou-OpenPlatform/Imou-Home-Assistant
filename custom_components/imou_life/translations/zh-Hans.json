@@ -30,7 +30,7 @@
       },
       "no_devices_menu": {
         "title": "未找到设备",
-        "description": "该账号下暂无 Imou 设备。你可以现在绑定设备，或先完成配置，稍后在集成选项中添加设备。",
+        "description": "该账号下暂无 Imou 设备。你可以现在绑定，或先完成配置。之后在乐橙 App 绑定的设备不会自动轮询，需到「配置 → 管理设备」中勾选。",
         "menu_options": {
           "bind_device": "绑定设备",
           "finish_without_devices": "暂不添加设备"
@@ -164,7 +164,7 @@
       },
       "select_poll_devices": {
         "title": "选择要轮询的设备",
-        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备，取消勾选的设备将在重载后移除，节省 API 调用次数。",
+        "description": "账号下共找到 {device_count} 个设备。勾选要轮询的设备；取消勾选的设备仍留在 Home Assistant，只是不再轮询，以节省 API 调用次数。",
         "data": {
           "selected_devices": "设备列表"
         }

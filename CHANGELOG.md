@@ -24,7 +24,7 @@
 - Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou app appears within ten minutes
 - Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls. Entities in that section are hidden from auto-generated dashboards and are not exposed to Assist by default; the entities themselves are unchanged, so anything referring to them by entity id keeps working
 - Invalid credentials now end the polling and ask you to sign in again, rather than retrying a secret the integration already knows is refused
-- Setting up an account that holds no devices records no device filter at all, instead of an empty one. A device bound later from the Imou app is picked up automatically; previously it was filtered out for good with nothing to indicate why
+- Setting up an account that holds no devices stores an empty device list. A device bound later from the Imou app is not polled until you select it under Configure → Manage devices — same as when the account already had cameras at setup
 - Depend on `pyimouapi==1.3.5`, which brings concurrent status reads, a per-host connection cap so snapshot downloads cannot stall status polling, credentials kept out of debug logs, and several connection-leak and paging fixes
 - A camera that cannot produce a snapshot reports why, in your language, instead of showing a blank tile
 - One unreadable accessory no longer leaves the whole account showing as unavailable
@@ -33,8 +33,9 @@
 
 #### Fixed
 
-- Saving options with **Save without binding** when the account has no devices clears the old device selection (including one stored from setup in entry data). Previously the previous whitelist was written back, so devices deleted in the Imou app kept showing after save, and a device bound later from the app could stay filtered out
-- After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status
+- Saving options with **Save without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
+- **Save and finish** in Manage devices does not write a device whitelist unless you chose one (or already had one). Opening the page and saving used to snapshot the current account list, so a device bound later from the Imou app was filtered out
+- After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status. Deselecting a device in options only stops polling — it does not remove the Home Assistant device
 - Refusing to delete a multi-channel camera/NVR channel raises a clear error in the UI instead of a silent rejection that the frontend showed as `[object Object]`. Devices already gone from the account can be removed from Home Assistant again
 - Device **Download diagnostics** now includes that device's ids, model, status, and entity summaries (secrets still redacted). Previously only account-level diagnostics existed, so the device-page download had almost nothing useful for a single camera
 - The `webhook` component is declared in the manifest. Event push registers a webhook and the config flow generates its URL, so on an installation that did not already load `webhook` for another reason this could fail
@@ -225,7 +226,7 @@
 - 账号设备列表改为约十分钟一次，而不再每次状态轮询都拉。状态仍按你配置的间隔刷新；仅「账号增删设备」的检查变慢（原先最耗配额）。在 App 新加的设备约十分钟内会出现
 - 配置类设置（侦测开关、音量、夜视、阈值、定时、重启）归入设备「配置」分区，而不再与主控件混在一起。该分区实体默认不出现在自动生成仪表盘、也不暴露给 Assist；实体本身未改，按 entity id 引用的自动化仍可用
 - 凭证无效时会结束轮询并要求重新登录，而不再反复重试已知被拒绝的密钥
-- 账号暂无设备时安装不再写入空设备过滤；之后在 App 绑定的设备会自动纳入。原先写入空列表会永久过滤掉后续设备且无提示
+- 账号暂无设备时安装会写入空的设备列表。之后在 App 绑定的设备不会自动轮询，需到「配置 → 管理设备」勾选——与安装时账号里已有摄像头的路径一致
 - 依赖 `pyimouapi==1.3.5`：并发状态读取、按主机连接上限（抓图不会拖死状态轮询）、debug 日志不含凭证，以及多处连接泄漏与分页修复
 - 无法抓图的摄像头会用你的语言说明原因，而不再只显示空白图块
 - 单个配件读失败不再导致整账号显示不可用
@@ -234,8 +235,9 @@
 
 #### 修复
 
-- 账号无设备时用 **不绑定并保存** 会清除旧的设备选择（含初次配置写在 entry data 中的白名单）。原先会写回旧白名单，App 已删设备保存后仍显示，且之后在 App 绑定的新设备可能一直被过滤
-- 重新加载后，首次拉取账号列表会卸掉账号上已不存在的 Home Assistant 设备。卸载故意保留注册表条目；下次 setup 若从空 map 起步会跳过清理，已删设备仍以最后状态显示
+- 账号无设备时用 **不绑定并保存** 会把旧的设备选择换成空列表（含初次配置写在 entry data 中的名单）。原先会写回旧 id，App 已删设备保存后仍显示
+- **保存并完成** 仅在你勾选过轮询列表（或本来就有白名单）时才写入设备过滤。只打开管理设备再保存，过去会把当前账号快照写成白名单，之后在 App 绑定的设备会被滤掉
+- 重新加载后，首次拉取账号列表会卸掉账号上已不存在的 Home Assistant 设备。卸载故意保留注册表条目；下次 setup 若从空 map 起步会跳过清理，已删设备仍以最后状态显示。在选项中取消勾选只停止轮询，不会从 Home Assistant 设备注册表移除该设备
 - 拒绝删除多通道/NVR 某一通道时，在界面抛出可读错误，而不再是前端显示成 `[object Object]` 的静默拒绝。账号上已不存在的设备也可以再次从 Home Assistant 中删除
 - 设备页 **下载诊断信息** 现包含该设备的 ID、型号、状态与实体摘要（密钥仍脱敏）。原先只有账号级诊断，设备页下载对单台相机几乎没用
 - manifest 声明 `webhook` 组件。事件推送会注册 webhook 且配置流程会生成 URL；若安装尚未因其他原因加载 `webhook`，此前可能失败

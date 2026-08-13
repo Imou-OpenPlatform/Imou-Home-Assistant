@@ -232,6 +232,34 @@ async def test_options_select_poll_returns_to_menu_then_save_and_finish(hass) ->
     assert result["data"][PARAM_UPDATE_INTERVAL] == 60
 
 
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_save_and_finish_without_picking_devices_keeps_no_filter(
+    hass,
+) -> None:
+    """Opening Manage devices and saving must not snapshot the account list.
+
+    No selected_devices key means poll everything, including a device bound
+    later from the Imou app. Writing the current map would freeze a whitelist.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_UPDATE_INTERVAL: 60},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "devices"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save_and_finish"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert PARAM_SELECTED_DEVICES not in result["data"]
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 60
+
+
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_devices_empty_shows_menu(hass) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
@@ -271,18 +299,18 @@ async def test_options_finish_without_bind_saves_options(hass) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is False
-    # The account holds nothing yet, so no filter is recorded; storing an empty
-    # list would keep a device bound later from ever being polled.
-    assert PARAM_SELECTED_DEVICES not in result["data"]
+    # Empty list: poll nothing until the user picks devices in Manage devices.
+    assert result["data"][PARAM_SELECTED_DEVICES] == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_saving_with_no_devices_clears_a_stale_selection(hass) -> None:
-    """Account listed empty: drop the old whitelist (devices deleted in the app).
+    """Account listed empty: replace a stale list with poll-nothing.
 
-    Keeping the previous ids would leave ghost devices after save/reload, and
-    would also filter out anything bound later from the Imou app. Cloud failures
-    still preserve the selection via save_without_devices.
+    Old ids would leave ghost devices after save/reload. An empty list means
+    a device bound later from the Imou app is not polled until chosen under
+    Manage devices. Cloud failures still preserve the selection via
+    save_without_devices.
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -299,7 +327,7 @@ async def test_saving_with_no_devices_clears_a_stale_selection(hass) -> None:
         result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
     )
 
-    assert PARAM_SELECTED_DEVICES not in result["data"]
+    assert result["data"][PARAM_SELECTED_DEVICES] == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -320,7 +348,7 @@ async def test_saving_with_no_devices_clears_selection_stored_in_data(hass) -> N
         result["flow_id"], user_input={"next_step_id": "finish_without_bind"}
     )
 
-    assert PARAM_SELECTED_DEVICES not in result["data"]
+    assert result["data"][PARAM_SELECTED_DEVICES] == []
     assert PARAM_SELECTED_DEVICES not in entry.data
 
 
@@ -469,6 +497,7 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
         user_input={"next_step_id": "save_and_finish"},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Binding from Manage devices records the new device for polling.
     assert result["data"][PARAM_SELECTED_DEVICES] == ["SN001"]
 
 

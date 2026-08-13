@@ -30,7 +30,7 @@
       },
       "no_devices_menu": {
         "title": "No devices found",
-        "description": "This account has no Imou devices yet. Bind a device now or finish setup and add devices later from integration options.",
+        "description": "This account has no Imou devices yet. Bind a device now, or finish setup. Devices bound later in the Imou app are not polled until you select them under Configure → Manage devices.",
         "menu_options": {
           "bind_device": "Bind a device",
           "finish_without_devices": "Continue without devices"
@@ -164,7 +164,7 @@
       },
       "select_poll_devices": {
         "title": "Select devices to poll",
-        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices will be removed on next reload.",
+        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices stay in Home Assistant but are not polled, saving API quota.",
         "data": {
           "selected_devices": "Devices"
         }

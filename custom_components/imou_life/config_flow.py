@@ -267,13 +267,13 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Create the entry for an account that holds no devices yet.
 
-        The selection is left unset rather than stored as an empty list, which
-        would read as "poll nothing" and quietly ignore the first device the
-        user binds from the Imou app.
+        Store an empty selection so later devices bound in the Imou app are
+        not polled until the user picks them under Configure → Manage devices.
+        That matches setup when the account already had cameras.
         """
         return self.async_create_entry(
             title=_entry_title(self._login_data[PARAM_APP_ID]),
-            data=dict(self._login_data),
+            data={**self._login_data, PARAM_SELECTED_DEVICES: []},
         )
 
     async def async_step_bind_device(
@@ -423,6 +423,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Initialize options flow."""
         self._devices_map: dict[str, str] = {}
         self._pending_selected: list[str] | None = None
+        self._persist_selected = False
         self._devices_error: str = ""
 
     @staticmethod
@@ -618,14 +619,21 @@ class ImouOptionsFlow(OptionsFlow):
             last_step=True,
         )
 
-    def _options_current_selected(self) -> list[str]:
-        """Return the current selected_devices list for options binding/selection."""
-        if self._pending_selected is not None:
-            return list(self._pending_selected)
+    def _stored_selected_devices(self) -> list[str] | None:
+        """Return the stored whitelist, or None when there is no filter."""
         if PARAM_SELECTED_DEVICES in self.config_entry.options:
             return list(self.config_entry.options[PARAM_SELECTED_DEVICES])
         if PARAM_SELECTED_DEVICES in self.config_entry.data:
             return list(self.config_entry.data[PARAM_SELECTED_DEVICES])
+        return None
+
+    def _options_current_selected(self) -> list[str]:
+        """Return the current selected_devices list for options binding/selection."""
+        if self._pending_selected is not None:
+            return list(self._pending_selected)
+        stored = self._stored_selected_devices()
+        if stored is not None:
+            return stored
         if self._devices_map:
             return list(self._devices_map.keys())
         return []
@@ -664,6 +672,7 @@ class ImouOptionsFlow(OptionsFlow):
             self._devices_error = error_detail
             return await self.async_step_devices_unavailable()
 
+        self._persist_selected = self._stored_selected_devices() is not None
         self._pending_selected = self._options_current_selected()
         if not self._devices_map:
             return await self.async_step_no_devices_menu()
@@ -682,7 +691,14 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_save_and_finish(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Persist pending device selection and leave other options untouched."""
+        """Persist pending device selection and leave other options untouched.
+
+        When the user never chose a whitelist (no stored key and no poll-list
+        submit), omit selected_devices so a device bound later from the Imou
+        app is still picked up.
+        """
+        if not self._persist_selected:
+            return self.async_create_entry(data=dict(self.config_entry.options))
         selected = self._options_current_selected()
         return self.async_create_entry(
             data=self._merge_options(**{PARAM_SELECTED_DEVICES: selected})
@@ -694,6 +710,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Select which account devices to poll."""
         if user_input is not None:
             self._pending_selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
+            self._persist_selected = True
             return await self.async_step_devices_menu()
 
         if not self._devices_map:
@@ -749,12 +766,12 @@ class ImouOptionsFlow(OptionsFlow):
         """Save options without binding when the account list is empty.
 
         The account was listed successfully and holds nothing, so any previous
-        selected_devices whitelist is stale (e.g. devices deleted in the Imou
-        app). Omitting the key means "no filter" — same as first-time setup —
-        so a device bound later from the app is picked up. Setup may have stored
-        the whitelist in entry.data; clear that too or get_selected_device_ids
-        would fall back to it. Cloud failures that cannot list the account use
-        save_without_devices and keep the selection.
+        selected_devices list is stale (e.g. devices deleted in the Imou app).
+        Write an empty list: poll nothing until the user picks devices under
+        Manage devices. Same rule as first-time setup with no cameras. Setup
+        may have stored the list in entry.data; clear that too or
+        get_selected_device_ids would fall back to it. Cloud failures that
+        cannot list the account use save_without_devices and keep the selection.
         """
         if PARAM_SELECTED_DEVICES in self.config_entry.data:
             self.hass.config_entries.async_update_entry(
@@ -765,12 +782,9 @@ class ImouOptionsFlow(OptionsFlow):
                     if key != PARAM_SELECTED_DEVICES
                 },
             )
-        merged = {
-            key: value
-            for key, value in self.config_entry.options.items()
-            if key != PARAM_SELECTED_DEVICES
-        }
-        return self.async_create_entry(data=merged)
+        return self.async_create_entry(
+            data=self._merge_options(**{PARAM_SELECTED_DEVICES: []})
+        )
 
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None
@@ -826,4 +840,5 @@ class ImouOptionsFlow(OptionsFlow):
         if user_input["device_id"] not in pending:
             pending.append(user_input["device_id"])
         self._pending_selected = pending
+        self._persist_selected = True
         return await self.async_step_devices_menu()
