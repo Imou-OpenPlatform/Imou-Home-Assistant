@@ -27,6 +27,7 @@ CONFIG_SWITCHES = {
     "light",
     "motion_detect",
     "pet_detect",
+    "play_sound",
     "smart_track",
     "wide_dynamic",
 }

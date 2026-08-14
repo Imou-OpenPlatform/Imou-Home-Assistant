@@ -320,6 +320,9 @@
       "pet_detect": {
         "name": "Pet Detect"
       },
+      "play_sound": {
+        "name": "Prompt Sound"
+      },
       "smart_track": {
         "name": "Smart Track"
       },

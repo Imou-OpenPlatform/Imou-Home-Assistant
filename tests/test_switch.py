@@ -8,6 +8,7 @@ from custom_components.imou_life.const import (
     PARAM_FRAME_REVERSE,
     PARAM_MOTION_DETECT,
     PARAM_PET_DETECT,
+    PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
     PARAM_WIDE_DYNAMIC,
@@ -19,6 +20,7 @@ from pyimouapi.ha_device import ImouHaDevice
 FEATURE_SWITCH_KEYS = {
     PARAM_FRAME_REVERSE,
     PARAM_PET_DETECT,
+    PARAM_PLAY_SOUND,
     PARAM_SMART_TRACK,
     PARAM_WIDE_DYNAMIC,
 }
@@ -55,6 +57,6 @@ def test_switch_types_include_plug_switch() -> None:
 
 
 def test_switch_types_include_feature_switches() -> None:
-    """Pet, flip, WDR, and smart-track must be registered or they never appear."""
+    """Feature switches must be registered or they never appear."""
     keys = {description.key for description in SWITCH_TYPES}
     assert keys >= FEATURE_SWITCH_KEYS

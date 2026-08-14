@@ -46,6 +46,9 @@
 			"pet_detect": {
 				"default": "mdi:paw"
 			},
+			"play_sound": {
+				"default": "mdi:volume-high"
+			},
 			"smart_track": {
 				"default": "mdi:target-account"
 			},

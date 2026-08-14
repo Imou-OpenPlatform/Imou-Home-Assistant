@@ -316,6 +316,9 @@
       "pet_detect": {
         "name": "宠物检测"
       },
+      "play_sound": {
+        "name": "设备提示音"
+      },
       "smart_track": {
         "name": "智能追踪"
       },

@@ -6,7 +6,7 @@
 
 #### Added
 
-- Config switches for pet detection, image flip, wide dynamic range, and smart track (IoT and PaaS where the device supports them; pet detection is IoT-only)
+- Config switches for pet detection, image flip, wide dynamic range, smart track, and device prompt sound (IoT and PaaS where the device supports them; pet detection is IoT-only)
 
 #### Changed
 
@@ -219,7 +219,7 @@
 
 #### 新增
 
-- 配置区开关：宠物检测、画面翻转、宽动态、智能追踪（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
+- 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
 
 #### 变更
 

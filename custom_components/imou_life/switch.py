@@ -27,6 +27,7 @@ from .const import (
     PARAM_LIGHT,
     PARAM_MOTION_DETECT,
     PARAM_PET_DETECT,
+    PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
     PARAM_WHITE_LIGHT,
@@ -80,6 +81,11 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_PET_DETECT,
         translation_key=PARAM_PET_DETECT,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key=PARAM_PLAY_SOUND,
+        translation_key=PARAM_PLAY_SOUND,
         entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
