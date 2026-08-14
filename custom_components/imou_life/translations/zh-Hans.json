@@ -285,7 +285,7 @@
         }
       },
       "collection_point": {
-        "name": "收藏点",
+        "name": "转到收藏点",
         "state": {
           "select_collection_point": "选择收藏点…"
         }

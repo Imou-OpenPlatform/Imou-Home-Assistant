@@ -307,7 +307,7 @@
         }
       },
       "collection_point": {
-        "name": "Collection Point",
+        "name": "Go to Collection Point",
         "state": {
           "select_collection_point": "Select a preset…"
         }
