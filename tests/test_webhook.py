@@ -193,7 +193,7 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
         {"msg_type": "alarmLocal", "name": "Front Door"},
     )
 
-    assert title == "Imou alarm: Local alarm"
+    assert title == "Imou Life alarm: Local alarm"
     assert message == "Device: Front Door\nType: Local alarm"
 
 

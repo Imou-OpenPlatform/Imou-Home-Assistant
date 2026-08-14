@@ -194,6 +194,43 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_callback_failure_stays_on_form(
+    hass, imou_config_flow_with_devices
+) -> None:
+    """A failed setMessageCallback must not save as success with no error."""
+    client = imou_config_flow_with_devices.return_value
+    client.async_set_message_callback = AsyncMock(
+        side_effect=RequestFailedException("OP1013 quota exceeded")
+    )
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_EVENT_PUSH: True,
+            SECTION_EVENT_PUSH_CALLBACK: {
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
+            },
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: ["alarm"],
+            },
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "event_push"
+    assert result["errors"] == {"base": "callback_failed"}
+    assert "OP1013" in result["description_placeholders"]["error"]
+    assert entry.options.get(PARAM_ENABLE_EVENT_PUSH) is not True
+    client.async_set_message_callback.assert_awaited_once()
+
+
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_options_select_poll_submits_and_saves(hass) -> None:
     entry = MockConfigEntry(

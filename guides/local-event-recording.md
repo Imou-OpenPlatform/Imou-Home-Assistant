@@ -215,7 +215,7 @@ Confirm the automation runs and a file appears.
 | `Can't write …, no access to path!` | `filename` is not under `allowlist_external_dirs`, directory missing, or absolute path mismatch with Step 2. Fix and restart. |
 | `Referenced entities … missing or not currently available` | Wait until the camera state is not `unavailable` after restart; verify entity ID. |
 | No `imou_life_alarm` | Enable event push + **alarm** type; fix external URL; Diagnostics → `event_push.recent_msg_type_counts`. Privacy mask (`openCamera` / `closeCamera`) fires `imou_life_event` only. |
-| Never see `human` / `videoMotion` | Enable motion/human detection on the device; confirm the cloud actually pushes those types. |
+| Never see `human` / `videoMotion` | Enable picture change / human detection on the device; confirm the cloud actually pushes those types. |
 | Empty / failed MP4 | Stream URL expired, network issue, or quota; retry; check logs around `getLiveStreamInfo` / stream / ffmpeg. |
 
 ### Roadmap — native support
@@ -445,7 +445,7 @@ event_data:
 | `Can't write …, no access to path!` | `filename` 不在 `allowlist_external_dirs` 下、目录不存在、或与步骤 2 的绝对路径不一致。修正后重启。 |
 | `Referenced entities … missing or not currently available` | 重启后等待相机状态非 `unavailable`；核对实体 ID。 |
 | 收不到 `imou_life_alarm` | 启用事件推送且包含 **alarm**；检查外网 URL；诊断信息中的 `event_push.recent_msg_type_counts`。隐私遮蔽（`openCamera` / `closeCamera`）只触发 `imou_life_event`。 |
-| 始终没有 `human` / `videoMotion` | 在设备上开启移动/人形侦测；确认云端确实推送了这些类型。 |
+| 始终没有 `human` / `videoMotion` | 在设备上开启画面变化/人形检测；确认云端确实推送了这些类型。 |
 | MP4 为空或失败 | 流地址过期、网络或配额问题；重试；查看 `getLiveStreamInfo` / stream / ffmpeg 相关日志。 |
 
 ### 路线图 — 原生支持

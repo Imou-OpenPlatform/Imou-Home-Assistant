@@ -1,6 +1,6 @@
 {
   "notification": {
-    "title": "Imou alarm: {alarm_type}",
+    "title": "Imou Life alarm: {alarm_type}",
     "device": "Device: {device_name}",
     "type": "Type: {alarm_type}",
     "time": "Time: {time_str}",
@@ -9,7 +9,7 @@
     "unknown_alarm": "Alarm"
   },
   "alarm_types": {
-    "videoMotion": "Motion detection",
+    "videoMotion": "Picture change",
     "human": "Human detection",
     "alarmPIR": "PIR alarm",
     "smokeAlarm": "Smoke alarm",
@@ -27,7 +27,7 @@
     "lowTemAbnormal": "Low temperature",
     "highHumAbnormal": "High humidity",
     "lowHumAbnormal": "Low humidity",
-    "electricAbnormal": "Voltage abnormal",
+    "electricAbnormal": "Abnormal voltage",
     "fireAlarm": "Fire alarm",
     "earlyWarning": "Early warning",
     "alarmOccurs": "Alarm triggered",
@@ -39,7 +39,7 @@
     "notOpenedDoor": "Door open failed",
     "openDoorAbnormal": "Unauthorized door open",
     "hijackAlarm": "Duress alarm",
-    "mobileDetect": "Mobile detection",
+    "mobileDetect": "Picture change",
     "callBellEvent": "Call event",
     "abAlarmSound": "Abnormal sound alarm",
     "objectMoved": "Object moved",

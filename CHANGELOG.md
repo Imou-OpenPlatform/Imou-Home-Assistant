@@ -6,11 +6,16 @@
 
 #### Added
 
-- Config switches for pet detection, image flip, wide dynamic range, smart track, device prompt sound, alarm siren linkage, and alarm white-light linkage (IoT and PaaS where the device supports them; pet detection is IoT-only)
+- Config switches for pet detection, flip image, wide dynamic range, smart tracking, prompt sound, alarm-linked siren, and alarm-linked white light (shown when the device has the matching IoT ref / PaaS ability; pet detection is IoT-only)
 
 #### Changed
 
 - Depend on `pyimouapi==1.3.6`
+- English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
+
+#### Fixed
+
+- Enabling event push no longer saves as success when Imou rejects the callback URL. The options form stays open and shows the API error
 
 ### [1.3.4]
 
@@ -31,10 +36,10 @@
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
 - Errors raised while operating a device are translated, so the UI shows them in your language instead of the raw English message from the API
-- Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou app appears within ten minutes
+- Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou Life app appears within ten minutes
 - Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls. Entities in that section are hidden from auto-generated dashboards and are not exposed to Assist by default; the entities themselves are unchanged, so anything referring to them by entity id keeps working
 - Invalid credentials now end the polling and ask you to sign in again, rather than retrying a secret the integration already knows is refused
-- Setting up an account that holds no devices stores an empty device list. A device bound later from the Imou app is not polled until you select it under Configure → Manage devices — same as when the account already had cameras at setup
+- Setting up an account that holds no devices stores an empty device list. A device bound later from the Imou Life app is not polled until you select it under Configure → Manage devices — same as when the account already had cameras at setup
 - Depend on `pyimouapi==1.3.5`, which brings concurrent status reads, a per-host connection cap so snapshot downloads cannot stall status polling, credentials kept out of debug logs, and several connection-leak and paging fixes
 - A camera that cannot produce a snapshot reports why, in your language, instead of showing a blank tile
 - One unreadable accessory no longer leaves the whole account showing as unavailable
@@ -44,8 +49,8 @@
 #### Fixed
 
 - On IPC-K7C (product_id `FKX9UYL4`), `motion_detect` skips advertised but unusable refs `14800` and `305000` and binds `108800`, so `switch.turn_on` / `turn_off` no longer returns `40999` (#77). The switch remains
-- Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
-- Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou app
+- Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou Life app kept showing after save
+- Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou Life app
 - After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status. Deselecting a device in options only stops polling — it does not remove the Home Assistant device
 - Refusing to delete a multi-channel camera/NVR channel raises a clear error in the UI instead of a silent rejection that the frontend showed as `[object Object]`. Devices already gone from the account can be removed from Home Assistant again
 - Device **Download diagnostics** now includes that device's ids, model, status, and entity summaries (secrets still redacted). Previously only account-level diagnostics existed, so the device-page download had almost nothing useful for a single camera
@@ -83,7 +88,7 @@
 
 #### Changed
 
-- Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
+- Event push always syncs to the Imou Life app (`basePush=1`); removed the Base push option from Configure
 - Webhook `msg_type` uses top-level `msgType` only; still expose `product_id` (`pid`) and `outputData`; treat `iotEvent` / `sirenOn` / `sirenOff` as alarms
 - Webhook: resolve numeric / `iotEvent` push types to product-model event identifiers via pyimouapi 1.3.2 (alarm classification still uses top-level `msgType`)
 - Depend on `pyimouapi==1.3.2`
@@ -219,11 +224,16 @@
 
 #### 新增
 
-- 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、报警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
+- 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、告警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
 
 #### 变更
 
 - 依赖 `pyimouapi==1.3.6`
+- 中英文界面文案对齐（实体名称、事件推送、收藏点占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
+
+#### 修复
+
+- 启用事件推送时，若 Imou 拒绝回调地址，不再当作成功保存。选项表单会留在当前页并显示接口错误
 
 ### [1.3.4]
 

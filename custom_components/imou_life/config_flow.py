@@ -34,6 +34,7 @@ from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
     API_URL_REGIONS,
+    BASE_PUSH_ALWAYS,
     CONF_HD,
     CONF_HTTP,
     CONF_HTTPS,
@@ -61,8 +62,10 @@ from .const import (
     api_url_from_region,
     api_url_region_from_value,
     callback_flags_to_event_push_types,
+    event_push_types_to_callback_flags,
 )
 from .helpers import async_build_device_map
+from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -425,6 +428,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Initialize options flow."""
         self._devices_map: dict[str, str] = {}
         self._devices_error: str = ""
+        self._callback_error: str = ""
 
     @staticmethod
     def _suggested_option_subset(
@@ -602,20 +606,89 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — event push and alarm notifications."""
         stored = dict(self.config_entry.options)
+        errors: dict[str, str] = {}
+        error_detail = ""
+        suggested_source: Mapping[str, Any] = stored
         if user_input is not None:
             flat = self._flatten_event_push_input(user_input, stored)
-            return self.async_create_entry(data=self._merge_options(**flat))
+            if flat[PARAM_ENABLE_EVENT_PUSH]:
+                callback_url = self._resolve_event_push_callback_url(
+                    str(flat.get(PARAM_WEBHOOK_URL) or "")
+                )
+                if not callback_url:
+                    errors["base"] = "callback_url_missing"
+                else:
+                    error_key = await self._async_register_message_callback(
+                        callback_url,
+                        list(flat.get(PARAM_EVENT_PUSH_TYPES) or []),
+                    )
+                    if error_key:
+                        errors["base"] = error_key
+                        error_detail = self._callback_error
+            if not errors:
+                return self.async_create_entry(data=self._merge_options(**flat))
+            suggested_source = {**stored, **flat}
 
-        suggested_options = self._nested_event_push_suggestions(stored)
-
+        placeholders = self._event_push_webhook_placeholders()
+        if error_detail:
+            placeholders["error"] = error_detail
         return self.async_show_form(
             step_id="event_push",
             data_schema=self.add_suggested_values_to_schema(
                 self._event_push_schema(),
-                suggested_options,
+                self._nested_event_push_suggestions(suggested_source),
             ),
-            description_placeholders=self._event_push_webhook_placeholders(),
+            errors=errors,
+            description_placeholders=placeholders,
         )
+
+    def _resolve_event_push_callback_url(self, custom_url: str) -> str:
+        """Return the custom URL, or the webhook URL Home Assistant can generate."""
+        url = custom_url.strip()
+        if url:
+            return url
+        webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
+        if not webhook_id:
+            return ""
+        try:
+            return webhook.async_generate_url(self.hass, webhook_id)
+        except Exception:
+            return ""
+
+    async def _async_register_message_callback(
+        self, callback_url: str, event_push_types: list[str]
+    ) -> str | None:
+        """Register the Imou callback. Return an options error key, or None."""
+        runtime = get_runtime_data(self.config_entry)
+        client = runtime.client if runtime is not None else None
+        owned = False
+        if client is None:
+            client = ImouOpenApiClient(
+                self.config_entry.data[PARAM_APP_ID],
+                self.config_entry.data[PARAM_APP_SECRET],
+                self.config_entry.data[PARAM_API_URL],
+            )
+            owned = True
+        try:
+            try:
+                await client.async_set_message_callback(
+                    status="on",
+                    callback_url=callback_url,
+                    callback_flag=event_push_types_to_callback_flags(event_push_types)
+                    or None,
+                    base_push=BASE_PUSH_ALWAYS,
+                )
+            except ImouException as exception:
+                self._callback_error = _api_error_placeholder(exception)
+                return "callback_failed"
+            except Exception as exception:
+                _LOGGER.exception("Failed to register Imou message callback")
+                self._callback_error = _api_error_placeholder(exception)
+                return "callback_failed"
+        finally:
+            if owned:
+                await client.async_close()
+        return None
 
     def _stored_selected_devices(self) -> list[str] | None:
         """Return the stored whitelist, or None when there is no filter."""

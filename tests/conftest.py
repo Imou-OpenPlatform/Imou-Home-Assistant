@@ -33,6 +33,7 @@ def imou_config_flow() -> Generator[MagicMock]:
     ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_set_message_callback = AsyncMock()
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client
@@ -57,6 +58,7 @@ def imou_config_flow_with_devices() -> Generator[MagicMock]:
     ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_set_message_callback = AsyncMock()
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client

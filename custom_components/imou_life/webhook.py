@@ -229,7 +229,7 @@ async def _async_build_notification_message(
     else:
         time_str = str(raw_time) if raw_time else ""
 
-    title = notif.get("title", "Imou alarm: {alarm_type}").format(alarm_type=alarm_type)
+    title = notif.get("title", "Imou Life alarm: {alarm_type}").format(alarm_type=alarm_type)
     message = notif.get("device", "Device: {device_name}").format(
         device_name=device_name
     )

@@ -1,4 +1,4 @@
-# Imou Home Assistant Component Integration
+# Imou Life Home Assistant Integration
 
 **[English](#english)** | **[简体中文](#zh-hans)**
 
@@ -11,9 +11,7 @@
 
 ## Introduction
 
-Imou Open Platform offers an open-source Imou python component. By integrating this component into the Home Assistant service, developers can access live preview, control devices, and view device statuses of Imou devices. Additionally, developers have the ability to extend the functionality of the Imou component by creating additional features.
-
-This integration enables bidirectional communication between Home Assistant and Imou ecosystem devices via the Imou Open Platform API.
+This integration connects Home Assistant to Imou cameras and smart devices through the Imou Open Platform API: live video, device control, and status. You can extend it with automations and additional features.
 
 > **Open Platform portal:** [open.imoulife.com](https://open.imoulife.com/) — China users, see [简体中文](#zh-hans).
 
@@ -37,7 +35,7 @@ Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App*
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your AppId and AppSecret, and select the **server region** closest to your account (**Europe / North America / Singapore**). The region must match the international portal where the app was created.
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your App ID and App secret, and select the **server region** closest to your account (**Europe / North America / Singapore**). The region must match the international portal where the app was created.
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
@@ -51,9 +49,9 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry to open a menu: **General**, **Event push**, or **Manage devices**. Each section saves when you submit that form; you do not need to visit the other sections in the same session.
+Use **Configure** on the integration entry to open a menu: **General settings**, **Event push**, or **Manage devices**. Each section saves when you submit that form; you do not need to visit the other sections in the same session.
 
-- **General** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+- **General settings** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
@@ -73,9 +71,9 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 
 ## Features
 * **Integration & account**
-  - Bind devices to your open-platform account from **Configure → Manage devices** (device serial + verification code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
+  - Bind devices to your open-platform account from **Configure → Manage devices** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
   - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
-  - **Configure** menu: **General** (enable polling, interval, camera, PTZ), **Event push**, and **Manage devices** (select/bind, then Submit); each section saves independently
+  - **Configure** menu: **General settings** (polling, camera, PTZ), **Event push**, and **Manage devices** (select/bind, then Submit); each section saves independently
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.6 for Open Platform API access
@@ -84,45 +82,42 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, and notifications
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional notify services for alarm messages (standard HA actions, comma-separated)
-  - Choose push message types; messages are also synced to the Imou mobile app
+  - Choose push message types; messages are also synced to the Imou Life app
   - Alarm images in push payloads are encrypted — use automations with `camera.snapshot` / `camera_proxy` if you need notification thumbnails
   - **Local event recording (workaround)** — save short post-alarm clips with `camera.record`; native support planned later. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
-* **Camera Function Management**
-  - Information and status display (device name, online status, storage status, battery level, etc.)
-  - Live video preview
-  - PTZ control (direction buttons and duration in **Configure → General**)
-  - **Collection points** — `select.collection_point` lists presets from the device/app; choose a preset to move the camera (requires `CollectionPoint` capability; no read-back of current position)
-  - Motion detection configuration
-  - Human detection configuration
-  - Privacy mode configuration
-  - Night vision mode configuration
-  - White light alarm configuration
-  - Audio capture configuration
-  - Abnormal sound alarm configuration
-  - Device reboot
-* **Alarm Sensor Smart Device Management**
-  - Information and status display (device name, online status, arming mode, battery level, etc.)
-  - Alarm volume configuration
-  - One-click alarm mute
-  - Indicator light switch configuration
-  - Temperature & humidity monitoring
-  - Device reboot
-* **Energy Smart Device Management**
-  - Information and status display (device name, power consumption, online status)
-  - Socket switch and countdown settings
-  - Socket indicator configuration
-  - Socket power configuration
+* **Camera**
+  - Status (name, online, storage, battery, …)
+  - Live video
+  - PTZ (direction buttons; duration in **Configure → General settings**)
+  - **Collection points** — `select.collection_point` lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
+  - Detection: picture change, human, pet
+  - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
+  - White light, alarm-linked white light, alarm-linked siren
+  - Audio recording, prompt sound, abnormal sound alarm
+  - Restart device
+* **Alarm sensors**
+  - Status (name, online, arming mode, battery, …)
+  - Alarm volume
+  - One-tap mute
+  - Indicator light
+  - Temperature and humidity
+  - Restart device
+* **Energy devices**
+  - Status (name, energy use, online)
+  - Plug switch and countdown
+  - Plug indicator light
+  - Max power
 
 ## Troubleshooting
 
-- **Invalid AppId / AppSecret** — Home Assistant opens a **re-authentication** flow; enter a new App Secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
+- **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
 - **Event push not working** — Open **Configure → Event push**. Confirm **Enable event push** is on; note the **Webhook ID** and **Suggested callback URL** at the top. Leave **Custom callback URL** empty unless you need a different public URL. Also check **Settings → System → Network → Home Assistant URL** (external URL required). Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
-  - If `videoMotion` / `human` / `mobileDetect` never appear: confirm motion/human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
+  - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
-- **PTZ presets** — use `select.select_option` on `select.<device>_collection_point` with the preset name (as shown in the Imou app). The select shows **Select a preset…** when the camera is not at a known preset position.
+- **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
 - **Local recording / `camera.record`** — Stream not set up, path access errors, or unavailable camera entities: see [Local event recording (workaround)](guides/local-event-recording.md#english).
 
@@ -147,13 +142,9 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 ## 简介
 
-Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home Assistant 后，开发者可以访问 Imou 设备的实时预览、控制设备并查看设备状态，也可以在此基础上扩展更多功能。
-
-本集成通过 Imou 开放平台 API，实现 Home Assistant 与 Imou 生态设备之间的双向通信。
+本集成通过 Imou 开放平台 API，把乐橙摄像头和智能设备接入 Home Assistant：直播、控制与状态查看，也可在此基础上做自动化和扩展。
 
 > **开放平台入口：** [open.imou.com](https://open.imou.com/) — 海外用户请参阅 [English](#english)。
-
-**[English](#english)** | **简体中文**
 
 ## 安装
 
@@ -175,7 +166,7 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 ### 3. 通过 HACS 安装
 
-<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 AppId、AppSecret，服务器区域选择 **中国**（须与在 open.imou.com 创建应用时使用的区域一致）。
+<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 App ID、App secret，服务器区域选择 **中国**（须与在 open.imou.com 创建应用时使用的区域一致）。
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
@@ -185,23 +176,23 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 
 ### 4. 完成
 
-您 Imou 账号下的设备应已出现在 Home Assistant 中。
+你的乐橙账号下的设备应已出现在 Home Assistant 中。
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点击 **配置（Configure）** 会打开菜单：**常规（General）**、**事件推送（Event push）** 或 **管理设备（Manage devices）**。每一项提交表单即保存，同一次会话中无需依次进入其他分区。
+在集成条目上点击 **配置** 会打开菜单：**常规设置**、**事件推送** 或 **管理设备**。每一项提交即保存，同一次会话中无需进入其他分区。
 
-- **常规（General）** — 启用/关闭状态轮询、轮询间隔、截图等待时间、直播分辨率/协议、云台持续时间  
+- **常规设置** — 启用/关闭状态轮询、轮询间隔、抓图等待时间、直播分辨率/协议、云台转动时间  
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
-- **事件推送（Event push）** — 启用 Webhook 回调、可选自定义回调 URL、消息类型与告警通知  
+- **事件推送** — 启用 Webhook 回调、可选自定义回调 URL、消息类型与告警通知  
 
 此步骤会显示 **Webhook ID** 与**建议回调 URL**。**自定义回调 URL** 留空即使用建议地址；仅当建议地址无法从公网访问时再填写公网 URL。
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
 
-- **管理设备（Manage devices）** — 勾选要轮询的设备，或展开 **绑定新设备** 填写序列号；点提交即保存并关闭
+- **管理设备** — 勾选要轮询的设备，或展开 **绑定新设备** 填写序列号；点提交即保存并关闭
 
 <img src="assets/images/configure_devices.png" width="70%" alt="配置 — 管理设备">
 
@@ -212,9 +203,9 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
 ## 功能
 
 * **集成与账号**
-  - 在 **配置 → 管理设备** 中将设备绑定到开放平台账号（设备序列号 + 验证码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
+  - 在 **配置 → 管理设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
   - 安装时及 **配置 → 管理设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 菜单：**常规**（轮询、摄像头、云台）、**事件推送**、**管理设备**（选择/绑定后提交）；每一项可独立保存
+  - **配置** 菜单：**常规设置**（轮询、摄像头、云台）、**事件推送**、**管理设备**（选择/绑定后提交）；每一项可独立保存
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.6 访问开放平台 API
@@ -223,45 +214,42 @@ Imou 开放平台提供开源 Imou Python 组件。将该组件集成到 Home As
   - **配置 → 事件推送** 显示 Webhook ID 与建议回调 URL；回调、消息类型、通知分组设置
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
   - 可选告警消息通知服务（标准 HA action，逗号分隔）
-  - 可选择推送消息类型；消息也会同步到 Imou 手机 App
+  - 可选择推送消息类型；消息也会同步到乐橙 App
   - 推送载荷中的告警图片为加密格式 — 若需通知缩略图，请在自动化中使用 `camera.snapshot` / `camera_proxy`
   - **本地事件录像（临时方案）** — 用 `camera.record` 保存告警后短视频；后续版本计划原生支持。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)
-* **摄像头功能**
-  - 信息与状态（设备名称、在线状态、存储状态、电量等）
-  - 实时视频预览
-  - 云台控制（方向按钮；时长在 **配置 → 常规** 中设置）
-  - **收藏点** — `select.collection_point` 列出设备/App 中的预置位，选择后跳转（需 `CollectionPoint` 能力；无法读取当前是否在某一收藏点）
-  - 移动侦测配置
-  - 人形检测配置
-  - 隐私模式配置
-  - 夜视模式配置
-  - 白光灯告警配置
-  - 音频采集配置
-  - 异常声音告警配置
-  - 设备重启
-* **报警传感器类设备**
-  - 信息与状态（设备名称、在线状态、布防模式、电量等）
-  - 告警音量配置
+* **摄像头**
+  - 状态（名称、在线、存储、电量等）
+  - 直播
+  - 云台（方向按钮；时长在 **配置 → 常规设置** 中设置）
+  - **收藏点** — `select.collection_point` 列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
+  - 检测：画面变化、人形、宠物
+  - 隐私模式、夜视、画面翻转、宽动态、智能追踪
+  - 白光灯、告警联动白光灯、告警联动警笛
+  - 音频录制、设备提示音、异常音告警
+  - 重启设备
+* **告警传感器**
+  - 状态（名称、在线、布防模式、电量等）
+  - 告警音量
   - 一键消音
-  - 指示灯开关配置
-  - 温湿度监测
-  - 设备重启
-* **能源类智能设备**
-  - 信息与状态（设备名称、功耗、在线状态）
+  - 指示灯
+  - 温湿度
+  - 重启设备
+* **能源设备**
+  - 状态（名称、用电、在线）
   - 插座开关与倒计时
-  - 插座指示灯配置
-  - 插座功率配置
+  - 插座指示灯
+  - 最大功率
 
 ## 故障排查
 
-- **AppId / AppSecret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App Secret（通知或三点菜单 → **重新认证**）。
+- **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
 - **事件推送不工作** — 打开 **配置 → 事件推送**。确认 **启用事件推送** 已开启；记下顶部的 **Webhook ID** 与 **建议回调 URL**。**自定义回调 URL** 留空除非需要其他公网地址。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**（需配置外网 URL）。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
-  - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启移动/人形侦测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。
+  - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。
-- **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填 Imou App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
+- **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
 - **本地录像 / `camera.record`** — Stream 未启用、路径无权访问、相机实体 unavailable 等：见 [本地事件录像（临时方案）](guides/local-event-recording.md#zh-hans)。
 

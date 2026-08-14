@@ -30,7 +30,7 @@
       },
       "no_devices_menu": {
         "title": "No devices found",
-        "description": "This account has no Imou devices yet. Bind a device now, or finish setup. Devices bound later in the Imou app are not polled until you select them under Configure → Manage devices.",
+        "description": "This account has no Imou devices yet. Bind a device now, or finish setup. Devices bound later in the Imou Life app are not polled until you select them under Configure → Manage devices.",
         "menu_options": {
           "bind_device": "Bind a device",
           "finish_without_devices": "Continue without devices"
@@ -38,26 +38,26 @@
       },
       "bind_device": {
         "title": "Bind device",
-        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "description": "Enter the device serial number and binding code from the Imou Life app or device label.",
         "data": {
           "device_id": "Device serial number",
           "code": "Binding code"
         },
         "data_description": {
-          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app",
           "code": "Optional. Leave empty if the device does not require a binding code"
         }
       },
       "select_devices": {
-        "title": "Select Devices",
-        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will NOT be polled, saving API quota. You can bind more devices later under Settings → Devices & services → Imou Life → Configure → Manage Devices.",
+        "title": "Select devices",
+        "description": "Found {device_count} device(s) on your account. Select the devices you want to add to Home Assistant. Unselected devices will not be polled, saving API quota. You can bind more devices later under Settings → Devices & services → Imou Life → Configure → Manage devices.",
         "data": {
           "selected_devices": "Devices"
         }
       },
       "reauth_confirm": {
         "title": "Re-authenticate Imou Life",
-        "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
+        "description": "Your app secret is no longer valid. Enter a new app secret for App ID {app_id}.",
         "data": {
           "app_secret": "App secret"
         }
@@ -71,14 +71,16 @@
     },
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
-      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your AppId resource quota, then reload the integration."
+      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your App ID resource quota, then reload the integration."
     }
   },
   "options": {
     "error": {
       "request_failed": "Failed to load device list: {error}",
       "bind_failed": "Failed to bind device: {error}",
-      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment."
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
+      "callback_failed": "Failed to register the callback URL with Imou: {error}",
+      "callback_url_missing": "No callback URL available. Enter a custom callback URL, or set Home Assistant's external URL."
     },
     "step": {
       "init": {
@@ -91,7 +93,7 @@
         }
       },
       "general_settings": {
-        "title": "General",
+        "title": "General settings",
         "description": "Polling interval and camera defaults.",
         "data": {
           "enable_polling": "Enable status polling",
@@ -117,7 +119,7 @@
           "enable_event_push": "Enable event push"
         },
         "data_description": {
-          "enable_event_push": "Registers the callback URL with Imou cloud. Alarm events also sync to the Imou app."
+          "enable_event_push": "Registers the callback URL with Imou cloud. Alarm events also sync to the Imou Life app."
         },
         "sections": {
           "callback": {
@@ -164,7 +166,7 @@
               "code": "Binding code"
             },
             "data_description": {
-              "device_id": "Serial number (SN) printed on the device or shown in the Imou app. Leave empty to skip binding.",
+              "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app. Leave empty to skip binding.",
               "code": "Optional. Leave empty if the device does not require a binding code"
             }
           }
@@ -188,13 +190,13 @@
       },
       "bind_device": {
         "title": "Bind device",
-        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "description": "Enter the device serial number and binding code from the Imou Life app or device label.",
         "data": {
           "device_id": "Device serial number",
           "code": "Binding code"
         },
         "data_description": {
-          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app",
           "code": "Optional. Leave empty if the device does not require a binding code"
         }
       }
@@ -216,7 +218,7 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
+        "alarm": "Device alarms (smoke, gas, human, picture change, etc.)",
         "device_status": "Device online/offline",
         "iot": "IoT device messages",
         "numberstat": "People counting",
@@ -245,7 +247,7 @@
         "name": "Storage used"
       },
       "switch_cnt": {
-        "name": "Cycles today"
+        "name": "Switch cycles today"
       },
       "use_electricity": {
         "name": "Energy consumption"
@@ -275,19 +277,19 @@
       "night_vision_mode": {
         "name": "Night vision mode",
         "state": {
-          "custom": "Custom mode",
-          "fullcolor": "Bright color night vision",
+          "custom": "Custom night vision",
+          "fullcolor": "Full-color night vision",
           "infrared": "Infrared night vision",
           "intelligent": "Smart night vision",
-          "lowlight": "Low light night vision",
+          "lowlight": "Low-light night vision",
           "off": "Off",
-          "smartlowlight": "Smart low light night vision"
+          "smartlowlight": "Smart low-light night vision"
         }
       },
       "collection_point": {
         "name": "Go to collection point",
         "state": {
-          "select_collection_point": "Select a preset…"
+          "select_collection_point": "Select a collection point…"
         }
       }
     },
@@ -302,7 +304,7 @@
         "name": "Privacy mode"
       },
       "frame_reverse": {
-        "name": "Flip Image"
+        "name": "Flip image"
       },
       "header_detect": {
         "name": "Human detection"
@@ -311,22 +313,22 @@
         "name": "Indicator light"
       },
       "linkage_siren": {
-        "name": "Alarm Siren Linkage"
+        "name": "Alarm-linked siren"
       },
       "linkage_white_light": {
-        "name": "Alarm White Light Linkage"
+        "name": "Alarm-linked white light"
       },
       "motion_detect": {
-        "name": "Motion detection"
+        "name": "Picture change"
       },
       "pet_detect": {
-        "name": "Pet Detect"
+        "name": "Pet detection"
       },
       "play_sound": {
-        "name": "Prompt Sound"
+        "name": "Prompt sound"
       },
       "smart_track": {
-        "name": "Smart Track"
+        "name": "Smart tracking"
       },
       "switch": {
         "name": "Plug switch"
@@ -335,33 +337,33 @@
         "name": "White light"
       },
       "wide_dynamic": {
-        "name": "Wide Dynamic Range"
+        "name": "Wide dynamic range"
       }
     },
     "button": {
       "ptz_up": {
-        "name": "PTZ Up"
+        "name": "PTZ up"
       },
       "ptz_down": {
-        "name": "PTZ Down"
+        "name": "PTZ down"
       },
       "ptz_left": {
-        "name": "PTZ Left"
+        "name": "PTZ left"
       },
       "ptz_right": {
-        "name": "PTZ Right"
+        "name": "PTZ right"
       },
       "restart_device": {
-        "name": "Restart Device"
+        "name": "Restart device"
       },
       "mute": {
         "name": "Mute"
       },
       "siren_start": {
-        "name": "Start Siren"
+        "name": "Start siren"
       },
       "siren_stop": {
-        "name": "Stop Siren"
+        "name": "Stop siren"
       }
     },
     "camera": {
@@ -380,10 +382,10 @@
     },
     "text": {
       "count_down_switch": {
-        "name": "Countdown Timer (min)"
+        "name": "Countdown timer (min)"
       },
       "overcharge_switch": {
-        "name": "Max Power (W)"
+        "name": "Max power (W)"
       }
     }
   },
