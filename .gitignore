@@ -158,7 +158,14 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
+
+# VS Code / Cursor workspace
+.vscode/
+
+# Ruff
+.ruff_cache/
+
 requirements.txt
 
 # Cursor IDE / Agent（含本仓库内 skill 与脚本；若需纳入版本控制可改为 `!.cursor/skills/` 等规则）
