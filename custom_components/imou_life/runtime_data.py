@@ -29,6 +29,7 @@ class ImouRuntimeData:
     push_msg_type_counts: dict[str, int] = field(default_factory=dict)
     push_last_msg_type: str | None = None
     push_last_received_at: datetime | None = None
+    local_record_started_at: dict[str, float] = field(default_factory=dict)
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

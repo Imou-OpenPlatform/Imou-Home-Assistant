@@ -91,6 +91,10 @@ PARAM_SELECTED_DEVICES = "selected_devices"
 PARAM_ENABLE_EVENT_PUSH = "enable_event_push"
 PARAM_EVENT_PUSH_TYPES = "event_push_types"
 PARAM_NOTIFY_SERVICES = "notify_services"
+PARAM_LOCAL_EVENT_RECORD = "local_event_record"
+PARAM_LOCAL_RECORD_PATH = "local_record_path"
+PARAM_LOCAL_RECORD_DURATION = "local_record_duration"
+DEFAULT_LOCAL_RECORD_DURATION = 60
 # Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
 BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"

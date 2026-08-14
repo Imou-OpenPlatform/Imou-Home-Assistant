@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT, PARAM_WEBHOOK_ID
 from .helpers import resolve_ha_device_name
+from .local_record import async_maybe_record_from_alarm
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -229,7 +230,9 @@ async def _async_build_notification_message(
     else:
         time_str = str(raw_time) if raw_time else ""
 
-    title = notif.get("title", "Imou Life alarm: {alarm_type}").format(alarm_type=alarm_type)
+    title = notif.get("title", "Imou Life alarm: {alarm_type}").format(
+        alarm_type=alarm_type
+    )
     message = notif.get("device", "Device: {device_name}").format(
         device_name=device_name
     )
@@ -302,6 +305,7 @@ def _get_entry_and_runtime(
 
 async def _async_dispatch_imou_push(
     hass: HomeAssistant,
+    entry: ConfigEntry,
     runtime: ImouRuntimeData,
     event_data: dict[str, Any],
     *,
@@ -316,6 +320,7 @@ async def _async_dispatch_imou_push(
             notify_services = runtime.notify_services
             if notify_services:
                 await _async_send_notifications(hass, event_data, notify_services)
+            await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:
         _LOGGER.exception("Failed while processing accepted Imou webhook push")
 
@@ -378,7 +383,7 @@ async def async_handle_imou_webhook(
     # tied to the entry so it cannot outlive the runtime data it holds.
     entry.async_create_background_task(
         hass,
-        _async_dispatch_imou_push(hass, runtime, event_data, is_alarm=is_alarm),
+        _async_dispatch_imou_push(hass, entry, runtime, event_data, is_alarm=is_alarm),
         name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
     )
     return web.Response(status=200, text="ok")

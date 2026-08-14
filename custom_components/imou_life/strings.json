@@ -80,7 +80,8 @@
       "bind_failed": "Failed to bind device: {error}",
       "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
       "callback_failed": "Failed to register the callback URL with Imou: {error}",
-      "callback_url_missing": "No callback URL available. Enter a custom callback URL, or set Home Assistant's external URL."
+      "callback_url_missing": "No callback URL available. Enter a custom callback URL, or set Home Assistant's external URL.",
+      "record_path_not_allowed": "This folder is not in allowlist_external_dirs. Add it under Home Assistant → Allowlist external directories, then try again."
     },
     "step": {
       "init": {
@@ -89,6 +90,7 @@
         "menu_options": {
           "general_settings": "General settings",
           "event_push": "Event push",
+          "local_recording": "Local recording",
           "devices": "Manage devices"
         }
       },
@@ -110,6 +112,18 @@
           "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
           "live_protocol": "Video stream protocol. Usually https is fine.",
           "rotation_duration": "How long a single PTZ button press moves. Default 500ms."
+        }
+      },
+      "local_recording": {
+        "title": "Local recording",
+        "description": "Shared folder and clip length for cameras whose **Local event recording** switch is on. Requires event push, the Stream integration, and a path listed in allowlist_external_dirs. Clips start after the alarm (no pre-roll) and use live-stream quota.",
+        "data": {
+          "local_record_path": "Save folder",
+          "local_record_duration": "Clip duration (seconds)"
+        },
+        "data_description": {
+          "local_record_path": "Example: /media/imou. Leave empty to disable saving even if a camera switch is on.",
+          "local_record_duration": "Length of each post-alarm clip. Default 60s, range 15–180s."
         }
       },
       "event_push": {
@@ -311,6 +325,9 @@
       },
       "light": {
         "name": "Indicator light"
+      },
+      "local_event_record": {
+        "name": "Local event recording"
       },
       "linkage_siren": {
         "name": "Alarm-linked siren"

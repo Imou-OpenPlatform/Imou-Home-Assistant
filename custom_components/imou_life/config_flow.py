@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -41,6 +42,7 @@ from .const import (
     CONF_SD,
     DEFAULT_API_URL_REGION,
     DEFAULT_EVENT_PUSH_TYPES,
+    DEFAULT_LOCAL_RECORD_DURATION,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EVENT_PUSH_TYPE_OPTIONS,
@@ -53,6 +55,8 @@ from .const import (
     PARAM_EVENT_PUSH_TYPES,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
+    PARAM_LOCAL_RECORD_DURATION,
+    PARAM_LOCAL_RECORD_PATH,
     PARAM_NOTIFY_SERVICES,
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
@@ -580,7 +584,12 @@ class ImouOptionsFlow(OptionsFlow):
         """Choose which options section to edit."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general_settings", "event_push", "devices"],
+            menu_options=[
+                "general_settings",
+                "event_push",
+                "local_recording",
+                "devices",
+            ],
         )
 
     async def async_step_general_settings(
@@ -599,6 +608,47 @@ class ImouOptionsFlow(OptionsFlow):
                 self._general_settings_schema(),
                 suggested,
             ),
+        )
+
+    @staticmethod
+    def _local_recording_schema() -> vol.Schema:
+        """Build the shared local-recording options form."""
+        return vol.Schema(
+            {
+                vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
+                vol.Required(
+                    PARAM_LOCAL_RECORD_DURATION,
+                    default=DEFAULT_LOCAL_RECORD_DURATION,
+                ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
+            }
+        )
+
+    async def async_step_local_recording(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Shared folder and duration for per-camera local event recording."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            folder = str(user_input.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
+            user_input[PARAM_LOCAL_RECORD_PATH] = folder
+            if folder:
+                probe = str(Path(folder) / "imou_record.mp4")
+                if not self.hass.config.is_allowed_path(probe):
+                    errors["base"] = "record_path_not_allowed"
+            if not errors:
+                return self.async_create_entry(data=self._merge_options(**user_input))
+
+        suggested = self._suggested_option_subset(
+            self.config_entry.options,
+            (PARAM_LOCAL_RECORD_PATH, PARAM_LOCAL_RECORD_DURATION),
+        )
+        return self.async_show_form(
+            step_id="local_recording",
+            data_schema=self.add_suggested_values_to_schema(
+                self._local_recording_schema(),
+                suggested,
+            ),
+            errors=errors,
         )
 
     async def async_step_event_push(

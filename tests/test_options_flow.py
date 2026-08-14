@@ -20,6 +20,8 @@ from custom_components.imou_life.const import (
     PARAM_EVENT_PUSH_TYPES,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
+    PARAM_LOCAL_RECORD_DURATION,
+    PARAM_LOCAL_RECORD_PATH,
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
@@ -44,6 +46,7 @@ async def test_options_flow_init_shows_menu(hass) -> None:
     assert set(result["menu_options"]) == {
         "general_settings",
         "event_push",
+        "local_recording",
         "devices",
     }
 
@@ -85,6 +88,96 @@ async def test_options_general_settings_saves_without_devices(hass) -> None:
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_local_recording_saves_shared_settings(hass) -> None:
+    """Shared folder and duration save without touching other option sections."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_SELECTED_DEVICES: ["device_1"],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"next_step_id": "local_recording"},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "local_recording"
+
+    with patch.object(hass.config, "is_allowed_path", return_value=True):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                PARAM_LOCAL_RECORD_PATH: " /media/imou ",
+                PARAM_LOCAL_RECORD_DURATION: 45,
+            },
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_LOCAL_RECORD_PATH] == "/media/imou"
+    assert result["data"][PARAM_LOCAL_RECORD_DURATION] == 45
+    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
+    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> None:
+    """A folder outside allowlist_external_dirs must not be saved."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"next_step_id": "local_recording"},
+    )
+
+    with patch.object(hass.config, "is_allowed_path", return_value=False):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                PARAM_LOCAL_RECORD_PATH: "/media/imou",
+                PARAM_LOCAL_RECORD_DURATION: 60,
+            },
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"]["base"] == "record_path_not_allowed"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
+    """Clearing the folder must save even when no path is allowlisted yet."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_LOCAL_RECORD_PATH: "/media/imou"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"next_step_id": "local_recording"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_LOCAL_RECORD_PATH: "",
+            PARAM_LOCAL_RECORD_DURATION: 60,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_LOCAL_RECORD_PATH] == ""
+    assert result["data"][PARAM_LOCAL_RECORD_DURATION] == 60
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")

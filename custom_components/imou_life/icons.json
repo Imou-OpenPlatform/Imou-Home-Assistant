@@ -73,6 +73,9 @@
 			"light": {
 				"default": "mdi:lightbulb-on"
 			},
+			"local_event_record": {
+				"default": "mdi:file-video"
+			},
 			"linkage_siren": {
 				"default": "mdi:bell-alert"
 			},

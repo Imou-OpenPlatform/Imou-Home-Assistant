@@ -9,10 +9,11 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
@@ -27,6 +28,7 @@ from .const import (
     PARAM_LIGHT,
     PARAM_LINKAGE_SIREN,
     PARAM_LINKAGE_WHITE_LIGHT,
+    PARAM_LOCAL_EVENT_RECORD,
     PARAM_MOTION_DETECT,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
@@ -141,6 +143,20 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou switch entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSwitch, _iter_switches)
+    async_add_imou_entities(
+        entry, async_add_entities, ImouLocalRecordSwitch, _iter_local_record_switches
+    )
+
+
+def _iter_local_record_switches(
+    coordinator: ImouDataUpdateCoordinator,
+) -> list[tuple[str, ImouHaDevice]]:
+    """One local-only record switch per camera channel."""
+    return [
+        (PARAM_LOCAL_EVENT_RECORD, device)
+        for device in coordinator.devices
+        if device.channel_id is not None
+    ]
 
 
 class ImouSwitch(ImouEntity, SwitchEntity):
@@ -189,4 +205,48 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 translation_key="switch_operation_failed",
                 translation_placeholders={"error": err.message},
             ) from err
+        self.async_write_ha_state()
+
+
+class ImouLocalRecordSwitch(ImouEntity, SwitchEntity, RestoreEntity):
+    """HA-only switch: save a short clip when this camera raises an alarm."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_is_on = False
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+        entity_type: str,
+        device: ImouHaDevice,
+    ) -> None:
+        """Initialize the local recording switch."""
+        super().__init__(coordinator, config_entry, entity_type, device)
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Keep the setting usable when the camera is offline."""
+        if not super(ImouEntity, self).available:
+            return False
+        return self._device_key in self.coordinator.devices_by_key
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last on/off state after a restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._attr_is_on = last_state.state == STATE_ON
+
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable local recording for this camera."""
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable local recording for this camera."""
+        self._attr_is_on = False
         self.async_write_ha_state()
