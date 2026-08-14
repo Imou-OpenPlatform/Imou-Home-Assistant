@@ -347,6 +347,12 @@
       "light": {
         "name": "Light"
       },
+      "linkage_siren": {
+        "name": "Alarm Siren Linkage"
+      },
+      "linkage_white_light": {
+        "name": "Alarm White Light Linkage"
+      },
       "switch": {
         "name": "Plug Switch"
       },

@@ -310,6 +310,12 @@
       "light": {
         "name": "Indicator light"
       },
+      "linkage_siren": {
+        "name": "Alarm Siren Linkage"
+      },
+      "linkage_white_light": {
+        "name": "Alarm White Light Linkage"
+      },
       "motion_detect": {
         "name": "Motion detection"
       },

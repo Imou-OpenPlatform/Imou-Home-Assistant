@@ -25,6 +25,8 @@ CONFIG_SWITCHES = {
     "frame_reverse",
     "header_detect",
     "light",
+    "linkage_siren",
+    "linkage_white_light",
     "motion_detect",
     "pet_detect",
     "play_sound",

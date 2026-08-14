@@ -25,6 +25,8 @@ from .const import (
     PARAM_FRAME_REVERSE,
     PARAM_HEADER_DETECT,
     PARAM_LIGHT,
+    PARAM_LINKAGE_SIREN,
+    PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_MOTION_DETECT,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
@@ -71,6 +73,16 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         key=PARAM_LIGHT,
         translation_key=PARAM_LIGHT,
         device_class=SwitchDeviceClass.SWITCH,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key=PARAM_LINKAGE_SIREN,
+        translation_key=PARAM_LINKAGE_SIREN,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key=PARAM_LINKAGE_WHITE_LIGHT,
+        translation_key=PARAM_LINKAGE_WHITE_LIGHT,
         entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(

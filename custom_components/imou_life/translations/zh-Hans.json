@@ -310,6 +310,12 @@
       "light": {
         "name": "指示灯"
       },
+      "linkage_siren": {
+        "name": "告警联动警笛"
+      },
+      "linkage_white_light": {
+        "name": "报警联动白光灯"
+      },
       "motion_detect": {
         "name": "移动检测"
       },

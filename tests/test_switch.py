@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 
 from custom_components.imou_life.const import (
     PARAM_FRAME_REVERSE,
+    PARAM_LINKAGE_SIREN,
+    PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_MOTION_DETECT,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
@@ -19,6 +21,8 @@ from pyimouapi.ha_device import ImouHaDevice
 
 FEATURE_SWITCH_KEYS = {
     PARAM_FRAME_REVERSE,
+    PARAM_LINKAGE_SIREN,
+    PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_SMART_TRACK,

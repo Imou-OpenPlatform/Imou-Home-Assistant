@@ -73,6 +73,12 @@
 			"light": {
 				"default": "mdi:lightbulb-on"
 			},
+			"linkage_siren": {
+				"default": "mdi:bullhorn"
+			},
+			"linkage_white_light": {
+				"default": "mdi:alarm-light"
+			},
 			"wide_dynamic": {
 				"default": "mdi:hdr"
 			}
