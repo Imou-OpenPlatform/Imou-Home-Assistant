@@ -301,6 +301,9 @@
       "close_camera": {
         "name": "隐私模式"
       },
+      "frame_reverse": {
+        "name": "画面翻转"
+      },
       "header_detect": {
         "name": "人形检测"
       },
@@ -310,11 +313,20 @@
       "motion_detect": {
         "name": "移动检测"
       },
+      "pet_detect": {
+        "name": "宠物检测"
+      },
+      "smart_track": {
+        "name": "智能追踪"
+      },
       "switch": {
         "name": "插座开关"
       },
       "white_light": {
         "name": "白光灯"
+      },
+      "wide_dynamic": {
+        "name": "宽动态"
       }
     },
     "button": {

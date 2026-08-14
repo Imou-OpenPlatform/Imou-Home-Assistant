@@ -4,10 +4,24 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from custom_components.imou_life.const import PARAM_MOTION_DETECT, PARAM_PLUG_SWITCH
+from custom_components.imou_life.const import (
+    PARAM_FRAME_REVERSE,
+    PARAM_MOTION_DETECT,
+    PARAM_PET_DETECT,
+    PARAM_PLUG_SWITCH,
+    PARAM_SMART_TRACK,
+    PARAM_WIDE_DYNAMIC,
+)
 from custom_components.imou_life.switch import SWITCH_TYPES, _iter_switches
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
+
+FEATURE_SWITCH_KEYS = {
+    PARAM_FRAME_REVERSE,
+    PARAM_PET_DETECT,
+    PARAM_SMART_TRACK,
+    PARAM_WIDE_DYNAMIC,
+}
 
 
 def _mock_coordinator(devices: list[ImouHaDevice]) -> MagicMock:
@@ -38,3 +52,9 @@ def test_iter_switches_whitelist_only() -> None:
 def test_switch_types_include_plug_switch() -> None:
     """Plug switch remains in the supported whitelist."""
     assert PARAM_PLUG_SWITCH in {description.key for description in SWITCH_TYPES}
+
+
+def test_switch_types_include_feature_switches() -> None:
+    """Pet, flip, WDR, and smart-track must be registered or they never appear."""
+    keys = {description.key for description in SWITCH_TYPES}
+    assert keys >= FEATURE_SWITCH_KEYS

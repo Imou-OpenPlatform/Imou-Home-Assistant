@@ -43,11 +43,20 @@
 			"motion_detect": {
 				"default": "mdi:motion-sensor"
 			},
+			"pet_detect": {
+				"default": "mdi:paw"
+			},
+			"smart_track": {
+				"default": "mdi:target-account"
+			},
 			"ab_alarm_sound": {
 				"default": "mdi:home-sound-in"
 			},
 			"close_camera": {
 				"default": "mdi:camera-off"
+			},
+			"frame_reverse": {
+				"default": "mdi:flip-vertical"
 			},
 			"white_light": {
 				"default": "mdi:light-flood-down"
@@ -60,6 +69,9 @@
 			},
 			"light": {
 				"default": "mdi:lightbulb-on"
+			},
+			"wide_dynamic": {
+				"default": "mdi:hdr"
 			}
 		},
 		"button": {

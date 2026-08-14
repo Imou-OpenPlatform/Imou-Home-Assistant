@@ -317,11 +317,20 @@
       "motion_detect": {
         "name": "Motion Detect"
       },
+      "pet_detect": {
+        "name": "Pet Detect"
+      },
+      "smart_track": {
+        "name": "Smart Track"
+      },
       "ab_alarm_sound": {
         "name": "Abnormal sound detection"
       },
       "close_camera": {
         "name": "Privacy mode"
+      },
+      "frame_reverse": {
+        "name": "Flip Image"
       },
       "white_light": {
         "name": "White Light"
@@ -337,6 +346,9 @@
       },
       "switch": {
         "name": "Plug Switch"
+      },
+      "wide_dynamic": {
+        "name": "Wide Dynamic Range"
       }
     },
     "button": {
