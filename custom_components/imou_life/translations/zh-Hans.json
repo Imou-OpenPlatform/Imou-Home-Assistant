@@ -90,7 +90,6 @@
         "menu_options": {
           "general_settings": "常规设置",
           "event_push": "事件推送",
-          "local_recording": "本地录像",
           "devices": "管理设备"
         }
       },
@@ -112,18 +111,6 @@
           "live_resolution": "摄像头直播分辨率，HD = 高清，SD = 标清。",
           "live_protocol": "视频流协议，一般用 https 即可。",
           "rotation_duration": "按一次云台方向按钮转动多久，默认 500 毫秒。"
-        }
-      },
-      "local_recording": {
-        "title": "本地录像",
-        "description": "账号共用的保存目录和片段时长。只对打开了「告警本地录像」开关的摄像头生效。需要已启用事件推送、Stream 组件，以及目录已加入 allowlist_external_dirs。片段从告警后开始（无预录），并消耗直播配额。",
-        "data": {
-          "local_record_path": "保存目录",
-          "local_record_duration": "片段时长（秒）"
-        },
-        "data_description": {
-          "local_record_path": "例如 /media/imou。留空则即使打开了摄像头开关也不会保存。",
-          "local_record_duration": "每次告警后录制的秒数，默认 60，范围 15–180。"
         }
       },
       "event_push": {
@@ -161,6 +148,18 @@
             },
             "data_description": {
               "notify_services": "英文逗号分隔的 HA 动作，如 notify.mobile_app_phone。留空则仅通过自动化处理。"
+            }
+          },
+          "local_recording": {
+            "name": "本地录像",
+            "description": "账号共用的保存目录和片段时长。只对打开了「告警本地录像」开关的摄像头生效。目录须加入 allowlist_external_dirs。片段从告警后开始（无预录），并消耗直播配额。",
+            "data": {
+              "local_record_path": "保存目录",
+              "local_record_duration": "片段时长（秒）"
+            },
+            "data_description": {
+              "local_record_path": "例如 /media/imou。留空则即使打开了摄像头开关也不会保存。",
+              "local_record_duration": "每次告警后录制的秒数，默认 60，范围 15–180。"
             }
           }
         }

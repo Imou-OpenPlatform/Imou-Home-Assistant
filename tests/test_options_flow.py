@@ -8,6 +8,7 @@ import pytest
 from custom_components.imou_life.config_flow import (
     SECTION_BIND_DEVICE,
     SECTION_EVENT_PUSH_CALLBACK,
+    SECTION_EVENT_PUSH_LOCAL_RECORDING,
     SECTION_EVENT_PUSH_SUBSCRIPTIONS,
 )
 from custom_components.imou_life.const import (
@@ -46,7 +47,6 @@ async def test_options_flow_init_shows_menu(hass) -> None:
     assert set(result["menu_options"]) == {
         "general_settings",
         "event_push",
-        "local_recording",
         "devices",
     }
 
@@ -90,9 +90,9 @@ async def test_options_general_settings_saves_without_devices(hass) -> None:
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_options_local_recording_saves_shared_settings(hass) -> None:
-    """Shared folder and duration save without touching other option sections."""
+    """Shared folder and duration save on the event push form."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
@@ -106,17 +106,26 @@ async def test_options_local_recording_saves_shared_settings(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"next_step_id": "local_recording"},
+        {"next_step_id": "event_push"},
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "local_recording"
+    assert result["step_id"] == "event_push"
 
     with patch.object(hass.config, "is_allowed_path", return_value=True):
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             {
-                PARAM_LOCAL_RECORD_PATH: " /media/imou ",
-                PARAM_LOCAL_RECORD_DURATION: 45,
+                PARAM_ENABLE_EVENT_PUSH: True,
+                SECTION_EVENT_PUSH_CALLBACK: {
+                    PARAM_WEBHOOK_URL: "https://example.test/hook",
+                },
+                SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                    PARAM_EVENT_PUSH_TYPES: ["alarm"],
+                },
+                SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                    PARAM_LOCAL_RECORD_PATH: " /media/imou ",
+                    PARAM_LOCAL_RECORD_DURATION: 45,
+                },
             },
         )
 
@@ -136,20 +145,27 @@ async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> Non
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"next_step_id": "local_recording"},
+        {"next_step_id": "event_push"},
     )
 
     with patch.object(hass.config, "is_allowed_path", return_value=False):
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             {
-                PARAM_LOCAL_RECORD_PATH: "/media/imou",
-                PARAM_LOCAL_RECORD_DURATION: 60,
+                PARAM_ENABLE_EVENT_PUSH: False,
+                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                    PARAM_EVENT_PUSH_TYPES: ["alarm"],
+                },
+                SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                    PARAM_LOCAL_RECORD_PATH: "/media/imou",
+                    PARAM_LOCAL_RECORD_DURATION: 60,
+                },
             },
         )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"]["base"] == "record_path_not_allowed"
+    assert result["errors"][PARAM_LOCAL_RECORD_PATH] == "record_path_not_allowed"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -165,13 +181,20 @@ async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"next_step_id": "local_recording"},
+        {"next_step_id": "event_push"},
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            PARAM_LOCAL_RECORD_PATH: "",
-            PARAM_LOCAL_RECORD_DURATION: 60,
+            PARAM_ENABLE_EVENT_PUSH: False,
+            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: ["alarm"],
+            },
+            SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                PARAM_LOCAL_RECORD_PATH: "",
+                PARAM_LOCAL_RECORD_DURATION: 60,
+            },
         },
     )
 
@@ -182,7 +205,7 @@ async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
-    """Event push step always shows callback, subscriptions, and notifications."""
+    """Event push step shows callback, subscriptions, notifications, and recording."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
     entry.add_to_hass(hass)
 
@@ -198,6 +221,7 @@ async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
     assert PARAM_ENABLE_EVENT_PUSH in schema.schema
     assert SECTION_EVENT_PUSH_CALLBACK in schema.schema
     assert SECTION_EVENT_PUSH_SUBSCRIPTIONS in schema.schema
+    assert SECTION_EVENT_PUSH_LOCAL_RECORDING in schema.schema
     placeholders = result["description_placeholders"]
     assert placeholders["webhook_id"]
     assert placeholders["suggested_url"]

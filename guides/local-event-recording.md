@@ -51,7 +51,7 @@ Restart Home Assistant after changing YAML.
 
 ### Step 2 — Shared folder and duration
 
-**Settings → Devices & services → Imou Life → Configure → Local recording**
+**Settings → Devices & services → Imou Life → Configure → Event push → Local recording**
 
 - **Save folder** — same path as the allowlist, for example `/media/imou`. Leave empty to disable saving even if a camera switch is on.
 - **Clip duration** — seconds after the alarm (default 60, range 15–180).
@@ -98,7 +98,7 @@ The built-in switch already calls `camera.record` on `imou_life_alarm`. Keep a Y
 
 | Symptom | What to do |
 | --- | --- |
-| Switch on but no file | Confirm **Configure → Local recording** has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
+| Switch on but no file | Confirm **Configure → Event push → Local recording** has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
 | `Stream integration is not set up` | Add `stream:` to `configuration.yaml`, restart. Stream is **not** added via the brand picker. |
 | `Can't write …, no access to path!` | Folder is not under `allowlist_external_dirs`, directory missing, or absolute path mismatch. Fix and restart. Options save is refused until the folder is allowlisted. |
 | `Referenced entities … missing or not currently available` | Wait until the camera state is not `unavailable` after restart; verify entity ID. |
@@ -160,7 +160,7 @@ Core / 开发环境请改用配置目录下的绝对路径，不要照搬 `/medi
 
 ### 步骤 2 — 公用保存目录和时长
 
-**设置 → 设备与服务 → Imou Life → 配置 → 本地录像**
+**设置 → 设备与服务 → Imou Life → 配置 → 事件推送 → 本地录像**
 
 - **保存目录** — 与白名单相同，例如 `/media/imou`。留空则即使打开了摄像头开关也不会保存。
 - **片段时长** — 告警后录制的秒数（默认 60，范围 15–180）。
@@ -207,7 +207,7 @@ data:
 
 | 现象 | 处理 |
 | --- | --- |
-| 开关已开但没有文件 | 确认 **配置 → 本地录像** 已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
+| 开关已开但没有文件 | 确认 **配置 → 事件推送 → 本地录像** 已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
 | `Stream integration is not set up` | 在 `configuration.yaml` 增加 `stream:` 并重启。Stream **不能**通过「添加集成」品牌列表安装。 |
 | `Can't write …, no access to path!` | 目录不在 `allowlist_external_dirs` 下、文件夹不存在、或绝对路径不一致。修正后重启。未加入白名单时，选项页会拒绝保存。 |
 | `Referenced entities … missing or not currently available` | 重启后等待相机状态非 `unavailable`；核对实体 ID。 |

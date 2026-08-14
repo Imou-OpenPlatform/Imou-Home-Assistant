@@ -89,11 +89,14 @@ _EVENT_PUSH_OPTION_KEYS = (
     PARAM_WEBHOOK_URL,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_SERVICES,
+    PARAM_LOCAL_RECORD_PATH,
+    PARAM_LOCAL_RECORD_DURATION,
 )
 
 SECTION_EVENT_PUSH_CALLBACK = "callback"
 SECTION_EVENT_PUSH_SUBSCRIPTIONS = "subscriptions"
 SECTION_EVENT_PUSH_NOTIFICATIONS = "notifications"
+SECTION_EVENT_PUSH_LOCAL_RECORDING = "local_recording"
 SECTION_BIND_DEVICE = "bind_new_device"
 
 
@@ -511,6 +514,12 @@ class ImouOptionsFlow(OptionsFlow):
             SECTION_EVENT_PUSH_NOTIFICATIONS: {
                 PARAM_NOTIFY_SERVICES: flat.get(PARAM_NOTIFY_SERVICES, ""),
             },
+            SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                PARAM_LOCAL_RECORD_PATH: flat.get(PARAM_LOCAL_RECORD_PATH, ""),
+                PARAM_LOCAL_RECORD_DURATION: flat.get(
+                    PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
+                ),
+            },
         }
         return nested
 
@@ -534,6 +543,19 @@ class ImouOptionsFlow(OptionsFlow):
             flat.update(user_input[SECTION_EVENT_PUSH_NOTIFICATIONS])
         else:
             flat[PARAM_NOTIFY_SERVICES] = stored_options.get(PARAM_NOTIFY_SERVICES, "")
+        if SECTION_EVENT_PUSH_LOCAL_RECORDING in user_input:
+            recording = dict(user_input[SECTION_EVENT_PUSH_LOCAL_RECORDING])
+            recording[PARAM_LOCAL_RECORD_PATH] = str(
+                recording.get(PARAM_LOCAL_RECORD_PATH) or ""
+            ).strip()
+            flat.update(recording)
+        else:
+            flat[PARAM_LOCAL_RECORD_PATH] = str(
+                stored_options.get(PARAM_LOCAL_RECORD_PATH) or ""
+            ).strip()
+            flat[PARAM_LOCAL_RECORD_DURATION] = stored_options.get(
+                PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
+            )
         return flat
 
     @staticmethod
@@ -575,6 +597,18 @@ class ImouOptionsFlow(OptionsFlow):
                     ),
                     {"collapsed": True},
                 ),
+                vol.Optional(SECTION_EVENT_PUSH_LOCAL_RECORDING): section(
+                    vol.Schema(
+                        {
+                            vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
+                            vol.Required(
+                                PARAM_LOCAL_RECORD_DURATION,
+                                default=DEFAULT_LOCAL_RECORD_DURATION,
+                            ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
+                        }
+                    ),
+                    {"collapsed": True},
+                ),
             }
         )
 
@@ -587,7 +621,6 @@ class ImouOptionsFlow(OptionsFlow):
             menu_options=[
                 "general_settings",
                 "event_push",
-                "local_recording",
                 "devices",
             ],
         )
@@ -610,58 +643,31 @@ class ImouOptionsFlow(OptionsFlow):
             ),
         )
 
-    @staticmethod
-    def _local_recording_schema() -> vol.Schema:
-        """Build the shared local-recording options form."""
-        return vol.Schema(
-            {
-                vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
-                vol.Required(
-                    PARAM_LOCAL_RECORD_DURATION,
-                    default=DEFAULT_LOCAL_RECORD_DURATION,
-                ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
-            }
-        )
-
-    async def async_step_local_recording(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Shared folder and duration for per-camera local event recording."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            folder = str(user_input.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
-            user_input[PARAM_LOCAL_RECORD_PATH] = folder
-            if folder:
-                probe = str(Path(folder) / "imou_record.mp4")
-                if not self.hass.config.is_allowed_path(probe):
-                    errors["base"] = "record_path_not_allowed"
-            if not errors:
-                return self.async_create_entry(data=self._merge_options(**user_input))
-
-        suggested = self._suggested_option_subset(
-            self.config_entry.options,
-            (PARAM_LOCAL_RECORD_PATH, PARAM_LOCAL_RECORD_DURATION),
-        )
-        return self.async_show_form(
-            step_id="local_recording",
-            data_schema=self.add_suggested_values_to_schema(
-                self._local_recording_schema(),
-                suggested,
-            ),
-            errors=errors,
-        )
+    def _local_record_path_error(self, folder: str) -> str | None:
+        """Return an options error key when the save folder is not allowlisted."""
+        if not folder:
+            return None
+        probe = str(Path(folder) / "imou_record.mp4")
+        if self.hass.config.is_allowed_path(probe):
+            return None
+        return "record_path_not_allowed"
 
     async def async_step_event_push(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage options — event push and alarm notifications."""
+        """Manage options — event push, notifications, and local recording."""
         stored = dict(self.config_entry.options)
         errors: dict[str, str] = {}
         error_detail = ""
         suggested_source: Mapping[str, Any] = stored
         if user_input is not None:
             flat = self._flatten_event_push_input(user_input, stored)
-            if flat[PARAM_ENABLE_EVENT_PUSH]:
+            path_error = self._local_record_path_error(
+                str(flat.get(PARAM_LOCAL_RECORD_PATH) or "")
+            )
+            if path_error:
+                errors[PARAM_LOCAL_RECORD_PATH] = path_error
+            if not errors and flat[PARAM_ENABLE_EVENT_PUSH]:
                 callback_url = self._resolve_event_push_callback_url(
                     str(flat.get(PARAM_WEBHOOK_URL) or "")
                 )
