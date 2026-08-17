@@ -67,7 +67,7 @@
   "issues": {
     "event_push_no_external_url": {
       "title": "Imou event push has no callback URL",
-      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a manual callback URL in Imou Life options."
+      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a callback URL under **Configure → Alarms, notifications, and recording**."
     },
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
@@ -86,7 +86,7 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Choose which settings to change. Each section saves when you submit that form.",
+        "description": "Pick a section to edit. Submit saves that section and closes the dialog.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarms, notifications, and recording",
@@ -124,59 +124,46 @@
         }
       },
       "event_push": {
-        "title": "Alarm push, notifications, and local recording",
-        "description": "Receive alarms in Home Assistant in real time. You can also notify your phone and save a short clip.",
+        "title": "Alarms, notifications, and recording",
+        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
         "data": {
-          "enable_event_push": "Enable event push"
+          "enable_event_push": "Enable event push",
+          "webhook_url": "Callback URL",
+          "event_push_types": "Subscribe to"
         },
         "data_description": {
-          "enable_event_push": "Registers a callback with Imou cloud. Alarms also sync to the Imou Life app."
+          "enable_event_push": "Imou cloud POSTs alarms to this Home Assistant webhook. Alarms also sync to the Imou Life app.",
+          "webhook_url": "Required when event push is on. Must be reachable from the internet; if the suggested address is not, change only the hostname and port.",
+          "event_push_types": "Which cloud messages Home Assistant should receive."
         },
         "sections": {
-          "callback": {
-            "name": "Callback URL",
-            "description": "Suggested: {suggested_url}. Imou cloud must reach this URL from the internet. If it is a LAN address, change the hostname and port as needed; keep the path.",
-            "data": {
-              "webhook_url": "Custom callback URL"
-            },
-            "data_description": {
-              "webhook_url": "Required when event push is on. Paste the suggested URL, or change the hostname and port if it is not public."
-            }
-          },
-          "subscriptions": {
-            "name": "Message types",
-            "description": "Which Imou cloud messages to receive when event push is on.",
-            "data": {
-              "event_push_types": "Subscribe to"
-            }
-          },
           "notifications": {
             "name": "Notify on alarm",
-            "description": "Optional. Leave empty to handle alarms only with automations.",
+            "description": "Optional. Leave empty to use automations only.",
             "data": {
               "notify_services": "Notification targets"
             },
             "data_description": {
-              "notify_services": "These are notify services already registered in this Home Assistant. Each alarm sends one message to the selected targets. To skip a device, turn off **Notify on alarm** on its device page."
+              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device."
             }
           },
           "local_recording": {
             "name": "Local recording",
-            "description": "This page only sets the shared folder and clip length. On each camera device page, turn on **Record on alarm** (Configuration). Clips start after the alarm (no pre-roll) and use live-stream quota. The folder must be in allowlist_external_dirs.",
+            "description": "Shared folder and clip length. Per-camera **Record on alarm** is on each device page.",
             "data": {
               "local_record_path": "Save folder",
               "local_record_duration": "Clip duration (seconds)"
             },
             "data_description": {
-              "local_record_path": "Example: /media/imou. Leave empty to skip saving. The per-camera switch is on the device page, not here.",
-              "local_record_duration": "Length of each post-alarm clip. Default 60s, range 15–180s."
+              "local_record_path": "Example: /media/imou. Leave empty to skip. Folder must be in allowlist_external_dirs.",
+              "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
             }
           }
         }
       },
       "devices_menu": {
         "title": "Choose and bind devices",
-        "description": "Choose which devices to poll, or bind a new one to this account.",
+        "description": "Choose devices to poll, or bind a new device.",
         "menu_options": {
           "select_poll_devices": "Choose devices to poll",
           "bind_device": "Bind a new device"

@@ -67,7 +67,7 @@
   "issues": {
     "event_push_no_external_url": {
       "title": "Imou 事件推送缺少回调 URL",
-      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 Imou Life 选项中填写手动回调 URL。"
+      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 **配置 → 告警、通知与录像** 中填写回调地址。"
     },
     "event_push_callback_failed": {
       "title": "Imou 事件推送注册失败",
@@ -86,7 +86,7 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "请选择要修改的设置。每一项点提交即保存并关闭。",
+        "description": "选择分区后提交即保存，无需一次改完所有项。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警、通知与录像",
@@ -124,59 +124,46 @@
         }
       },
       "event_push": {
-        "title": "告警推送、通知与本地录像",
-        "description": "告警会实时送到 Home Assistant。也可以发到手机，并保存一小段录像。",
+        "title": "告警、通知与录像",
+        "description": "通过 Webhook 接收云端告警。建议地址：{suggested_url}",
         "data": {
-          "enable_event_push": "启用事件推送"
+          "enable_event_push": "启用事件推送",
+          "webhook_url": "回调地址",
+          "event_push_types": "订阅类型"
         },
         "data_description": {
-          "enable_event_push": "向 Imou 云注册回调；告警也会同步到乐橙 App。"
+          "enable_event_push": "Imou 云向本实例的 Webhook 推送告警，同时会同步到乐橙 App。",
+          "webhook_url": "开启推送时必填，须公网可达。建议地址不可达时，只改主机名和端口，路径不要改。",
+          "event_push_types": "选择要接收的云端消息类型。"
         },
         "sections": {
-          "subscriptions": {
-            "name": "消息类型",
-            "description": "开启推送后，Home Assistant 要接收哪些云端消息。",
-            "data": {
-              "event_push_types": "订阅类型"
-            }
-          },
           "notifications": {
             "name": "告警时通知",
-            "description": "可选。留空则只靠自动化处理告警。",
+            "description": "可选。留空只靠自动化。",
             "data": {
               "notify_services": "通知目标"
             },
             "data_description": {
-              "notify_services": "选项都是本 Home Assistant 里已经注册的 notify 服务。告警时会给所选目标各发一条消息。某台设备不想推，到设备页关掉「告警时通知」。"
+              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。"
             }
           },
           "local_recording": {
             "name": "本地录像",
-            "description": "本页只设置共用的保存目录和时长。要给某路镜头录像，请打开该摄像头的设备页，在「配置」里打开 **告警时录像**。片段从告警后开始（无预录），并消耗直播配额。目录须加入 allowlist_external_dirs。",
+            "description": "共用保存目录与片段时长。各摄像头的 **告警时录像** 在设备页开关。",
             "data": {
               "local_record_path": "保存目录",
               "local_record_duration": "片段时长（秒）"
             },
             "data_description": {
-              "local_record_path": "例如 /media/imou。留空则不会保存。开关在各摄像头设备页，不在本页。",
-              "local_record_duration": "每次告警后录制的秒数，默认 60，范围 15–180。"
-            }
-          },
-          "callback": {
-            "name": "回调地址",
-            "description": "建议填 {suggested_url}。这个地址必须公网可达。若是内网地址，把主机名和端口换成公网能访问的，后面的路径不要改。",
-            "data": {
-              "webhook_url": "自定义回调地址"
-            },
-            "data_description": {
-              "webhook_url": "开启事件推送时必填。可粘贴建议地址；内网不可达时改主机名和端口。"
+              "local_record_path": "例如 /media/imou。留空则不保存。目录须加入 allowlist_external_dirs。",
+              "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
             }
           }
         }
       },
       "devices_menu": {
         "title": "选择与绑定设备",
-        "description": "选择要轮询的设备，或绑定新设备到本账号。",
+        "description": "选择要轮询的设备，或绑定新设备。",
         "menu_options": {
           "select_poll_devices": "选择要轮询的设备",
           "bind_device": "绑定新设备"

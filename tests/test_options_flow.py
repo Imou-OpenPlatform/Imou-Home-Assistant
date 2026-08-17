@@ -7,10 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from custom_components.imou_life.config_flow import (
     SECTION_CAMERA_DEFAULTS,
-    SECTION_EVENT_PUSH_CALLBACK,
     SECTION_EVENT_PUSH_LOCAL_RECORDING,
     SECTION_EVENT_PUSH_NOTIFICATIONS,
-    SECTION_EVENT_PUSH_SUBSCRIPTIONS,
 )
 from custom_components.imou_life.const import (
     CONF_HD,
@@ -68,12 +66,10 @@ async def _register_notify(hass, name: str) -> None:
 
 
 def _event_push_input(**overrides) -> dict:
-    """Required alarm-page sections; optional callback may be omitted."""
+    """Required alarm-page fields; optional overrides for top-level keys."""
     payload = {
         PARAM_ENABLE_EVENT_PUSH: False,
-        SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-            PARAM_EVENT_PUSH_TYPES: ["alarm"],
-        },
+        PARAM_EVENT_PUSH_TYPES: ["alarm"],
         SECTION_EVENT_PUSH_NOTIFICATIONS: {
             PARAM_NOTIFY_SERVICES: [],
         },
@@ -82,6 +78,9 @@ def _event_push_input(**overrides) -> dict:
             PARAM_LOCAL_RECORD_DURATION: 60,
         },
     }
+    for key in (PARAM_ENABLE_EVENT_PUSH, PARAM_WEBHOOK_URL, PARAM_EVENT_PUSH_TYPES):
+        if key in overrides:
+            payload[key] = overrides.pop(key)
     payload.update(overrides)
     return payload
 
@@ -216,9 +215,7 @@ async def test_options_local_recording_saves_shared_settings(hass) -> None:
             _event_push_input(
                 **{
                     PARAM_ENABLE_EVENT_PUSH: True,
-                    SECTION_EVENT_PUSH_CALLBACK: {
-                        PARAM_WEBHOOK_URL: "https://example.test/hook",
-                    },
+                    PARAM_WEBHOOK_URL: "https://example.test/hook",
                     SECTION_EVENT_PUSH_LOCAL_RECORDING: {
                         PARAM_LOCAL_RECORD_PATH: " /media/imou ",
                         PARAM_LOCAL_RECORD_DURATION: 45,
@@ -251,7 +248,7 @@ async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> Non
             result["flow_id"],
             _event_push_input(
                 **{
-                    SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                    PARAM_WEBHOOK_URL: "",
                     SECTION_EVENT_PUSH_LOCAL_RECORDING: {
                         PARAM_LOCAL_RECORD_PATH: "/media/imou",
                         PARAM_LOCAL_RECORD_DURATION: 60,
@@ -281,7 +278,7 @@ async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        _event_push_input(**{SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""}}),
+        _event_push_input(**{PARAM_WEBHOOK_URL: ""}),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -307,17 +304,13 @@ async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
     schema_keys = [getattr(key, "schema", key) for key in schema.schema]
     assert schema_keys == [
         PARAM_ENABLE_EVENT_PUSH,
-        SECTION_EVENT_PUSH_CALLBACK,
-        SECTION_EVENT_PUSH_SUBSCRIPTIONS,
+        PARAM_WEBHOOK_URL,
+        PARAM_EVENT_PUSH_TYPES,
         SECTION_EVENT_PUSH_NOTIFICATIONS,
         SECTION_EVENT_PUSH_LOCAL_RECORDING,
     ]
-    callback_section = next(
-        val
-        for key, val in schema.schema.items()
-        if getattr(key, "schema", key) == SECTION_EVENT_PUSH_CALLBACK
-    )
-    assert callback_section.options.get("collapsed") is not True
+    recording_section = schema.schema[SECTION_EVENT_PUSH_LOCAL_RECORDING]
+    assert recording_section.options.get("collapsed") is True
     placeholders = result["description_placeholders"]
     assert placeholders["suggested_url"]
 
@@ -339,7 +332,7 @@ async def test_options_flow_event_push_step_when_enabled(hass) -> None:
     )
     schema = result.get("data_schema") or result.get("schema")
     assert schema is not None
-    assert SECTION_EVENT_PUSH_SUBSCRIPTIONS in schema.schema
+    assert PARAM_EVENT_PUSH_TYPES in schema.schema
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -358,9 +351,7 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
         _event_push_input(
             **{
                 PARAM_ENABLE_EVENT_PUSH: True,
-                SECTION_EVENT_PUSH_CALLBACK: {
-                    PARAM_WEBHOOK_URL: "https://example.test/hook",
-                },
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
             }
         ),
     )
@@ -389,7 +380,7 @@ async def test_options_event_push_saves_notify_services_as_list(hass) -> None:
         result["flow_id"],
         _event_push_input(
             **{
-                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                PARAM_WEBHOOK_URL: "",
                 SECTION_EVENT_PUSH_NOTIFICATIONS: {
                     PARAM_NOTIFY_SERVICES: ["notify.mobile_app_phone"],
                 },
@@ -427,7 +418,7 @@ async def test_options_event_push_migrates_comma_notify_string(hass) -> None:
         result["flow_id"],
         _event_push_input(
             **{
-                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                PARAM_WEBHOOK_URL: "",
                 SECTION_EVENT_PUSH_NOTIFICATIONS: {
                     PARAM_NOTIFY_SERVICES: [
                         "notify.mobile_app_phone",
@@ -462,9 +453,7 @@ async def test_options_event_push_keeps_custom_webhook_url(hass) -> None:
         result["flow_id"],
         _event_push_input(
             **{
-                SECTION_EVENT_PUSH_CALLBACK: {
-                    PARAM_WEBHOOK_URL: "https://example.test/kept",
-                },
+                PARAM_WEBHOOK_URL: "https://example.test/kept",
             }
         ),
     )
@@ -493,9 +482,7 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
         _event_push_input(
             **{
                 PARAM_ENABLE_EVENT_PUSH: True,
-                SECTION_EVENT_PUSH_CALLBACK: {
-                    PARAM_WEBHOOK_URL: "https://example.test/hook",
-                },
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
             }
         ),
     )
@@ -527,9 +514,7 @@ async def test_options_event_push_callback_failure_stays_on_form(
         _event_push_input(
             **{
                 PARAM_ENABLE_EVENT_PUSH: True,
-                SECTION_EVENT_PUSH_CALLBACK: {
-                    PARAM_WEBHOOK_URL: "https://example.test/hook",
-                },
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
             }
         ),
     )
@@ -557,7 +542,7 @@ async def test_options_event_push_requires_callback_url_when_enabled(hass) -> No
         _event_push_input(
             **{
                 PARAM_ENABLE_EVENT_PUSH: True,
-                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                PARAM_WEBHOOK_URL: "",
             }
         ),
     )
@@ -593,9 +578,8 @@ async def test_options_event_push_does_not_prefill_generated_callback_url(
         "http://192.168.1.2:8123/api/webhook/hook-id"
     )
     schema = result.get("data_schema") or result.get("schema")
-    callback_section = schema.schema[SECTION_EVENT_PUSH_CALLBACK]
     suggested = None
-    for key in callback_section.schema.schema:
+    for key in schema.schema:
         if getattr(key, "schema", key) == PARAM_WEBHOOK_URL:
             suggested = (key.description or {}).get("suggested_value")
             break

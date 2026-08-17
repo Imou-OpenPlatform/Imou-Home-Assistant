@@ -97,8 +97,6 @@ _EVENT_PUSH_OPTION_KEYS = (
     PARAM_LOCAL_RECORD_DURATION,
 )
 
-SECTION_EVENT_PUSH_CALLBACK = "callback"
-SECTION_EVENT_PUSH_SUBSCRIPTIONS = "subscriptions"
 SECTION_EVENT_PUSH_NOTIFICATIONS = "notifications"
 SECTION_EVENT_PUSH_LOCAL_RECORDING = "local_recording"
 SECTION_CAMERA_DEFAULTS = "camera_defaults"
@@ -557,17 +555,11 @@ class ImouOptionsFlow(OptionsFlow):
         if isinstance(event_push_types, list):
             event_push_types = callback_flags_to_event_push_types(event_push_types)
 
-        callback_suggestions: dict[str, Any] = {}
         stored_webhook_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
-        if stored_webhook_url:
-            callback_suggestions[PARAM_WEBHOOK_URL] = stored_webhook_url
 
         nested: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: enable_push,
-            SECTION_EVENT_PUSH_CALLBACK: callback_suggestions,
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: event_push_types,
-            },
+            PARAM_EVENT_PUSH_TYPES: event_push_types,
             SECTION_EVENT_PUSH_NOTIFICATIONS: {
                 PARAM_NOTIFY_SERVICES: parse_notify_services(
                     flat.get(PARAM_NOTIFY_SERVICES)
@@ -580,6 +572,8 @@ class ImouOptionsFlow(OptionsFlow):
                 ),
             },
         }
+        if stored_webhook_url:
+            nested[PARAM_WEBHOOK_URL] = stored_webhook_url
         return nested
 
     @staticmethod
@@ -589,22 +583,15 @@ class ImouOptionsFlow(OptionsFlow):
         """Flatten section-based event push input back to stored option keys."""
         flat: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: user_input[PARAM_ENABLE_EVENT_PUSH],
+            PARAM_WEBHOOK_URL: str(
+                user_input.get(PARAM_WEBHOOK_URL, stored_options.get(PARAM_WEBHOOK_URL))
+                or ""
+            ).strip(),
+            PARAM_EVENT_PUSH_TYPES: user_input.get(
+                PARAM_EVENT_PUSH_TYPES,
+                stored_options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES),
+            ),
         }
-        if SECTION_EVENT_PUSH_CALLBACK in user_input:
-            callback = user_input[SECTION_EVENT_PUSH_CALLBACK]
-            flat[PARAM_WEBHOOK_URL] = str(
-                callback.get(PARAM_WEBHOOK_URL) or ""
-            ).strip()
-        else:
-            flat[PARAM_WEBHOOK_URL] = str(
-                stored_options.get(PARAM_WEBHOOK_URL) or ""
-            ).strip()
-        if SECTION_EVENT_PUSH_SUBSCRIPTIONS in user_input:
-            flat.update(user_input[SECTION_EVENT_PUSH_SUBSCRIPTIONS])
-        else:
-            flat[PARAM_EVENT_PUSH_TYPES] = stored_options.get(
-                PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES
-            )
         if SECTION_EVENT_PUSH_NOTIFICATIONS in user_input:
             notifications = dict(user_input[SECTION_EVENT_PUSH_NOTIFICATIONS])
             notifications[PARAM_NOTIFY_SERVICES] = parse_notify_services(
@@ -639,30 +626,18 @@ class ImouOptionsFlow(OptionsFlow):
         return vol.Schema(
             {
                 vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
-                vol.Required(SECTION_EVENT_PUSH_CALLBACK): section(
-                    vol.Schema(
-                        {
-                            vol.Optional(PARAM_WEBHOOK_URL, default=""): TextSelector(
-                                TextSelectorConfig(type=TextSelectorType.URL)
-                            ),
-                        }
-                    ),
+                vol.Optional(PARAM_WEBHOOK_URL, default=""): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.URL)
                 ),
-                vol.Required(SECTION_EVENT_PUSH_SUBSCRIPTIONS): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                PARAM_EVENT_PUSH_TYPES,
-                                default=DEFAULT_EVENT_PUSH_TYPES,
-                            ): SelectSelector(
-                                SelectSelectorConfig(
-                                    options=list(EVENT_PUSH_TYPE_OPTIONS),
-                                    multiple=True,
-                                    translation_key="event_push_type",
-                                )
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    PARAM_EVENT_PUSH_TYPES,
+                    default=DEFAULT_EVENT_PUSH_TYPES,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(EVENT_PUSH_TYPE_OPTIONS),
+                        multiple=True,
+                        translation_key="event_push_type",
+                    )
                 ),
                 vol.Required(SECTION_EVENT_PUSH_NOTIFICATIONS): section(
                     vol.Schema(
@@ -689,6 +664,7 @@ class ImouOptionsFlow(OptionsFlow):
                             ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
                         }
                     ),
+                    {"collapsed": True},
                 ),
             }
         )

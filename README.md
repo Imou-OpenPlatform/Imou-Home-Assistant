@@ -57,7 +57,7 @@ Use **Configure** on the integration entry to open a menu: **Polling and cameras
 
 - **Alarms, notifications, and recording** — enable webhook callback, message types, alarm notifications, and local recording (shared save folder and clip duration for cameras whose **Record on alarm** switch is on). See [guides/local-event-recording.md](guides/local-event-recording.md#english).
 
-**Custom callback URL** is in **Callback URL**, directly under **Enable event push**. Copy the suggested URL, or replace the hostname and port if that address is not reachable from the internet. The field is required when event push is on.
+Turn on **Enable event push**, then fill **Callback URL** (must be public; change hostname and port if the suggested address is not reachable) and **Subscribe to**.
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
 
@@ -111,7 +111,7 @@ Use **Configure** on the integration entry to open a menu: **Polling and cameras
 ## Troubleshooting
 
 - **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
-- **Event push not working** — Open **Configure → Alarms, notifications, and recording**. Confirm **Enable event push** is on. The suggested callback URL is under **Callback URL**. Paste it, or replace the hostname and port if that address is not reachable from the internet. Also check **Settings → System → Network → Home Assistant URL** (external URL required). Review repair issues under **Settings → System → Repairs**.
+- **Event push not working** — Open **Configure → Alarms, notifications, and recording**. Confirm **Enable event push** is on. Paste the suggested URL into **Callback URL**, or change hostname and port if it is not public. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
@@ -188,7 +188,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 - **告警、通知与录像** — 启用 Webhook 回调、消息类型、告警通知，以及本地录像（账号共用保存目录和片段时长，只对打开了 **告警时录像** 开关的摄像头生效）。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
 
-**自定义回调地址** 在 **回调地址**，紧挨着 **启用事件推送**。开启事件推送时必填且必须公网可达：可复制建议地址；不可达时把主机名和端口换成可达的即可。
+先打开 **启用事件推送**，再填 **回调地址**（须公网可达；建议地址不可达时只改主机名和端口）和 **订阅类型**。
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
 
@@ -243,7 +243,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 故障排查
 
 - **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
-- **事件推送不工作** — 打开 **配置 → 告警、通知与录像**。确认 **启用事件推送** 已开启。建议地址在 **回调地址**。复制进去即可；外网访问不到时把主机名和端口换成可达的。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**（需配置外网 URL）。在 **设置 → 系统 → 修复** 中查看 repair 提示。
+- **事件推送不工作** — 打开 **配置 → 告警、通知与录像**。确认 **启用事件推送** 已开启。把建议地址填进 **回调地址**，或把主机名和端口改成公网可达的。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。
