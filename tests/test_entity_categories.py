@@ -33,7 +33,7 @@ CONFIG_SWITCHES = {
     "smart_track",
     "wide_dynamic",
 }
-CONFIG_SELECTS = {"device_volume", "mode", "night_vision_mode"}
+CONFIG_SELECTS = {"device_volume", "night_vision_mode"}
 DIAGNOSTIC_SENSORS = {PARAM_STATUS, "battery", "storage_used"}
 
 

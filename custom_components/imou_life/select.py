@@ -17,7 +17,6 @@ from .const import (
     DOMAIN,
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
-    PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -31,11 +30,6 @@ SELECT_TYPES: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key=PARAM_DEVICE_VOLUME,
         translation_key=PARAM_DEVICE_VOLUME,
-        entity_category=EntityCategory.CONFIG,
-    ),
-    SelectEntityDescription(
-        key=PARAM_MODE,
-        translation_key=PARAM_MODE,
         entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(

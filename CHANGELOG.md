@@ -4,10 +4,15 @@
 
 ### [1.3.6]
 
+#### Breaking
+
+- `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. After upgrade, leftover `select` registry rows may be deleted manually
+
 #### Added
 
 - Config switches for pet detection, flip image, wide dynamic range, smart tracking, prompt sound, alarm-linked siren, and alarm-linked white light (shown when the device has the matching IoT ref / PaaS ability; pet detection is IoT-only)
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Event push**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
+- Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 
 #### Changed
 
@@ -223,10 +228,15 @@
 
 ### [1.3.6]
 
+#### 破坏性变更
+
+- `select.*_mode` 已替换为 `alarm_control_panel`。自动化需从 `select.select_option`（`home`/`away`/`disarm`）改为 `alarm_control_panel.alarm_arm_home`、`alarm_control_panel.alarm_arm_away`、`alarm_control_panel.alarm_disarm`。升级后实体注册表可能留下旧 select，可手动删除
+
 #### 新增
 
 - 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、告警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 事件推送**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
+- 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 
 #### 变更
 

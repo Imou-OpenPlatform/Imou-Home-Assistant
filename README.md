@@ -96,7 +96,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - Audio recording, prompt sound, abnormal sound alarm
   - Restart device
 * **Alarm sensors**
-  - Status (name, online, arming mode, battery, …)
+  - Status (name, online, arming via `alarm_control_panel`, battery, …)
   - Alarm volume
   - One-tap mute
   - Indicator light
@@ -228,7 +228,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 音频录制、设备提示音、异常音告警
   - 重启设备
 * **告警传感器**
-  - 状态（名称、在线、布防模式、电量等）
+  - 状态（名称、在线、布防 `alarm_control_panel`、电量等）
   - 告警音量
   - 一键消音
   - 指示灯
