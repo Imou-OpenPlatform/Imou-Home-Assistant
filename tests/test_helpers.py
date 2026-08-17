@@ -2,8 +2,12 @@
 
 import pytest
 from custom_components.imou_life.const import DOMAIN, imou_life_device_key_from_ids
-from custom_components.imou_life.helpers import resolve_ha_device_name
-from homeassistant.core import HomeAssistant
+from custom_components.imou_life.helpers import (
+    notify_service_selector_options,
+    parse_notify_services,
+    resolve_ha_device_name,
+)
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -20,6 +24,45 @@ def test_device_key_from_ids_uses_product_when_no_channel() -> None:
 def test_device_key_from_ids_incomplete_returns_none() -> None:
     assert imou_life_device_key_from_ids(None, "0", "pid") is None
     assert imou_life_device_key_from_ids("SN1", None, None) is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, []),
+        ("", []),
+        ([], []),
+        ("notify.mobile_app_phone", ["notify.mobile_app_phone"]),
+        (
+            "notify.mobile_app_phone, qiyewechat.send",
+            ["notify.mobile_app_phone", "qiyewechat.send"],
+        ),
+        (
+            ["notify.mobile_app_phone", " qiyewechat.send "],
+            ["notify.mobile_app_phone", "qiyewechat.send"],
+        ),
+    ],
+)
+def test_parse_notify_services_normalizes_legacy_and_list(raw, expected) -> None:
+    """Stored comma strings and lists both become a clean service id list."""
+    assert parse_notify_services(raw) == expected
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_notify_selector_options_keep_saved_non_notify(
+    hass: HomeAssistant,
+) -> None:
+    """Legacy non-notify actions stay selectable after upgrading to a picker."""
+
+    async def _notify(_call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "mobile_app_phone", _notify)
+    options = notify_service_selector_options(
+        hass, ["notify.mobile_app_phone", "qiyewechat.send"]
+    )
+    assert "notify.mobile_app_phone" in options
+    assert "qiyewechat.send" in options
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

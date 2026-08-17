@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -195,6 +197,65 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 
     assert title == "Imou Life alarm: Local alarm"
     assert message == "Device: Front Door\nType: Local alarm"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_and_paas_motion_are_scene_change(
+    hass: HomeAssistant,
+) -> None:
+    """IoT e_videoMotion and PaaS videoMotion share the same motion copy."""
+    iot_title, _ = await _async_build_notification_message(
+        hass, {"msg_type": "e_videoMotion", "name": "Cam"}
+    )
+    paas_title, _ = await _async_build_notification_message(
+        hass, {"msg_type": "videoMotion", "name": "Cam"}
+    )
+    assert iot_title == paas_title == "Imou Life alarm: Motion detected"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("msg_type", "expected"),
+    [
+        ("human", "Person detected"),
+        ("Doorbell", "Doorbell pressed"),
+        ("alarmPIR", "PIR motion detected"),
+        ("e_aiVehArea", "Vehicle entered the area"),
+    ],
+)
+async def test_webhook_alarm_copy_is_an_event_sentence(
+    hass: HomeAssistant, msg_type: str, expected: str
+) -> None:
+    """English titles follow common security-notification phrasing."""
+    title, _ = await _async_build_notification_message(
+        hass, {"msg_type": msg_type, "name": "Cam"}
+    )
+    assert title == f"Imou Life alarm: {expected}"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_unknown_alarm_type_falls_back_to_msg_type(
+    hass: HomeAssistant,
+) -> None:
+    """Unmapped keys stay as the raw identifier / msgType."""
+    title, message = await _async_build_notification_message(
+        hass, {"msg_type": "totallyUnknownType", "name": "Cam"}
+    )
+    assert title == "Imou Life alarm: totallyUnknownType"
+    assert "Type: totallyUnknownType" in message
+
+
+def test_alarm_types_keys_match_between_languages() -> None:
+    """Chinese and English alarm_types tables must cover the same keys."""
+    strings_dir = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components"
+        / "imou_life"
+        / "webhook_strings"
+    )
+    zh = json.loads((strings_dir / "zh-Hans.json").read_text(encoding="utf-8"))
+    en = json.loads((strings_dir / "en.json").read_text(encoding="utf-8"))
+    assert set(zh["alarm_types"]) == set(en["alarm_types"])
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

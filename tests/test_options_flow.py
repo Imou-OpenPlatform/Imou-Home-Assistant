@@ -9,6 +9,7 @@ from custom_components.imou_life.config_flow import (
     SECTION_BIND_DEVICE,
     SECTION_EVENT_PUSH_CALLBACK,
     SECTION_EVENT_PUSH_LOCAL_RECORDING,
+    SECTION_EVENT_PUSH_NOTIFICATIONS,
     SECTION_EVENT_PUSH_SUBSCRIPTIONS,
 )
 from custom_components.imou_life.const import (
@@ -23,16 +24,37 @@ from custom_components.imou_life.const import (
     PARAM_LIVE_RESOLUTION,
     PARAM_LOCAL_RECORD_DURATION,
     PARAM_LOCAL_RECORD_PATH,
+    PARAM_NOTIFY_SERVICES,
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_URL,
 )
+from homeassistant.core import ServiceCall
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import SelectSelector
 from pyimouapi.exceptions import RequestFailedException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
+
+
+def _notify_selector_options(form_schema) -> list[str]:
+    """Return the notify_services SelectSelector option values."""
+    section_marker = form_schema.schema[SECTION_EVENT_PUSH_NOTIFICATIONS]
+    for key, validator in section_marker.schema.schema.items():
+        if getattr(key, "schema", None) == PARAM_NOTIFY_SERVICES:
+            assert isinstance(validator, SelectSelector)
+            assert validator.config["multiple"] is True
+            return list(validator.config["options"])
+    raise AssertionError("notify_services selector missing")
+
+
+async def _register_notify(hass, name: str) -> None:
+    async def _handler(_call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", name, _handler)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -274,6 +296,82 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
     assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/hook"
     assert result["data"][PARAM_EVENT_PUSH_TYPES] == ["alarm"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_saves_notify_services_as_list(hass) -> None:
+    """Alarm notify picker stores selected notify.* services as a list."""
+    await _register_notify(hass, "mobile_app_phone")
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    assert "notify.mobile_app_phone" in _notify_selector_options(
+        result.get("data_schema") or result.get("schema")
+    )
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_EVENT_PUSH: False,
+            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: ["alarm"],
+            },
+            SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                PARAM_NOTIFY_SERVICES: ["notify.mobile_app_phone"],
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_NOTIFY_SERVICES] == ["notify.mobile_app_phone"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_migrates_comma_notify_string(hass) -> None:
+    """Opening and saving converts a legacy comma-separated string to a list."""
+    await _register_notify(hass, "mobile_app_phone")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_NOTIFY_SERVICES: "notify.mobile_app_phone, qiyewechat.send",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    options = _notify_selector_options(result.get("data_schema") or result.get("schema"))
+    assert "notify.mobile_app_phone" in options
+    assert "qiyewechat.send" in options
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_EVENT_PUSH: False,
+            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+                PARAM_EVENT_PUSH_TYPES: ["alarm"],
+            },
+            SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                PARAM_NOTIFY_SERVICES: [
+                    "notify.mobile_app_phone",
+                    "qiyewechat.send",
+                ],
+            },
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_NOTIFY_SERVICES] == [
+        "notify.mobile_app_phone",
+        "qiyewechat.send",
+    ]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")

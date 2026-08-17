@@ -147,7 +147,7 @@
               "notify_services": "Notify services"
             },
             "data_description": {
-              "notify_services": "Comma-separated HA actions, e.g. notify.mobile_app_phone. Leave empty to use automations only."
+              "notify_services": "Select notify services for alarm alerts. Leave empty to use automations only."
             }
           },
           "local_recording": {

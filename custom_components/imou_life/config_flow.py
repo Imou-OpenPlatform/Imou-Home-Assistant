@@ -68,7 +68,11 @@ from .const import (
     callback_flags_to_event_push_types,
     event_push_types_to_callback_flags,
 )
-from .helpers import async_build_device_map
+from .helpers import (
+    async_build_device_map,
+    notify_service_selector_options,
+    parse_notify_services,
+)
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -512,7 +516,9 @@ class ImouOptionsFlow(OptionsFlow):
                 PARAM_EVENT_PUSH_TYPES: event_push_types,
             },
             SECTION_EVENT_PUSH_NOTIFICATIONS: {
-                PARAM_NOTIFY_SERVICES: flat.get(PARAM_NOTIFY_SERVICES, ""),
+                PARAM_NOTIFY_SERVICES: parse_notify_services(
+                    flat.get(PARAM_NOTIFY_SERVICES)
+                ),
             },
             SECTION_EVENT_PUSH_LOCAL_RECORDING: {
                 PARAM_LOCAL_RECORD_PATH: flat.get(PARAM_LOCAL_RECORD_PATH, ""),
@@ -540,9 +546,15 @@ class ImouOptionsFlow(OptionsFlow):
                 PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES
             )
         if SECTION_EVENT_PUSH_NOTIFICATIONS in user_input:
-            flat.update(user_input[SECTION_EVENT_PUSH_NOTIFICATIONS])
+            notifications = dict(user_input[SECTION_EVENT_PUSH_NOTIFICATIONS])
+            notifications[PARAM_NOTIFY_SERVICES] = parse_notify_services(
+                notifications.get(PARAM_NOTIFY_SERVICES)
+            )
+            flat.update(notifications)
         else:
-            flat[PARAM_NOTIFY_SERVICES] = stored_options.get(PARAM_NOTIFY_SERVICES, "")
+            flat[PARAM_NOTIFY_SERVICES] = parse_notify_services(
+                stored_options.get(PARAM_NOTIFY_SERVICES)
+            )
         if SECTION_EVENT_PUSH_LOCAL_RECORDING in user_input:
             recording = dict(user_input[SECTION_EVENT_PUSH_LOCAL_RECORDING])
             recording[PARAM_LOCAL_RECORD_PATH] = str(
@@ -558,9 +570,12 @@ class ImouOptionsFlow(OptionsFlow):
             )
         return flat
 
-    @staticmethod
-    def _event_push_schema() -> vol.Schema:
+    def _event_push_schema(self) -> vol.Schema:
         """Build the event push options form."""
+        stored_notify = parse_notify_services(
+            self.config_entry.options.get(PARAM_NOTIFY_SERVICES)
+        )
+        notify_options = notify_service_selector_options(self.hass, stored_notify)
         return vol.Schema(
             {
                 vol.Required(PARAM_ENABLE_EVENT_PUSH, default=False): bool,
@@ -592,7 +607,14 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Optional(SECTION_EVENT_PUSH_NOTIFICATIONS): section(
                     vol.Schema(
                         {
-                            vol.Optional(PARAM_NOTIFY_SERVICES, default=""): str,
+                            vol.Optional(
+                                PARAM_NOTIFY_SERVICES, default=[]
+                            ): SelectSelector(
+                                SelectSelectorConfig(
+                                    options=notify_options,
+                                    multiple=True,
+                                )
+                            ),
                         }
                     ),
                     {"collapsed": True},

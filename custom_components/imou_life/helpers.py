@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -56,6 +58,27 @@ def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:
     if status_text:
         label += f" [{status_text}]"
     return label
+
+
+def parse_notify_services(raw: Any) -> list[str]:
+    """Normalize stored notify options to a list of domain.service ids."""
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    if isinstance(raw, str) and raw.strip():
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    return []
+
+
+def notify_service_selector_options(
+    hass: HomeAssistant, stored: list[str]
+) -> list[str]:
+    """Return notify.* services plus any saved non-notify actions."""
+    notify = hass.services.async_services().get("notify", {})
+    options = [f"notify.{name}" for name in notify]
+    for extra in stored:
+        if extra not in options:
+            options.append(extra)
+    return sorted(options)
 
 
 async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, str]:

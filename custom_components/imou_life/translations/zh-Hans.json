@@ -147,7 +147,7 @@
               "notify_services": "通知服务"
             },
             "data_description": {
-              "notify_services": "英文逗号分隔的 HA 动作，如 notify.mobile_app_phone。留空则仅通过自动化处理。"
+              "notify_services": "选择接收告警通知的 notify 服务。留空则仅通过自动化处理。"
             }
           },
           "local_recording": {

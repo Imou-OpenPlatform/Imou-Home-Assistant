@@ -81,7 +81,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, notifications, and local recording
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
-  - Optional notify services for alarm messages (standard HA actions, comma-separated)
+  - Optional notify services for alarm messages (multi-select of registered `notify.*` services)
   - Choose push message types; messages are also synced to the Imou Life app
   - Alarm images in push payloads are encrypted — use automations with `camera.snapshot` / `camera_proxy` if you need notification thumbnails
   - **Local event recording** — per-camera switch (default off, stored in Home Assistant only). When an alarm is pushed, the integration records a short cloud-HLS clip with `camera.record`. Shared folder and duration: **Configure → Event push**. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
@@ -213,7 +213,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 事件推送** 显示 Webhook ID 与建议回调 URL；回调、消息类型、通知、本地录像分组设置
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
-  - 可选告警消息通知服务（标准 HA action，逗号分隔）
+  - 可选告警消息通知服务（多选已注册的 `notify.*` 服务）
   - 可选择推送消息类型；消息也会同步到乐橙 App
   - 推送载荷中的告警图片为加密格式 — 若需通知缩略图，请在自动化中使用 `camera.snapshot` / `camera_proxy`
   - **告警本地录像** — 每路镜头一个开关（默认关，只存在 Home Assistant）。收到告警推送后，用 `camera.record` 从云端 HLS 录一段短视频。保存目录和时长在 **配置 → 事件推送**。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)

@@ -15,8 +15,10 @@ from custom_components.imou_life import async_unload_entry
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_NOTIFY_SERVICES,
     PARAM_WEBHOOK_ID,
 )
+from custom_components.imou_life.event_push import async_setup_event_push
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -139,3 +141,41 @@ async def test_turning_push_on_and_off_leaves_the_cloud_off(
         "the reload after saving the options never told the cloud to stop, so it "
         f"keeps pushing; calls were {statuses}"
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (["notify.mobile_app_phone"], ["notify.mobile_app_phone"]),
+        (
+            "notify.mobile_app_phone, qiyewechat.send",
+            ["notify.mobile_app_phone", "qiyewechat.send"],
+        ),
+    ],
+)
+async def test_setup_event_push_loads_notify_services(
+    hass: HomeAssistant, stored: Any, expected: list[str]
+) -> None:
+    """Notify options may be a list or a legacy comma-separated string."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh-notify"},
+        options={PARAM_NOTIFY_SERVICES: stored},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    with (
+        patch(
+            "custom_components.imou_life.event_push.async_register_imou_webhook",
+            return_value="https://example.test/hook",
+        ),
+        patch(
+            "custom_components.imou_life.event_push.async_preload_webhook_strings",
+            AsyncMock(),
+        ),
+    ):
+        await async_setup_event_push(hass, entry, MagicMock(), runtime)
+
+    assert runtime.notify_services == expected
