@@ -8,10 +8,7 @@ from custom_components.imou_life.alarm_control_panel import (
     _iter_alarm_control_panels,
 )
 from custom_components.imou_life.const import DOMAIN, PARAM_MODE
-from homeassistant.components.alarm_control_panel import (
-    AlarmControlPanelEntityFeature,
-    AlarmControlPanelState,
-)
+from homeassistant.components.alarm_control_panel import AlarmControlPanelState
 from homeassistant.exceptions import HomeAssistantError
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
