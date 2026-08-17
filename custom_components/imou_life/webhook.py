@@ -441,6 +441,8 @@ async def async_handle_imou_webhook(
         _LOGGER.warning("Unexpected Imou webhook payload type: %s", type(payload))
         return web.Response(status=200, text="ok")
 
+    _LOGGER.debug("Received Imou push raw payload: %s", payload)
+
     event_data = _normalize_event_payload(payload)
     device_id = event_data.get("device_id")
     _LOGGER.debug("Received Imou push event: %s", event_data)
