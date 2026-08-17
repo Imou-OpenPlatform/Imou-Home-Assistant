@@ -17,7 +17,7 @@ from custom_components.imou_life.diagnostics import (
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.helpers import device_registry as dr
-from pyimouapi.const import PARAM_STATE
+from pyimouapi.const import PARAM_REF, PARAM_STATE, PARAM_SUPPORTED, PARAM_VALUE_TYPE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -127,4 +127,15 @@ async def test_device_diagnostics_includes_device_fields(hass) -> None:
     assert result["selected"] is True
     assert result["status"] == DeviceStatus.ONLINE.value
     assert result["entities"]["switches"] == {"motion_detect": True}
+    assert result["entities"]["alarm_control_panel"] is None
+
+    panel = {
+        PARAM_REF: "15200",
+        PARAM_STATE: "away",
+        PARAM_SUPPORTED: ["home", "away", "disarm"],
+        PARAM_VALUE_TYPE: "int",
+    }
+    device.alarm_control_panel = panel
+    result = await async_get_device_diagnostics(hass, entry, device_entry)
+    assert result["entities"]["alarm_control_panel"] == panel
     assert "app_secret" not in result

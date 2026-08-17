@@ -85,6 +85,7 @@ def _device_diagnostics_payload(
             "selects": _entity_state_summary(device.selects),
             "buttons": sorted(device.buttons.keys()),
             "texts": _entity_state_summary(device.texts),
+            "alarm_control_panel": device.alarm_control_panel,
         },
     }
 
