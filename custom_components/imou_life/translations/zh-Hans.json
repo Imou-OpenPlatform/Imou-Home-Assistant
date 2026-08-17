@@ -233,7 +233,7 @@
       "options": {
         "alarm": "设备告警（烟感 / 燃气 / 人形 / 画面变化等）",
         "device_status": "设备上下线",
-        "iot": "物联网设备消息",
+        "iot": "物模型设备消息",
         "numberstat": "客流统计",
         "face_analysis": "人脸分析"
       }
@@ -248,7 +248,12 @@
   "entity": {
     "alarm_control_panel": {
       "arming": {
-        "name": "布防"
+        "name": "布防",
+        "state": {
+          "armed_home": "在家布防",
+          "armed_away": "离家布防",
+          "disarmed": "已撤防"
+        }
       }
     },
     "sensor": {

@@ -248,7 +248,12 @@
   "entity": {
     "alarm_control_panel": {
       "arming": {
-        "name": "Arming"
+        "name": "Arming",
+        "state": {
+          "armed_home": "Armed home",
+          "armed_away": "Armed away",
+          "disarmed": "Disarmed"
+        }
       }
     },
     "sensor": {
