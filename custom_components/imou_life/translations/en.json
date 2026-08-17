@@ -246,6 +246,11 @@
     }
   },
   "entity": {
+    "alarm_control_panel": {
+      "arming": {
+        "name": "Arming"
+      }
+    },
     "sensor": {
       "status": {
         "name": "Status",
@@ -277,14 +282,6 @@
           "low": "Low",
           "medium": "Medium",
           "mute": "Mute"
-        }
-      },
-      "mode": {
-        "name": "Mode",
-        "state": {
-          "away": "Away",
-          "disarm": "Disarm",
-          "home": "Home"
         }
       },
       "night_vision_mode": {
@@ -429,6 +426,9 @@
     },
     "button_press_failed": {
       "message": "Imou rejected the button press: {error}"
+    },
+    "alarm_arm_disarm_failed": {
+      "message": "Imou rejected the arming change: {error}"
     },
     "stream_source_failed": {
       "message": "Could not get the live stream URL from Imou: {error}"

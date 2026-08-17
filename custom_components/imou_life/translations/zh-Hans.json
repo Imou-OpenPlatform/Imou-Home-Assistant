@@ -246,6 +246,11 @@
     }
   },
   "entity": {
+    "alarm_control_panel": {
+      "arming": {
+        "name": "布防"
+      }
+    },
     "sensor": {
       "status": {
         "name": "状态",
@@ -277,14 +282,6 @@
           "low": "低",
           "medium": "中",
           "mute": "静音"
-        }
-      },
-      "mode": {
-        "name": "模式",
-        "state": {
-          "away": "离家",
-          "disarm": "撤防",
-          "home": "在家"
         }
       },
       "night_vision_mode": {
@@ -429,6 +426,9 @@
     },
     "button_press_failed": {
       "message": "Imou 拒绝了此按钮操作：{error}"
+    },
+    "alarm_arm_disarm_failed": {
+      "message": "乐橙拒绝了布防操作：{error}"
     },
     "stream_source_failed": {
       "message": "无法从 Imou 获取直播地址：{error}"

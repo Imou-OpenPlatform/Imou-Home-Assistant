@@ -206,6 +206,7 @@ SERVICE_CONTROL_MOVE_PTZ = "control_move_ptz"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.ALARM_CONTROL_PANEL,
     Platform.BUTTON,
     Platform.CAMERA,
     Platform.SELECT,
