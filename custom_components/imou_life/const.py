@@ -29,17 +29,45 @@ def imou_life_device_key_from_ids(
     channel_id: object | None,
     product_id: str | None,
 ) -> str | None:
-    """Build the device registry identifier key from push / API ids.
+    """Build the preferred device registry key from push / API ids.
 
     Same format as ``imou_life_device_key``: ``{device_id}_{channel_id|product_id}``.
-    Uses ``is not None`` for channel so channel 0 is kept.
+    Uses ``is not None`` for channel so channel 0 is kept. Prefer
+    ``imou_life_device_keys_from_ids`` when resolving against the registry —
+    IoT pushes often include a monitor channel that is not the registry suffix.
+    """
+    keys = imou_life_device_keys_from_ids(device_id, channel_id, product_id)
+    return keys[0] if keys else None
+
+
+def imou_life_device_keys_from_ids(
+    device_id: str | None,
+    channel_id: object | None,
+    product_id: str | None,
+) -> list[str]:
+    """Return candidate registry keys for an Imou device.
+
+    Order:
+    1. Channel-based key (IPC / multi-lens channel from the push)
+    2. Product-based key (channel-less IoT accessory)
+    3. Primary channel ``0`` when the push omitted channel_id — multi-lens
+       devices are registered per channel (``did_0``, ``did_1``, …), not as
+       ``did_pid``, so a missing channel still resolves to the main lens.
     """
     if not device_id:
-        return None
-    suffix = channel_id if channel_id is not None else product_id
-    if suffix is None:
-        return None
-    return f"{device_id}_{suffix}"
+        return []
+    keys: list[str] = []
+    if channel_id is not None:
+        keys.append(f"{device_id}_{channel_id}")
+    if product_id is not None and product_id != "":
+        key = f"{device_id}_{product_id}"
+        if key not in keys:
+            keys.append(key)
+    if channel_id is None:
+        zero = f"{device_id}_0"
+        if zero not in keys:
+            keys.append(zero)
+    return keys
 
 
 # Configuration definitions

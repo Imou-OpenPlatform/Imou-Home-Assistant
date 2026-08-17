@@ -10,7 +10,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import translation
 from pyimouapi.device import ImouDeviceSummary
 
-from .const import DOMAIN, PARAM_SELECTED_DEVICES, imou_life_device_key_from_ids
+from .const import DOMAIN, PARAM_SELECTED_DEVICES, imou_life_device_keys_from_ids
 
 
 def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
@@ -33,13 +33,12 @@ def resolve_ha_device_name(
     product_id: str | None = None,
 ) -> str | None:
     """Return HA device display name for Imou ids, or None if not registered."""
-    key = imou_life_device_key_from_ids(device_id, channel_id, product_id)
-    if key is None:
-        return None
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, key)})
-    if device is None:
-        return None
-    return device.name_by_user or device.name
+    registry = dr.async_get(hass)
+    for key in imou_life_device_keys_from_ids(device_id, channel_id, product_id):
+        device = registry.async_get_device(identifiers={(DOMAIN, key)})
+        if device is not None:
+            return device.name_by_user or device.name
+    return None
 
 
 def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:

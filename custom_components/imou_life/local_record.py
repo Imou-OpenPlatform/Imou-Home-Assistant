@@ -17,7 +17,7 @@ from .const import (
     PARAM_LOCAL_EVENT_RECORD,
     PARAM_LOCAL_RECORD_DURATION,
     PARAM_LOCAL_RECORD_PATH,
-    imou_life_device_key_from_ids,
+    imou_life_device_keys_from_ids,
 )
 from .runtime_data import get_runtime_data
 
@@ -42,17 +42,32 @@ def _camera_entity_id(hass: HomeAssistant, device_key: str) -> str | None:
     )
 
 
+def _resolve_device_key(
+    hass: HomeAssistant,
+    event_data: dict,
+) -> str | None:
+    """Pick the registry key that has a local-record switch or camera entity."""
+    registry = er.async_get(hass)
+    candidates = imou_life_device_keys_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    for device_key in candidates:
+        if registry.async_get_entity_id(
+            "switch", DOMAIN, f"{device_key}${PARAM_LOCAL_EVENT_RECORD}"
+        ) or registry.async_get_entity_id("camera", DOMAIN, f"{device_key}$camera"):
+            return device_key
+    return candidates[0] if candidates else None
+
+
 async def async_maybe_record_from_alarm(
     hass: HomeAssistant,
     entry: ConfigEntry,
     event_data: dict,
 ) -> None:
     """Start camera.record when this channel's local-record switch is on."""
-    device_key = imou_life_device_key_from_ids(
-        event_data.get("device_id"),
-        event_data.get("channel_id"),
-        event_data.get("product_id"),
-    )
+    device_key = _resolve_device_key(hass, event_data)
     if device_key is None or not _switch_is_on(hass, device_key):
         return
 

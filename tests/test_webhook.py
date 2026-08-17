@@ -15,7 +15,7 @@ from custom_components.imou_life.const import (
     EVENT_IMOU_EVENT,
     PARAM_NOTIFY_ON_ALARM,
 )
-from custom_components.imou_life.runtime_data import ImouRuntimeData
+from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtime_data
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _format_notification_time,
@@ -200,8 +200,8 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
         {"msg_type": "alarmLocal", "device_name": "Front Door"},
     )
 
-    assert title == "Imou Life alarm: Local alarm"
-    assert message == "Device: Front Door\nType: Local alarm"
+    assert title == "Imou Life · Local alarm"
+    assert message == "Device: Front Door"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -215,7 +215,7 @@ async def test_webhook_iot_and_paas_motion_are_scene_change(
     paas_title, _ = await _async_build_notification_message(
         hass, {"msg_type": "videoMotion", "device_name": "Cam"}
     )
-    assert iot_title == paas_title == "Imou Life alarm: Motion detected"
+    assert iot_title == paas_title == "Imou Life · Motion detected"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -232,9 +232,10 @@ async def test_webhook_e_ab_alarm_sound_uses_localized_copy(
             "time": "2026-08-17T14:30:05",
         },
     )
-    assert title == "Imou Life alarm: Unusual sound detected"
-    assert "Type: Unusual sound detected" in message
+    assert title == "Imou Life · Unusual sound detected"
+    assert "Type:" not in message
     assert "Time: 14:30:05" in message
+    assert "Device: Hall" in message
 
 
 @pytest.mark.parametrize(
@@ -290,7 +291,7 @@ async def test_webhook_product_model_events_localized(
     title, _ = await _async_build_notification_message(
         hass, {"msg_type": msg_type, "device_name": "Cam"}
     )
-    assert title == f"Imou Life alarm: {expected_fragment}"
+    assert title == f"Imou Life · {expected_fragment}"
 
 
 @pytest.mark.parametrize(
@@ -345,7 +346,7 @@ async def test_webhook_alarm_copy_is_an_event_sentence(
     title, _ = await _async_build_notification_message(
         hass, {"msg_type": msg_type, "device_name": "Cam"}
     )
-    assert title == f"Imou Life alarm: {expected}"
+    assert title == f"Imou Life · {expected}"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -356,8 +357,9 @@ async def test_webhook_unknown_alarm_type_falls_back_to_msg_type(
     title, message = await _async_build_notification_message(
         hass, {"msg_type": "totallyUnknownType", "device_name": "Cam"}
     )
-    assert title == "Imou Life alarm: totallyUnknownType"
-    assert "Type: totallyUnknownType" in message
+    assert title == "Imou Life · totallyUnknownType"
+    assert "Type:" not in message
+    assert "Device: Cam" in message
 
 
 def test_alarm_types_keys_match_between_languages() -> None:
@@ -423,6 +425,57 @@ async def test_webhook_event_includes_ha_device_name(hass: HomeAssistant) -> Non
     assert events[0].data["device_name"] == "HA Front"
     assert events[0].data["name"] == "Cloud Dname"
     assert events[0].data["device_id"] == "SN1"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_uses_product_key_ha_name(hass: HomeAssistant) -> None:
+    """IoT iotEvent with monitor.channel still resolves the accessory HA name."""
+    notify_calls = async_mock_service(hass, "notify", "persistent_notification")
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["ACC1"],
+        notify_services=["notify.persistent_notification"],
+    )
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "ACC1_pidSmoke")},
+        name="Cloud Smoke",
+    )
+    registry.async_update_device(device.id, name_by_user="厨房烟感")
+    runtime = get_runtime_data(entry)
+    assert runtime is not None
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(return_value="e_hxSmokeAlarm")
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "pidSmoke",
+                "did": "ACC1",
+                "dname": "Cloud Smoke",
+                "localTime": "2026-08-17T14:30:05",
+                "content": {
+                    "event": "303200",
+                    "monitor": {"channel": 0, "action": 1},
+                },
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(notify_calls) == 1
+    assert notify_calls[0].data["title"] == "Imou Life · Smoke detected"
+    assert "厨房烟感" in notify_calls[0].data["message"]
+    assert "ACC1" not in notify_calls[0].data["message"]
+    assert "Type:" not in notify_calls[0].data["message"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

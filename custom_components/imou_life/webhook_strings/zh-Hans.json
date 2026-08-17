@@ -1,8 +1,7 @@
 {
   "notification": {
-    "title": "乐橙告警：{alarm_type}",
+    "title": "Imou Life · {alarm_type}",
     "device": "设备：{device_name}",
-    "type": "类型：{alarm_type}",
     "time": "时间：{time_str}",
     "details": "详情：{desc_type}",
     "unknown_device": "未知设备",

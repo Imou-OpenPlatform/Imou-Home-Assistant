@@ -1,7 +1,11 @@
 """Tests for Imou Life shared helpers and device key helpers."""
 
 import pytest
-from custom_components.imou_life.const import DOMAIN, imou_life_device_key_from_ids
+from custom_components.imou_life.const import (
+    DOMAIN,
+    imou_life_device_key_from_ids,
+    imou_life_device_keys_from_ids,
+)
 from custom_components.imou_life.helpers import (
     notify_service_selector_options,
     parse_notify_services,
@@ -17,13 +21,32 @@ def test_device_key_from_ids_prefers_channel_id() -> None:
     assert imou_life_device_key_from_ids("SN1", 0, "pid") == "SN1_0"
 
 
+def test_device_keys_from_ids_includes_product_fallback() -> None:
+    """IoT pushes with monitor.channel still expose the product registry key."""
+    assert imou_life_device_keys_from_ids("SN1", 0, "pidX") == ["SN1_0", "SN1_pidX"]
+    assert imou_life_device_keys_from_ids("SN1", None, "pidX") == [
+        "SN1_pidX",
+        "SN1_0",
+    ]
+
+
+def test_device_keys_from_ids_omitted_channel_tries_primary() -> None:
+    """Multi-lens pushes without channel still try did_0 after did_pid."""
+    assert imou_life_device_keys_from_ids("SN1", None, None) == ["SN1_0"]
+    assert imou_life_device_keys_from_ids("SN1", None, "multiPid") == [
+        "SN1_multiPid",
+        "SN1_0",
+    ]
+
+
 def test_device_key_from_ids_uses_product_when_no_channel() -> None:
     assert imou_life_device_key_from_ids("SN1", None, "pidX") == "SN1_pidX"
 
 
 def test_device_key_from_ids_incomplete_returns_none() -> None:
     assert imou_life_device_key_from_ids(None, "0", "pid") is None
-    assert imou_life_device_key_from_ids("SN1", None, None) is None
+    # device_id alone still yields primary-channel fallback for multi-lens.
+    assert imou_life_device_key_from_ids("SN1", None, None) == "SN1_0"
 
 
 @pytest.mark.parametrize(
@@ -127,6 +150,51 @@ async def test_resolve_ha_device_name_falls_back_to_name(
     assert (
         resolve_ha_device_name(hass, "SN1", channel_id=None, product_id="pidX")
         == "Plug"
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_resolve_ha_device_name_falls_back_to_product_key(
+    hass: HomeAssistant,
+) -> None:
+    """Spurious monitor.channel must not hide the IoT accessory registry name."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_pidX")},
+        name="Smoke Sensor",
+    )
+
+    assert (
+        resolve_ha_device_name(hass, "SN1", channel_id=0, product_id="pidX")
+        == "Smoke Sensor"
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_resolve_ha_device_name_multi_lens_without_channel(
+    hass: HomeAssistant,
+) -> None:
+    """Multi-lens IoT with no channel_id resolves to the primary channel name."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Front Lens",
+    )
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_1")},
+        name="Side Lens",
+    )
+
+    assert (
+        resolve_ha_device_name(hass, "SN1", channel_id=None, product_id="multiPid")
+        == "Front Lens"
     )
 
 

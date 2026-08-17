@@ -22,7 +22,7 @@ from .const import (
     EVENT_IMOU_EVENT,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
-    imou_life_device_key_from_ids,
+    imou_life_device_keys_from_ids,
 )
 from .helpers import resolve_ha_device_name
 from .local_record import async_maybe_record_from_alarm
@@ -104,20 +104,20 @@ def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) ->
     Missing entity or unresolvable device key defaults to on so existing
     installs keep sending until the user turns a switch off.
     """
-    device_key = imou_life_device_key_from_ids(
+    registry = er.async_get(hass)
+    for device_key in imou_life_device_keys_from_ids(
         event_data.get("device_id"),
         event_data.get("channel_id"),
         event_data.get("product_id"),
-    )
-    if device_key is None:
-        return True
-    entity_id = er.async_get(hass).async_get_entity_id(
-        "switch", DOMAIN, f"{device_key}${PARAM_NOTIFY_ON_ALARM}"
-    )
-    if not entity_id:
-        return True
-    state = hass.states.get(entity_id)
-    return state is None or state.state == STATE_ON
+    ):
+        entity_id = registry.async_get_entity_id(
+            "switch", DOMAIN, f"{device_key}${PARAM_NOTIFY_ON_ALARM}"
+        )
+        if not entity_id:
+            continue
+        state = hass.states.get(entity_id)
+        return state is None or state.state == STATE_ON
+    return True
 
 
 def _webhook_strings_filename(language: str) -> str:
@@ -333,14 +333,12 @@ async def _async_build_notification_message(
     )
     time_str = _format_notification_time(event_data.get("time"))
 
-    title = notif.get("title", "Imou Life alarm: {alarm_type}").format(
-        alarm_type=alarm_type
-    )
+    # Title is the alarm type only; body carries device (and time) without
+    # repeating the same type line.
+    title = notif.get("title", "Imou Life · {alarm_type}").format(alarm_type=alarm_type)
     message = notif.get("device", "Device: {device_name}").format(
         device_name=device_name
     )
-    type_line = notif.get("type", "Type: {alarm_type}").format(alarm_type=alarm_type)
-    message += f"\n{type_line}"
     if time_str:
         time_line = notif.get("time", "Time: {time_str}").format(time_str=time_str)
         message += f"\n{time_line}"
