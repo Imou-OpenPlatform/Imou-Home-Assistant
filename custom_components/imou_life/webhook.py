@@ -79,6 +79,15 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "e_upgradeFail",
         "e_storageEmpty",
         "e_storageAbnormal",
+        "upgrading",
+        "upgrade_success",
+        "upgrade_failed",
+        "upgrade_result",
+        "e_matchApSucc",
+        # alarm-panel scenario / disarm status
+        "home",
+        "leave",
+        "no_defend",
     }
 )
 
@@ -144,6 +153,23 @@ async def _async_get_webhook_strings(
     return notification, alarm_types
 
 
+def _channel_id_from_payload(payload: dict[str, Any]) -> Any:
+    """Return a scalar channel id from the push payload, if present."""
+    for key in ("cid", "channelId", "msgChannelId"):
+        if key not in payload:
+            continue
+        value = payload.get(key)
+        if value is None or value == "":
+            continue
+        if isinstance(value, (list, dict)):
+            continue
+        return value
+    channels = payload.get("channels")
+    if isinstance(channels, (list, dict)) or channels in (None, ""):
+        return None
+    return channels
+
+
 def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize different Imou push formats into convenient common fields."""
     device_id = (
@@ -152,13 +178,7 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or payload.get("msgDeviceId")
         or payload.get("dname")
     )
-    channel_id = (
-        payload.get("cid")
-        if "cid" in payload
-        else payload.get("channelId")
-        or payload.get("msgChannelId")
-        or payload.get("channels")
-    )
+    channel_id = _channel_id_from_payload(payload)
     msg_type = payload.get("msgType")
     content = payload.get("content")
     output_data = None
@@ -190,6 +210,59 @@ def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _is_digit_str(value: Any) -> bool:
     return isinstance(value, str) and value.isdigit()
+
+
+def _alarm_type_label(alarm_types: dict[str, str], msg_type: str | None) -> str | None:
+    """Map msg_type / IoT identifier to a localized label."""
+    if not msg_type:
+        return None
+    if msg_type in alarm_types:
+        return alarm_types[msg_type]
+    if msg_type.startswith("e_") and msg_type[2:] in alarm_types:
+        return alarm_types[msg_type[2:]]
+    return None
+
+
+def _format_notification_time(raw_time: Any) -> str:
+    """Normalize push timestamps to HH:MM:SS for notification bodies."""
+    if raw_time is None or raw_time == "":
+        return ""
+    if isinstance(raw_time, (int, float)):
+        value = float(raw_time)
+        # Milliseconds since epoch.
+        if value > 1_000_000_000_000:
+            value /= 1000.0
+        if value > 1_000_000_000:
+            try:
+                return datetime.fromtimestamp(value).strftime("%H:%M:%S")
+            except (OSError, OverflowError, ValueError):
+                return str(raw_time)
+        return str(raw_time)
+
+    text = str(raw_time).strip()
+    if not text:
+        return ""
+    if text.isdigit():
+        return _format_notification_time(int(text))
+
+    # Compact IoT localTime: 20260817T143005 or 20260817T143005.000
+    if "T" in text and "-" not in text.split("T", 1)[0]:
+        date_part, time_part = text.split("T", 1)
+        time_part = time_part.split(".", 1)[0].replace("Z", "")
+        if len(date_part) == 8 and len(time_part) >= 6 and time_part[:6].isdigit():
+            return f"{time_part[0:2]}:{time_part[2:4]}:{time_part[4:6]}"
+
+    if "T" in text:
+        candidate = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(candidate).strftime("%H:%M:%S")
+        except ValueError:
+            after = text.split("T", 1)[1]
+            digits = "".join(ch for ch in after if ch.isdigit())
+            if len(digits) >= 6:
+                return f"{digits[0:2]}:{digits[2:4]}:{digits[4:6]}"
+
+    return text
 
 
 def _lookup_key_for_event_resolve(
@@ -248,22 +321,16 @@ async def _async_build_notification_message(
     msg_type = event_data.get("msg_type")
     unknown_device = notif.get("unknown_device", "Unknown device")
     unknown_alarm = notif.get("unknown_alarm", "Alarm")
+    # Prefer the Home Assistant registry name; never use the cloud dname/cname.
     device_name = (
         event_data.get("device_name")
-        or event_data.get("name")
         or event_data.get("device_id")
         or unknown_device
     )
-    alarm_type = alarm_types.get(msg_type, msg_type) if msg_type else unknown_alarm
-
-    raw_time = event_data.get("time")
-    if isinstance(raw_time, (int, float)) and raw_time > 1000000000:
-        try:
-            time_str = datetime.fromtimestamp(raw_time).strftime("%H:%M:%S")
-        except (OSError, ValueError):
-            time_str = str(raw_time)
-    else:
-        time_str = str(raw_time) if raw_time else ""
+    alarm_type = _alarm_type_label(alarm_types, msg_type) or (
+        msg_type if msg_type else unknown_alarm
+    )
+    time_str = _format_notification_time(event_data.get("time"))
 
     title = notif.get("title", "Imou Life alarm: {alarm_type}").format(
         alarm_type=alarm_type
@@ -386,6 +453,15 @@ async def async_handle_imou_webhook(
     entry, runtime = entry_and_runtime
     if not runtime.push_enabled:
         _LOGGER.debug("Push is disabled, ignoring event")
+        return web.Response(status=200, text="ok")
+
+    # IoT devices (product id present) only accept the iotEvent envelope.
+    if event_data.get("product_id") and event_data.get("msg_type") != "iotEvent":
+        _LOGGER.debug(
+            "Ignoring non-iotEvent push for IoT device %s (msg_type=%s)",
+            device_id,
+            event_data.get("msg_type"),
+        )
         return web.Response(status=200, text="ok")
 
     # Filter: None = all devices; [] = none; otherwise allow-list

@@ -18,6 +18,7 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
+    _format_notification_time,
     _is_alarm_msg_type,
     _load_webhook_strings_file,
     _normalize_event_payload,
@@ -196,7 +197,7 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
     """Alarm notifications use webhook translation strings."""
     title, message = await _async_build_notification_message(
         hass,
-        {"msg_type": "alarmLocal", "name": "Front Door"},
+        {"msg_type": "alarmLocal", "device_name": "Front Door"},
     )
 
     assert title == "Imou Life alarm: Local alarm"
@@ -209,12 +210,89 @@ async def test_webhook_iot_and_paas_motion_are_scene_change(
 ) -> None:
     """IoT e_videoMotion and PaaS videoMotion share the same motion copy."""
     iot_title, _ = await _async_build_notification_message(
-        hass, {"msg_type": "e_videoMotion", "name": "Cam"}
+        hass, {"msg_type": "e_videoMotion", "device_name": "Cam"}
     )
     paas_title, _ = await _async_build_notification_message(
-        hass, {"msg_type": "videoMotion", "name": "Cam"}
+        hass, {"msg_type": "videoMotion", "device_name": "Cam"}
     )
     assert iot_title == paas_title == "Imou Life alarm: Motion detected"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_e_ab_alarm_sound_uses_localized_copy(
+    hass: HomeAssistant,
+) -> None:
+    """IoT e_abAlarmSound maps to the same copy as PaaS abAlarmSound."""
+    _load_webhook_strings_file.cache_clear()
+    title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "e_abAlarmSound",
+            "device_name": "Hall",
+            "time": "2026-08-17T14:30:05",
+        },
+    )
+    assert title == "Imou Life alarm: Unusual sound detected"
+    assert "Type: Unusual sound detected" in message
+    assert "Time: 14:30:05" in message
+
+
+@pytest.mark.parametrize(
+    ("msg_type", "expected_fragment"),
+    [
+        ("e_multiVideoAiPerArea", "Person entered the area"),
+        ("e_multiVideoAiPetAlarm", "Pet entered the area"),
+        ("e_multiVideoAiVehAreaAlarm", "Vehicle entered the area"),
+        ("e_multiVideoAreaDetect", "Intrusion detected"),
+        ("e_multiOrdinaryEvent", "Ordinary recording event"),
+        ("e_std_aorAlarm", "AOR recording event"),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_product_model_events_localized(
+    hass: HomeAssistant, msg_type: str, expected_fragment: str
+) -> None:
+    """Product-model IoT identifiers from sample models have notify copy."""
+    _load_webhook_strings_file.cache_clear()
+    title, _ = await _async_build_notification_message(
+        hass, {"msg_type": msg_type, "device_name": "Cam"}
+    )
+    assert title == f"Imou Life alarm: {expected_fragment}"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (1723888205, "14:30:05"),
+        ("2026-08-17T14:30:05", "14:30:05"),
+        ("2026-08-17T14:30:05Z", "14:30:05"),
+        ("20260817T143005", "14:30:05"),
+        ("14:30:05", "14:30:05"),
+        (None, ""),
+    ],
+)
+def test_format_notification_time_normalizes_iot_and_iso(raw, expected) -> None:
+    """Epoch, ISO-with-T, and compact IoT localTime become HH:MM:SS."""
+    if isinstance(raw, int):
+        from datetime import datetime
+
+        expected = datetime.fromtimestamp(raw).strftime("%H:%M:%S")
+    assert _format_notification_time(raw) == expected
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notify_ignores_cloud_device_name(hass: HomeAssistant) -> None:
+    """Notify body never falls back to cloud dname/cname."""
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "alarmLocal",
+            "name": "Cloud Dname",
+            "device_id": "SN1",
+        },
+    )
+    assert "SN1" in message
+    assert "Cloud Dname" not in message
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -232,7 +310,7 @@ async def test_webhook_alarm_copy_is_an_event_sentence(
 ) -> None:
     """English titles follow common security-notification phrasing."""
     title, _ = await _async_build_notification_message(
-        hass, {"msg_type": msg_type, "name": "Cam"}
+        hass, {"msg_type": msg_type, "device_name": "Cam"}
     )
     assert title == f"Imou Life alarm: {expected}"
 
@@ -243,7 +321,7 @@ async def test_webhook_unknown_alarm_type_falls_back_to_msg_type(
 ) -> None:
     """Unmapped keys stay as the raw identifier / msgType."""
     title, message = await _async_build_notification_message(
-        hass, {"msg_type": "totallyUnknownType", "name": "Cam"}
+        hass, {"msg_type": "totallyUnknownType", "device_name": "Cam"}
     )
     assert title == "Imou Life alarm: totallyUnknownType"
     assert "Type: totallyUnknownType" in message
@@ -335,9 +413,10 @@ async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> No
         "webhook-id",
         MockRequest(
             {
-                "msgType": "33000",
+                "msgType": "iotEvent",
                 "pid": "mhpf7Dsz",
                 "deviceId": "SN1",
+                "content": {"event": "33000"},
             }
         ),
     )
@@ -363,7 +442,7 @@ async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
     ) as mock_executor:
         await _async_build_notification_message(
             hass,
-            {"msg_type": "alarmLocal", "name": "Front Door"},
+            {"msg_type": "alarmLocal", "device_name": "Front Door"},
         )
 
     assert mock_executor.call_count >= 1
@@ -384,6 +463,14 @@ async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
         ("e_storageAbnormal", False),
         ("e_upgradeSuccess", False),
         ("e_upgradeFail", False),
+        ("upgrading", False),
+        ("upgrade_success", False),
+        ("home", False),
+        ("leave", False),
+        ("no_defend", False),
+        ("e_matchApSucc", False),
+        ("e_multiVideoAiPerArea", True),
+        ("e_std_aorAlarm", True),
         ("e_videoMotion", True),
         ("whiteLightOn", False),
         ("sirenOn", True),
@@ -487,8 +574,42 @@ async def test_webhook_electricity_is_not_alarm(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_resolves_numeric_msg_type(hass: HomeAssistant) -> None:
-    """Numeric top-level msgType is rewritten to product-model identifier."""
+async def test_webhook_iot_ignores_non_iot_event_msg_type(hass: HomeAssistant) -> None:
+    """IoT devices (pid present) only accept the iotEvent envelope."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(return_value="e_abAlarmSound")
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "e_abAlarmSound",
+                "pid": "pid1",
+                "did": "device_1",
+                "localTime": "20260817T143005",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert generic_events == []
+    assert alarm_events == []
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_resolves_numeric_msg_type_via_iot_event(
+    hass: HomeAssistant,
+) -> None:
+    """Numeric content.event refs under iotEvent are rewritten to identifiers."""
     generic_events: list[Event] = []
     alarm_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
@@ -504,9 +625,10 @@ async def test_webhook_resolves_numeric_msg_type(hass: HomeAssistant) -> None:
         "webhook-id",
         MockRequest(
             {
-                "msgType": "123900",
+                "msgType": "iotEvent",
                 "pid": "pid1",
                 "deviceId": "device_1",
+                "content": {"event": "123900"},
             }
         ),
     )
@@ -566,7 +688,12 @@ async def test_webhook_resolves_iot_event_content_event(hass: HomeAssistant) -> 
         ("e_storageAbnormal", False),
         ("e_upgradeSuccess", False),
         ("e_upgradeFail", False),
+        ("upgrading", False),
+        ("home", False),
+        ("e_matchApSucc", False),
         ("e_videoMotion", True),
+        ("e_multiVideoAiPerArea", True),
+        ("e_std_aorAlarm", True),
     ],
 )
 async def test_webhook_classifies_after_iot_identifier_rewrite(
@@ -605,8 +732,10 @@ async def test_webhook_classifies_after_iot_identifier_rewrite(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_skips_resolve_for_string_msg_type(hass: HomeAssistant) -> None:
-    """Non-numeric string msgTypes are not resolved via product model."""
+async def test_webhook_skips_resolve_for_paas_string_msg_type(
+    hass: HomeAssistant,
+) -> None:
+    """PaaS string msgTypes without pid are not resolved via product model."""
     generic_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
     runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
@@ -617,7 +746,7 @@ async def test_webhook_skips_resolve_for_string_msg_type(hass: HomeAssistant) ->
     await async_handle_imou_webhook(
         hass,
         "webhook-id",
-        MockRequest({"msgType": "videoMotion", "pid": "pid1", "deviceId": "device_1"}),
+        MockRequest({"msgType": "videoMotion", "deviceId": "device_1"}),
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 
@@ -640,11 +769,18 @@ async def test_webhook_resolve_failure_keeps_original_msg_type(
     await async_handle_imou_webhook(
         hass,
         "webhook-id",
-        MockRequest({"msgType": "123900", "pid": "pid1", "deviceId": "device_1"}),
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "pid1",
+                "deviceId": "device_1",
+                "content": {"event": "123900"},
+            }
+        ),
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 
-    assert generic_events[0].data["msg_type"] == "123900"
+    assert generic_events[0].data["msg_type"] == "iotEvent"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
