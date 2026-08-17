@@ -48,6 +48,7 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "iotAction",
         "numberstat",
         "electricity",
+        "low_battery_alarm",
         # privacy mask (#66)
         "openCamera",
         "closeCamera",
