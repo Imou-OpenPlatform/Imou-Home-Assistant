@@ -57,7 +57,7 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "transferDeviceFrom",
         "transferDeviceTo",
         "deviceDeletedSharedCancel",
-        # upgrade / storage ops
+        # upgrade / storage ops (PaaS msgType and IoT identifier)
         "UpgradeSuccess",
         "upgradeFail",
         "apUpgradeSuccess",
@@ -66,6 +66,10 @@ _NON_ALARM_MSG_TYPES = frozenset(
         "storageRecoverFail",
         "storageEmpty",
         "storageAbnormal",
+        "e_upgradeSuccess",
+        "e_upgradeFail",
+        "e_storageEmpty",
+        "e_storageAbnormal",
     }
 )
 
@@ -308,14 +312,13 @@ async def _async_dispatch_imou_push(
     entry: ConfigEntry,
     runtime: ImouRuntimeData,
     event_data: dict[str, Any],
-    *,
-    is_alarm: bool,
 ) -> None:
-    """Resolve identifiers, fire events, and notify after webhook ACK."""
+    """Resolve identifiers, classify, fire events, and notify after webhook ACK."""
     try:
         await _async_apply_event_identifier(runtime, event_data)
+        runtime.record_push_msg(event_data.get("msg_type"))
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
-        if is_alarm:
+        if _is_alarm_msg_type(event_data.get("msg_type")):
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             notify_services = runtime.notify_services
             if notify_services:
@@ -342,7 +345,6 @@ async def async_handle_imou_webhook(
         return web.Response(status=200, text="ok")
 
     event_data = _normalize_event_payload(payload)
-    msg_type = event_data.get("msg_type")
     device_id = event_data.get("device_id")
     _LOGGER.debug("Received Imou push event: %s", event_data)
 
@@ -374,16 +376,11 @@ async def async_handle_imou_webhook(
         product_id=event_data.get("product_id"),
     )
 
-    runtime.record_push_msg(msg_type)
-
-    # Classify on original top-level msgType before outbound identifier rewrite.
-    is_alarm = _is_alarm_msg_type(msg_type)
-
     # ACK first so Imou does not stop pushing while we resolve/notify. The task is
     # tied to the entry so it cannot outlive the runtime data it holds.
     entry.async_create_background_task(
         hass,
-        _async_dispatch_imou_push(hass, entry, runtime, event_data, is_alarm=is_alarm),
+        _async_dispatch_imou_push(hass, entry, runtime, event_data),
         name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
     )
     return web.Response(status=200, text="ok")

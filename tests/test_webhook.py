@@ -340,12 +340,14 @@ async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> No
 
     assert response.status == 200
     assert events == []
+    assert runtime.push_msg_type_counts == {}
 
     gate.set()
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert len(events) == 1
     assert events[0].data["msg_type"] == "human"
+    assert runtime.push_last_msg_type == "human"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -374,6 +376,11 @@ async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
         ("iotAction", False),
         ("electricity", False),
         ("iotEvent", True),
+        ("e_storageEmpty", False),
+        ("e_storageAbnormal", False),
+        ("e_upgradeSuccess", False),
+        ("e_upgradeFail", False),
+        ("e_videoMotion", True),
         ("whiteLightOn", False),
         ("sirenOn", True),
         ("sirenOff", True),
@@ -512,7 +519,7 @@ async def test_webhook_resolves_numeric_msg_type(hass: HomeAssistant) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_resolves_iot_event_content_event(hass: HomeAssistant) -> None:
-    """iotEvent content.event resolves for outbound msg_type; alarm uses iotEvent."""
+    """iotEvent content.event is rewritten; classification uses the identifier."""
     generic_events: list[Event] = []
     alarm_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
@@ -545,6 +552,52 @@ async def test_webhook_resolves_iot_event_content_event(hass: HomeAssistant) -> 
     runtime.coordinator.device_manager.delegate.async_resolve_event_identifier.assert_awaited_once_with(
         "mhpf7Dsz", "33000"
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("identifier", "expect_alarm"),
+    [
+        ("e_storageEmpty", False),
+        ("e_storageAbnormal", False),
+        ("e_upgradeSuccess", False),
+        ("e_upgradeFail", False),
+        ("e_videoMotion", True),
+    ],
+)
+async def test_webhook_classifies_after_iot_identifier_rewrite(
+    hass: HomeAssistant, identifier: str, expect_alarm: bool
+) -> None:
+    """IoT ops identifiers match PaaS denylist; real IoT alarms still notify."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["SN1"])
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(return_value=identifier)
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "pid1",
+                "did": "SN1",
+                "content": {"event": "15200"},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert generic_events[0].data["msg_type"] == identifier
+    assert len(alarm_events) == (1 if expect_alarm else 0)
+    assert runtime.push_last_msg_type == identifier
+    assert runtime.push_msg_type_counts[identifier] == 1
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
