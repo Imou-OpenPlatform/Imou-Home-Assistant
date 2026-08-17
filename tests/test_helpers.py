@@ -58,11 +58,37 @@ async def test_notify_selector_options_keep_saved_non_notify(
         return None
 
     hass.services.async_register("notify", "mobile_app_phone", _notify)
+    hass.services.async_register("notify", "send_message", _notify)
+    hass.services.async_register("notify", "persistent_notification", _notify)
     options = notify_service_selector_options(
         hass, ["notify.mobile_app_phone", "qiyewechat.send"]
     )
-    assert "notify.mobile_app_phone" in options
-    assert "qiyewechat.send" in options
+    values = [item["value"] for item in options]
+    assert options == [
+        {"value": item, "label": item}
+        for item in [
+            "notify.mobile_app_phone",
+            "notify.persistent_notification",
+            "qiyewechat.send",
+        ]
+    ]
+    assert "notify.send_message" not in values
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_notify_selector_options_keep_stored_send_message(
+    hass: HomeAssistant,
+) -> None:
+    """A previously saved send_message entry stays so the user can clear it."""
+
+    async def _notify(_call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "send_message", _notify)
+    options = notify_service_selector_options(hass, ["notify.send_message"])
+    assert options == [
+        {"value": "notify.send_message", "label": "notify.send_message"}
+    ]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

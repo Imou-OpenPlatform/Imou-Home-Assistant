@@ -9,13 +9,18 @@ from custom_components.imou_life.const import (
     PARAM_LINKAGE_SIREN,
     PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_MOTION_DETECT,
+    PARAM_NOTIFY_ON_ALARM,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
     PARAM_WIDE_DYNAMIC,
 )
-from custom_components.imou_life.switch import SWITCH_TYPES, _iter_switches
+from custom_components.imou_life.switch import (
+    SWITCH_TYPES,
+    _iter_notify_on_alarm_switches,
+    _iter_switches,
+)
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
@@ -64,3 +69,17 @@ def test_switch_types_include_feature_switches() -> None:
     """Feature switches must be registered or they never appear."""
     keys = {description.key for description in SWITCH_TYPES}
     assert keys >= FEATURE_SWITCH_KEYS
+
+
+def test_iter_notify_on_alarm_covers_every_device() -> None:
+    """Notify-on-alarm is HA-only and is created for cameras and non-cameras."""
+    camera = _mock_device({})
+    camera.channel_id = "0"
+    plug = _mock_device({})
+    plug.channel_id = None
+    pairs = _iter_notify_on_alarm_switches(_mock_coordinator([camera, plug]))
+    assert [key for key, _device in pairs] == [
+        PARAM_NOTIFY_ON_ALARM,
+        PARAM_NOTIFY_ON_ALARM,
+    ]
+    assert [device for _key, device in pairs] == [camera, plug]

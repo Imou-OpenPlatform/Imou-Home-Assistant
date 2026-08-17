@@ -13,6 +13,7 @@ from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
+    PARAM_NOTIFY_ON_ALARM,
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from custom_components.imou_life.webhook import (
@@ -22,8 +23,11 @@ from custom_components.imou_life.webhook import (
     _normalize_event_payload,
     async_handle_imou_webhook,
 )
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import async_mock_service
 
 from .conftest import setup_imou_runtime
 
@@ -789,3 +793,88 @@ def test_record_push_msg_caps_distinct_keys() -> None:
     assert runtime.push_msg_type_counts["_other"] == 1
     assert "type_extra" not in runtime.push_msg_type_counts
     assert runtime.push_last_msg_type == "type_extra"
+
+
+def _register_notify_on_alarm_switch(
+    hass: HomeAssistant, *, device_key: str, switch_on: bool
+) -> None:
+    registry = er.async_get(hass)
+    switch = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        f"{device_key}${PARAM_NOTIFY_ON_ALARM}",
+        suggested_object_id="front_notify_on_alarm",
+    )
+    hass.states.async_set(switch.entity_id, STATE_ON if switch_on else STATE_OFF)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_skips_notify_when_device_switch_off(
+    hass: HomeAssistant,
+) -> None:
+    """A per-device notify switch off still fires alarm events."""
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.test"],
+    )
+    _register_notify_on_alarm_switch(hass, device_key="SN1_0", switch_on=False)
+    calls = async_mock_service(hass, "notify", "test")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(alarm_events) == 1
+    assert calls == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notifies_when_device_switch_on(hass: HomeAssistant) -> None:
+    """Account targets plus an on switch send the alarm notification."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.test"],
+    )
+    _register_notify_on_alarm_switch(hass, device_key="SN1_0", switch_on=True)
+    calls = async_mock_service(hass, "notify", "test")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notifies_when_device_switch_missing(
+    hass: HomeAssistant,
+) -> None:
+    """No switch entity means notify stays on, matching the default."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.test"],
+    )
+    calls = async_mock_service(hass, "notify", "test")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1

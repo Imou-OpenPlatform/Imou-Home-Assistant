@@ -12,9 +12,18 @@ from typing import Any
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN, EVENT_IMOU_ALARM, EVENT_IMOU_EVENT, PARAM_WEBHOOK_ID
+from .const import (
+    DOMAIN,
+    EVENT_IMOU_ALARM,
+    EVENT_IMOU_EVENT,
+    PARAM_NOTIFY_ON_ALARM,
+    PARAM_WEBHOOK_ID,
+    imou_life_device_key_from_ids,
+)
 from .helpers import resolve_ha_device_name
 from .local_record import async_maybe_record_from_alarm
 from .runtime_data import ImouRuntimeData, get_runtime_data
@@ -77,6 +86,28 @@ _NON_ALARM_MSG_TYPES = frozenset(
 def _is_alarm_msg_type(msg_type: str | None) -> bool:
     """Return True if this push should fire imou_life_alarm / notify."""
     return msg_type is not None and msg_type not in _NON_ALARM_MSG_TYPES
+
+
+def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) -> bool:
+    """Return True unless this device's notify-on-alarm switch is off.
+
+    Missing entity or unresolvable device key defaults to on so existing
+    installs keep sending until the user turns a switch off.
+    """
+    device_key = imou_life_device_key_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    if device_key is None:
+        return True
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "switch", DOMAIN, f"{device_key}${PARAM_NOTIFY_ON_ALARM}"
+    )
+    if not entity_id:
+        return True
+    state = hass.states.get(entity_id)
+    return state is None or state.state == STATE_ON
 
 
 def _webhook_strings_filename(language: str) -> str:
@@ -321,7 +352,7 @@ async def _async_dispatch_imou_push(
         if _is_alarm_msg_type(event_data.get("msg_type")):
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             notify_services = runtime.notify_services
-            if notify_services:
+            if notify_services and _notify_on_alarm_enabled(hass, event_data):
                 await _async_send_notifications(hass, event_data, notify_services)
             await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:

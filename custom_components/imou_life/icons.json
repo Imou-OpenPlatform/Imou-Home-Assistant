@@ -73,6 +73,9 @@
 			"local_event_record": {
 				"default": "mdi:file-video"
 			},
+			"notify_on_alarm": {
+				"default": "mdi:bell-badge"
+			},
 			"linkage_siren": {
 				"default": "mdi:bell-alert"
 			},

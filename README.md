@@ -49,21 +49,21 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry to open a menu: **General settings**, **Event push**, or **Manage devices**. Each section saves when you submit that form; you do not need to visit the other sections in the same session.
+Use **Configure** on the integration entry to open a menu: **Polling and cameras**, **Alarms, notifications, and recording**, or **Choose and bind devices**. Each section saves when you submit that form; you do not need to visit the other sections in the same session.
 
-- **General settings** — enable/disable status polling, polling interval, snapshot wait time, live stream resolution/protocol, PTZ duration  
+- **Polling and cameras** — polling on/off and interval. Snapshot wait, live stream, and PTZ defaults are under **Camera defaults**.  
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
-- **Event push** — enable webhook callback, optional custom callback URL, message types, alarm notifications, and local recording (shared save folder and clip duration for cameras whose **Local event recording** switch is on). See [guides/local-event-recording.md](guides/local-event-recording.md#english).
+- **Alarms, notifications, and recording** — enable webhook callback, message types, alarm notifications, and local recording (shared save folder and clip duration for cameras whose **Record on alarm** switch is on). See [guides/local-event-recording.md](guides/local-event-recording.md#english).
 
-On this step the integration shows your **Webhook ID** and a **suggested callback URL**. Leave **Custom callback URL** empty to use the suggested address; enter a public URL only if the suggested one is not reachable from the internet.
+**Custom callback URL** is in **Callback URL**, directly under **Enable event push**. Copy the suggested URL, or replace the hostname and port if that address is not reachable from the internet. The field is required when event push is on.
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
 
-- **Manage devices** — choose which devices to poll, or expand **Bind a new device** to add a serial; Submit saves and closes
+- **Choose and bind devices** — choose which devices to poll, or **Bind a new device**; each action saves when you submit
 
-<img src="assets/images/configure_devices.png" width="70%" alt="Configure — Manage devices">
+<img src="assets/images/configure_devices.png" width="70%" alt="Configure — Devices">
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
@@ -71,24 +71,24 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 
 ## Features
 * **Integration & account**
-  - Bind devices to your open-platform account from **Configure → Manage devices** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
-  - Device selection at setup and in **Configure → Manage devices** (poll only chosen devices)
-  - **Configure** menu: **General settings** (polling, camera, PTZ), **Event push** (callback, notifications, local recording folder/duration), and **Manage devices** (select/bind, then Submit); each section saves independently
+  - Bind devices to your open-platform account from **Configure → Choose and bind devices** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
+  - Device selection at setup and in **Configure → Choose and bind devices** (poll only chosen devices)
+  - **Configure** menu: **Polling and cameras**, **Alarms, notifications, and recording**, and **Choose and bind devices**; each section saves independently
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.6 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
-  - **Configure → Event push** shows Webhook ID and suggested callback URL; grouped settings for callback, message types, notifications, and local recording
+  - **Configure → Alarms, notifications, and recording** — callback URL (suggested URL; replace hostname and port if it is not public), message types, phone notify, and local recording.
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
-  - Optional notify services for alarm messages (multi-select of registered `notify.*` services)
+  - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarms, notifications, and recording**. Silence one device with **Notify on alarm** on its device page (default on)
   - Choose push message types; messages are also synced to the Imou Life app
   - Alarm images in push payloads are encrypted — use automations with `camera.snapshot` / `camera_proxy` if you need notification thumbnails
-  - **Local event recording** — per-camera switch (default off, stored in Home Assistant only). When an alarm is pushed, the integration records a short cloud-HLS clip with `camera.record`. Shared folder and duration: **Configure → Event push**. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
+  - **Record on alarm** — per-camera switch (default off, stored in Home Assistant only). When an alarm is pushed, the integration records a short cloud-HLS clip with `camera.record`. Shared folder and duration: **Configure → Alarms, notifications, and recording**. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
 * **Camera**
   - Status (name, online, storage, battery, …)
   - Live video
-  - PTZ (direction buttons; duration in **Configure → General settings**)
+  - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
   - **Collection points** — `select.collection_point` lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
   - Detection: picture change, human, pet
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
@@ -111,7 +111,7 @@ On this step the integration shows your **Webhook ID** and a **suggested callbac
 ## Troubleshooting
 
 - **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
-- **Event push not working** — Open **Configure → Event push**. Confirm **Enable event push** is on; note the **Webhook ID** and **Suggested callback URL** at the top. Leave **Custom callback URL** empty unless you need a different public URL. Also check **Settings → System → Network → Home Assistant URL** (external URL required). Review repair issues under **Settings → System → Repairs**.
+- **Event push not working** — Open **Configure → Alarms, notifications, and recording**. Confirm **Enable event push** is on. The suggested callback URL is under **Callback URL**. Paste it, or replace the hostname and port if that address is not reachable from the internet. Also check **Settings → System → Network → Home Assistant URL** (external URL required). Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
@@ -180,21 +180,21 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点击 **配置** 会打开菜单：**常规设置**、**事件推送** 或 **管理设备**。每一项提交即保存，同一次会话中无需进入其他分区。
+在集成条目上点击 **配置** 会打开菜单：**轮询与摄像头**、**告警、通知与录像** 或 **选择与绑定设备**。每一项提交即保存，同一次会话中无需进入其他分区。
 
-- **常规设置** — 启用/关闭状态轮询、轮询间隔、抓图等待时间、直播分辨率/协议、云台转动时间  
+- **轮询与摄像头** — 轮询开关与间隔。抓图等待、直播与云台默认参数在 **摄像头默认**。  
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
-- **事件推送** — 启用 Webhook 回调、可选自定义回调 URL、消息类型、告警通知，以及本地录像（账号共用保存目录和片段时长，只对打开了 **告警本地录像** 开关的摄像头生效）。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
+- **告警、通知与录像** — 启用 Webhook 回调、消息类型、告警通知，以及本地录像（账号共用保存目录和片段时长，只对打开了 **告警时录像** 开关的摄像头生效）。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
 
-此步骤会显示 **Webhook ID** 与**建议回调 URL**。**自定义回调 URL** 留空即使用建议地址；仅当建议地址无法从公网访问时再填写公网 URL。
+**自定义回调地址** 在 **回调地址**，紧挨着 **启用事件推送**。开启事件推送时必填且必须公网可达：可复制建议地址；不可达时把主机名和端口换成可达的即可。
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
 
-- **管理设备** — 勾选要轮询的设备，或展开 **绑定新设备** 填写序列号；点提交即保存并关闭
+- **选择与绑定设备** — 勾选要轮询的设备，或 **绑定新设备**；每一步提交即保存
 
-<img src="assets/images/configure_devices.png" width="70%" alt="配置 — 管理设备">
+<img src="assets/images/configure_devices.png" width="70%" alt="配置 — 设备">
 
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
@@ -203,24 +203,24 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 功能
 
 * **集成与账号**
-  - 在 **配置 → 管理设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
-  - 安装时及 **配置 → 管理设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 菜单：**常规设置**（轮询、摄像头、云台）、**事件推送**（回调、通知、本地录像目录与时长）、**管理设备**（选择/绑定后提交）；每一项可独立保存
+  - 在 **配置 → 选择与绑定设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
+  - 安装时及 **配置 → 选择与绑定设备** 中可选择设备（仅轮询已选设备）
+  - **配置** 菜单：**轮询与摄像头**、**告警、通知与录像**、**选择与绑定设备**；每一项可独立保存
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.6 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
-  - **配置 → 事件推送** 显示 Webhook ID 与建议回调 URL；回调、消息类型、通知、本地录像分组设置
+  - **配置 → 告警、通知与录像** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知、本地录像。
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
-  - 可选告警消息通知服务（多选已注册的 `notify.*` 服务）
+  - 可选告警通知：在 **配置 → 告警、通知与录像** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）
   - 可选择推送消息类型；消息也会同步到乐橙 App
   - 推送载荷中的告警图片为加密格式 — 若需通知缩略图，请在自动化中使用 `camera.snapshot` / `camera_proxy`
-  - **告警本地录像** — 每路镜头一个开关（默认关，只存在 Home Assistant）。收到告警推送后，用 `camera.record` 从云端 HLS 录一段短视频。保存目录和时长在 **配置 → 事件推送**。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)
+  - **告警时录像** — 每路镜头一个开关（默认关，只存在 Home Assistant）。收到告警推送后，用 `camera.record` 从云端 HLS 录一段短视频。保存目录和时长在 **配置 → 告警、通知与录像**。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)
 * **摄像头**
   - 状态（名称、在线、存储、电量等）
   - 直播
-  - 云台（方向按钮；时长在 **配置 → 常规设置** 中设置）
+  - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
   - **收藏点** — `select.collection_point` 列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
   - 检测：画面变化、人形、宠物
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
@@ -243,7 +243,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 故障排查
 
 - **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
-- **事件推送不工作** — 打开 **配置 → 事件推送**。确认 **启用事件推送** 已开启；记下顶部的 **Webhook ID** 与 **建议回调 URL**。**自定义回调 URL** 留空除非需要其他公网地址。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**（需配置外网 URL）。在 **设置 → 系统 → 修复** 中查看 repair 提示。
+- **事件推送不工作** — 打开 **配置 → 告警、通知与录像**。确认 **启用事件推送** 已开启。建议地址在 **回调地址**。复制进去即可；外网访问不到时把主机名和端口换成可达的。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**（需配置外网 URL）。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。

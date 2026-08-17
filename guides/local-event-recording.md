@@ -1,4 +1,4 @@
-# Local event recording / 本地事件录像
+# Record on alarm / 告警时录像
 
 **[English](#english)** | **[简体中文](#zh-hans)**
 
@@ -8,7 +8,7 @@
 
 ## English
 
-When an Imou **alarm** is pushed to Home Assistant, cameras whose **Local event recording** switch is on can save a short MP4 from the **cloud HLS live stream**.
+When an Imou **alarm** is pushed to Home Assistant, cameras whose **Record on alarm** switch is on can save a short MP4 from the **cloud HLS live stream**.
 
 This is **post-event** recording, not an NVR. Dual-lens devices have one switch per channel.
 
@@ -27,7 +27,7 @@ Each recording pulls the cloud live stream and consumes **Open Platform live-vie
 ### Prerequisites
 
 1. **Imou Life** installed; at least one `camera.*` entity.
-2. **Event push** enabled: **Configure → Event push**, include **alarm**, and a reachable HA callback URL.
+2. **Event push** enabled: **Configure → Alarms, notifications, and recording**, include **alarm**, and a reachable HA callback URL.
 3. A **writable** directory listed in `allowlist_external_dirs` (creating a folder alone is not enough).
 4. The **Stream** component. This integration asks Home Assistant to load Stream when available. If logs still say it is not set up, add `stream:` to `configuration.yaml` and restart.
 
@@ -51,7 +51,7 @@ Restart Home Assistant after changing YAML.
 
 ### Step 2 — Shared folder and duration
 
-**Settings → Devices & services → Imou Life → Configure → Event push → Local recording**
+**Settings → Devices & services → Imou Life → Configure → Alarms, notifications, and recording → Local recording**
 
 - **Save folder** — same path as the allowlist, for example `/media/imou`. Leave empty to disable saving even if a camera switch is on.
 - **Clip duration** — seconds after the alarm (default 60, range 15–180).
@@ -60,7 +60,7 @@ These settings apply to every camera on this account. They do not turn recording
 
 ### Step 3 — Per-camera switch
 
-On each camera device page, open **Local event recording** (configuration section) and turn it on for the lenses you want.
+On each camera device page, open **Record on alarm** (configuration section) and turn it on for the lenses you want.
 
 Default is off so an alarm does not start pulling live streams for every device.
 
@@ -98,7 +98,7 @@ The built-in switch already calls `camera.record` on `imou_life_alarm`. Keep a Y
 
 | Symptom | What to do |
 | --- | --- |
-| Switch on but no file | Confirm **Configure → Event push → Local recording** has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
+| Switch on but no file | Confirm **Configure → Alarms, notifications, and recording → Local recording** has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
 | `Stream integration is not set up` | Add `stream:` to `configuration.yaml`, restart. Stream is **not** added via the brand picker. |
 | `Can't write …, no access to path!` | Folder is not under `allowlist_external_dirs`, directory missing, or absolute path mismatch. Fix and restart. Options save is refused until the folder is allowlisted. |
 | `Referenced entities … missing or not currently available` | Wait until the camera state is not `unavailable` after restart; verify entity ID. |
@@ -117,7 +117,7 @@ The built-in switch already calls `camera.record` on `imou_life_alarm`. Keep a Y
 
 ## 简体中文
 
-乐橙**告警**推送到 Home Assistant 后，打开了 **告警本地录像** 开关的摄像头会从**云端 HLS 直播流**保存一段短 MP4。
+乐橙**告警**推送到 Home Assistant 后，打开了 **告警时录像** 开关的摄像头会从**云端 HLS 直播流**保存一段短 MP4。
 
 这是**事后短视频**，不是 NVR。双目设备按通道各有一个开关。
 
@@ -136,7 +136,7 @@ The built-in switch already calls `camera.record` on `imou_life_alarm`. Keep a Y
 ### 前置条件
 
 1. 已安装 **Imou Life**，且存在 `camera.*` 实体。
-2. 已开启**事件推送**：**配置 → 事件推送**，包含 **alarm**，且回调 URL 可被乐橙云访问。
+2. 已开启**事件推送**：**配置 → 告警、通知与录像**，包含 **alarm**，且回调 URL 可被乐橙云访问。
 3. 有一个**可写**目录，并已写入 `allowlist_external_dirs`（只建文件夹不够）。
 4. **Stream** 组件。本集成会在可用时请求 Home Assistant 加载 Stream。若日志仍提示未启用，在 `configuration.yaml` 增加 `stream:` 后重启。
 
@@ -160,7 +160,7 @@ Core / 开发环境请改用配置目录下的绝对路径，不要照搬 `/medi
 
 ### 步骤 2 — 公用保存目录和时长
 
-**设置 → 设备与服务 → Imou Life → 配置 → 事件推送 → 本地录像**
+**设置 → 设备与服务 → Imou Life → 配置 → 告警、通知与录像 → 本地录像**
 
 - **保存目录** — 与白名单相同，例如 `/media/imou`。留空则即使打开了摄像头开关也不会保存。
 - **片段时长** — 告警后录制的秒数（默认 60，范围 15–180）。
@@ -169,7 +169,7 @@ Core / 开发环境请改用配置目录下的绝对路径，不要照搬 `/medi
 
 ### 步骤 3 — 每路镜头开关
 
-在各摄像头设备页打开 **告警本地录像**（配置区），只给需要的镜头打开。
+在各摄像头设备页打开 **告警时录像**（配置区），只给需要的镜头打开。
 
 默认关闭，避免一次告警把账号下所有设备都拉去直播。
 
@@ -207,7 +207,7 @@ data:
 
 | 现象 | 处理 |
 | --- | --- |
-| 开关已开但没有文件 | 确认 **配置 → 事件推送 → 本地录像** 已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
+| 开关已开但没有文件 | 确认 **配置 → 告警、通知与录像 → 本地录像** 已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
 | `Stream integration is not set up` | 在 `configuration.yaml` 增加 `stream:` 并重启。Stream **不能**通过「添加集成」品牌列表安装。 |
 | `Can't write …, no access to path!` | 目录不在 `allowlist_external_dirs` 下、文件夹不存在、或绝对路径不一致。修正后重启。未加入白名单时，选项页会拒绝保存。 |
 | `Referenced entities … missing or not currently available` | 重启后等待相机状态非 `unavailable`；核对实体 ID。 |

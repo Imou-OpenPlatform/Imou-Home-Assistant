@@ -101,7 +101,7 @@ SECTION_EVENT_PUSH_CALLBACK = "callback"
 SECTION_EVENT_PUSH_SUBSCRIPTIONS = "subscriptions"
 SECTION_EVENT_PUSH_NOTIFICATIONS = "notifications"
 SECTION_EVENT_PUSH_LOCAL_RECORDING = "local_recording"
-SECTION_BIND_DEVICE = "bind_new_device"
+SECTION_CAMERA_DEFAULTS = "camera_defaults"
 
 
 def _entry_title(app_id: str) -> str:
@@ -284,7 +284,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Create the entry for an account that holds no devices yet.
 
         Store an empty selection so later devices bound in the Imou app are
-        not polled until the user picks them under Configure → Manage devices.
+        not polled until the user picks them under Configure → Devices.
         That matches setup when the account already had cameras.
         """
         return self.async_create_entry(
@@ -452,8 +452,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Replace options wholesale while keeping untouched keys."""
         return {**dict(self.config_entry.options), **updates}
 
-    @staticmethod
-    def _general_settings_schema() -> vol.Schema:
+    def _general_settings_schema(self) -> vol.Schema:
         """Build the general options form."""
         return vol.Schema(
             {
@@ -461,38 +460,89 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Required(
                     PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
-                vol.Required(PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=9)
-                ),
-                vol.Required(PARAM_LIVE_RESOLUTION, default=CONF_HD): vol.In(
-                    [CONF_HD, CONF_SD]
-                ),
-                vol.Required(PARAM_LIVE_PROTOCOL, default=CONF_HTTPS): vol.In(
-                    [CONF_HTTPS, CONF_HTTP]
-                ),
-                vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
-                    vol.Coerce(int), vol.Range(min=100, max=10000)
+                vol.Optional(SECTION_CAMERA_DEFAULTS): section(
+                    vol.Schema(
+                        {
+                            vol.Required(
+                                PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3
+                            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=9)),
+                            vol.Required(
+                                PARAM_LIVE_RESOLUTION, default=CONF_HD
+                            ): vol.In([CONF_HD, CONF_SD]),
+                            vol.Required(
+                                PARAM_LIVE_PROTOCOL, default=CONF_HTTPS
+                            ): vol.In([CONF_HTTPS, CONF_HTTP]),
+                            vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
+                                vol.Coerce(int), vol.Range(min=100, max=10000)
+                            ),
+                        }
+                    ),
+                    {"collapsed": True},
                 ),
             }
         )
+
+    def _nested_general_suggestions(self, options: Mapping[str, Any]) -> dict[str, Any]:
+        """Map stored general options into the section-based form."""
+        flat = self._suggested_option_subset(options, _GENERAL_OPTION_KEYS)
+        return {
+            PARAM_ENABLE_POLLING: bool(flat.get(PARAM_ENABLE_POLLING, True)),
+            PARAM_UPDATE_INTERVAL: flat.get(
+                PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+            ),
+            SECTION_CAMERA_DEFAULTS: {
+                PARAM_DOWNLOAD_SNAP_WAIT_TIME: flat.get(
+                    PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3
+                ),
+                PARAM_LIVE_RESOLUTION: flat.get(PARAM_LIVE_RESOLUTION, CONF_HD),
+                PARAM_LIVE_PROTOCOL: flat.get(PARAM_LIVE_PROTOCOL, CONF_HTTPS),
+                PARAM_ROTATION_DURATION: flat.get(PARAM_ROTATION_DURATION, 500),
+            },
+        }
+
+    @staticmethod
+    def _flatten_general_input(
+        user_input: dict[str, Any], stored_options: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Flatten section-based general input back to stored option keys."""
+        flat: dict[str, Any] = {
+            PARAM_ENABLE_POLLING: bool(user_input.get(PARAM_ENABLE_POLLING, True)),
+            PARAM_UPDATE_INTERVAL: user_input.get(
+                PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+            ),
+        }
+        if SECTION_CAMERA_DEFAULTS in user_input:
+            flat.update(user_input[SECTION_CAMERA_DEFAULTS])
+        else:
+            for key, default in (
+                (PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
+                (PARAM_LIVE_RESOLUTION, CONF_HD),
+                (PARAM_LIVE_PROTOCOL, CONF_HTTPS),
+                (PARAM_ROTATION_DURATION, 500),
+            ):
+                flat[key] = stored_options.get(key, default)
+        return flat
+
+    def _generated_webhook_url(self) -> str:
+        """Return the webhook URL Home Assistant can generate, or empty."""
+        webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
+        if not webhook_id:
+            return ""
+        try:
+            return webhook.async_generate_url(self.hass, webhook_id)
+        except Exception:
+            return ""
 
     def _event_push_webhook_placeholders(self) -> dict[str, str]:
         """Return webhook reference values for the step description."""
         language = self.hass.config.language
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
-        suggested_webhook_url = ""
-        if webhook_id:
-            try:
-                suggested_webhook_url = webhook.async_generate_url(
-                    self.hass, webhook_id
-                )
-            except Exception:
-                suggested_webhook_url = f"/api/webhook/{webhook_id}"
-
+        suggested_webhook_url = self._generated_webhook_url()
         not_generated = _selector_option_label(
             self.hass, language, "webhook_placeholder", "not_generated", "Not generated"
         )
         return {
+            # Keep webhook_id for cached frontend strings that still reference it.
             "webhook_id": webhook_id or not_generated,
             "suggested_url": suggested_webhook_url or not_generated,
         }
@@ -507,11 +557,14 @@ class ImouOptionsFlow(OptionsFlow):
         if isinstance(event_push_types, list):
             event_push_types = callback_flags_to_event_push_types(event_push_types)
 
+        callback_suggestions: dict[str, Any] = {}
+        stored_webhook_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
+        if stored_webhook_url:
+            callback_suggestions[PARAM_WEBHOOK_URL] = stored_webhook_url
+
         nested: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: enable_push,
-            SECTION_EVENT_PUSH_CALLBACK: {
-                PARAM_WEBHOOK_URL: flat.get(PARAM_WEBHOOK_URL, ""),
-            },
+            SECTION_EVENT_PUSH_CALLBACK: callback_suggestions,
             SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
                 PARAM_EVENT_PUSH_TYPES: event_push_types,
             },
@@ -534,11 +587,18 @@ class ImouOptionsFlow(OptionsFlow):
         user_input: dict[str, Any], stored_options: Mapping[str, Any]
     ) -> dict[str, Any]:
         """Flatten section-based event push input back to stored option keys."""
-        callback = user_input.get(SECTION_EVENT_PUSH_CALLBACK, {})
         flat: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: user_input[PARAM_ENABLE_EVENT_PUSH],
-            PARAM_WEBHOOK_URL: callback.get(PARAM_WEBHOOK_URL, ""),
         }
+        if SECTION_EVENT_PUSH_CALLBACK in user_input:
+            callback = user_input[SECTION_EVENT_PUSH_CALLBACK]
+            flat[PARAM_WEBHOOK_URL] = str(
+                callback.get(PARAM_WEBHOOK_URL) or ""
+            ).strip()
+        else:
+            flat[PARAM_WEBHOOK_URL] = str(
+                stored_options.get(PARAM_WEBHOOK_URL) or ""
+            ).strip()
         if SECTION_EVENT_PUSH_SUBSCRIPTIONS in user_input:
             flat.update(user_input[SECTION_EVENT_PUSH_SUBSCRIPTIONS])
         else:
@@ -604,7 +664,7 @@ class ImouOptionsFlow(OptionsFlow):
                         }
                     ),
                 ),
-                vol.Optional(SECTION_EVENT_PUSH_NOTIFICATIONS): section(
+                vol.Required(SECTION_EVENT_PUSH_NOTIFICATIONS): section(
                     vol.Schema(
                         {
                             vol.Optional(
@@ -613,13 +673,13 @@ class ImouOptionsFlow(OptionsFlow):
                                 SelectSelectorConfig(
                                     options=notify_options,
                                     multiple=True,
+                                    mode=SelectSelectorMode.DROPDOWN,
                                 )
                             ),
                         }
                     ),
-                    {"collapsed": True},
                 ),
-                vol.Optional(SECTION_EVENT_PUSH_LOCAL_RECORDING): section(
+                vol.Required(SECTION_EVENT_PUSH_LOCAL_RECORDING): section(
                     vol.Schema(
                         {
                             vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
@@ -629,7 +689,6 @@ class ImouOptionsFlow(OptionsFlow):
                             ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
                         }
                     ),
-                    {"collapsed": True},
                 ),
             }
         )
@@ -652,16 +711,17 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — polling, camera, and PTZ settings."""
         if user_input is not None:
-            return self.async_create_entry(data=self._merge_options(**user_input))
+            return self.async_create_entry(
+                data=self._merge_options(
+                    **self._flatten_general_input(user_input, self.config_entry.options)
+                )
+            )
 
-        suggested = self._suggested_option_subset(
-            self.config_entry.options, _GENERAL_OPTION_KEYS
-        )
         return self.async_show_form(
             step_id="general_settings",
             data_schema=self.add_suggested_values_to_schema(
                 self._general_settings_schema(),
-                suggested,
+                self._nested_general_suggestions(self.config_entry.options),
             ),
         )
 
@@ -690,11 +750,9 @@ class ImouOptionsFlow(OptionsFlow):
             if path_error:
                 errors[PARAM_LOCAL_RECORD_PATH] = path_error
             if not errors and flat[PARAM_ENABLE_EVENT_PUSH]:
-                callback_url = self._resolve_event_push_callback_url(
-                    str(flat.get(PARAM_WEBHOOK_URL) or "")
-                )
+                callback_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
                 if not callback_url:
-                    errors["base"] = "callback_url_missing"
+                    errors[PARAM_WEBHOOK_URL] = "callback_url_missing"
                 else:
                     error_key = await self._async_register_message_callback(
                         callback_url,
@@ -719,19 +777,6 @@ class ImouOptionsFlow(OptionsFlow):
             errors=errors,
             description_placeholders=placeholders,
         )
-
-    def _resolve_event_push_callback_url(self, custom_url: str) -> str:
-        """Return the custom URL, or the webhook URL Home Assistant can generate."""
-        url = custom_url.strip()
-        if url:
-            return url
-        webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
-        if not webhook_id:
-            return ""
-        try:
-            return webhook.async_generate_url(self.hass, webhook_id)
-        except Exception:
-            return ""
 
     async def _async_register_message_callback(
         self, callback_url: str, event_push_types: list[str]
@@ -806,7 +851,7 @@ class ImouOptionsFlow(OptionsFlow):
         )
 
     def _devices_schema(self) -> vol.Schema:
-        """Build the manage-devices form: poll list plus optional bind."""
+        """Build the poll-list form."""
         current = [
             device_id
             for device_id in self._options_current_selected()
@@ -818,15 +863,6 @@ class ImouOptionsFlow(OptionsFlow):
                     PARAM_SELECTED_DEVICES,
                     default=current,
                 ): cv.multi_select(self._devices_map),
-                vol.Optional(SECTION_BIND_DEVICE): section(
-                    vol.Schema(
-                        {
-                            vol.Optional("device_id", default=""): str,
-                            vol.Optional("code", default=""): str,
-                        }
-                    ),
-                    {"collapsed": True},
-                ),
             }
         )
 
@@ -835,15 +871,22 @@ class ImouOptionsFlow(OptionsFlow):
         errors: dict[str, str] | None = None,
         error_detail: str = "",
     ) -> ConfigFlowResult:
-        """Show the manage-devices form with a Submit button that saves."""
+        """Show the poll-list form with a Submit button that saves."""
         placeholders = {"device_count": str(len(self._devices_map))}
         if error_detail:
             placeholders["error"] = error_detail
         return self.async_show_form(
-            step_id="devices",
+            step_id="select_poll_devices",
             data_schema=self._devices_schema(),
             description_placeholders=placeholders,
             errors=errors or {},
+        )
+
+    def _show_devices_menu(self) -> ConfigFlowResult:
+        """Choose poll list vs bind when the account has devices."""
+        return self.async_show_menu(
+            step_id="devices_menu",
+            menu_options=["select_poll_devices", "bind_device"],
         )
 
     async def _async_bind_device_id(self, device_id: str, code: str) -> str | None:
@@ -877,23 +920,7 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick which account devices to poll. Submit saves and closes."""
-        if user_input is not None and PARAM_SELECTED_DEVICES in user_input:
-            selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
-            bind = user_input.get(SECTION_BIND_DEVICE) or {}
-            device_id = str(bind.get("device_id") or "").strip()
-            if device_id:
-                error_key = await self._async_bind_device_id(
-                    device_id, bind.get("code", "")
-                )
-                if error_key is not None:
-                    return self._show_devices_form(
-                        errors={"base": error_key},
-                        error_detail=self._devices_error,
-                    )
-                selected = self._merge_bound_device(device_id, selected)
-            return self._create_selected_entry(selected)
-
+        """Load the account device list, then offer poll or bind."""
         errors: dict[str, str] = {}
         error_detail = ""
         try:
@@ -924,6 +951,23 @@ class ImouOptionsFlow(OptionsFlow):
         if not self._devices_map:
             return await self.async_step_no_devices_menu()
 
+        return self._show_devices_menu()
+
+    async def async_step_devices_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose whether to edit the poll list or bind a device."""
+        return self._show_devices_menu()
+
+    async def async_step_select_poll_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick which account devices to poll. Submit saves and closes."""
+        if user_input is not None and PARAM_SELECTED_DEVICES in user_input:
+            selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
+            return self._create_selected_entry(selected)
+        if not self._devices_map:
+            return await self.async_step_devices()
         return self._show_devices_form()
 
     async def async_step_devices_unavailable(
@@ -959,7 +1003,7 @@ class ImouOptionsFlow(OptionsFlow):
         The account was listed successfully and holds nothing, so any previous
         selected_devices list is stale (e.g. devices deleted in the Imou app).
         Write an empty list: poll nothing until the user picks devices under
-        Manage devices. Setup may have stored the list in entry.data; clear
+        Devices. Setup may have stored the list in entry.data; clear
         that too or get_selected_device_ids would fall back to it. Cloud
         failures that cannot list the account use save_without_devices and
         keep the selection.
@@ -969,7 +1013,7 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Bind a device from Manage devices and save the merged selection."""
+        """Bind a device from Devices and save the merged selection."""
         if user_input is None:
             return self.async_show_form(
                 step_id="bind_device",

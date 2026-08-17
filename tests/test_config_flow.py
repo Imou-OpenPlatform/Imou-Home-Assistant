@@ -97,7 +97,7 @@ async def test_finish_without_devices_records_empty_selection(
         )
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    # Empty list: poll nothing until the user picks devices in Manage devices.
+    # Empty list: poll nothing until the user picks devices in Devices.
     # Same as setup when the account already had cameras.
     assert result["data"][PARAM_SELECTED_DEVICES] == []
     assert len(mock_setup_entry.mock_calls) == 1

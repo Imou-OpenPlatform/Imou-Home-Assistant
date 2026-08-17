@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from custom_components.imou_life.config_flow import (
-    SECTION_BIND_DEVICE,
+    SECTION_CAMERA_DEFAULTS,
     SECTION_EVENT_PUSH_CALLBACK,
     SECTION_EVENT_PUSH_LOCAL_RECORDING,
     SECTION_EVENT_PUSH_NOTIFICATIONS,
@@ -15,6 +15,7 @@ from custom_components.imou_life.config_flow import (
 from custom_components.imou_life.const import (
     CONF_HD,
     CONF_HTTPS,
+    CONF_SD,
     DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
@@ -28,11 +29,12 @@ from custom_components.imou_life.const import (
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
+    PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
 )
 from homeassistant.core import ServiceCall
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers.selector import SelectSelector
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorMode
 from pyimouapi.exceptions import RequestFailedException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -46,7 +48,15 @@ def _notify_selector_options(form_schema) -> list[str]:
         if getattr(key, "schema", None) == PARAM_NOTIFY_SERVICES:
             assert isinstance(validator, SelectSelector)
             assert validator.config["multiple"] is True
-            return list(validator.config["options"])
+            assert validator.config["mode"] == SelectSelectorMode.DROPDOWN
+            values: list[str] = []
+            for item in validator.config["options"]:
+                if isinstance(item, dict):
+                    assert item["label"] == item["value"]
+                    values.append(item["value"])
+                else:
+                    values.append(item)
+            return values
     raise AssertionError("notify_services selector missing")
 
 
@@ -55,6 +65,40 @@ async def _register_notify(hass, name: str) -> None:
         return None
 
     hass.services.async_register("notify", name, _handler)
+
+
+def _event_push_input(**overrides) -> dict:
+    """Required alarm-page sections; optional callback may be omitted."""
+    payload = {
+        PARAM_ENABLE_EVENT_PUSH: False,
+        SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
+            PARAM_EVENT_PUSH_TYPES: ["alarm"],
+        },
+        SECTION_EVENT_PUSH_NOTIFICATIONS: {
+            PARAM_NOTIFY_SERVICES: [],
+        },
+        SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+            PARAM_LOCAL_RECORD_PATH: "",
+            PARAM_LOCAL_RECORD_DURATION: 60,
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def _open_poll_devices(hass, flow_id):
+    """Open Devices → choose poll list (after the account list is fetched)."""
+    result = await hass.config_entries.options.async_configure(
+        flow_id, {"next_step_id": "devices"}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "select_poll_devices"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "select_poll_devices"
+    return result
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -100,16 +144,49 @@ async def test_options_general_settings_saves_without_devices(hass) -> None:
         {
             PARAM_ENABLE_POLLING: True,
             PARAM_UPDATE_INTERVAL: 120,
-            PARAM_DOWNLOAD_SNAP_WAIT_TIME: 3,
-            PARAM_LIVE_RESOLUTION: CONF_HD,
-            PARAM_LIVE_PROTOCOL: CONF_HTTPS,
-            PARAM_ROTATION_DURATION: 500,
+            SECTION_CAMERA_DEFAULTS: {
+                PARAM_DOWNLOAD_SNAP_WAIT_TIME: 3,
+                PARAM_LIVE_RESOLUTION: CONF_HD,
+                PARAM_LIVE_PROTOCOL: CONF_HTTPS,
+                PARAM_ROTATION_DURATION: 500,
+            },
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_general_omitting_camera_defaults_keeps_stored(hass) -> None:
+    """Collapsed camera defaults omitted on submit must keep saved values."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_LIVE_RESOLUTION: CONF_SD,
+            PARAM_ROTATION_DURATION: 800,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"next_step_id": "general_settings"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_POLLING: True,
+            PARAM_UPDATE_INTERVAL: 180,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 180
+    assert result["data"][PARAM_LIVE_RESOLUTION] == CONF_SD
+    assert result["data"][PARAM_ROTATION_DURATION] == 800
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -136,19 +213,18 @@ async def test_options_local_recording_saves_shared_settings(hass) -> None:
     with patch.object(hass.config, "is_allowed_path", return_value=True):
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            {
-                PARAM_ENABLE_EVENT_PUSH: True,
-                SECTION_EVENT_PUSH_CALLBACK: {
-                    PARAM_WEBHOOK_URL: "https://example.test/hook",
-                },
-                SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                    PARAM_EVENT_PUSH_TYPES: ["alarm"],
-                },
-                SECTION_EVENT_PUSH_LOCAL_RECORDING: {
-                    PARAM_LOCAL_RECORD_PATH: " /media/imou ",
-                    PARAM_LOCAL_RECORD_DURATION: 45,
-                },
-            },
+            _event_push_input(
+                **{
+                    PARAM_ENABLE_EVENT_PUSH: True,
+                    SECTION_EVENT_PUSH_CALLBACK: {
+                        PARAM_WEBHOOK_URL: "https://example.test/hook",
+                    },
+                    SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                        PARAM_LOCAL_RECORD_PATH: " /media/imou ",
+                        PARAM_LOCAL_RECORD_DURATION: 45,
+                    },
+                }
+            ),
         )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -173,17 +249,15 @@ async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> Non
     with patch.object(hass.config, "is_allowed_path", return_value=False):
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            {
-                PARAM_ENABLE_EVENT_PUSH: False,
-                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
-                SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                    PARAM_EVENT_PUSH_TYPES: ["alarm"],
-                },
-                SECTION_EVENT_PUSH_LOCAL_RECORDING: {
-                    PARAM_LOCAL_RECORD_PATH: "/media/imou",
-                    PARAM_LOCAL_RECORD_DURATION: 60,
-                },
-            },
+            _event_push_input(
+                **{
+                    SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                    SECTION_EVENT_PUSH_LOCAL_RECORDING: {
+                        PARAM_LOCAL_RECORD_PATH: "/media/imou",
+                        PARAM_LOCAL_RECORD_DURATION: 60,
+                    },
+                }
+            ),
         )
 
     assert result["type"] is FlowResultType.FORM
@@ -207,17 +281,7 @@ async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: False,
-            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-            SECTION_EVENT_PUSH_LOCAL_RECORDING: {
-                PARAM_LOCAL_RECORD_PATH: "",
-                PARAM_LOCAL_RECORD_DURATION: 60,
-            },
-        },
+        _event_push_input(**{SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""}}),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -240,12 +304,21 @@ async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
     assert result["step_id"] == "event_push"
     schema = result.get("data_schema") or result.get("schema")
     assert schema is not None
-    assert PARAM_ENABLE_EVENT_PUSH in schema.schema
-    assert SECTION_EVENT_PUSH_CALLBACK in schema.schema
-    assert SECTION_EVENT_PUSH_SUBSCRIPTIONS in schema.schema
-    assert SECTION_EVENT_PUSH_LOCAL_RECORDING in schema.schema
+    schema_keys = [getattr(key, "schema", key) for key in schema.schema]
+    assert schema_keys == [
+        PARAM_ENABLE_EVENT_PUSH,
+        SECTION_EVENT_PUSH_CALLBACK,
+        SECTION_EVENT_PUSH_SUBSCRIPTIONS,
+        SECTION_EVENT_PUSH_NOTIFICATIONS,
+        SECTION_EVENT_PUSH_LOCAL_RECORDING,
+    ]
+    callback_section = next(
+        val
+        for key, val in schema.schema.items()
+        if getattr(key, "schema", key) == SECTION_EVENT_PUSH_CALLBACK
+    )
+    assert callback_section.options.get("collapsed") is not True
     placeholders = result["description_placeholders"]
-    assert placeholders["webhook_id"]
     assert placeholders["suggested_url"]
 
 
@@ -282,15 +355,14 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: True,
-            SECTION_EVENT_PUSH_CALLBACK: {
-                PARAM_WEBHOOK_URL: "https://example.test/hook",
-            },
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-        },
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                SECTION_EVENT_PUSH_CALLBACK: {
+                    PARAM_WEBHOOK_URL: "https://example.test/hook",
+                },
+            }
+        ),
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
@@ -315,16 +387,14 @@ async def test_options_event_push_saves_notify_services_as_list(hass) -> None:
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: False,
-            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-            SECTION_EVENT_PUSH_NOTIFICATIONS: {
-                PARAM_NOTIFY_SERVICES: ["notify.mobile_app_phone"],
-            },
-        },
+        _event_push_input(
+            **{
+                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                    PARAM_NOTIFY_SERVICES: ["notify.mobile_app_phone"],
+                },
+            }
+        ),
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_NOTIFY_SERVICES] == ["notify.mobile_app_phone"]
@@ -347,31 +417,59 @@ async def test_options_event_push_migrates_comma_notify_string(hass) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "event_push"}
     )
-    options = _notify_selector_options(result.get("data_schema") or result.get("schema"))
+    options = _notify_selector_options(
+        result.get("data_schema") or result.get("schema")
+    )
     assert "notify.mobile_app_phone" in options
     assert "qiyewechat.send" in options
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: False,
-            SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-            SECTION_EVENT_PUSH_NOTIFICATIONS: {
-                PARAM_NOTIFY_SERVICES: [
-                    "notify.mobile_app_phone",
-                    "qiyewechat.send",
-                ],
-            },
-        },
+        _event_push_input(
+            **{
+                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+                SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                    PARAM_NOTIFY_SERVICES: [
+                        "notify.mobile_app_phone",
+                        "qiyewechat.send",
+                    ],
+                },
+            }
+        ),
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_NOTIFY_SERVICES] == [
         "notify.mobile_app_phone",
         "qiyewechat.send",
     ]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_keeps_custom_webhook_url(hass) -> None:
+    """Expanded callback saves the custom URL shown on the form."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_WEBHOOK_URL: "https://example.test/kept"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(
+            **{
+                SECTION_EVENT_PUSH_CALLBACK: {
+                    PARAM_WEBHOOK_URL: "https://example.test/kept",
+                },
+            }
+        ),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/kept"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -392,15 +490,14 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: True,
-            SECTION_EVENT_PUSH_CALLBACK: {
-                PARAM_WEBHOOK_URL: "https://example.test/hook",
-            },
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-        },
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                SECTION_EVENT_PUSH_CALLBACK: {
+                    PARAM_WEBHOOK_URL: "https://example.test/hook",
+                },
+            }
+        ),
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
@@ -427,15 +524,14 @@ async def test_options_event_push_callback_failure_stays_on_form(
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            PARAM_ENABLE_EVENT_PUSH: True,
-            SECTION_EVENT_PUSH_CALLBACK: {
-                PARAM_WEBHOOK_URL: "https://example.test/hook",
-            },
-            SECTION_EVENT_PUSH_SUBSCRIPTIONS: {
-                PARAM_EVENT_PUSH_TYPES: ["alarm"],
-            },
-        },
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                SECTION_EVENT_PUSH_CALLBACK: {
+                    PARAM_WEBHOOK_URL: "https://example.test/hook",
+                },
+            }
+        ),
     )
 
     assert result["type"] is FlowResultType.FORM
@@ -444,6 +540,66 @@ async def test_options_event_push_callback_failure_stays_on_form(
     assert "OP1013" in result["description_placeholders"]["error"]
     assert entry.options.get(PARAM_ENABLE_EVENT_PUSH) is not True
     client.async_set_message_callback.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_requires_callback_url_when_enabled(hass) -> None:
+    """Enabling event push with a blank callback URL must stay on the form."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                SECTION_EVENT_PUSH_CALLBACK: {PARAM_WEBHOOK_URL: ""},
+            }
+        ),
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "event_push"
+    assert result["errors"] == {PARAM_WEBHOOK_URL: "callback_url_missing"}
+    assert entry.options.get(PARAM_ENABLE_EVENT_PUSH) is not True
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_does_not_prefill_generated_callback_url(
+    hass,
+) -> None:
+    """The callback field stays empty; the suggested URL is only in the description."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "hook-id"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch(
+        "custom_components.imou_life.config_flow.webhook.async_generate_url",
+        return_value="http://192.168.1.2:8123/api/webhook/hook-id",
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "event_push"}
+        )
+
+    assert result["description_placeholders"]["suggested_url"] == (
+        "http://192.168.1.2:8123/api/webhook/hook-id"
+    )
+    schema = result.get("data_schema") or result.get("schema")
+    callback_section = schema.schema[SECTION_EVENT_PUSH_CALLBACK]
+    suggested = None
+    for key in callback_section.schema.schema:
+        if getattr(key, "schema", key) == PARAM_WEBHOOK_URL:
+            suggested = (key.description or {}).get("suggested_value")
+            break
+    assert suggested in (None, "")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -456,11 +612,7 @@ async def test_options_select_poll_submits_and_saves(hass) -> None:
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "devices"}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "devices"
+    result = await _open_poll_devices(hass, result["flow_id"])
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -510,7 +662,7 @@ async def test_options_finish_without_bind_saves_options(hass) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_UPDATE_INTERVAL] == 120
     assert result["data"][PARAM_ENABLE_EVENT_PUSH] is False
-    # Empty list: poll nothing until the user picks devices in Manage devices.
+    # Empty list: poll nothing until the user picks devices in Devices.
     assert result["data"][PARAM_SELECTED_DEVICES] == []
 
 
@@ -520,7 +672,7 @@ async def test_saving_with_no_devices_clears_a_stale_selection(hass) -> None:
 
     Old ids would leave ghost devices after save/reload. An empty list means
     a device bound later from the Imou app is not polled until chosen under
-    Manage devices. Cloud failures still preserve the selection via
+    Devices. Cloud failures still preserve the selection via
     save_without_devices.
     """
     entry = MockConfigEntry(
@@ -565,7 +717,7 @@ async def test_saving_with_no_devices_clears_selection_stored_in_data(hass) -> N
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_unreachable_cloud_still_lets_the_other_options_be_saved(hass) -> None:
-    """Unreachable cloud in Manage devices must still allow save without devices.
+    """Unreachable cloud in Devices must still allow save without devices.
 
     Listing failure must not trap the user; existing general options stay intact
     when they choose save without fetching the device list.
@@ -620,8 +772,8 @@ async def test_retrying_after_an_unreachable_cloud_reaches_the_devices(hass) -> 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"next_step_id": "devices"}
     )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "devices"
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "devices_menu"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -637,7 +789,11 @@ async def test_options_bind_from_devices_form(hass) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "devices"}
     )
-    assert result["step_id"] == "devices"
+    assert result["step_id"] == "devices_menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "bind_device"}
+    )
+    assert result["step_id"] == "bind_device"
     with (
         patch(
             "custom_components.imou_life.config_flow.ImouDeviceManager",
@@ -655,10 +811,7 @@ async def test_options_bind_from_devices_form(hass) -> None:
         mock_mgr_cls.return_value.async_bind_device = AsyncMock()
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={
-                PARAM_SELECTED_DEVICES: ["device_1"],
-                SECTION_BIND_DEVICE: {"device_id": "SN001", "code": "123456"},
-            },
+            user_input={"device_id": "SN001", "code": "123456"},
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
@@ -694,7 +847,7 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
             user_input={"device_id": "SN001", "code": "123456"},
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    # Binding from Manage devices records the new device for polling.
+    # Binding from Devices records the new device for polling.
     assert result["data"][PARAM_SELECTED_DEVICES] == ["SN001"]
 
 

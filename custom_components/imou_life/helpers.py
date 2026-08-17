@@ -69,16 +69,27 @@ def parse_notify_services(raw: Any) -> list[str]:
     return []
 
 
+_NOTIFY_SERVICES_NOT_TARGETS = frozenset({"send_message"})
+
+
 def notify_service_selector_options(
     hass: HomeAssistant, stored: list[str]
-) -> list[str]:
-    """Return notify.* services plus any saved non-notify actions."""
+) -> list[dict[str, str]]:
+    """Return notify targets plus any saved non-notify actions.
+
+    ``notify.send_message`` is a generic action, not a destination, so it is
+    omitted unless the user already saved it.
+    """
     notify = hass.services.async_services().get("notify", {})
-    options = [f"notify.{name}" for name in notify]
+    values: list[str] = []
+    for name in notify:
+        if name in _NOTIFY_SERVICES_NOT_TARGETS:
+            continue
+        values.append(f"notify.{name}")
     for extra in stored:
-        if extra not in options:
-            options.append(extra)
-    return sorted(options)
+        if extra not in values:
+            values.append(extra)
+    return [{"value": item, "label": item} for item in sorted(values)]
 
 
 async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, str]:
