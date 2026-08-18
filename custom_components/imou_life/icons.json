@@ -114,6 +114,11 @@
 				"default": "mdi:video"
 			}
 		},
+		"siren": {
+			"siren": {
+				"default": "mdi:bullhorn"
+			}
+		},
 		"text": {
 			"count_down_switch": {
 				"default": "mdi:timer"

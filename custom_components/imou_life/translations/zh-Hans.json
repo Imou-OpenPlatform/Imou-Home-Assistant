@@ -395,6 +395,11 @@
         "name": "运动"
       }
     },
+    "siren": {
+      "siren": {
+        "name": "警笛"
+      }
+    },
     "text": {
       "count_down_switch": {
         "name": "开关倒计时（分钟）"

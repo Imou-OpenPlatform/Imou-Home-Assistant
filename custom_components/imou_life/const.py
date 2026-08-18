@@ -129,6 +129,8 @@ BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_MOTION = "motion"
 MOTION_OFF_DELAY = 30
+PARAM_SIREN = "siren"
+SIREN_OFF_DELAY = 60
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
@@ -242,6 +244,7 @@ PLATFORMS: list[Platform] = [
     Platform.CAMERA,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SIREN,
     Platform.SWITCH,
     Platform.TEXT,
 ]

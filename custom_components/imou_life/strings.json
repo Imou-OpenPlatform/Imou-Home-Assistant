@@ -395,6 +395,11 @@
         "name": "Motion"
       }
     },
+    "siren": {
+      "siren": {
+        "name": "Siren"
+      }
+    },
     "text": {
       "count_down_switch": {
         "name": "Countdown timer (min)"

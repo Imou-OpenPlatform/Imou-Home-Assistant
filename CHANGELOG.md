@@ -7,6 +7,7 @@
 #### Breaking
 
 - `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. After upgrade, leftover `select` registry rows may be deleted manually
+- `button.siren_start` / `button.siren_stop` are replaced by a `siren` entity. Use `siren.turn_on` / `siren.turn_off` instead; delete leftover button registry rows after upgrade
 
 #### Added
 
@@ -14,6 +15,7 @@
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Event push**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 - Cameras get `binary_sensor` **Motion** (`device_class: motion`) from event-push `videoMotion` / `human` / `mobileDetect` / PIR. It stays on for 30 seconds, or turns off immediately on a PIR-clear push. Fire / gas / other alarms stay on the existing notify + `imou_life_alarm` path
+- Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off. State assumes on until about 60 seconds pass or a `sirenOff` push arrives
 
 #### Changed
 
@@ -232,6 +234,7 @@
 #### 破坏性变更
 
 - `select.*_mode` 已替换为 `alarm_control_panel`。自动化需从 `select.select_option`（`home`/`away`/`disarm`）改为 `alarm_control_panel.alarm_arm_home`、`alarm_control_panel.alarm_arm_away`、`alarm_control_panel.alarm_disarm`。升级后实体注册表可能留下旧 select，可手动删除
+- `button.siren_start` / `button.siren_stop` 已替换为 `siren` 实体。请改用 `siren.turn_on` / `siren.turn_off`；升级后可手动删除遗留的 button 注册行
 
 #### 新增
 
@@ -239,6 +242,7 @@
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 事件推送**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 摄像头增加 `binary_sensor` **运动**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR 置位，约 30 秒后自动复位；收到 PIR 清除则立即关。火警 / 燃气等仍走通知和 `imou_life_alarm`
+- 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关；状态约 60 秒后自动复位，或收到 `sirenOff` 推送立即关
 
 #### 变更
 

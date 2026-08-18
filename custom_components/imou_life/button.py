@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from pyimouapi.const import PARAM_DURATION
+from pyimouapi.const import PARAM_DURATION, PARAM_SIREN_START, PARAM_SIREN_STOP
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
@@ -29,6 +29,8 @@ _LOGGER = logging.getLogger(__package__)
 
 PARALLEL_UPDATES = 0
 
+_SIREN_BUTTONS = frozenset({PARAM_SIREN_START, PARAM_SIREN_STOP})
+
 
 def _iter_buttons(
     coordinator: ImouDataUpdateCoordinator,
@@ -38,6 +40,7 @@ def _iter_buttons(
         (button_type, device)
         for device in coordinator.devices
         for button_type in device.buttons
+        if button_type not in _SIREN_BUTTONS
     ]
 
 
@@ -79,7 +82,7 @@ class ImouButton(ImouEntity, ButtonEntity):
 
     @property
     def entity_category(self) -> EntityCategory | None:
-        """Keep the reboot button out of the way of the PTZ and siren controls."""
+        """Keep the reboot button out of the way of the PTZ controls."""
         if self._entity_type == PARAM_RESTART_DEVICE:
             return EntityCategory.CONFIG
         return None

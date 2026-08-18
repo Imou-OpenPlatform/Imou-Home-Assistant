@@ -80,7 +80,6 @@ def test_text_entities_are_configuration() -> None:
     [
         (PARAM_RESTART_DEVICE, EntityCategory.CONFIG),
         ("ptz_up", None),
-        ("siren_start", None),
         ("mute", None),
     ],
 )
