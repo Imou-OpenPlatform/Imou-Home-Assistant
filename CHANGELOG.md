@@ -14,7 +14,7 @@
 - Config switches for pet detection, flip image, wide dynamic range, smart tracking, prompt sound, alarm-linked siren, and alarm-linked white light (shown when the device has the matching IoT ref / PaaS ability; pet detection is IoT-only)
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Event push**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
-- Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off. State assumes on until about 60 seconds pass or a `sirenOff` push arrives
+- Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
 
 #### Changed
 
@@ -240,7 +240,7 @@
 - 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、告警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 事件推送**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
-- 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关；状态约 60 秒后自动复位，或收到 `sirenOff` 推送立即关
+- 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
 
 #### 变更
 

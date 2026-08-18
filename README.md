@@ -93,7 +93,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - Detection: picture change, human, pet
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
   - White light, alarm-linked white light, alarm-linked siren (configuration switches)
-  - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; state auto-clears after about 60 seconds or on a `sirenOff` push
+  - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; does not require event push for manual control. Entity state auto-clears after about 15 seconds (typical firmware hold), or immediately on a `sirenOff` push when event push is enabled
   - Audio recording, prompt sound, abnormal sound alarm
   - Restart device
 * **Alarm sensors**
@@ -226,7 +226,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 检测：画面变化、人形、宠物
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
   - 白光灯、告警联动白光灯、告警联动警笛（配置区开关）
-  - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；约 60 秒后自动复位，或收到 `sirenOff` 推送立即关
+  - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
   - 音频录制、设备提示音、异常音告警
   - 重启设备
 * **告警传感器**
