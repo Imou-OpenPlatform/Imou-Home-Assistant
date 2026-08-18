@@ -390,9 +390,6 @@
           "on": "Open",
           "off": "Closed"
         }
-      },
-      "motion": {
-        "name": "Motion"
       }
     },
     "siren": {

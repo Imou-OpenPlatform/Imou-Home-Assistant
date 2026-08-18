@@ -90,7 +90,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - Live video
   - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
   - **Collection points** — `select.collection_point` lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
-  - Detection: picture change, human, pet (toggles under **Configuration**). Cameras expose `binary_sensor` **Motion** (`device_class: motion`) from event-push picture change / human / PIR (`videoMotion` / `human` / `mobileDetect` / PIR). It stays on for 30 seconds, turns off immediately on a PIR-clear push, and resets to off after a Home Assistant restart. Pet alarms still use notify + `imou_life_alarm`; they do not drive this sensor. **Motion** is live detection state; **Picture change** / **Human detection** switches only enable or disable detection on the device.
+  - Detection: picture change, human, pet
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
   - White light, alarm-linked white light, alarm-linked siren (configuration switches)
   - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; state auto-clears after about 60 seconds or on a `sirenOff` push
@@ -115,7 +115,6 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 - **Event push not working** — Open **Configure → Alarms, notifications, and recording**. Confirm **Enable event push** is on. Paste the suggested URL into **Callback URL**, or change hostname and port if it is not public. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
-  - If `binary_sensor` **Motion** never turns on: it only updates from event push — confirm **Enable event push** is on and push types include **alarm** (same as below).
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`.
@@ -224,7 +223,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 直播
   - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
   - **收藏点** — `select.collection_point` 列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
-  - 检测：画面变化、人形、宠物（开关在设备**配置**区）。摄像头提供 `binary_sensor` **运动**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR（`videoMotion` / `human` / `mobileDetect` / PIR）置位，约 30 秒后复位，收到 PIR 清除立即关；Home Assistant 重启后也会回到关。宠物告警仍走通知和 `imou_life_alarm`，不会驱动该实体。**运动**是当前检测状态；**画面变化** / **人形检测**开关只负责在设备上开/关检测。
+  - 检测：画面变化、人形、宠物
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
   - 白光灯、告警联动白光灯、告警联动警笛（配置区开关）
   - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；约 60 秒后自动复位，或收到 `sirenOff` 推送立即关
@@ -249,7 +248,6 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - **事件推送不工作** — 打开 **配置 → 告警、通知与录像**。确认 **启用事件推送** 已开启。把建议地址填进 **回调地址**，或把主机名和端口改成公网可达的。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
-  - 若 `binary_sensor` **运动**始终不变：它只随事件推送更新 — 确认 **启用事件推送** 已开且推送类型包含 **alarm**（同下）。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。
