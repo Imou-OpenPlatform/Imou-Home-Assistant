@@ -31,8 +31,8 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
-    async_mock_service,
     MockConfigEntry,
+    async_mock_service,
 )
 
 from .conftest import register_imou_ha_device, setup_imou_runtime
@@ -80,10 +80,14 @@ async def test_webhook_respects_matching_config_entry_only(
         selected_devices=["dev-b"],
     )
     entry_a = next(
-        e for e in hass.config_entries.async_entries(DOMAIN) if e.data["app_id"] == "app_a"
+        e
+        for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data["app_id"] == "app_a"
     )
     entry_b = next(
-        e for e in hass.config_entries.async_entries(DOMAIN) if e.data["app_id"] == "app_b"
+        e
+        for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data["app_id"] == "app_b"
     )
     register_imou_ha_device(hass, entry_a, "dev-a")
     register_imou_ha_device(hass, entry_b, "dev-b")
@@ -345,6 +349,7 @@ async def test_webhook_product_model_events_localized(
         ("2026-08-17T14:30:05", "UTC", "2026-08-17 14:30:05"),
         ("2026-08-17T14:30:05Z", "Asia/Shanghai", "2026-08-17 22:30:05"),
         ("20260817T143005", "UTC", "2026-08-17 14:30:05"),
+        ("20260817T143005Z", "Asia/Shanghai", "2026-08-17 22:30:05"),
         ("14:30:05", "UTC", "14:30:05"),
         (None, "UTC", ""),
     ],
@@ -352,7 +357,7 @@ async def test_webhook_product_model_events_localized(
 def test_format_notification_time_normalizes_iot_and_iso(
     raw, tz_name, expected
 ) -> None:
-    """Full datetimes include the date in the given timezone; time-only stays time-only."""
+    """Normalize full datetimes to HA local time; time-only stays as-is."""
     from zoneinfo import ZoneInfo
 
     tz = ZoneInfo(tz_name)
@@ -418,6 +423,7 @@ def test_alarm_types_keys_match_between_languages() -> None:
     zh = json.loads((strings_dir / "zh-Hans.json").read_text(encoding="utf-8"))
     en = json.loads((strings_dir / "en.json").read_text(encoding="utf-8"))
     assert set(zh["alarm_types"]) == set(en["alarm_types"])
+    assert set(zh["notification"]) == set(en["notification"])
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -561,6 +567,7 @@ async def test_webhook_iot_uses_product_key_ha_name(hass: HomeAssistant) -> None
 
     assert response.status == 200
     assert len(notify_calls) == 1
+    assert "data" not in notify_calls[0].data
     assert notify_calls[0].data["title"] == "Imou Life · Smoke detected"
     assert "厨房烟感" in notify_calls[0].data["message"]
     assert "ACC1" not in notify_calls[0].data["message"]
@@ -1221,9 +1228,7 @@ async def test_webhook_notifies_when_device_switch_not_off(
         selected_devices=["SN1"],
         notify_services=["notify.test"],
     )
-    _register_notify_on_alarm_switch(
-        hass, device_key="SN1_0", state=switch_state
-    )
+    _register_notify_on_alarm_switch(hass, device_key="SN1_0", state=switch_state)
     calls = async_mock_service(hass, "notify", "test")
 
     await async_handle_imou_webhook(
@@ -1249,9 +1254,7 @@ async def test_webhook_iot_notify_uses_accessory_not_camera(
         register_ha_devices=False,
     )
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
-    register_imou_ha_device(
-        hass, entry, "ACC1", channel_id="0", name="Garden Cam"
-    )
+    register_imou_ha_device(hass, entry, "ACC1", channel_id="0", name="Garden Cam")
     register_imou_ha_device(
         hass,
         entry,
@@ -1261,9 +1264,7 @@ async def test_webhook_iot_notify_uses_accessory_not_camera(
         name="Kitchen Smoke",
     )
     _register_notify_on_alarm_switch(hass, device_key="ACC1_0", switch_on=False)
-    _register_notify_on_alarm_switch(
-        hass, device_key="ACC1_pidSmoke", switch_on=True
-    )
+    _register_notify_on_alarm_switch(hass, device_key="ACC1_pidSmoke", switch_on=True)
     calls = async_mock_service(hass, "notify", "test")
     runtime = get_runtime_data(entry)
     assert runtime is not None
@@ -1303,9 +1304,7 @@ async def test_webhook_iot_missing_accessory_switch_does_not_use_camera(
         register_ha_devices=False,
     )
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
-    register_imou_ha_device(
-        hass, entry, "ACC1", channel_id="0", name="Garden Cam"
-    )
+    register_imou_ha_device(hass, entry, "ACC1", channel_id="0", name="Garden Cam")
     register_imou_ha_device(
         hass,
         entry,

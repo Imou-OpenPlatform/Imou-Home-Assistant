@@ -110,9 +110,7 @@ async def test_notify_selector_options_keep_stored_send_message(
 
     hass.services.async_register("notify", "send_message", _notify)
     options = notify_service_selector_options(hass, ["notify.send_message"])
-    assert options == [
-        {"value": "notify.send_message", "label": "notify.send_message"}
-    ]
+    assert options == [{"value": "notify.send_message", "label": "notify.send_message"}]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

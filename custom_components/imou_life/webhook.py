@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, tzinfo
-from zoneinfo import ZoneInfo
+import re
+from datetime import UTC, datetime, tzinfo
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiohttp import web
 from homeassistant.components import webhook
@@ -25,7 +26,11 @@ from .const import (
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
 )
-from .helpers import resolve_ha_device_entry, resolve_ha_device_key, resolve_ha_device_name
+from .helpers import (
+    resolve_ha_device_entry,
+    resolve_ha_device_key,
+    resolve_ha_device_name,
+)
 from .local_record import async_maybe_record_from_alarm
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -244,11 +249,11 @@ def _alarm_type_label(alarm_types: dict[str, str], msg_type: str | None) -> str 
 def _zoneinfo(tz_name: str | None) -> tzinfo:
     """Return a tzinfo for HA's configured zone, defaulting to UTC."""
     if not tz_name:
-        return timezone.utc
+        return UTC
     try:
         return ZoneInfo(tz_name)
-    except Exception:
-        return timezone.utc
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
 
 
 def _format_wall_datetime(dt: datetime, tz: tzinfo) -> str:
@@ -256,11 +261,27 @@ def _format_wall_datetime(dt: datetime, tz: tzinfo) -> str:
 
     Naive values are treated as already in tz. Aware values are converted.
     """
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=tz)
-    else:
-        dt = dt.astimezone(tz)
+    dt = dt.replace(tzinfo=tz) if dt.tzinfo is None else dt.astimezone(tz)
     return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+_COMPACT_TZ_SUFFIX_RE = re.compile(
+    r"^(?P<time>\d{6}(?:\.\d+)?)(?P<tz>Z|[+-]\d{2}:?\d{2})$",
+    re.IGNORECASE,
+)
+
+
+def _parse_compact_offset(offset: str) -> str:
+    """Normalize a compact numeric offset for datetime.fromisoformat."""
+    if offset.upper() == "Z":
+        return "+00:00"
+    if ":" in offset:
+        return offset
+    if len(offset) == 5:
+        return f"{offset[:3]}:{offset[3:]}"
+    if len(offset) == 3:
+        return f"{offset}:00"
+    return offset
 
 
 def _format_notification_time(raw_time: Any, tz: tzinfo) -> str:
@@ -284,22 +305,48 @@ def _format_notification_time(raw_time: Any, tz: tzinfo) -> str:
     if text.isdigit():
         return _format_notification_time(int(text), tz)
 
-    if len(text) == 8 and text[2] == ":" and text[5] == ":" and text.replace(":", "").isdigit():
+    if (
+        len(text) == 8
+        and text[2] == ":"
+        and text[5] == ":"
+        and text.replace(":", "").isdigit()
+    ):
         return text
 
-    # Compact IoT localTime: 20260817T143005 or 20260817T143005.000
+    # Compact IoT localTime: 20260817T143005 or 20260817T143005.000Z
     if "T" in text and "-" not in text.split("T", 1)[0]:
         date_part, time_part = text.split("T", 1)
-        time_part = time_part.split(".", 1)[0].replace("Z", "")
-        if len(date_part) == 8 and len(time_part) >= 6 and date_part.isdigit() and time_part[:6].isdigit():
+        tz_suffix = ""
+        time_core = time_part
+        match = _COMPACT_TZ_SUFFIX_RE.match(time_part)
+        if match:
+            time_core = match.group("time")
+            tz_suffix = match.group("tz")
+        else:
+            time_core = time_part.split(".", 1)[0]
+        if (
+            len(date_part) == 8
+            and len(time_core) >= 6
+            and date_part.isdigit()
+            and time_core[:6].isdigit()
+        ):
+            if tz_suffix:
+                iso_date = f"{date_part[0:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                iso_time = f"{time_core[0:2]}:{time_core[2:4]}:{time_core[4:6]}"
+                candidate = f"{iso_date}T{iso_time}{_parse_compact_offset(tz_suffix)}"
+                try:
+                    parsed = datetime.fromisoformat(candidate)
+                except ValueError:
+                    return text
+                return _format_wall_datetime(parsed, tz)
             try:
                 naive = datetime(
                     int(date_part[0:4]),
                     int(date_part[4:6]),
                     int(date_part[6:8]),
-                    int(time_part[0:2]),
-                    int(time_part[2:4]),
-                    int(time_part[4:6]),
+                    int(time_core[0:2]),
+                    int(time_core[2:4]),
+                    int(time_core[4:6]),
                 )
             except ValueError:
                 return text
@@ -378,9 +425,7 @@ async def _async_build_notification_message(
     unknown_alarm = notif.get("unknown_alarm", "Alarm")
     # Prefer the Home Assistant registry name; never use the cloud dname/cname.
     device_name = (
-        event_data.get("device_name")
-        or event_data.get("device_id")
-        or unknown_device
+        event_data.get("device_name") or event_data.get("device_id") or unknown_device
     )
     alarm_type = _alarm_type_label(alarm_types, msg_type) or (
         msg_type if msg_type else unknown_alarm
@@ -441,6 +486,12 @@ async def _async_send_notifications(
       - "domain.service"            -> calls any HA service
     """
     title, message = await _async_build_notification_message(hass, event_data)
+    ha_device = resolve_ha_device_entry(
+        hass,
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
     for svc in notify_services:
         svc = svc.strip()
         if not svc:
@@ -452,16 +503,9 @@ async def _async_send_notifications(
             svc_domain = "notify"
             svc_name = svc
         service_data: dict[str, Any] = {"message": message, "title": title}
-        if _is_companion_notify(svc_domain, svc_name):
-            ha_device = resolve_ha_device_entry(
-                hass,
-                event_data.get("device_id"),
-                event_data.get("channel_id"),
-                event_data.get("product_id"),
-            )
-            if ha_device is not None:
-                path = f"/config/devices/device/{ha_device.id}"
-                service_data["data"] = {"url": path, "clickAction": path}
+        if _is_companion_notify(svc_domain, svc_name) and ha_device is not None:
+            path = f"/config/devices/device/{ha_device.id}"
+            service_data["data"] = {"url": path, "clickAction": path}
         try:
             await hass.services.async_call(
                 svc_domain,
