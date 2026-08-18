@@ -22,6 +22,7 @@
 - Depend on `pyimouapi==1.3.6` (publish that library first; do not install it on Imou Life 1.3.5)
 - Enabling event push requires a public **Callback URL**. Notify targets are a `notify.*` multi-select; an empty list means automations only. A previously saved comma-separated string is still read
 - Push notification titles use `Imou Life · {alarm_type}` in both English and Simplified Chinese
+- Companion App alarm notifications include the Home Assistant area (when set) and a local date-time. Tapping the notification opens that device's Home Assistant device page. No snapshot is attached (Open API quota)
 - English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point name **Go to collection point** / **转到收藏点**, placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
 
 #### Fixed
@@ -255,6 +256,7 @@
 - 依赖 `pyimouapi==1.3.6`（须先发布该库；不要在 Imou Life 1.3.5 上单独安装）
 - 启用事件推送必须填写公网 **回调地址**。通知目标改为 `notify.*` 多选；留空则只走自动化。以前保存的逗号分隔字符串仍能读
 - 推送通知标题中英均为 `Imou Life · {alarm_type}`
+- Companion App 告警通知会带上 Home Assistant 区域（若已设置）和本地日期时间。点通知打开该设备的 Home Assistant 设备页。不附抓图（避免占用开放平台额度）
 - 中英文界面文案对齐（实体名称、事件推送、收藏点名称 **转到收藏点** / **Go to collection point**、占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
 
 #### 修复

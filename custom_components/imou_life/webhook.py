@@ -424,6 +424,11 @@ async def _async_build_notification_message(
     return title, message
 
 
+def _is_companion_notify(domain: str, service: str) -> bool:
+    """Return True for Companion App notify.mobile_app_* services."""
+    return domain == "notify" and service.startswith("mobile_app_")
+
+
 async def _async_send_notifications(
     hass: HomeAssistant, event_data: dict[str, Any], notify_services: list[str]
 ) -> None:
@@ -446,11 +451,22 @@ async def _async_send_notifications(
         else:
             svc_domain = "notify"
             svc_name = svc
+        service_data: dict[str, Any] = {"message": message, "title": title}
+        if _is_companion_notify(svc_domain, svc_name):
+            ha_device = resolve_ha_device_entry(
+                hass,
+                event_data.get("device_id"),
+                event_data.get("channel_id"),
+                event_data.get("product_id"),
+            )
+            if ha_device is not None:
+                path = f"/config/devices/device/{ha_device.id}"
+                service_data["data"] = {"url": path, "clickAction": path}
         try:
             await hass.services.async_call(
                 svc_domain,
                 svc_name,
-                {"message": message, "title": title},
+                service_data,
                 blocking=False,
             )
             _LOGGER.debug("Sent alarm notification via %s.%s", svc_domain, svc_name)

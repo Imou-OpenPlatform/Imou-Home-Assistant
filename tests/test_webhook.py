@@ -1337,3 +1337,58 @@ async def test_webhook_iot_missing_accessory_switch_does_not_use_camera(
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_companion_notify_opens_device_page(
+    hass: HomeAssistant,
+) -> None:
+    """notify.mobile_app_* gets url and clickAction to the HA device page."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.mobile_app_phone"],
+    )
+    registry = dr.async_get(hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, "SN1_0")})
+    assert device is not None
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+    path = f"/config/devices/device/{device.id}"
+    assert calls[0].data["title"].startswith("Imou Life ·")
+    assert calls[0].data["data"]["url"] == path
+    assert calls[0].data["data"]["clickAction"] == path
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_non_companion_notify_has_no_click_data(
+    hass: HomeAssistant,
+) -> None:
+    """qiyewechat.send only receives title and message."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["qiyewechat.send"],
+    )
+    calls = async_mock_service(hass, "qiyewechat", "send")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+    assert "data" not in calls[0].data
+    assert "url" not in calls[0].data
