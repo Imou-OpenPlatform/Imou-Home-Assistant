@@ -127,6 +127,8 @@ DEFAULT_LOCAL_RECORD_DURATION = 60
 # Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
 BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
+PARAM_MOTION = "motion"
+MOTION_OFF_DELAY = 30
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
