@@ -40,6 +40,19 @@ def resolve_ha_device_key(
     return None
 
 
+def resolve_ha_device_entry(
+    hass: HomeAssistant,
+    device_id: str | None,
+    channel_id: object | None = None,
+    product_id: str | None = None,
+) -> dr.DeviceEntry | None:
+    """Return the HA device registry row for Imou ids, if registered."""
+    key = resolve_ha_device_key(hass, device_id, channel_id, product_id)
+    if key is None:
+        return None
+    return dr.async_get(hass).async_get_device(identifiers={(DOMAIN, key)})
+
+
 def resolve_ha_device_name(
     hass: HomeAssistant,
     device_id: str | None,
@@ -47,10 +60,7 @@ def resolve_ha_device_name(
     product_id: str | None = None,
 ) -> str | None:
     """Return HA device display name for Imou ids, or None if not registered."""
-    key = resolve_ha_device_key(hass, device_id, channel_id, product_id)
-    if key is None:
-        return None
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, key)})
+    device = resolve_ha_device_entry(hass, device_id, channel_id, product_id)
     if device is None:
         return None
     return device.name_by_user or device.name

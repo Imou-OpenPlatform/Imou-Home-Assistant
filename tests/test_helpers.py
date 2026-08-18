@@ -9,6 +9,7 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.helpers import (
     notify_service_selector_options,
     parse_notify_services,
+    resolve_ha_device_entry,
     resolve_ha_device_name,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -112,6 +113,24 @@ async def test_notify_selector_options_keep_stored_send_message(
     assert options == [
         {"value": "notify.send_message", "label": "notify.send_message"}
     ]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_resolve_ha_device_entry_returns_registry_row(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Front Door Cam",
+    )
+
+    found = resolve_ha_device_entry(hass, "SN1", channel_id="0")
+    assert found is not None
+    assert found.id == device.id
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

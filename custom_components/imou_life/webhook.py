@@ -15,6 +15,7 @@ from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
@@ -24,7 +25,7 @@ from .const import (
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
 )
-from .helpers import resolve_ha_device_key, resolve_ha_device_name
+from .helpers import resolve_ha_device_entry, resolve_ha_device_key, resolve_ha_device_name
 from .local_record import async_maybe_record_from_alarm
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -394,6 +395,19 @@ async def _async_build_notification_message(
     message = notif.get("device", "Device: {device_name}").format(
         device_name=device_name
     )
+    ha_device = resolve_ha_device_entry(
+        hass,
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    if ha_device is not None and ha_device.area_id:
+        area = ar.async_get(hass).async_get_area(ha_device.area_id)
+        if area is not None and area.name:
+            area_line = notif.get("area", "Location: {area_name}").format(
+                area_name=area.name
+            )
+            message += f"\n{area_line}"
     if time_str:
         time_line = notif.get("time", "Time: {time_str}").format(time_str=time_str)
         message += f"\n{time_line}"

@@ -27,9 +27,13 @@ from custom_components.imou_life.webhook import (
 )
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import async_mock_service
+from pytest_homeassistant_custom_component.common import (
+    async_mock_service,
+    MockConfigEntry,
+)
 
 from .conftest import register_imou_ha_device, setup_imou_runtime
 
@@ -414,6 +418,49 @@ def test_alarm_types_keys_match_between_languages() -> None:
     zh = json.loads((strings_dir / "zh-Hans.json").read_text(encoding="utf-8"))
     en = json.loads((strings_dir / "en.json").read_text(encoding="utf-8"))
     assert set(zh["alarm_types"]) == set(en["alarm_types"])
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notification_includes_area_when_assigned(
+    hass: HomeAssistant,
+) -> None:
+    """HA area becomes a location line; no empty location when unset."""
+    _load_webhook_strings_file.cache_clear()
+    await hass.config.async_set_time_zone("UTC")
+    config_entry = MockConfigEntry(domain=DOMAIN, data={})
+    config_entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Front Door Cam",
+    )
+    area = ar.async_get(hass).async_get_or_create("Front yard")
+    registry.async_update_device(device.id, area_id=area.id)
+
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "human",
+            "device_id": "SN1",
+            "channel_id": "0",
+            "device_name": "Front Door Cam",
+        },
+    )
+    assert "Device: Front Door Cam" in message
+    assert "Location: Front yard" in message
+
+    registry.async_update_device(device.id, area_id=None)
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "human",
+            "device_id": "SN1",
+            "channel_id": "0",
+            "device_name": "Front Door Cam",
+        },
+    )
+    assert "Location:" not in message
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

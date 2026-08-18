@@ -2,6 +2,7 @@
   "notification": {
     "title": "Imou Life · {alarm_type}",
     "device": "Device: {device_name}",
+    "area": "Location: {area_name}",
     "time": "Time: {time_str}",
     "details": "Details: {desc_type}",
     "unknown_device": "Unknown device",
