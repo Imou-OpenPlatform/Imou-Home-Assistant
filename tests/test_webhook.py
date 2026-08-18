@@ -261,6 +261,7 @@ async def test_webhook_e_ab_alarm_sound_uses_localized_copy(
     hass: HomeAssistant,
 ) -> None:
     """IoT e_abAlarmSound maps to the same copy as PaaS abAlarmSound."""
+    await hass.config.async_set_time_zone("UTC")
     _load_webhook_strings_file.cache_clear()
     title, message = await _async_build_notification_message(
         hass,
@@ -272,7 +273,7 @@ async def test_webhook_e_ab_alarm_sound_uses_localized_copy(
     )
     assert title == "Imou Life · Unusual sound detected"
     assert "Type:" not in message
-    assert "Time: 14:30:05" in message
+    assert "Time: 2026-08-17 14:30:05" in message
     assert "Device: Hall" in message
 
 
@@ -333,23 +334,25 @@ async def test_webhook_product_model_events_localized(
 
 
 @pytest.mark.parametrize(
-    ("raw", "expected"),
+    ("raw", "tz_name", "expected"),
     [
-        (1723888205, "14:30:05"),
-        ("2026-08-17T14:30:05", "14:30:05"),
-        ("2026-08-17T14:30:05Z", "14:30:05"),
-        ("20260817T143005", "14:30:05"),
-        ("14:30:05", "14:30:05"),
-        (None, ""),
+        (1723888205, "UTC", "2024-08-17 09:50:05"),
+        (1723888205, "Asia/Shanghai", "2024-08-17 17:50:05"),
+        ("2026-08-17T14:30:05", "UTC", "2026-08-17 14:30:05"),
+        ("2026-08-17T14:30:05Z", "Asia/Shanghai", "2026-08-17 22:30:05"),
+        ("20260817T143005", "UTC", "2026-08-17 14:30:05"),
+        ("14:30:05", "UTC", "14:30:05"),
+        (None, "UTC", ""),
     ],
 )
-def test_format_notification_time_normalizes_iot_and_iso(raw, expected) -> None:
-    """Epoch, ISO-with-T, and compact IoT localTime become HH:MM:SS."""
-    if isinstance(raw, int):
-        from datetime import datetime
+def test_format_notification_time_normalizes_iot_and_iso(
+    raw, tz_name, expected
+) -> None:
+    """Full datetimes include the date in the given timezone; time-only stays time-only."""
+    from zoneinfo import ZoneInfo
 
-        expected = datetime.fromtimestamp(raw).strftime("%H:%M:%S")
-    assert _format_notification_time(raw) == expected
+    tz = ZoneInfo(tz_name)
+    assert _format_notification_time(raw, tz) == expected
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

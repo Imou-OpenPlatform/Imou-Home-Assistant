@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, tzinfo
+from zoneinfo import ZoneInfo
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -239,18 +240,39 @@ def _alarm_type_label(alarm_types: dict[str, str], msg_type: str | None) -> str 
     return None
 
 
-def _format_notification_time(raw_time: Any) -> str:
-    """Normalize push timestamps to HH:MM:SS for notification bodies."""
+def _zoneinfo(tz_name: str | None) -> tzinfo:
+    """Return a tzinfo for HA's configured zone, defaulting to UTC."""
+    if not tz_name:
+        return timezone.utc
+    try:
+        return ZoneInfo(tz_name)
+    except Exception:
+        return timezone.utc
+
+
+def _format_wall_datetime(dt: datetime, tz: tzinfo) -> str:
+    """Format a datetime as YYYY-MM-DD HH:MM:SS in tz.
+
+    Naive values are treated as already in tz. Aware values are converted.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    else:
+        dt = dt.astimezone(tz)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _format_notification_time(raw_time: Any, tz: tzinfo) -> str:
+    """Normalize push timestamps for notification bodies."""
     if raw_time is None or raw_time == "":
         return ""
     if isinstance(raw_time, (int, float)):
         value = float(raw_time)
-        # Milliseconds since epoch.
         if value > 1_000_000_000_000:
             value /= 1000.0
         if value > 1_000_000_000:
             try:
-                return datetime.fromtimestamp(value).strftime("%H:%M:%S")
+                return datetime.fromtimestamp(value, tz).strftime("%Y-%m-%d %H:%M:%S")
             except (OSError, OverflowError, ValueError):
                 return str(raw_time)
         return str(raw_time)
@@ -259,24 +281,40 @@ def _format_notification_time(raw_time: Any) -> str:
     if not text:
         return ""
     if text.isdigit():
-        return _format_notification_time(int(text))
+        return _format_notification_time(int(text), tz)
+
+    if len(text) == 8 and text[2] == ":" and text[5] == ":" and text.replace(":", "").isdigit():
+        return text
 
     # Compact IoT localTime: 20260817T143005 or 20260817T143005.000
     if "T" in text and "-" not in text.split("T", 1)[0]:
         date_part, time_part = text.split("T", 1)
         time_part = time_part.split(".", 1)[0].replace("Z", "")
-        if len(date_part) == 8 and len(time_part) >= 6 and time_part[:6].isdigit():
-            return f"{time_part[0:2]}:{time_part[2:4]}:{time_part[4:6]}"
+        if len(date_part) == 8 and len(time_part) >= 6 and date_part.isdigit() and time_part[:6].isdigit():
+            try:
+                naive = datetime(
+                    int(date_part[0:4]),
+                    int(date_part[4:6]),
+                    int(date_part[6:8]),
+                    int(time_part[0:2]),
+                    int(time_part[2:4]),
+                    int(time_part[4:6]),
+                )
+            except ValueError:
+                return text
+            return _format_wall_datetime(naive, tz)
 
     if "T" in text:
         candidate = text.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(candidate).strftime("%H:%M:%S")
+            parsed = datetime.fromisoformat(candidate)
         except ValueError:
             after = text.split("T", 1)[1]
             digits = "".join(ch for ch in after if ch.isdigit())
             if len(digits) >= 6:
                 return f"{digits[0:2]}:{digits[2:4]}:{digits[4:6]}"
+            return text
+        return _format_wall_datetime(parsed, tz)
 
     return text
 
@@ -346,7 +384,9 @@ async def _async_build_notification_message(
     alarm_type = _alarm_type_label(alarm_types, msg_type) or (
         msg_type if msg_type else unknown_alarm
     )
-    time_str = _format_notification_time(event_data.get("time"))
+    time_str = _format_notification_time(
+        event_data.get("time"), _zoneinfo(hass.config.time_zone)
+    )
 
     # Title is the alarm type only; body carries device (and time) without
     # repeating the same type line.
