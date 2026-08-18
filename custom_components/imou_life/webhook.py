@@ -477,12 +477,21 @@ async def async_handle_imou_webhook(
         )
         return web.Response(status=200, text="ok")
 
-    event_data["device_name"] = resolve_ha_device_name(
+    ha_device_name = resolve_ha_device_name(
         hass,
         event_data.get("device_id"),
         channel_id=event_data.get("channel_id"),
         product_id=event_data.get("product_id"),
     )
+    if not ha_device_name:
+        _LOGGER.debug(
+            "Ignoring push with no Home Assistant device for %s (msg_type=%s)",
+            device_id,
+            event_data.get("msg_type"),
+        )
+        return web.Response(status=200, text="ok")
+
+    event_data["device_name"] = ha_device_name
 
     # ACK first so Imou does not stop pushing while we resolve/notify. The task is
     # tied to the entry so it cannot outlive the runtime data it holds.

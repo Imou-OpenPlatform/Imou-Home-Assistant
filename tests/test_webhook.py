@@ -30,7 +30,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import async_mock_service
 
-from .conftest import setup_imou_runtime
+from .conftest import register_imou_ha_device, setup_imou_runtime
 
 
 class MockRequest:
@@ -74,6 +74,14 @@ async def test_webhook_respects_matching_config_entry_only(
         app_id="app_b",
         selected_devices=["dev-b"],
     )
+    entry_a = next(
+        e for e in hass.config_entries.async_entries(DOMAIN) if e.data["app_id"] == "app_a"
+    )
+    entry_b = next(
+        e for e in hass.config_entries.async_entries(DOMAIN) if e.data["app_id"] == "app_b"
+    )
+    register_imou_ha_device(hass, entry_a, "dev-a")
+    register_imou_ha_device(hass, entry_b, "dev-b")
 
     response = await async_handle_imou_webhook(
         hass,
@@ -125,6 +133,35 @@ async def test_webhook_ignores_invalid_json(hass: HomeAssistant) -> None:
 
     assert response.status == 200
     assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_ignores_push_without_ha_device(hass: HomeAssistant) -> None:
+    """Pushes with no matching device registry row are ACKed but not dispatched."""
+    events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    notify_calls = async_mock_service(hass, "notify", "persistent_notification")
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["ghost"],
+        notify_services=["notify.persistent_notification"],
+        register_ha_devices=False,
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "ghost"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []
+    assert alarm_events == []
+    assert notify_calls == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -436,6 +473,7 @@ async def test_webhook_iot_uses_product_key_ha_name(hass: HomeAssistant) -> None
         push_enabled=True,
         selected_devices=["ACC1"],
         notify_services=["notify.persistent_notification"],
+        register_ha_devices=False,
     )
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     registry = dr.async_get(hass)
