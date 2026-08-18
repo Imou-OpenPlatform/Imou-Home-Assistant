@@ -22,8 +22,8 @@ def test_device_key_from_ids_prefers_channel_id() -> None:
 
 
 def test_device_keys_from_ids_includes_product_fallback() -> None:
-    """IoT pushes with monitor.channel still expose the product registry key."""
-    assert imou_life_device_keys_from_ids("SN1", 0, "pidX") == ["SN1_0", "SN1_pidX"]
+    """IoT lookup tries the product registry key before the camera channel."""
+    assert imou_life_device_keys_from_ids("SN1", 0, "pidX") == ["SN1_pidX", "SN1_0"]
     assert imou_life_device_keys_from_ids("SN1", None, "pidX") == [
         "SN1_pidX",
         "SN1_0",
@@ -161,6 +161,31 @@ async def test_resolve_ha_device_name_falls_back_to_product_key(
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
     registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_pidX")},
+        name="Smoke Sensor",
+    )
+
+    assert (
+        resolve_ha_device_name(hass, "SN1", channel_id=0, product_id="pidX")
+        == "Smoke Sensor"
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_resolve_ha_device_name_prefers_product_when_camera_also_registered(
+    hass: HomeAssistant,
+) -> None:
+    """Accessory pid wins over the parent camera channel when both exist."""
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Garden Cam",
+    )
     registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "SN1_pidX")},

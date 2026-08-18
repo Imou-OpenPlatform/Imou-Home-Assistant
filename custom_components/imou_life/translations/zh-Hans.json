@@ -432,7 +432,7 @@
       "message": "Imou 拒绝了此按钮操作：{error}"
     },
     "alarm_arm_disarm_failed": {
-      "message": "乐橙拒绝了布防操作：{error}"
+      "message": "Imou 拒绝了布防操作：{error}"
     },
     "stream_source_failed": {
       "message": "无法从 Imou 获取直播地址：{error}"

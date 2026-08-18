@@ -91,11 +91,12 @@ def register_imou_ha_device(
     name: str = "Test Device",
 ) -> None:
     """Create a device registry row so webhook pushes resolve a HA name."""
-    from custom_components.imou_life.const import imou_life_device_keys_from_ids
+    from custom_components.imou_life.const import imou_life_device_key_from_ids
 
     registry = dr.async_get(hass)
-    keys = imou_life_device_keys_from_ids(device_id, channel_id, product_id)
-    key = keys[0] if keys else f"{device_id}_0"
+    key = imou_life_device_key_from_ids(device_id, channel_id, product_id)
+    if key is None:
+        key = f"{device_id}_0"
     registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, key)},

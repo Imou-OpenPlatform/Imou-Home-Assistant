@@ -258,7 +258,9 @@ async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> Non
         )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"][PARAM_LOCAL_RECORD_PATH] == "record_path_not_allowed"
+    assert result["errors"][SECTION_EVENT_PUSH_LOCAL_RECORDING][
+        PARAM_LOCAL_RECORD_PATH
+    ] == "record_path_not_allowed"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -310,7 +312,7 @@ async def test_options_flow_event_push_step_shows_all_sections(hass) -> None:
         SECTION_EVENT_PUSH_LOCAL_RECORDING,
     ]
     recording_section = schema.schema[SECTION_EVENT_PUSH_LOCAL_RECORDING]
-    assert recording_section.options.get("collapsed") is True
+    assert recording_section.options.get("collapsed") is False
     placeholders = result["description_placeholders"]
     assert placeholders["suggested_url"]
 

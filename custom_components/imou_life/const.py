@@ -29,15 +29,20 @@ def imou_life_device_key_from_ids(
     channel_id: object | None,
     product_id: str | None,
 ) -> str | None:
-    """Build the preferred device registry key from push / API ids.
+    """Build the preferred device registry key from API ids.
 
-    Same format as ``imou_life_device_key``: ``{device_id}_{channel_id|product_id}``.
-    Uses ``is not None`` for channel so channel 0 is kept. Prefer
-    ``imou_life_device_keys_from_ids`` when resolving against the registry —
-    IoT pushes often include a monitor channel that is not the registry suffix.
+    Cameras register as ``{device_id}_{channel_id}`` (channel 0 is kept).
+    Channel-less IoT accessories use ``{device_id}_{product_id}``. Push
+    lookup uses ``imou_life_device_keys_from_ids``, which tries the product
+    key first so a spurious monitor.channel does not steal the accessory.
     """
-    keys = imou_life_device_keys_from_ids(device_id, channel_id, product_id)
-    return keys[0] if keys else None
+    if not device_id:
+        return None
+    if channel_id is not None:
+        return f"{device_id}_{channel_id}"
+    if product_id is not None and product_id != "":
+        return f"{device_id}_{product_id}"
+    return f"{device_id}_0"
 
 
 def imou_life_device_keys_from_ids(
@@ -45,11 +50,12 @@ def imou_life_device_keys_from_ids(
     channel_id: object | None,
     product_id: str | None,
 ) -> list[str]:
-    """Return candidate registry keys for an Imou device.
+    """Return candidate registry keys for an Imou push.
 
     Order:
-    1. Channel-based key (IPC / multi-lens channel from the push)
-    2. Product-based key (channel-less IoT accessory)
+    1. Product-based key (IoT accessory). ``iotEvent`` often includes
+       ``monitor.channel=0``, which would otherwise match the parent camera.
+    2. Channel-based key (IPC / multi-lens channel from the push)
     3. Primary channel ``0`` when the push omitted channel_id — multi-lens
        devices are registered per channel (``did_0``, ``did_1``, …), not as
        ``did_pid``, so a missing channel still resolves to the main lens.
@@ -57,10 +63,10 @@ def imou_life_device_keys_from_ids(
     if not device_id:
         return []
     keys: list[str] = []
-    if channel_id is not None:
-        keys.append(f"{device_id}_{channel_id}")
     if product_id is not None and product_id != "":
-        key = f"{device_id}_{product_id}"
+        keys.append(f"{device_id}_{product_id}")
+    if channel_id is not None:
+        key = f"{device_id}_{channel_id}"
         if key not in keys:
             keys.append(key)
     if channel_id is None:

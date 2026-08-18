@@ -22,9 +22,10 @@ from custom_components.imou_life.webhook import (
     _is_alarm_msg_type,
     _load_webhook_strings_file,
     _normalize_event_payload,
+    _redact_push_for_log,
     async_handle_imou_webhook,
 )
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -615,6 +616,16 @@ def test_is_alarm_msg_type(msg_type: str | None, expected: bool) -> None:
     assert _is_alarm_msg_type(msg_type) is expected
 
 
+def test_redact_push_for_log_masks_token() -> None:
+    """Debug logs must not print the live push token."""
+    redacted = _redact_push_for_log(
+        {"msgType": "human", "token": "live-token", "raw": {"token": "live-token"}}
+    )
+    assert redacted["token"] == "***"
+    assert redacted["raw"]["token"] == "***"
+    assert redacted["msgType"] == "human"
+
+
 def test_normalize_iot_event_keeps_top_level_msg_type() -> None:
     """iotEvent keeps top-level msgType; still exposes pid/outputData/channel."""
     event = _normalize_event_payload(
@@ -1057,7 +1068,11 @@ def test_record_push_msg_caps_distinct_keys() -> None:
 
 
 def _register_notify_on_alarm_switch(
-    hass: HomeAssistant, *, device_key: str, switch_on: bool
+    hass: HomeAssistant,
+    *,
+    device_key: str,
+    switch_on: bool | None = True,
+    state: str | None = None,
 ) -> None:
     registry = er.async_get(hass)
     switch = registry.async_get_or_create(
@@ -1066,7 +1081,10 @@ def _register_notify_on_alarm_switch(
         f"{device_key}${PARAM_NOTIFY_ON_ALARM}",
         suggested_object_id="front_notify_on_alarm",
     )
-    hass.states.async_set(switch.entity_id, STATE_ON if switch_on else STATE_OFF)
+    hass.states.async_set(
+        switch.entity_id,
+        state if state is not None else (STATE_ON if switch_on else STATE_OFF),
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -1135,6 +1153,136 @@ async def test_webhook_notifies_when_device_switch_missing(
         hass,
         "webhook-id",
         MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("switch_state", [STATE_UNAVAILABLE, STATE_UNKNOWN])
+async def test_webhook_notifies_when_device_switch_not_off(
+    hass: HomeAssistant, switch_state: str
+) -> None:
+    """Unavailable/unknown switch keeps the default-on notify behavior."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.test"],
+    )
+    _register_notify_on_alarm_switch(
+        hass, device_key="SN1_0", state=switch_state
+    )
+    calls = async_mock_service(hass, "notify", "test")
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_notify_uses_accessory_not_camera(
+    hass: HomeAssistant,
+) -> None:
+    """Accessory iotEvent must not inherit the parent camera notify switch."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["ACC1"],
+        notify_services=["notify.test"],
+        register_ha_devices=False,
+    )
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    register_imou_ha_device(
+        hass, entry, "ACC1", channel_id="0", name="Garden Cam"
+    )
+    register_imou_ha_device(
+        hass,
+        entry,
+        "ACC1",
+        channel_id=None,
+        product_id="pidSmoke",
+        name="Kitchen Smoke",
+    )
+    _register_notify_on_alarm_switch(hass, device_key="ACC1_0", switch_on=False)
+    _register_notify_on_alarm_switch(
+        hass, device_key="ACC1_pidSmoke", switch_on=True
+    )
+    calls = async_mock_service(hass, "notify", "test")
+    runtime = get_runtime_data(entry)
+    assert runtime is not None
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(return_value="e_hxSmokeAlarm")
+    )
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "pidSmoke",
+                "did": "ACC1",
+                "content": {"monitor": {"channel": 0, "action": 1}},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+    assert "Kitchen Smoke" in calls[0].data["message"]
+    assert "Garden Cam" not in calls[0].data["message"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_missing_accessory_switch_does_not_use_camera(
+    hass: HomeAssistant,
+) -> None:
+    """Missing accessory switch defaults on; do not inherit the camera off."""
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["ACC1"],
+        notify_services=["notify.test"],
+        register_ha_devices=False,
+    )
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    register_imou_ha_device(
+        hass, entry, "ACC1", channel_id="0", name="Garden Cam"
+    )
+    register_imou_ha_device(
+        hass,
+        entry,
+        "ACC1",
+        channel_id=None,
+        product_id="pidSmoke",
+        name="Kitchen Smoke",
+    )
+    _register_notify_on_alarm_switch(hass, device_key="ACC1_0", switch_on=False)
+    calls = async_mock_service(hass, "notify", "test")
+    runtime = get_runtime_data(entry)
+    assert runtime is not None
+    runtime.coordinator.device_manager.delegate.async_resolve_event_identifier = (
+        AsyncMock(return_value="e_hxSmokeAlarm")
+    )
+
+    await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotEvent",
+                "pid": "pidSmoke",
+                "did": "ACC1",
+                "content": {"monitor": {"channel": 0, "action": 1}},
+            }
+        ),
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 

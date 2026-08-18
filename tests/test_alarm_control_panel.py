@@ -73,7 +73,7 @@ def test_translation_key_is_arming() -> None:
         _coordinator(device), MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
         PARAM_MODE, device,
     )
-    assert entity._attr_translation_key == "arming"
+    assert entity.translation_key == "arming"
 
 
 @pytest.mark.parametrize(

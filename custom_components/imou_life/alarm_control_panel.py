@@ -57,7 +57,6 @@ class ImouAlarmControlPanel(ImouEntity, AlarmControlPanelEntity):
     """Representation of an Imou arming panel."""
 
     _attr_code_arm_required = False
-    _attr_translation_key = "arming"
     _attr_supported_features = (
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
@@ -72,6 +71,7 @@ class ImouAlarmControlPanel(ImouEntity, AlarmControlPanelEntity):
     ) -> None:
         """Initialize ImouAlarmControlPanel."""
         super().__init__(coordinator, config_entry, entity_type, device)
+        # ImouEntity.__init__ sets this from entity_type ("mode").
         self._attr_translation_key = "arming"
 
     @property

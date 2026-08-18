@@ -664,7 +664,7 @@ class ImouOptionsFlow(OptionsFlow):
                             ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
                         }
                     ),
-                    {"collapsed": True},
+                    {"collapsed": False},
                 ),
             }
         )
@@ -715,7 +715,7 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — event push, notifications, and local recording."""
         stored = dict(self.config_entry.options)
-        errors: dict[str, str] = {}
+        errors: dict[str, Any] = {}
         error_detail = ""
         suggested_source: Mapping[str, Any] = stored
         if user_input is not None:
@@ -724,7 +724,9 @@ class ImouOptionsFlow(OptionsFlow):
                 str(flat.get(PARAM_LOCAL_RECORD_PATH) or "")
             )
             if path_error:
-                errors[PARAM_LOCAL_RECORD_PATH] = path_error
+                errors[SECTION_EVENT_PUSH_LOCAL_RECORDING] = {
+                    PARAM_LOCAL_RECORD_PATH: path_error
+                }
             if not errors and flat[PARAM_ENABLE_EVENT_PUSH]:
                 callback_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
                 if not callback_url:

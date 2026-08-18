@@ -12,18 +12,25 @@
 #### Added
 
 - Config switches for pet detection, flip image, wide dynamic range, smart tracking, prompt sound, alarm-linked siren, and alarm-linked white light (shown when the device has the matching IoT ref / PaaS ability; pet detection is IoT-only)
-- **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Event push**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
+- Per-device **Notify on alarm** switch (default on, Home Assistant only). Account notify targets still apply; turning the switch off silences phone notifications for that device without stopping `imou_life_alarm` or local recording
+- **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Alarms, notifications, and recording**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 - Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
 
 #### Changed
 
-- Depend on `pyimouapi==1.3.6`
-- English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
+- Depend on `pyimouapi==1.3.6` (publish that library first; do not install it on Imou Life 1.3.5)
+- Enabling event push requires a public **Callback URL**. Notify targets are a `notify.*` multi-select; an empty list means automations only. A previously saved comma-separated string is still read
+- Push notification titles use `Imou Life · {alarm_type}` in both English and Simplified Chinese
+- English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point name **Go to collection point** / **转到收藏点**, placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
 
 #### Fixed
 
 - Enabling event push no longer saves as success when Imou rejects the callback URL. The options form stays open and shows the API error
+- A push that does not match a Home Assistant device is acknowledged (HTTP 200) and discarded, so unmatched cloud devices do not fire events or notifications
+- IoT identifier rewrite now happens before alarm classification and notify, so product-model events such as `e_storageEmpty` are no longer treated as alarms or double-notified
+- **Notify on alarm** stays on when the switch is `unavailable` or `unknown` (only an explicit off silences the device)
+- Accessory `iotEvent` with `monitor.channel` resolves to the accessory, not the parent camera, when both are registered
 
 ### [1.3.4]
 
@@ -238,18 +245,25 @@
 #### 新增
 
 - 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、告警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
-- **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 事件推送**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
+- 每台设备一个 **告警时通知** 开关（默认开，只存在 Home Assistant）。账号级通知目标仍生效；关掉后只静音该设备的手机通知，不影响 `imou_life_alarm` 和本地录像
+- **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警、通知与录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
 
 #### 变更
 
-- 依赖 `pyimouapi==1.3.6`
-- 中英文界面文案对齐（实体名称、事件推送、收藏点占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
+- 依赖 `pyimouapi==1.3.6`（须先发布该库；不要在 Imou Life 1.3.5 上单独安装）
+- 启用事件推送必须填写公网 **回调地址**。通知目标改为 `notify.*` 多选；留空则只走自动化。以前保存的逗号分隔字符串仍能读
+- 推送通知标题中英均为 `Imou Life · {alarm_type}`
+- 中英文界面文案对齐（实体名称、事件推送、收藏点名称 **转到收藏点** / **Go to collection point**、占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
 
 #### 修复
 
 - 启用事件推送时，若 Imou 拒绝回调地址，不再当作成功保存。选项表单会留在当前页并显示接口错误
+- 对不上 Home Assistant 设备注册表的推送仍返回 HTTP 200，但会丢弃，避免未接入的云端设备触发事件或通知
+- IoT 先改写 identifier 再分类/通知，因此 `e_storageEmpty` 等产品型号事件不再当告警、也不再双发通知
+- **告警时通知** 在开关为 `unavailable` / `unknown` 时仍视为开（只有显式关掉才静音）
+- 配件 `iotEvent` 带 `monitor.channel` 时，若摄像头和配件都已注册，会打到配件而不是父摄像头
 
 ### [1.3.4]
 

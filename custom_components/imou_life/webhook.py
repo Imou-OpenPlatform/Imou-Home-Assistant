@@ -12,7 +12,7 @@ from typing import Any
 from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -22,9 +22,8 @@ from .const import (
     EVENT_IMOU_EVENT,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
-    imou_life_device_keys_from_ids,
 )
-from .helpers import resolve_ha_device_name
+from .helpers import resolve_ha_device_key, resolve_ha_device_name
 from .local_record import async_maybe_record_from_alarm
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -98,26 +97,42 @@ def _is_alarm_msg_type(msg_type: str | None) -> bool:
     return msg_type is not None and msg_type not in _NON_ALARM_MSG_TYPES
 
 
+def _redact_push_for_log(data: dict[str, Any]) -> dict[str, Any]:
+    """Copy a push dict with live tokens masked for debug logs."""
+    redacted = dict(data)
+    if redacted.get("token"):
+        redacted["token"] = "***"
+    raw = redacted.get("raw")
+    if isinstance(raw, dict) and raw.get("token"):
+        redacted["raw"] = {**raw, "token": "***"}
+    return redacted
+
+
 def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) -> bool:
     """Return True unless this device's notify-on-alarm switch is off.
 
-    Missing entity or unresolvable device key defaults to on so existing
+    Missing entity, unresolvable device key, or a non-off state (unknown /
+    unavailable during coordinator failure) defaults to on so existing
     installs keep sending until the user turns a switch off.
     """
     registry = er.async_get(hass)
-    for device_key in imou_life_device_keys_from_ids(
+    device_key = resolve_ha_device_key(
+        hass,
         event_data.get("device_id"),
         event_data.get("channel_id"),
         event_data.get("product_id"),
-    ):
-        entity_id = registry.async_get_entity_id(
-            "switch", DOMAIN, f"{device_key}${PARAM_NOTIFY_ON_ALARM}"
-        )
-        if not entity_id:
-            continue
-        state = hass.states.get(entity_id)
-        return state is None or state.state == STATE_ON
-    return True
+    )
+    if device_key is None:
+        return True
+    entity_id = registry.async_get_entity_id(
+        "switch", DOMAIN, f"{device_key}${PARAM_NOTIFY_ON_ALARM}"
+    )
+    if not entity_id:
+        return True
+    state = hass.states.get(entity_id)
+    if state is None:
+        return True
+    return state.state != STATE_OFF
 
 
 def _webhook_strings_filename(language: str) -> str:
@@ -441,11 +456,9 @@ async def async_handle_imou_webhook(
         _LOGGER.warning("Unexpected Imou webhook payload type: %s", type(payload))
         return web.Response(status=200, text="ok")
 
-    _LOGGER.debug("Received Imou push raw payload: %s", payload)
-
     event_data = _normalize_event_payload(payload)
     device_id = event_data.get("device_id")
-    _LOGGER.debug("Received Imou push event: %s", event_data)
+    _LOGGER.debug("Received Imou push: %s", _redact_push_for_log(event_data))
 
     # Check: is push enabled? If user disabled it, silently ignore.
     entry_and_runtime = _get_entry_and_runtime(hass, webhook_id)
