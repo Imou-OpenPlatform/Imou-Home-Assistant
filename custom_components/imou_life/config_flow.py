@@ -53,6 +53,9 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEFAULT_DEVICE_PASSWORD,
+    PARAM_DEVICE_PASSWORDS,
     PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_LOCAL_RECORD_DURATION,
@@ -93,6 +96,8 @@ _EVENT_PUSH_OPTION_KEYS = (
     PARAM_WEBHOOK_URL,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_SERVICES,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_LOCAL_RECORD_PATH,
     PARAM_LOCAL_RECORD_DURATION,
 )
@@ -564,6 +569,12 @@ class ImouOptionsFlow(OptionsFlow):
                 PARAM_NOTIFY_SERVICES: parse_notify_services(
                     flat.get(PARAM_NOTIFY_SERVICES)
                 ),
+                PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
+                    flat.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
+                ),
+                PARAM_DEFAULT_DEVICE_PASSWORD: str(
+                    flat.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+                ),
             },
             SECTION_EVENT_PUSH_LOCAL_RECORDING: {
                 PARAM_LOCAL_RECORD_PATH: flat.get(PARAM_LOCAL_RECORD_PATH, ""),
@@ -597,10 +608,22 @@ class ImouOptionsFlow(OptionsFlow):
             notifications[PARAM_NOTIFY_SERVICES] = parse_notify_services(
                 notifications.get(PARAM_NOTIFY_SERVICES)
             )
+            notifications[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = bool(
+                notifications.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
+            )
+            notifications[PARAM_DEFAULT_DEVICE_PASSWORD] = str(
+                notifications.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+            )
             flat.update(notifications)
         else:
             flat[PARAM_NOTIFY_SERVICES] = parse_notify_services(
                 stored_options.get(PARAM_NOTIFY_SERVICES)
+            )
+            flat[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = bool(
+                stored_options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
+            )
+            flat[PARAM_DEFAULT_DEVICE_PASSWORD] = str(
+                stored_options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
             )
         if SECTION_EVENT_PUSH_LOCAL_RECORDING in user_input:
             recording = dict(user_input[SECTION_EVENT_PUSH_LOCAL_RECORDING])
@@ -615,6 +638,7 @@ class ImouOptionsFlow(OptionsFlow):
             flat[PARAM_LOCAL_RECORD_DURATION] = stored_options.get(
                 PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
             )
+        flat[PARAM_DEVICE_PASSWORDS] = stored_options.get(PARAM_DEVICE_PASSWORDS, {})
         return flat
 
     def _event_push_schema(self) -> vol.Schema:
@@ -650,6 +674,14 @@ class ImouOptionsFlow(OptionsFlow):
                                     multiple=True,
                                     mode=SelectSelectorMode.DROPDOWN,
                                 )
+                            ),
+                            vol.Optional(
+                                PARAM_ATTACH_DECRYPTED_THUMBNAIL, default=False
+                            ): bool,
+                            vol.Optional(
+                                PARAM_DEFAULT_DEVICE_PASSWORD, default=""
+                            ): TextSelector(
+                                TextSelectorConfig(type=TextSelectorType.PASSWORD)
                             ),
                         }
                     ),

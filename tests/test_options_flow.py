@@ -15,6 +15,9 @@ from custom_components.imou_life.const import (
     CONF_HTTPS,
     CONF_SD,
     DOMAIN,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEFAULT_DEVICE_PASSWORD,
+    PARAM_DEVICE_PASSWORDS,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
@@ -72,6 +75,8 @@ def _event_push_input(**overrides) -> dict:
         PARAM_EVENT_PUSH_TYPES: ["alarm"],
         SECTION_EVENT_PUSH_NOTIFICATIONS: {
             PARAM_NOTIFY_SERVICES: [],
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: False,
+            PARAM_DEFAULT_DEVICE_PASSWORD: "",
         },
         SECTION_EVENT_PUSH_LOCAL_RECORDING: {
             PARAM_LOCAL_RECORD_PATH: "",
@@ -461,6 +466,56 @@ async def test_options_event_push_keeps_custom_webhook_url(hass) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/kept"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_saves_decrypted_thumbnail_settings(hass) -> None:
+    """Attach-decrypted toggle and default password save on the event push form."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(
+            **{
+                PARAM_WEBHOOK_URL: "",
+                SECTION_EVENT_PUSH_NOTIFICATIONS: {
+                    PARAM_NOTIFY_SERVICES: [],
+                    PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+                    PARAM_DEFAULT_DEVICE_PASSWORD: "secret-pw",
+                },
+            }
+        ),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_ATTACH_DECRYPTED_THUMBNAIL] is True
+    assert result["data"][PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_options_event_push_preserves_device_passwords_map(hass) -> None:
+    """Saving event push must not drop per-device passwords from options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_DEVICE_PASSWORDS: {"SN1": "x"}},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(**{PARAM_WEBHOOK_URL: ""}),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN1": "x"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")

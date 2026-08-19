@@ -141,10 +141,14 @@
             "name": "告警时通知",
             "description": "可选。留空只靠自动化。",
             "data": {
-              "notify_services": "通知目标"
+              "notify_services": "通知目标",
+              "attach_decrypted_thumbnail": "贴解密告警缩略图",
+              "default_device_password": "默认设备密码"
             },
             "data_description": {
-              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。"
+              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。",
+              "attach_decrypted_thumbnail": "仅 linux x86-64；将官方 Demo 库放到 /config/imou_life/native/（libLCOpenApiClient.so 与 libLCOpenSDK.so）。TCM 需要乐橙设备密码。",
+              "default_device_password": "某设备在「告警图片密码」中未单独设置时使用。"
             }
           },
           "local_recording": {

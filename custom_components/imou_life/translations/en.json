@@ -141,10 +141,14 @@
             "name": "Notify on alarm",
             "description": "Optional. Leave empty to use automations only.",
             "data": {
-              "notify_services": "Notification targets"
+              "notify_services": "Notification targets",
+              "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
+              "default_device_password": "Default device password"
             },
             "data_description": {
-              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device."
+              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device.",
+              "attach_decrypted_thumbnail": "linux x86-64 only; place official Demo libs in /config/imou_life/native/ (libLCOpenApiClient.so and libLCOpenSDK.so). TCM needs the Imou Life device password.",
+              "default_device_password": "Used when a device has no per-serial password in Alarm image passwords."
             }
           },
           "local_recording": {
