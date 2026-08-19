@@ -113,10 +113,11 @@ def setup_imou_runtime(
     notify_services: list[str] | None = None,
     app_id: str = "test_app_id",
     register_ha_devices: bool = True,
+    options: dict | None = None,
 ) -> ImouRuntimeData:
     """Attach ImouRuntimeData to a mock config entry for webhook tests."""
     entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
-    entry = MockConfigEntry(domain=DOMAIN, data=entry_data)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options=options or {})
     entry.add_to_hass(hass)
     if register_ha_devices and selected_devices:
         for device_id in selected_devices:

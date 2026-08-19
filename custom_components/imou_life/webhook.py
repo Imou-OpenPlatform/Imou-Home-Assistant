@@ -32,6 +32,7 @@ from .helpers import (
     resolve_ha_device_name,
 )
 from .local_record import async_maybe_record_from_alarm
+from .pic_thumbnail import async_maybe_decrypt_thumbnail
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -505,7 +506,15 @@ async def _async_send_notifications(
         service_data: dict[str, Any] = {"message": message, "title": title}
         if _is_companion_notify(svc_domain, svc_name) and ha_device is not None:
             path = f"/config/devices/device/{ha_device.id}"
-            service_data["data"] = {"url": path, "clickAction": path}
+            notify_data: dict[str, Any] = {"url": path, "clickAction": path}
+            thumbnail_url = event_data.get("thumbnail_local_url")
+            if thumbnail_url:
+                notify_data["image"] = thumbnail_url
+                notify_data["attachment"] = {
+                    "url": thumbnail_url,
+                    "content-type": "image/jpeg",
+                }
+            service_data["data"] = notify_data
         try:
             await hass.services.async_call(
                 svc_domain,
@@ -548,6 +557,7 @@ async def _async_dispatch_imou_push(
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             notify_services = runtime.notify_services
             if notify_services and _notify_on_alarm_enabled(hass, event_data):
+                await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
                 await _async_send_notifications(hass, event_data, notify_services)
             await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:

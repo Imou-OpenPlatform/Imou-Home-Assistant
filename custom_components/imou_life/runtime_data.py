@@ -30,6 +30,9 @@ class ImouRuntimeData:
     push_last_msg_type: str | None = None
     push_last_received_at: datetime | None = None
     local_record_started_at: dict[str, float] = field(default_factory=dict)
+    pic_decoder: object | None = None
+    pic_decoder_failed: bool = False
+    pic_decoder_initialized: bool = False
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

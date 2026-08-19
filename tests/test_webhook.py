@@ -13,7 +13,12 @@ from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_NOTIFY_ON_ALARM,
+)
+from custom_components.imou_life.pic_thumbnail import (
+    pic_urls_from_payload,
+    preferred_pic_url,
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtime_data
 from custom_components.imou_life.webhook import (
@@ -1391,3 +1396,246 @@ async def test_webhook_non_companion_notify_has_no_click_data(
     assert len(calls) == 1
     assert "data" not in calls[0].data
     assert "url" not in calls[0].data
+
+
+def test_pic_urls_from_payload_extracts_array() -> None:
+    """picUrlArray strings are returned in order."""
+    urls = pic_urls_from_payload(
+        {"picUrlArray": ["https://a/big", "https://a/small"]}
+    )
+    assert urls == ["https://a/big", "https://a/small"]
+
+
+def test_preferred_pic_url_prefers_small_thumb() -> None:
+    """Thumbnail pick prefers index 1 when two URLs are present."""
+    assert preferred_pic_url(["https://a/big", "https://a/small"]) == "https://a/small"
+    assert preferred_pic_url(["https://a/big"]) == "https://a/big"
+
+
+def _setup_thumbnail_notify(
+    hass: HomeAssistant,
+    *,
+    attach: bool,
+    notify_services: list[str],
+    device_id: str = "SN1",
+) -> tuple[ImouRuntimeData, MockConfigEntry]:
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=[device_id],
+        notify_services=notify_services,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: attach},
+    )
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    return runtime, entry
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_companion_notify_includes_decrypted_thumb(
+    hass: HomeAssistant,
+) -> None:
+    """Companion notify merges image and attachment when decrypt returns a URL."""
+    runtime, _entry = _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.mobile_app_phone"],
+    )
+    registry = dr.async_get(hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, "SN1_0")})
+    assert device is not None
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    thumb_url = "/local/imou_life/thumbs/1.jpg"
+
+    async def _inject_thumb(
+        _hass: HomeAssistant,
+        _entry: MockConfigEntry,
+        _runtime: ImouRuntimeData,
+        event_data: dict[str, Any],
+    ) -> str:
+        event_data["thumbnail_local_url"] = thumb_url
+        return thumb_url
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(side_effect=_inject_thumb),
+    ) as mock_decrypt:
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "id": "1",
+                    "picUrlArray": ["https://a/big", "https://a/small"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    mock_decrypt.assert_awaited_once()
+    assert len(calls) == 1
+    path = f"/config/devices/device/{device.id}"
+    data = calls[0].data["data"]
+    assert data["url"] == path
+    assert data["clickAction"] == path
+    assert data["image"] == thumb_url
+    assert data["attachment"]["url"] == thumb_url
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_thumb_option_off_skips_image(hass: HomeAssistant) -> None:
+    """When attach_decrypted_thumbnail is off, Companion data has no image."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=False,
+        notify_services=["notify.mobile_app_phone"],
+    )
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+
+    with patch(
+        "custom_components.imou_life.pic_thumbnail.LCOpenPicDecoder",
+    ) as mock_decoder_cls:
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big", "https://a/small"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    mock_decoder_cls.assert_not_called()
+    assert len(calls) == 1
+    assert "image" not in calls[0].data.get("data", {})
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_qiyewechat_thumb_option_on_has_no_data(
+    hass: HomeAssistant,
+) -> None:
+    """qiyewechat.send never receives a data payload, even when thumbs are on."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["qiyewechat.send"],
+    )
+    calls = async_mock_service(hass, "qiyewechat", "send")
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value="/local/imou_life/thumbs/1.jpg"),
+    ):
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert len(calls) == 1
+    assert "data" not in calls[0].data
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_no_pic_url_array_skips_decrypt(hass: HomeAssistant) -> None:
+    """Push without picUrlArray must not invoke decrypt."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.mobile_app_phone"],
+    )
+    async_mock_service(hass, "notify", "mobile_app_phone")
+
+    with patch(
+        "custom_components.imou_life.pic_thumbnail.LCOpenPicDecoder",
+    ) as mock_decoder_cls:
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    mock_decoder_cls.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_tcm_without_password_skips_decrypt(hass: HomeAssistant) -> None:
+    """TCM devices without a password must not call the native decoder."""
+    runtime, entry = _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.mobile_app_phone"],
+    )
+    device = MagicMock()
+    device.device_id = "SN1"
+    device.device_ability = "WLAN,TCM"
+    runtime.coordinator.devices_by_key = {"SN1_0": device}
+    async_mock_service(hass, "notify", "mobile_app_phone")
+
+    with patch(
+        "custom_components.imou_life.pic_thumbnail.LCOpenPicDecoder",
+    ) as mock_decoder_cls:
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big", "https://a/small"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    mock_decoder_cls.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notify_never_calls_device_image(hass: HomeAssistant) -> None:
+    """Alarm notify path must not snapshot via async_get_device_image."""
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["SN1"],
+        notify_services=["notify.mobile_app_phone"],
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+    runtime.coordinator.device_manager.async_get_device_image = AsyncMock()
+    async_mock_service(hass, "notify", "mobile_app_phone")
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value=None),
+    ):
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    runtime.coordinator.device_manager.async_get_device_image.assert_not_awaited()
