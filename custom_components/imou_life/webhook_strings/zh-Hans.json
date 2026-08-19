@@ -3,6 +3,7 @@
     "title": "Imou Life · {alarm_type}",
     "device": "设备：{device_name}",
     "area": "位置：{area_name}",
+    "labels": "标签：{labels}",
     "time": "时间：{time_str}",
     "details": "详情：{desc_type}",
     "unknown_device": "未知设备",

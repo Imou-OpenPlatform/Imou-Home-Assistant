@@ -3,6 +3,7 @@
     "title": "Imou Life · {alarm_type}",
     "device": "Device: {device_name}",
     "area": "Location: {area_name}",
+    "labels": "Labels: {labels}",
     "time": "Time: {time_str}",
     "details": "Details: {desc_type}",
     "unknown_device": "Unknown device",

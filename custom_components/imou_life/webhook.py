@@ -18,6 +18,7 @@ from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from pyimouapi.push import (
     event_ref_lookup_key,
     is_alarm_msg_type,
@@ -318,6 +319,19 @@ async def _async_build_notification_message(
                 area_name=area.name
             )
             message += f"\n{area_line}"
+    if ha_device is not None and ha_device.labels:
+        label_reg = lr.async_get(hass)
+        label_names = sorted(
+            name
+            for label_id in ha_device.labels
+            if (label := label_reg.async_get_label(label_id)) is not None
+            and (name := label.name)
+        )
+        if label_names:
+            labels_line = notif.get("labels", "Labels: {labels}").format(
+                labels=" / ".join(label_names)
+            )
+            message += f"\n{labels_line}"
     if time_str:
         time_line = notif.get("time", "Time: {time_str}").format(time_str=time_str)
         message += f"\n{time_line}"

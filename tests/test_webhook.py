@@ -29,6 +29,7 @@ from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_mock_service,
@@ -466,6 +467,53 @@ async def test_webhook_notification_includes_area_when_assigned(
         },
     )
     assert "Location:" not in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notification_includes_labels_when_assigned(
+    hass: HomeAssistant,
+) -> None:
+    """HA device labels become a labels line; omit when none."""
+    _load_webhook_strings_file.cache_clear()
+    await hass.config.async_set_time_zone("UTC")
+    config_entry = MockConfigEntry(domain=DOMAIN, data={})
+    config_entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, "SN1_0")},
+        name="Front Door Cam",
+    )
+    label_reg = lr.async_get(hass)
+    outdoor = label_reg.async_create("Outdoor")
+    priority = label_reg.async_create("Priority")
+    registry.async_update_device(
+        device.id, labels={outdoor.label_id, priority.label_id}
+    )
+
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "human",
+            "device_id": "SN1",
+            "channel_id": "0",
+            "device_name": "Front Door Cam",
+        },
+    )
+    assert "Device: Front Door Cam" in message
+    assert "Labels: Outdoor / Priority" in message
+
+    registry.async_update_device(device.id, labels=set())
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "human",
+            "device_id": "SN1",
+            "channel_id": "0",
+            "device_name": "Front Door Cam",
+        },
+    )
+    assert "Labels:" not in message
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
