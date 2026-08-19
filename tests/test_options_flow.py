@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import voluptuous as vol
 from custom_components.imou_life.config_flow import (
     SECTION_CAMERA_DEFAULTS,
     SECTION_EVENT_PUSH_LOCAL_RECORDING,
@@ -35,7 +36,11 @@ from custom_components.imou_life.const import (
 )
 from homeassistant.core import ServiceCall
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorMode
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorMode,
+    TextSelector,
+)
 from pyimouapi.exceptions import RequestFailedException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -117,8 +122,89 @@ async def test_options_flow_init_shows_menu(hass) -> None:
     assert set(result["menu_options"]) == {
         "general_settings",
         "event_push",
+        "alarm_image_passwords",
         "devices",
     }
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
+    """Per-serial passwords save mid-flow; empty password removes the SN."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "alarm_image_passwords"
+    assert result["description_placeholders"]["password_count"] == "0"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "add_device_password"
+    schema = result.get("data_schema") or result.get("schema")
+    assert schema is not None
+    device_field = schema.schema[vol.Required("device_id")]
+    assert isinstance(device_field, TextSelector)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"device_id": "SN1", "password": "pw"},
+    )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "alarm_image_passwords"
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "pw"}
+    assert result["description_placeholders"]["password_count"] == "1"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"device_id": "SN1", "password": ""},
+    )
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {}
+    assert result["description_placeholders"]["password_count"] == "0"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "finish_passwords"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_DEVICE_PASSWORDS] == {}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_passwords_uses_device_selector_with_runtime(
+    hass,
+) -> None:
+    """When runtime exists, pick serial numbers from coordinator devices."""
+    from custom_components.imou_life.runtime_data import ImouRuntimeData
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+    device_a = MagicMock()
+    device_a.device_id = "SN-A"
+    device_b = MagicMock()
+    device_b.device_id = "SN-B"
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {"SN-A_0": device_a, "SN-B_0": device_b}
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    schema = result.get("data_schema") or result.get("schema")
+    device_field = schema.schema[vol.Required("device_id")]
+    assert isinstance(device_field, SelectSelector)
+    assert device_field.config["options"] == ["SN-A", "SN-B"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

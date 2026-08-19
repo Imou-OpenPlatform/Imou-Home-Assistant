@@ -710,9 +710,84 @@ class ImouOptionsFlow(OptionsFlow):
             menu_options=[
                 "general_settings",
                 "event_push",
+                "alarm_image_passwords",
                 "devices",
             ],
         )
+
+    def _device_passwords(self) -> dict[str, str]:
+        """Return the stored per-serial alarm image passwords."""
+        stored = self.config_entry.options.get(PARAM_DEVICE_PASSWORDS, {})
+        return dict(stored) if isinstance(stored, dict) else {}
+
+    def _add_device_password_schema(self) -> vol.Schema:
+        """Build the per-serial password form."""
+        runtime = get_runtime_data(self.config_entry)
+        if runtime is not None:
+            device_ids = sorted(
+                {
+                    device.device_id
+                    for device in runtime.coordinator.devices_by_key.values()
+                    if device.device_id
+                }
+            )
+            device_field: SelectSelector | TextSelector = SelectSelector(
+                SelectSelectorConfig(options=device_ids)
+            )
+        else:
+            device_field = TextSelector()
+        return vol.Schema(
+            {
+                vol.Required("device_id"): device_field,
+                vol.Optional("password", default=""): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                ),
+            }
+        )
+
+    async def async_step_alarm_image_passwords(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage per-serial alarm image passwords."""
+        return self.async_show_menu(
+            step_id="alarm_image_passwords",
+            menu_options=["add_device_password", "finish_passwords"],
+            description_placeholders={
+                "password_count": str(len(self._device_passwords()))
+            },
+        )
+
+    async def async_step_add_device_password(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Add or remove a per-serial alarm image password."""
+        if user_input is not None:
+            device_id = str(user_input["device_id"]).strip()
+            password = str(user_input.get("password") or "")
+            passwords = self._device_passwords()
+            if not password:
+                passwords.pop(device_id, None)
+            else:
+                passwords[device_id] = password
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                options={
+                    **dict(self.config_entry.options),
+                    PARAM_DEVICE_PASSWORDS: passwords,
+                },
+            )
+            return await self.async_step_alarm_image_passwords()
+
+        return self.async_show_form(
+            step_id="add_device_password",
+            data_schema=self._add_device_password_schema(),
+        )
+
+    async def async_step_finish_passwords(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Close the password loop and save options."""
+        return self.async_create_entry(data=dict(self.config_entry.options))
 
     async def async_step_general_settings(
         self, user_input: dict[str, Any] | None = None

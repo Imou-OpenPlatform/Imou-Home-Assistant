@@ -90,6 +90,7 @@
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警、通知与录像",
+          "alarm_image_passwords": "告警图片密码",
           "devices": "选择与绑定设备"
         }
       },
@@ -163,6 +164,26 @@
               "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
             }
           }
+        }
+      },
+      "alarm_image_passwords": {
+        "title": "告警图片密码",
+        "description": "已配置 {password_count} 个按序列号的密码。可添加或更新设备密码，完成后保存。",
+        "menu_options": {
+          "add_device_password": "添加或更新设备密码",
+          "finish_passwords": "完成"
+        }
+      },
+      "add_device_password": {
+        "title": "设备告警图片密码",
+        "description": "输入 Imou Life 设备密码以解密告警缩略图。密码留空可删除该序列号。",
+        "data": {
+          "device_id": "设备序列号",
+          "password": "设备密码"
+        },
+        "data_description": {
+          "device_id": "摄像头或配件的序列号（SN）",
+          "password": "留空可删除该序列号的密码"
         }
       },
       "devices_menu": {

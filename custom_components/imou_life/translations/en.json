@@ -90,6 +90,7 @@
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarms, notifications, and recording",
+          "alarm_image_passwords": "Alarm image passwords",
           "devices": "Choose and bind devices"
         }
       },
@@ -163,6 +164,26 @@
               "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
             }
           }
+        }
+      },
+      "alarm_image_passwords": {
+        "title": "Alarm image passwords",
+        "description": "{password_count} per-serial password(s) configured. Add or update a device password, or finish to save.",
+        "menu_options": {
+          "add_device_password": "Add or update a device password",
+          "finish_passwords": "Finish"
+        }
+      },
+      "add_device_password": {
+        "title": "Device alarm image password",
+        "description": "Enter the Imou Life device password for decrypting alarm thumbnails. Leave the password empty to remove a stored serial.",
+        "data": {
+          "device_id": "Device serial number",
+          "password": "Device password"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) for this camera or accessory",
+          "password": "Leave empty to delete the password for this serial"
         }
       },
       "devices_menu": {
