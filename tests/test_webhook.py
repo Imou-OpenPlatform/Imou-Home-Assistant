@@ -1448,9 +1448,8 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
         _hass: HomeAssistant,
         _entry: MockConfigEntry,
         _runtime: ImouRuntimeData,
-        event_data: dict[str, Any],
+        _event_data: dict[str, Any],
     ) -> str:
-        event_data["thumbnail_local_url"] = thumb_url
         return thumb_url
 
     with patch(

@@ -148,7 +148,7 @@
             },
             "data_description": {
               "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。",
-              "attach_decrypted_thumbnail": "仅 linux x86-64；将官方 Demo 库放到 /config/imou_life/native/（libLCOpenApiClient.so 与 libLCOpenSDK.so）。TCM 需要乐橙设备密码。",
+              "attach_decrypted_thumbnail": "仅 linux x86-64；将官方 Demo 库放到 /config/imou_life/native/（libLCOpenApiClient.so 与 libLCOpenSDK.so）。TCM 需要乐橙设备密码。/local/imou_life/thumbs/ 无身份验证（持有 URL 约 24 小时内可查看）。若原先没有 /config/www，首次生成缩略图后需重启 Home Assistant。",
               "default_device_password": "某设备在「告警图片密码」中未单独设置时使用。"
             }
           },

@@ -148,7 +148,7 @@
             },
             "data_description": {
               "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device.",
-              "attach_decrypted_thumbnail": "linux x86-64 only; place official Demo libs in /config/imou_life/native/ (libLCOpenApiClient.so and libLCOpenSDK.so). TCM needs the Imou Life device password.",
+              "attach_decrypted_thumbnail": "linux x86-64 only; place official Demo libs in /config/imou_life/native/ (libLCOpenApiClient.so and libLCOpenSDK.so). TCM needs the Imou Life device password. /local/imou_life/thumbs/ is unauthenticated (URL holders can view for ~24h). If /config/www was missing, restart Home Assistant after the first thumbnail.",
               "default_device_password": "Used when a device has no per-serial password in Alarm image passwords."
             }
           },

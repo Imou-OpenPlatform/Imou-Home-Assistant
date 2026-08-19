@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +37,8 @@ _LOGGER = logging.getLogger(__name__)
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
 _NATIVE_API_PORT = 443
+_DECRYPT_TIMEOUT_SECONDS = 10
+_PIC_DECODER_INIT_LOCK = threading.Lock()
 
 
 def pic_urls_from_payload(raw: dict[str, Any]) -> list[str]:
@@ -126,20 +130,21 @@ def _sync_decrypt_and_write(
     token: str,
 ) -> str | None:
     native_dir = Path(hass.config.path("imou_life", "native"))
-    if runtime.pic_decoder is None:
-        runtime.pic_decoder = LCOpenPicDecoder(native_dir)
-    decoder = runtime.pic_decoder
     try:
-        if not runtime.pic_decoder_initialized:
-            decoder.load()
-            host = str(entry.data[PARAM_API_URL])
-            decoder.init_open_api(
-                host,
-                _NATIVE_API_PORT,
-                entry.data[PARAM_APP_ID],
-                entry.data[PARAM_APP_SECRET],
-            )
-            runtime.pic_decoder_initialized = True
+        with _PIC_DECODER_INIT_LOCK:
+            if runtime.pic_decoder is None:
+                runtime.pic_decoder = LCOpenPicDecoder(native_dir)
+            decoder = runtime.pic_decoder
+            if not runtime.pic_decoder_initialized:
+                decoder.load()
+                host = str(entry.data[PARAM_API_URL])
+                decoder.init_open_api(
+                    host,
+                    _NATIVE_API_PORT,
+                    entry.data[PARAM_APP_ID],
+                    entry.data[PARAM_APP_SECRET],
+                )
+                runtime.pic_decoder_initialized = True
     except Exception:
         runtime.pic_decoder_failed = True
         _LOGGER.warning(
@@ -172,8 +177,15 @@ def _sync_decrypt_and_write(
         )
         return None
 
-    thumbs_dir = Path(hass.config.path("www")) / _THUMB_SUBDIR
+    www_dir = Path(hass.config.path("www"))
+    www_existed = www_dir.is_dir()
+    thumbs_dir = www_dir / _THUMB_SUBDIR
     thumbs_dir.mkdir(parents=True, exist_ok=True)
+    if not www_existed:
+        _LOGGER.warning(
+            "Created %s; restart Home Assistant for /local/ to serve alarm thumbnails",
+            www_dir,
+        )
     _prune_old_thumbs(thumbs_dir)
     filename = _thumb_filename(event_data.get("alarm_id"), pic_url)
     dest = thumbs_dir / filename
@@ -183,9 +195,7 @@ def _sync_decrypt_and_write(
         _LOGGER.warning("Could not write alarm thumb %s", dest, exc_info=True)
         return None
 
-    local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
-    event_data["thumbnail_local_url"] = local_url
-    return local_url
+    return f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
 
 
 async def async_maybe_decrypt_thumbnail(
@@ -233,15 +243,25 @@ async def async_maybe_decrypt_thumbnail(
     token = event_data.get("token")
     token_str = str(token) if token else ""
 
-    return await hass.async_add_executor_job(
-        _sync_decrypt_and_write,
-        runtime,
-        entry,
-        hass,
-        event_data,
-        pic_url,
-        encrypt_key,
-        str(device_id),
-        is_tcm,
-        token_str,
-    )
+    try:
+        return await asyncio.wait_for(
+            hass.async_add_executor_job(
+                _sync_decrypt_and_write,
+                runtime,
+                entry,
+                hass,
+                event_data,
+                pic_url,
+                encrypt_key,
+                str(device_id),
+                is_tcm,
+                token_str,
+            ),
+            timeout=_DECRYPT_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        _LOGGER.warning(
+            "Alarm thumbnail decrypt timed out for device %s",
+            device_id,
+        )
+        return None

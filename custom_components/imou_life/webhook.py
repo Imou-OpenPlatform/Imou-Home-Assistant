@@ -476,7 +476,10 @@ def _is_companion_notify(domain: str, service: str) -> bool:
 
 
 async def _async_send_notifications(
-    hass: HomeAssistant, event_data: dict[str, Any], notify_services: list[str]
+    hass: HomeAssistant,
+    event_data: dict[str, Any],
+    notify_services: list[str],
+    thumbnail_url: str | None = None,
 ) -> None:
     """Send alarm notifications.
 
@@ -507,7 +510,6 @@ async def _async_send_notifications(
         if _is_companion_notify(svc_domain, svc_name) and ha_device is not None:
             path = f"/config/devices/device/{ha_device.id}"
             notify_data: dict[str, Any] = {"url": path, "clickAction": path}
-            thumbnail_url = event_data.get("thumbnail_local_url")
             if thumbnail_url:
                 notify_data["image"] = thumbnail_url
                 notify_data["attachment"] = {
@@ -557,8 +559,12 @@ async def _async_dispatch_imou_push(
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             notify_services = runtime.notify_services
             if notify_services and _notify_on_alarm_enabled(hass, event_data):
-                await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
-                await _async_send_notifications(hass, event_data, notify_services)
+                thumbnail_url = await async_maybe_decrypt_thumbnail(
+                    hass, entry, runtime, event_data
+                )
+                await _async_send_notifications(
+                    hass, event_data, notify_services, thumbnail_url
+                )
             await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:
         _LOGGER.exception("Failed while processing accepted Imou webhook push")
