@@ -48,7 +48,9 @@ logger:
 
 ### What to paste
 
-Search logs for `pyimouapi` / `imou_life` (and for setup failures: `listDeviceDetails`). Prefer lines like `url: ... request body: ... response: ...` that show the API `code` / `msg`.
+Reproduce the issue once, then search logs for `pyimouapi` / `imou_life` (and for setup failures: `listDeviceDetails`). Prefer lines like `url: ... request body: ... response: ...` that show the API `code` / `msg` (for example `OP1013: Call interface times exceed limit`).
+
+**Also note:** When adding the integration fails, the UI abort/error message should already include the Imou `code`/`msg` (e.g. quota exceeded). Paste that UI text here too if available.
 
 **Redact** `accessToken` / `token` and any secrets before posting. AppId, API host, and result `code`/`msg` can stay visible.
 

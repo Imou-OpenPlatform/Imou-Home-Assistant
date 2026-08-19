@@ -2,7 +2,7 @@
 name = "imou-life-ha"
 version = "0.0.0"
 description = "Development tooling for Imou Life Home Assistant custom integration"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = []
 
 [tool.uv]
@@ -13,29 +13,39 @@ pyimouapi = { path = "../Py-Imou-Open-Api", editable = true }
 
 [dependency-groups]
 dev = [
-  "homeassistant==2025.1.4",
-  "pyimouapi==1.3.3",
-  "pytest-homeassistant-custom-component==0.13.205",
+  "homeassistant==2025.4.4",
+  "pyimouapi==1.3.7",
+  "pytest-homeassistant-custom-component==0.13.236",
   "pytest-asyncio>=0.24.0",
   "pytest-timeout>=2.3.0",
   "ruff>=0.8.3",
+  "mypy>=1.13",
   "codespell>=2.3.0",
   "yamllint>=1.35.0",
   "pre-commit>=4.0.0",
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 88
 src = ["custom_components", "tests"]
 
 [tool.ruff.lint]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+  # Entities run on the event loop: ASYNC catches work that would block it, and
+  # G/LOG keep per-poll logs from formatting messages nobody will read.
+  "ASYNC", "G", "LOG",
 ]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+files = ["custom_components/imou_life"]
+# voluptuous and aiohttp ship no stubs.
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

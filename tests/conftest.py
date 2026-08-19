@@ -7,6 +7,7 @@ import pytest
 from custom_components.imou_life.const import DOMAIN, PARAM_WEBHOOK_ID
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from pyimouapi import InvalidAppIdOrSecretException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -33,6 +34,7 @@ def imou_config_flow() -> Generator[MagicMock]:
     ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_set_message_callback = AsyncMock()
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client
@@ -57,6 +59,7 @@ def imou_config_flow_with_devices() -> Generator[MagicMock]:
     ):
         instance = MagicMock()
         instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+        instance.async_set_message_callback = AsyncMock()
         instance.async_close = AsyncMock()
         mock_client.return_value = instance
         yield mock_client
@@ -78,6 +81,29 @@ def imou_config_flow_exception() -> Generator[MagicMock]:
         yield mock_client
 
 
+def register_imou_ha_device(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    device_id: str,
+    *,
+    channel_id: str | int | None = "0",
+    product_id: str | None = None,
+    name: str = "Test Device",
+) -> None:
+    """Create a device registry row so webhook pushes resolve a HA name."""
+    from custom_components.imou_life.const import imou_life_device_key_from_ids
+
+    registry = dr.async_get(hass)
+    key = imou_life_device_key_from_ids(device_id, channel_id, product_id)
+    if key is None:
+        key = f"{device_id}_0"
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, key)},
+        name=name,
+    )
+
+
 def setup_imou_runtime(
     hass: HomeAssistant,
     *,
@@ -86,11 +112,16 @@ def setup_imou_runtime(
     selected_devices: list[str] | None = None,
     notify_services: list[str] | None = None,
     app_id: str = "test_app_id",
+    register_ha_devices: bool = True,
+    options: dict | None = None,
 ) -> ImouRuntimeData:
     """Attach ImouRuntimeData to a mock config entry for webhook tests."""
     entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
-    entry = MockConfigEntry(domain=DOMAIN, data=entry_data)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options=options or {})
     entry.add_to_hass(hass)
+    if register_ha_devices and selected_devices:
+        for device_id in selected_devices:
+            register_imou_ha_device(hass, entry, device_id)
     coordinator = MagicMock()
     delegate = MagicMock()
     delegate.async_resolve_event_identifier = AsyncMock(return_value=None)

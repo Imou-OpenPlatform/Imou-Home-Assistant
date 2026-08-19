@@ -6,28 +6,30 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pyimouapi.const import PARAM_DURATION
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from pyimouapi.const import PARAM_DURATION, PARAM_SIREN_START, PARAM_SIREN_STOP
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
     PARAM_ROTATION_DURATION,
     SERVICE_CONTROL_MOVE_PTZ,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity
+from .entity import ImouEntity, async_add_imou_entities
 
 _LOGGER = logging.getLogger(__package__)
 
 PARALLEL_UPDATES = 0
+
+_SIREN_BUTTONS = frozenset({PARAM_SIREN_START, PARAM_SIREN_STOP})
 
 
 def _iter_buttons(
@@ -38,38 +40,22 @@ def _iter_buttons(
         (button_type, device)
         for device in coordinator.devices
         for button_type in device.buttons
+        if button_type not in _SIREN_BUTTONS
     ]
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ImouConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ImouConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Imou button entities."""
-    coordinator = entry.runtime_data.coordinator
-
-    def _async_add_buttons(new_devices: list[ImouHaDevice]) -> None:
-        device_keys = {imou_life_device_key(device) for device in new_devices}
-        async_add_entities(
-            ImouButton(coordinator, entry, button_type, device)
-            for button_type, device in _iter_buttons(coordinator)
-            if imou_life_device_key(device) in device_keys
-        )
-
-    coordinator.new_device_callbacks.append(_async_add_buttons)
-
-    @callback
-    def _remove_new_device_callback() -> None:
-        if _async_add_buttons in coordinator.new_device_callbacks:
-            coordinator.new_device_callbacks.remove(_async_add_buttons)
-
-    entry.async_on_unload(_remove_new_device_callback)
-    _async_add_buttons(coordinator.devices)
+    async_add_imou_entities(entry, async_add_entities, ImouButton, _iter_buttons)
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
         SERVICE_CONTROL_MOVE_PTZ,
         {
-            vol.Required("entity_id"): cv.entity_id,
             vol.Required(PARAM_DURATION, default=500): vol.All(
                 vol.Coerce(int), vol.Range(min=100, max=10000)
             ),
@@ -94,12 +80,21 @@ class ImouButton(ImouEntity, ButtonEntity):
             return ButtonDeviceClass.RESTART
         return None
 
+    @property
+    def entity_category(self) -> EntityCategory | None:
+        """Keep the reboot button out of the way of the PTZ controls."""
+        if self._entity_type == PARAM_RESTART_DEVICE:
+            return EntityCategory.CONFIG
+        return None
+
     async def async_handle_control_move_ptz(self, duration: int) -> None:
         """Service: move PTZ for the given duration."""
         _LOGGER.debug("PTZ move for %ss on entity type %s", duration, self._entity_type)
         if PARAM_PTZ not in self._entity_type:
-            raise HomeAssistantError(
-                f"Invalid entity type {self._entity_type}; expected PTZ button"
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_a_ptz_button",
+                translation_placeholders={"entity_id": self.entity_id},
             )
         await self._async_do_press(duration)
 
@@ -112,5 +107,8 @@ class ImouButton(ImouEntity, ButtonEntity):
                 duration,
             )
         except ImouException as e:
-            raise HomeAssistantError(e.message) from e
-        await self.coordinator.async_request_refresh()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="button_press_failed",
+                translation_placeholders={"error": e.message},
+            ) from e

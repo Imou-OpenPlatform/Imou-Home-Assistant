@@ -30,8 +30,10 @@ async def test_reauth_updates_app_secret(hass) -> None:
             result["flow_id"],
             user_input={PARAM_APP_SECRET: "new_secret"},
         )
+        # The reload is scheduled as a background task, so it has to be awaited
+        # while the patch is still in place.
+        await hass.async_block_till_done(wait_background_tasks=True)
 
-    await hass.async_block_till_done()
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data[PARAM_APP_SECRET] == "new_secret"

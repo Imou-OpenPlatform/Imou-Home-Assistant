@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Literal
 
 from homeassistant.config_entries import ConfigEntry
@@ -18,7 +19,7 @@ from .const import (
     PARAM_WEBHOOK_URL,
     event_push_types_to_callback_flags,
 )
-from .helpers import get_selected_device_ids
+from .helpers import get_selected_device_ids, parse_notify_services
 from .repairs import (
     async_create_event_push_callback_failed_issue,
     async_create_event_push_no_url_issue,
@@ -55,6 +56,7 @@ async def async_setup_event_push(
         return webhook_id, ""
 
     generated_url = async_register_imou_webhook(hass, webhook_id)
+    entry.async_on_unload(partial(async_unregister_imou_webhook, hass, webhook_id))
     await async_preload_webhook_strings(hass)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
@@ -62,11 +64,9 @@ async def async_setup_event_push(
     else:
         async_delete_event_push_issues(hass, entry)
 
-    raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
-    if raw_services:
-        runtime.notify_services = [
-            s.strip() for s in raw_services.split(",") if s.strip()
-        ]
+    runtime.notify_services = parse_notify_services(
+        entry.options.get(PARAM_NOTIFY_SERVICES)
+    )
 
     return webhook_id, generated_url
 
@@ -76,10 +76,14 @@ async def async_teardown_event_push(
     entry: ConfigEntry,
     imou_client: ImouOpenApiClient | None = None,
 ) -> None:
-    """Disable Imou message callback and unregister webhook."""
+    """Disable Imou message callback and unregister webhook.
+
+    A client is passed only when the callback was actually enabled, so its
+    presence is the signal to tell the cloud to stop pushing.
+    """
     async_delete_event_push_issues(hass, entry)
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
-    if entry.options.get(PARAM_ENABLE_EVENT_PUSH) and webhook_id and imou_client:
+    if webhook_id and imou_client:
         await _async_set_message_callback(hass, entry, imou_client, "off")
     if webhook_id:
         async_unregister_imou_webhook(hass, webhook_id)

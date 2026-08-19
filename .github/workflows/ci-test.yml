@@ -26,12 +26,12 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: dev
+          ref: main
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: "3.13"
       - run: uv sync --dev
       - run: uv run pytest tests/ -q --timeout=30

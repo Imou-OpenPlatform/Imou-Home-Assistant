@@ -1,5 +1,10 @@
 {
 	"entity": {
+		"alarm_control_panel": {
+			"arming": {
+				"default": "mdi:shield-home"
+			}
+		},
 		"sensor": {
 			"storage_used": {
 				"default": "mdi:harddisk"
@@ -21,21 +26,13 @@
 			"night_vision_mode": {
 				"default": "mdi:weather-night"
 			},
-			"mode": {
-				"default": "mdi:auto-mode",
-				"state": {
-					"0": "mdi:home-account",
-					"1": "mdi:exit-run",
-					"2": "mdi:shield-off"
-				}
-			},
 			"device_volume": {
 				"default": "mdi:volume-high",
 				"state": {
-					"99": "mdi:volume-off",
-					"0": "mdi:volume-low",
-					"1": "mdi:volume-medium",
-					"2": "mdi:volume-high"
+					"high": "mdi:volume-high",
+					"low": "mdi:volume-low",
+					"medium": "mdi:volume-medium",
+					"mute": "mdi:volume-off"
 				}
 			}
 		},
@@ -43,11 +40,23 @@
 			"motion_detect": {
 				"default": "mdi:motion-sensor"
 			},
+			"pet_detect": {
+				"default": "mdi:paw"
+			},
+			"play_sound": {
+				"default": "mdi:bell-ring-outline"
+			},
+			"smart_track": {
+				"default": "mdi:target-account"
+			},
 			"ab_alarm_sound": {
 				"default": "mdi:home-sound-in"
 			},
 			"close_camera": {
 				"default": "mdi:camera-off"
+			},
+			"frame_reverse": {
+				"default": "mdi:flip-vertical"
 			},
 			"white_light": {
 				"default": "mdi:light-flood-down"
@@ -60,6 +69,21 @@
 			},
 			"light": {
 				"default": "mdi:lightbulb-on"
+			},
+			"local_event_record": {
+				"default": "mdi:file-video"
+			},
+			"notify_on_alarm": {
+				"default": "mdi:bell-badge"
+			},
+			"linkage_siren": {
+				"default": "mdi:bell-alert"
+			},
+			"linkage_white_light": {
+				"default": "mdi:alarm-light"
+			},
+			"wide_dynamic": {
+				"default": "mdi:hdr"
 			}
 		},
 		"button": {
@@ -88,6 +112,11 @@
 		"camera": {
 			"camera": {
 				"default": "mdi:video"
+			}
+		},
+		"siren": {
+			"siren": {
+				"default": "mdi:bullhorn"
 			}
 		},
 		"text": {
