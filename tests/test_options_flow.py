@@ -125,6 +125,36 @@ async def test_options_flow_init_shows_menu(hass) -> None:
         "alarm_image_passwords",
         "devices",
     }
+    native_dir = result["description_placeholders"]["native_dir"]
+    assert native_dir.endswith("imou_life/native")
+    assert result["description_placeholders"]["native_libs_found"] in {"0", "1", "2"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_shows_native_lib_count_when_so_files_present(hass) -> None:
+    """Configure menus report 2/2 when both official Demo libraries exist."""
+    from custom_components.imou_life.pic_thumbnail import (
+        NATIVE_CLIENT_SO,
+        NATIVE_SDK_SO,
+        native_lib_dir,
+    )
+
+    native_dir = native_lib_dir(hass)
+    native_dir.mkdir(parents=True, exist_ok=True)
+    (native_dir / NATIVE_CLIENT_SO).write_bytes(b"")
+    (native_dir / NATIVE_SDK_SO).write_bytes(b"")
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["description_placeholders"]["native_libs_found"] == "2"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+    )
+    assert result["description_placeholders"]["native_dir"] == str(native_dir)
+    assert result["description_placeholders"]["native_libs_found"] == "2"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

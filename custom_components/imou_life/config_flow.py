@@ -76,6 +76,7 @@ from .helpers import (
     notify_service_selector_options,
     parse_notify_services,
 )
+from .pic_thumbnail import native_lib_dir, native_libs_found
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -685,6 +686,7 @@ class ImouOptionsFlow(OptionsFlow):
                             ),
                         }
                     ),
+                    {"collapsed": False},
                 ),
                 vol.Required(SECTION_EVENT_PUSH_LOCAL_RECORDING): section(
                     vol.Schema(
@@ -713,7 +715,15 @@ class ImouOptionsFlow(OptionsFlow):
                 "alarm_image_passwords",
                 "devices",
             ],
+            description_placeholders=self._native_lib_placeholders(),
         )
+
+    def _native_lib_placeholders(self) -> dict[str, str]:
+        """Return native-library path and how many of the two .so files exist."""
+        return {
+            "native_dir": str(native_lib_dir(self.hass)),
+            "native_libs_found": str(native_libs_found(self.hass)),
+        }
 
     def _device_passwords(self) -> dict[str, str]:
         """Return the stored per-serial alarm image passwords."""
@@ -753,7 +763,8 @@ class ImouOptionsFlow(OptionsFlow):
             step_id="alarm_image_passwords",
             menu_options=["add_device_password", "finish_passwords"],
             description_placeholders={
-                "password_count": str(len(self._device_passwords()))
+                "password_count": str(len(self._device_passwords())),
+                **self._native_lib_placeholders(),
             },
         )
 
@@ -850,7 +861,10 @@ class ImouOptionsFlow(OptionsFlow):
                 return self.async_create_entry(data=self._merge_options(**flat))
             suggested_source = {**stored, **flat}
 
-        placeholders = self._event_push_webhook_placeholders()
+        placeholders = {
+            **self._event_push_webhook_placeholders(),
+            **self._native_lib_placeholders(),
+        }
         if error_detail:
             placeholders["error"] = error_detail
         return self.async_show_form(

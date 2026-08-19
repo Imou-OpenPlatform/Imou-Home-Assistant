@@ -86,11 +86,11 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Pick a section to edit. Submit saves that section and closes the dialog.",
+        "description": "Pick a section to edit. Decrypted alarm thumbnails need libLCOpenApiClient.so and libLCOpenSDK.so in {native_dir} ({native_libs_found}/2 found).",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarms, notifications, and recording",
-          "alarm_image_passwords": "Alarm image passwords",
+          "alarm_image_passwords": "Alarm image decrypt (libraries and passwords)",
           "devices": "Choose and bind devices"
         }
       },
@@ -126,7 +126,7 @@
       },
       "event_push": {
         "title": "Alarms, notifications, and recording",
-        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
+        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url} Decrypted thumbnails: copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
         "data": {
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
@@ -140,7 +140,7 @@
         "sections": {
           "notifications": {
             "name": "Notify on alarm",
-            "description": "Optional. Leave empty to use automations only.",
+            "description": "Optional. Leave empty to use automations only. Thumbnail .so files go in {native_dir} ({native_libs_found}/2 found).",
             "data": {
               "notify_services": "Notification targets",
               "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
@@ -149,7 +149,7 @@
             "data_description": {
               "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device.",
               "attach_decrypted_thumbnail": "linux x86-64 only; place official Demo libs in /config/imou_life/native/ (libLCOpenApiClient.so and libLCOpenSDK.so). TCM needs the Imou Life device password. /local/imou_life/thumbs/ is unauthenticated (URL holders can view for ~24h). If /config/www was missing, restart Home Assistant after the first thumbnail.",
-              "default_device_password": "Used when a device has no per-serial password in Alarm image passwords."
+              "default_device_password": "Used when a device has no per-serial password in Alarm image decrypt."
             }
           },
           "local_recording": {
@@ -167,8 +167,8 @@
         }
       },
       "alarm_image_passwords": {
-        "title": "Alarm image passwords",
-        "description": "{password_count} per-serial password(s) configured. Add or update a device password, or finish to save.",
+        "title": "Alarm image decrypt",
+        "description": "{password_count} per-serial password(s) configured. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
         "menu_options": {
           "add_device_password": "Add or update a device password",
           "finish_passwords": "Finish"

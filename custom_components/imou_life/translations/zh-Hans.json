@@ -86,11 +86,11 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "选择分区后提交即保存，无需一次改完所有项。",
+        "description": "选择分区后提交即保存。解密告警缩略图需将 libLCOpenApiClient.so 与 libLCOpenSDK.so 放到 {native_dir}（已找到 {native_libs_found}/2）。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警、通知与录像",
-          "alarm_image_passwords": "告警图片密码",
+          "alarm_image_passwords": "告警图片解密（库文件与密码）",
           "devices": "选择与绑定设备"
         }
       },
@@ -126,7 +126,7 @@
       },
       "event_push": {
         "title": "告警、通知与录像",
-        "description": "通过 Webhook 接收云端告警。建议地址：{suggested_url}",
+        "description": "通过 Webhook 接收云端告警。建议地址：{suggested_url} 解密缩略图：将 libLCOpenApiClient.so 与 libLCOpenSDK.so 复制到 {native_dir}（已找到 {native_libs_found}/2）。",
         "data": {
           "enable_event_push": "启用事件推送",
           "webhook_url": "回调地址",
@@ -140,7 +140,7 @@
         "sections": {
           "notifications": {
             "name": "告警时通知",
-            "description": "可选。留空只靠自动化。",
+            "description": "可选。留空只靠自动化。.so 库放到 {native_dir}（已找到 {native_libs_found}/2）。",
             "data": {
               "notify_services": "通知目标",
               "attach_decrypted_thumbnail": "贴解密告警缩略图",
@@ -149,7 +149,7 @@
             "data_description": {
               "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。",
               "attach_decrypted_thumbnail": "仅 linux x86-64；将官方 Demo 库放到 /config/imou_life/native/（libLCOpenApiClient.so 与 libLCOpenSDK.so）。TCM 需要乐橙设备密码。/local/imou_life/thumbs/ 无身份验证（持有 URL 约 24 小时内可查看）。若原先没有 /config/www，首次生成缩略图后需重启 Home Assistant。",
-              "default_device_password": "某设备在「告警图片密码」中未单独设置时使用。"
+              "default_device_password": "某设备在「告警图片解密」中未单独设置时使用。"
             }
           },
           "local_recording": {
@@ -167,8 +167,8 @@
         }
       },
       "alarm_image_passwords": {
-        "title": "告警图片密码",
-        "description": "已配置 {password_count} 个按序列号的密码。可添加或更新设备密码，完成后保存。",
+        "title": "告警图片解密",
+        "description": "已配置 {password_count} 个按序列号的密码。请将 libLCOpenApiClient.so 与 libLCOpenSDK.so 复制到 {native_dir}（已找到 {native_libs_found}/2）。",
         "menu_options": {
           "add_device_password": "添加或更新设备密码",
           "finish_passwords": "完成"

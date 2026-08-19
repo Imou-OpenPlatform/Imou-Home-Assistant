@@ -42,6 +42,27 @@ _NATIVE_API_PORT = 443
 _DECRYPT_TIMEOUT_SECONDS = 10
 _PIC_DECODER_INIT_LOCK = threading.Lock()
 
+NATIVE_CLIENT_SO = "libLCOpenApiClient.so"
+NATIVE_SDK_SO = "libLCOpenSDK.so"
+
+
+def native_lib_dir(hass: HomeAssistant) -> Path:
+    """Return the folder where official Image Decryption Demo libraries go."""
+    return Path(hass.config.path("imou_life", "native"))
+
+
+def native_libs_found(hass: HomeAssistant) -> int:
+    """Return how many of the two required .so files exist (0 to 2)."""
+    native_dir = native_lib_dir(hass)
+    return sum(
+        1 for name in (NATIVE_CLIENT_SO, NATIVE_SDK_SO) if (native_dir / name).is_file()
+    )
+
+
+def native_libs_present(hass: HomeAssistant) -> bool:
+    """Return whether both official Demo native libraries exist."""
+    return native_libs_found(hass) == 2
+
 
 def password_for_device(options: Mapping[str, Any], device_id: str) -> str | None:
     """Resolve per-serial password from entry options."""
@@ -110,7 +131,7 @@ def _sync_decrypt_and_write(
     use_tcm: bool,
     token: str,
 ) -> str | None:
-    native_dir = Path(hass.config.path("imou_life", "native"))
+    native_dir = native_lib_dir(hass)
     try:
         with _PIC_DECODER_INIT_LOCK:
             if runtime.pic_decoder is None:

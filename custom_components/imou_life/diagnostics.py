@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from importlib.metadata import version
-from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -28,27 +27,17 @@ from .const import (
     imou_life_device_key,
 )
 from .helpers import get_selected_device_ids
+from .pic_thumbnail import native_libs_present
 from .runtime_data import get_runtime_data
 
 # Resolved at import time: reading package metadata touches the filesystem and
 # must not run inside the event loop.
 _PYIMOUAPI_VERSION = version("pyimouapi")
 
-_NATIVE_API_CLIENT = "libLCOpenApiClient.so"
-_NATIVE_OPENSDK = "libLCOpenSDK.so"
-
 
 def _redact_id(value: str, keep: int) -> str:
     """Return a partially redacted identifier for diagnostics."""
     return f"{value[:keep]}…" if len(value) > keep else value
-
-
-def _native_libs_present(hass: HomeAssistant) -> bool:
-    """Return whether both official Demo native libraries exist."""
-    native_dir = Path(hass.config.path("imou_life", "native"))
-    return (native_dir / _NATIVE_API_CLIENT).is_file() and (
-        native_dir / _NATIVE_OPENSDK
-    ).is_file()
 
 
 def _device_password_serials(options: Mapping[str, Any]) -> list[str]:
@@ -170,7 +159,7 @@ async def async_get_config_entry_diagnostics(
         "attach_decrypted_thumbnail": bool(
             entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
         ),
-        "native_libs_present": _native_libs_present(hass),
+        "native_libs_present": native_libs_present(hass),
         "device_password_serials": _device_password_serials(entry.options),
         "event_push": event_push,
     }
