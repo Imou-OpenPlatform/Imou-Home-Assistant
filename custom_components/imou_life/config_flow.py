@@ -81,6 +81,13 @@ from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
+_FIELD_EXTRA_DEVICE_ID = "extra_device_id"
+_FIELD_EXTRA_PASSWORD = "extra_password"
+_FIELD_REMOVE_PASSWORDS = "remove_device_passwords"
+_PASSWORD_FORM_RESERVED = frozenset(
+    {_FIELD_EXTRA_DEVICE_ID, _FIELD_EXTRA_PASSWORD, _FIELD_REMOVE_PASSWORDS}
+)
+
 _ENTRY_NAME = "Imou Life Official"
 
 _GENERAL_OPTION_KEYS = (
@@ -444,7 +451,6 @@ class ImouOptionsFlow(OptionsFlow):
         self._devices_map: dict[str, str] = {}
         self._devices_error: str = ""
         self._callback_error: str = ""
-        self._password_device_id: str = ""
 
     @staticmethod
     def _suggested_option_subset(
@@ -738,102 +744,97 @@ class ImouOptionsFlow(OptionsFlow):
         stored = self.config_entry.options.get(PARAM_DEVICE_PASSWORDS, {})
         return dict(stored) if isinstance(stored, dict) else {}
 
-    def _add_device_password_schema(self) -> vol.Schema:
-        """Build the serial-number picker."""
+    def _device_password_serials(self) -> list[str]:
+        """Return serials that should appear on the password form."""
+        serials = set(self._device_passwords())
         runtime = get_runtime_data(self.config_entry)
         if runtime is not None:
-            device_ids = sorted(
-                {
-                    device.device_id
-                    for device in runtime.coordinator.devices_by_key.values()
-                    if device.device_id
-                }
+            serials.update(
+                device.device_id
+                for device in runtime.coordinator.devices_by_key.values()
+                if device.device_id
             )
-            device_field: SelectSelector | TextSelector = SelectSelector(
-                SelectSelectorConfig(options=device_ids)
-            )
-        else:
-            device_field = TextSelector()
-        return vol.Schema({vol.Required("device_id"): device_field})
+        return sorted(serials)
 
-    def _edit_device_password_schema(self, stored_password: str) -> vol.Schema:
-        """Build the password form, suggesting the value already stored for this SN."""
-        return self.add_suggested_values_to_schema(
-            vol.Schema(
-                {
-                    vol.Optional("password", default=""): TextSelector(
-                        TextSelectorConfig(
-                            type=TextSelectorType.PASSWORD,
-                            autocomplete="new-password",
-                        )
-                    ),
-                }
-            ),
-            {"password": stored_password},
+    def _alarm_image_passwords_schema(self) -> vol.Schema:
+        """Build one password field per known serial, plus add/remove extras."""
+        stored = self._device_passwords()
+        fields: dict[Any, Any] = {}
+        suggested: dict[str, Any] = {}
+        password_selector = TextSelector(
+            TextSelectorConfig(
+                type=TextSelectorType.PASSWORD,
+                autocomplete="new-password",
+            )
         )
+        for serial in self._device_password_serials():
+            fields[vol.Optional(serial, default="")] = password_selector
+            suggested[serial] = stored.get(serial, "")
+        fields[vol.Optional(_FIELD_EXTRA_DEVICE_ID, default="")] = TextSelector()
+        fields[vol.Optional(_FIELD_EXTRA_PASSWORD, default="")] = password_selector
+        if stored:
+            fields[vol.Optional(_FIELD_REMOVE_PASSWORDS, default=[])] = SelectSelector(
+                SelectSelectorConfig(
+                    options=sorted(stored),
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+        return self.add_suggested_values_to_schema(vol.Schema(fields), suggested)
+
+    @staticmethod
+    def _merge_device_passwords(
+        stored: Mapping[str, str], user_input: Mapping[str, Any]
+    ) -> dict[str, str]:
+        """Merge the password form into the stored serial map.
+
+        Empty per-serial fields keep the existing password. Extra serial with an
+        empty password deletes that serial. Checked remove serials are deleted last.
+        """
+        passwords = dict(stored)
+        extra_id = str(user_input.get(_FIELD_EXTRA_DEVICE_ID) or "").strip()
+        extra_pw = str(user_input.get(_FIELD_EXTRA_PASSWORD) or "")
+        if extra_id:
+            if extra_pw:
+                passwords[extra_id] = extra_pw
+            else:
+                passwords.pop(extra_id, None)
+        for key, value in user_input.items():
+            if key in _PASSWORD_FORM_RESERVED:
+                continue
+            serial = str(key).strip()
+            if not serial:
+                continue
+            password = str(value or "")
+            if password:
+                passwords[serial] = password
+        for serial in user_input.get(_FIELD_REMOVE_PASSWORDS) or []:
+            passwords.pop(str(serial).strip(), None)
+        return passwords
 
     async def async_step_alarm_image_passwords(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage per-serial alarm image passwords."""
-        return self.async_show_menu(
+        """Set per-serial alarm image passwords on one form."""
+        if user_input is not None:
+            passwords = self._merge_device_passwords(
+                self._device_passwords(), user_input
+            )
+            return self.async_create_entry(
+                data=self._merge_options(**{PARAM_DEVICE_PASSWORDS: passwords})
+            )
+
+        stored = self._device_passwords()
+        configured = ", ".join(sorted(stored)) if stored else "-"
+        return self.async_show_form(
             step_id="alarm_image_passwords",
-            menu_options=["add_device_password", "finish_passwords"],
+            data_schema=self._alarm_image_passwords_schema(),
             description_placeholders={
-                "password_count": str(len(self._device_passwords())),
+                "password_count": str(len(stored)),
+                "configured_serials": configured,
                 **self._native_lib_placeholders(),
             },
         )
-
-    async def async_step_add_device_password(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Pick the serial whose alarm image password to edit."""
-        if user_input is not None:
-            self._password_device_id = str(user_input["device_id"]).strip()
-            if self._password_device_id:
-                return await self.async_step_edit_device_password()
-
-        return self.async_show_form(
-            step_id="add_device_password",
-            data_schema=self._add_device_password_schema(),
-        )
-
-    async def async_step_edit_device_password(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Add, update, or remove the password for the selected serial."""
-        device_id = self._password_device_id
-        if not device_id:
-            return await self.async_step_add_device_password()
-        if user_input is not None:
-            password = str(user_input.get("password") or "")
-            passwords = self._device_passwords()
-            if not password:
-                passwords.pop(device_id, None)
-            else:
-                passwords[device_id] = password
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                options={
-                    **dict(self.config_entry.options),
-                    PARAM_DEVICE_PASSWORDS: passwords,
-                },
-            )
-            return await self.async_step_alarm_image_passwords()
-
-        stored = self._device_passwords().get(device_id, "")
-        return self.async_show_form(
-            step_id="edit_device_password",
-            data_schema=self._edit_device_password_schema(stored),
-            description_placeholders={"device_id": device_id},
-        )
-
-    async def async_step_finish_passwords(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Close the password loop and save options."""
-        return self.async_create_entry(data=dict(self.config_entry.options))
 
     async def async_step_general_settings(
         self, user_input: dict[str, Any] | None = None

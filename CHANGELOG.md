@@ -7,7 +7,7 @@
 #### Added
 
 - Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Decrypts push `picUrlArray` images with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. That page states whether this host is supported and how many of the two `.so` files were found.
-- Per-device alarm image password loop under **Configure → Alarm image decrypt** (empty password removes that serial). Passwords are stored on this Home Assistant and used only to decrypt.
+- Per-device alarm image passwords under **Configure → Alarm image decrypt**: one form lists every known serial. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
 - Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
 
 #### Changed
@@ -15,7 +15,7 @@
 - Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
 - Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. Many motion pushes have neither; notifications stay text-only in that case. Phone must reach Home Assistant's external URL for `/local/` images. Skip reasons and decrypt result are debug-logged.
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
-- Alarm image password editor is two steps: pick serial, then edit. Re-opening a serial shows the password already stored for it
+- Alarm image passwords are one form: every known serial on a page, empty keeps the stored value, extras add a serial, a multi-select removes
 - Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
 
 ### [1.3.6]
@@ -257,7 +257,7 @@
 #### 新增
 
 - 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。使用官方 Demo 原生库；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。该页会写明本机是否支持，以及两个 `.so` 找到了几个。
-- **配置 → 告警图片解密**：按设备序列号循环录入密码（留空则删除该序列号）。密码保存在本机，仅用于解密。
+- **配置 → 告警图片解密**：一页填写账号下各序列号密码（留空表示不改）。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
 
 #### 变更
@@ -265,7 +265,7 @@
 - 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
 - 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。许多移动侦测推送两者都没有，此时仍为纯文本通知。手机须能访问 Home Assistant 外网 URL 才能加载 `/local/` 图片。跳过原因与解密结果会打 debug 日志。
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
-- 告警图片密码改为先选序列号再编辑；再次打开同一设备会显示已保存的密码
+- 告警图片密码改为一页填写多台设备：密码框留空表示不改，额外序列号可补录，多选可删除
 - Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
 
 ### [1.3.6]

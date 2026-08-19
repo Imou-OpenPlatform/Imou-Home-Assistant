@@ -168,30 +168,16 @@
       },
       "alarm_image_passwords": {
         "title": "Alarm image decrypt",
-        "description": "{password_count} per-serial password(s). Passwords are stored on this Home Assistant and used only to decrypt. Decrypt libraries: {native_support}. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
-        "menu_options": {
-          "add_device_password": "Add or update a device password",
-          "finish_passwords": "Finish"
-        }
-      },
-      "add_device_password": {
-        "title": "Device alarm image password",
-        "description": "Choose the serial to add or update. Passwords are stored on this Home Assistant and used only to decrypt.",
+        "description": "{password_count} per-serial password(s) ({configured_serials}). Fill every serial on this page; empty keeps the stored password. Passwords are stored on this Home Assistant and used only to decrypt. Decrypt libraries: {native_support}. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
         "data": {
-          "device_id": "Device serial number"
+          "extra_device_id": "Additional serial number",
+          "extra_password": "Password for additional serial",
+          "remove_device_passwords": "Remove stored passwords"
         },
         "data_description": {
-          "device_id": "Serial number (SN) for this camera or accessory"
-        }
-      },
-      "edit_device_password": {
-        "title": "Device alarm image password",
-        "description": "Password for {device_id}. Stored on this Home Assistant, used only to decrypt. Leave empty to remove this serial.",
-        "data": {
-          "password": "Device password"
-        },
-        "data_description": {
-          "password": "Shown value is the password already stored for this serial. Leave empty to delete it."
+          "extra_device_id": "Use this when the serial is not listed above.",
+          "extra_password": "Required to add the additional serial. Leave empty to delete that serial if it was stored.",
+          "remove_device_passwords": "Checked serials are deleted. Does not affect serials you are filling in unless also checked."
         }
       },
       "devices_menu": {
