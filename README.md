@@ -76,7 +76,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - **Configure** menu: **Polling and cameras**, **Alarms, notifications, and recording**, and **Choose and bind devices**; each section saves independently
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.7 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Alarms, notifications, and recording** — callback URL (suggested URL; replace hostname and port if it is not public), message types, phone notify, and local recording.
@@ -211,7 +211,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - **配置** 菜单：**轮询与摄像头**、**告警、通知与录像**、**选择与绑定设备**；每一项可独立保存
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.3.7 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 告警、通知与录像** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知、本地录像。

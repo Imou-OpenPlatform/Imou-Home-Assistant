@@ -20,7 +20,7 @@
   ],
   "quality_scale": "bronze",
   "requirements": [
-    "pyimouapi==1.3.7"
+    "pyimouapi==1.4.0"
   ],
-  "version": "1.3.7"
+  "version": "1.4.0"
 }
