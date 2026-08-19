@@ -16,17 +16,11 @@ from custom_components.imou_life.const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_NOTIFY_ON_ALARM,
 )
-from custom_components.imou_life.pic_thumbnail import (
-    pic_urls_from_payload,
-    preferred_pic_url,
-)
 from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtime_data
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _format_notification_time,
-    _is_alarm_msg_type,
     _load_webhook_strings_file,
-    _normalize_event_payload,
     _redact_push_for_log,
     async_handle_imou_webhook,
 )
@@ -636,48 +630,6 @@ async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
     assert mock_executor.call_args.args[0] is _load_webhook_strings_file
 
 
-@pytest.mark.parametrize(
-    ("msg_type", "expected"),
-    [
-        ("closeCamera", False),
-        ("openCamera", False),
-        ("online", False),
-        ("iotProperty", False),
-        ("iotAction", False),
-        ("electricity", False),
-        ("low_battery_alarm", False),
-        ("iotEvent", True),
-        ("e_storageEmpty", False),
-        ("e_storageAbnormal", False),
-        ("e_upgradeSuccess", False),
-        ("e_upgradeFail", False),
-        ("upgrading", False),
-        ("upgrade_success", False),
-        ("home", False),
-        ("leave", False),
-        ("no_defend", False),
-        ("e_matchApSucc", False),
-        ("e_multiVideoAiPerArea", True),
-        ("e_std_aorAlarm", True),
-        ("e_videoMotion", True),
-        ("whiteLightOn", False),
-        ("sirenOn", True),
-        ("sirenOff", True),
-        ("bindDevice", False),
-        ("videoMotion", True),
-        ("human", True),
-        ("abAlarmSound", True),
-        ("mobileDetect", True),
-        ("alarmLocal", True),
-        ("totallyUnknownType", True),
-        (None, False),
-    ],
-)
-def test_is_alarm_msg_type(msg_type: str | None, expected: bool) -> None:
-    """Hybrid classification: denylist non-alarms; unknown types are alarms."""
-    assert _is_alarm_msg_type(msg_type) is expected
-
-
 def test_redact_push_for_log_masks_token() -> None:
     """Debug logs must not print the live push token."""
     redacted = _redact_push_for_log(
@@ -686,35 +638,6 @@ def test_redact_push_for_log_masks_token() -> None:
     assert redacted["token"] == "***"
     assert redacted["raw"]["token"] == "***"
     assert redacted["msgType"] == "human"
-
-
-def test_normalize_iot_event_keeps_top_level_msg_type() -> None:
-    """iotEvent keeps top-level msgType; still exposes pid/outputData/channel."""
-    event = _normalize_event_payload(
-        {
-            "msgType": "iotEvent",
-            "pid": "mhpf7Dsz",
-            "did": "TESTQWERXXXX",
-            "dname": "Gate",
-            "alarmId": "116257862023505xxxx",
-            "token": "tok",
-            "time": "20230111T111629",
-            "content": {
-                "outputData": {"foo": 1},
-                "event": "33000",
-                "monitor": {"channel": 0, "action": 1},
-            },
-        }
-    )
-
-    assert event["msg_type"] == "iotEvent"
-    assert event["msg_type_name"] == "iotEvent"
-    assert event["product_id"] == "mhpf7Dsz"
-    assert event["device_id"] == "TESTQWERXXXX"
-    assert event["channel_id"] == 0
-    assert event["alarm_id"] == "116257862023505xxxx"
-    assert event["outputData"] == {"foo": 1}
-    assert event["raw"]["msgType"] == "iotEvent"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -1396,18 +1319,6 @@ async def test_webhook_non_companion_notify_has_no_click_data(
     assert len(calls) == 1
     assert "data" not in calls[0].data
     assert "url" not in calls[0].data
-
-
-def test_pic_urls_from_payload_extracts_array() -> None:
-    """picUrlArray strings are returned in order."""
-    urls = pic_urls_from_payload({"picUrlArray": ["https://a/big", "https://a/small"]})
-    assert urls == ["https://a/big", "https://a/small"]
-
-
-def test_preferred_pic_url_prefers_small_thumb() -> None:
-    """Thumbnail pick prefers index 1 when two URLs are present."""
-    assert preferred_pic_url(["https://a/big", "https://a/small"]) == "https://a/small"
-    assert preferred_pic_url(["https://a/big"]) == "https://a/big"
 
 
 def _setup_thumbnail_notify(

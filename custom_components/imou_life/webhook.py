@@ -18,6 +18,12 @@ from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
+from pyimouapi.push import (
+    event_ref_lookup_key,
+    is_alarm_msg_type,
+    is_iot_non_event,
+    normalize_push_payload,
+)
 
 from .const import (
     DOMAIN,
@@ -38,71 +44,6 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
-
-# Status / ops types that must NOT fire imou_life_alarm or notify.
-# Official Imou "Device alarm" list also includes privacy-mask and lifecycle
-# types; we subtract those here. See:
-# https://open.imoulife.com/book/en/push/alarm.html
-_NON_ALARM_MSG_TYPES = frozenset(
-    {
-        # deviceStatus
-        "online",
-        "offline",
-        "close",
-        "changeDevName",
-        # iot property/action & stats (iotEvent is an alarm)
-        "iotProperty",
-        "iotAction",
-        "numberstat",
-        "electricity",
-        "low_battery_alarm",
-        # privacy mask (#66)
-        "openCamera",
-        "closeCamera",
-        # light state (sirenOn/sirenOff are alarms)
-        "whiteLightOn",
-        "whiteLightOff",
-        # sleep
-        "sleep",
-        # bind / share / auth / transfer
-        "bindDevice",
-        "unbindDevice",
-        "deviceShare",
-        "deviceShareCancel",
-        "deviceAuthorize",
-        "deviceAuthorizationChanged",
-        "transferDeviceFrom",
-        "transferDeviceTo",
-        "deviceDeletedSharedCancel",
-        # upgrade / storage ops (PaaS msgType and IoT identifier)
-        "UpgradeSuccess",
-        "upgradeFail",
-        "apUpgradeSuccess",
-        "apUpgradeFail",
-        "storageRecoverOk",
-        "storageRecoverFail",
-        "storageEmpty",
-        "storageAbnormal",
-        "e_upgradeSuccess",
-        "e_upgradeFail",
-        "e_storageEmpty",
-        "e_storageAbnormal",
-        "upgrading",
-        "upgrade_success",
-        "upgrade_failed",
-        "upgrade_result",
-        "e_matchApSucc",
-        # alarm-panel scenario / disarm status
-        "home",
-        "leave",
-        "no_defend",
-    }
-)
-
-
-def _is_alarm_msg_type(msg_type: str | None) -> bool:
-    """Return True if this push should fire imou_life_alarm / notify."""
-    return msg_type is not None and msg_type not in _NON_ALARM_MSG_TYPES
 
 
 def _redact_push_for_log(data: dict[str, Any]) -> dict[str, Any]:
@@ -175,65 +116,6 @@ async def _async_get_webhook_strings(
     notification = data.get("notification", {})
     alarm_types = data.get("alarm_types", {})
     return notification, alarm_types
-
-
-def _channel_id_from_payload(payload: dict[str, Any]) -> Any:
-    """Return a scalar channel id from the push payload, if present."""
-    for key in ("cid", "channelId", "msgChannelId"):
-        if key not in payload:
-            continue
-        value = payload.get(key)
-        if value is None or value == "":
-            continue
-        if isinstance(value, (list, dict)):
-            continue
-        return value
-    channels = payload.get("channels")
-    if isinstance(channels, (list, dict)) or channels in (None, ""):
-        return None
-    return channels
-
-
-def _normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Normalize different Imou push formats into convenient common fields."""
-    device_id = (
-        payload.get("did")
-        or payload.get("deviceId")
-        or payload.get("msgDeviceId")
-        or payload.get("dname")
-    )
-    channel_id = _channel_id_from_payload(payload)
-    msg_type = payload.get("msgType")
-    content = payload.get("content")
-    output_data = None
-    if isinstance(content, dict):
-        output_data = content.get("outputData")
-        if channel_id is None:
-            monitor = content.get("monitor")
-            if isinstance(monitor, dict) and "channel" in monitor:
-                channel_id = monitor.get("channel")
-
-    raw_time = payload.get("time") or payload.get("localTime") or payload.get("utcTime")
-
-    event = {
-        "msg_type": msg_type,
-        "msg_type_name": msg_type,
-        "device_id": device_id,
-        "channel_id": channel_id,
-        "product_id": payload.get("pid"),
-        "time": raw_time,
-        "name": payload.get("cname") or payload.get("dname"),
-        "alarm_id": payload.get("id") or payload.get("alarmId"),
-        "token": payload.get("token"),
-        "desc": payload.get("desc"),
-        "outputData": output_data,
-        "raw": payload,
-    }
-    return event
-
-
-def _is_digit_str(value: Any) -> bool:
-    return isinstance(value, str) and value.isdigit()
 
 
 def _alarm_type_label(alarm_types: dict[str, str], msg_type: str | None) -> str | None:
@@ -368,24 +250,6 @@ def _format_notification_time(raw_time: Any, tz: tzinfo) -> str:
     return text
 
 
-def _lookup_key_for_event_resolve(
-    msg_type: str | None, raw: dict[str, Any]
-) -> str | None:
-    """Return the product-model event ref to resolve, or None to skip."""
-    if _is_digit_str(msg_type):
-        return msg_type
-    if msg_type == "iotEvent":
-        content = raw.get("content")
-        if isinstance(content, dict):
-            event_ref = content.get("event")
-            if event_ref is None or event_ref == "":
-                return None
-            key = str(event_ref)
-            if key.isdigit():
-                return key
-    return None
-
-
 async def _async_apply_event_identifier(
     runtime: ImouRuntimeData, event_data: dict[str, Any]
 ) -> None:
@@ -394,7 +258,7 @@ async def _async_apply_event_identifier(
     raw = event_data.get("raw")
     if not product_id or not isinstance(raw, dict):
         return
-    lookup_key = _lookup_key_for_event_resolve(event_data.get("msg_type"), raw)
+    lookup_key = event_ref_lookup_key(event_data.get("msg_type"), raw)
     if not lookup_key:
         return
     try:
@@ -555,7 +419,7 @@ async def _async_dispatch_imou_push(
         await _async_apply_event_identifier(runtime, event_data)
         runtime.record_push_msg(event_data.get("msg_type"))
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
-        if _is_alarm_msg_type(event_data.get("msg_type")):
+        if is_alarm_msg_type(event_data.get("msg_type")):
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             notify_services = runtime.notify_services
             if notify_services and _notify_on_alarm_enabled(hass, event_data):
@@ -586,7 +450,7 @@ async def async_handle_imou_webhook(
         _LOGGER.warning("Unexpected Imou webhook payload type: %s", type(payload))
         return web.Response(status=200, text="ok")
 
-    event_data = _normalize_event_payload(payload)
+    event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
     _LOGGER.debug("Received Imou push: %s", _redact_push_for_log(event_data))
 
@@ -600,7 +464,7 @@ async def async_handle_imou_webhook(
         return web.Response(status=200, text="ok")
 
     # IoT devices (product id present) only accept the iotEvent envelope.
-    if event_data.get("product_id") and event_data.get("msg_type") != "iotEvent":
+    if is_iot_non_event(event_data.get("product_id"), event_data.get("msg_type")):
         _LOGGER.debug(
             "Ignoring non-iotEvent push for IoT device %s (msg_type=%s)",
             device_id,

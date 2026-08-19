@@ -19,6 +19,7 @@ from pyimouapi.pic_decode import (
     is_tcm_ability,
     resolve_encrypt_key,
 )
+from pyimouapi.push import pic_urls_from_payload, preferred_pic_url
 
 from .const import (
     PARAM_API_URL,
@@ -40,27 +41,6 @@ _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
 _NATIVE_API_PORT = 443
 _DECRYPT_TIMEOUT_SECONDS = 10
 _PIC_DECODER_INIT_LOCK = threading.Lock()
-
-
-def pic_urls_from_payload(raw: dict[str, Any]) -> list[str]:
-    """Return picUrlArray strings from a push payload, if any."""
-    value = raw.get("picUrlArray")
-    if not isinstance(value, list):
-        return []
-    urls: list[str] = []
-    for item in value:
-        if isinstance(item, str) and item:
-            urls.append(item)
-    return urls
-
-
-def preferred_pic_url(urls: list[str]) -> str | None:
-    """Prefer index 1 (small thumb) when present, else index 0."""
-    if not urls:
-        return None
-    if len(urls) > 1 and urls[1]:
-        return urls[1]
-    return urls[0] or None
 
 
 def password_for_device(options: Mapping[str, Any], device_id: str) -> str | None:
