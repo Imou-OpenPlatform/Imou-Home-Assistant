@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from importlib.metadata import version
+from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,8 @@ from .const import (
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEVICE_PASSWORDS,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_STATUS,
@@ -30,10 +33,29 @@ from .runtime_data import get_runtime_data
 # must not run inside the event loop.
 _PYIMOUAPI_VERSION = version("pyimouapi")
 
+_NATIVE_API_CLIENT = "libLCOpenApiClient.so"
+_NATIVE_OPENSDK = "libLCOpenSDK.so"
+
 
 def _redact_id(value: str, keep: int) -> str:
     """Return a partially redacted identifier for diagnostics."""
     return f"{value[:keep]}…" if len(value) > keep else value
+
+
+def _native_libs_present(hass: HomeAssistant) -> bool:
+    """Return whether both official Demo native libraries exist."""
+    native_dir = Path(hass.config.path("imou_life", "native"))
+    return (native_dir / _NATIVE_API_CLIENT).is_file() and (
+        native_dir / _NATIVE_OPENSDK
+    ).is_file()
+
+
+def _device_password_serials(options: dict[str, Any]) -> list[str]:
+    """Return device serials with stored passwords (values never included)."""
+    passwords = options.get(PARAM_DEVICE_PASSWORDS)
+    if not isinstance(passwords, dict):
+        return []
+    return sorted(key for key in passwords if key)
 
 
 def _entity_state_summary(entities: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -144,6 +166,11 @@ async def async_get_config_entry_diagnostics(
         "webhook_url_configured": bool(webhook_url),
         "last_update_success": last_update_success,
         "pyimouapi_version": _PYIMOUAPI_VERSION,
+        "attach_decrypted_thumbnail": bool(
+            entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
+        ),
+        "native_libs_present": _native_libs_present(hass),
+        "device_password_serials": _device_password_serials(entry.options),
         "event_push": event_push,
     }
 

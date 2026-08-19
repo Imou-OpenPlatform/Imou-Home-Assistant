@@ -349,9 +349,10 @@ async def test_options_local_recording_rejects_path_not_allowlisted(hass) -> Non
         )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"][SECTION_EVENT_PUSH_LOCAL_RECORDING][
-        PARAM_LOCAL_RECORD_PATH
-    ] == "record_path_not_allowed"
+    assert (
+        result["errors"][SECTION_EVENT_PUSH_LOCAL_RECORDING][PARAM_LOCAL_RECORD_PATH]
+        == "record_path_not_allowed"
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

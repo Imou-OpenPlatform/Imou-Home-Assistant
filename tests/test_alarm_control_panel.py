@@ -61,8 +61,10 @@ def test_iter_only_devices_with_panel() -> None:
 def test_alarm_state_mapping(mode: str, state: AlarmControlPanelState) -> None:
     device = _device(panel={PARAM_STATE: mode})
     entity = ImouAlarmControlPanel(
-        _coordinator(device), MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
-        PARAM_MODE, device,
+        _coordinator(device),
+        MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
+        PARAM_MODE,
+        device,
     )
     assert entity.alarm_state is state
 
@@ -70,8 +72,10 @@ def test_alarm_state_mapping(mode: str, state: AlarmControlPanelState) -> None:
 def test_translation_key_is_arming() -> None:
     device = _device(panel={PARAM_STATE: "home"})
     entity = ImouAlarmControlPanel(
-        _coordinator(device), MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
-        PARAM_MODE, device,
+        _coordinator(device),
+        MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
+        PARAM_MODE,
+        device,
     )
     assert entity.translation_key == "arming"
 

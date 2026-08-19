@@ -2,6 +2,19 @@
 
 ## English
 
+### [1.3.7]
+
+#### Added
+
+- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Decrypts push `picUrlArray` images with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image passwords** or **Default device password**
+- Per-device alarm image password loop under **Configure → Alarm image passwords** (empty password removes that serial)
+- Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
+
+#### Changed
+
+- Depend on `pyimouapi==1.3.7` (publish that library first; do not install it on Imou Life 1.3.6)
+- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray`. Many motion pushes have no `picUrlArray`; notifications stay text-only in that case. Phone must reach Home Assistant's external URL for `/local/` images
+
 ### [1.3.6]
 
 #### Breaking
@@ -235,6 +248,19 @@
 ---
 
 ## 中文
+
+### [1.3.7]
+
+#### 新增
+
+- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。使用官方 Demo 原生库；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片密码** 或 **默认设备密码** 中填写乐橙设备密码
+- **配置 → 告警图片密码**：按设备序列号循环录入密码（留空则删除该序列号）
+- 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
+
+#### 变更
+
+- 依赖 `pyimouapi==1.3.7`（须先发布该库；不要在 Imou Life 1.3.6 上单独安装）
+- 开启选项且原生库可用、推送含 `picUrlArray` 时，Companion 告警通知可附带解密缩略图。许多移动侦测推送不含 `picUrlArray`，此时仍为纯文本通知。手机须能访问 Home Assistant 外网 URL 才能加载 `/local/` 图片
 
 ### [1.3.6]
 

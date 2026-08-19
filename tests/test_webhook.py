@@ -1400,9 +1400,7 @@ async def test_webhook_non_companion_notify_has_no_click_data(
 
 def test_pic_urls_from_payload_extracts_array() -> None:
     """picUrlArray strings are returned in order."""
-    urls = pic_urls_from_payload(
-        {"picUrlArray": ["https://a/big", "https://a/small"]}
-    )
+    urls = pic_urls_from_payload({"picUrlArray": ["https://a/big", "https://a/small"]})
     assert urls == ["https://a/big", "https://a/small"]
 
 
@@ -1435,7 +1433,7 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
     hass: HomeAssistant,
 ) -> None:
     """Companion notify merges image and attachment when decrypt returns a URL."""
-    runtime, _entry = _setup_thumbnail_notify(
+    _runtime, _entry = _setup_thumbnail_notify(
         hass,
         attach=True,
         notify_services=["notify.mobile_app_phone"],
@@ -1576,7 +1574,7 @@ async def test_webhook_no_pic_url_array_skips_decrypt(hass: HomeAssistant) -> No
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_tcm_without_password_skips_decrypt(hass: HomeAssistant) -> None:
     """TCM devices without a password must not call the native decoder."""
-    runtime, entry = _setup_thumbnail_notify(
+    runtime, _entry = _setup_thumbnail_notify(
         hass,
         attach=True,
         notify_services=["notify.mobile_app_phone"],

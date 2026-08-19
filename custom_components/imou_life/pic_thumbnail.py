@@ -71,7 +71,9 @@ def password_for_device(options: dict[str, Any], device_id: str) -> str | None:
     return None
 
 
-def _device_for_event(runtime: ImouRuntimeData, event_data: dict[str, Any]) -> Any | None:
+def _device_for_event(
+    runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> Any | None:
     device_id = event_data.get("device_id")
     if not device_id:
         return None

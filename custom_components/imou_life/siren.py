@@ -69,9 +69,7 @@ async def async_setup_entry(
 class ImouSiren(ImouEntity, SirenEntity):
     """Manual siren control; assumed on ~15s or until a sirenOff push."""
 
-    _attr_supported_features = (
-        SirenEntityFeature.TURN_ON | SirenEntityFeature.TURN_OFF
-    )
+    _attr_supported_features = SirenEntityFeature.TURN_ON | SirenEntityFeature.TURN_OFF
     _attr_is_on = False
 
     def __init__(
