@@ -6,8 +6,8 @@
 
 #### Added
 
-- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Decrypts push `picUrlArray` images with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. Configure shows that folder and how many of the two `.so` files were found.
-- Per-device alarm image password loop under **Configure → Alarm image decrypt** (empty password removes that serial)
+- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Decrypts push `picUrlArray` images with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. That page states whether this host is supported and how many of the two `.so` files were found.
+- Per-device alarm image password loop under **Configure → Alarm image decrypt** (empty password removes that serial). Passwords are stored on this Home Assistant and used only to decrypt.
 - Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
 
 #### Changed
@@ -254,8 +254,8 @@
 
 #### 新增
 
-- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。使用官方 Demo 原生库；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。配置页会显示该目录，以及两个 `.so` 找到了几个。
-- **配置 → 告警图片解密**：按设备序列号循环录入密码（留空则删除该序列号）
+- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。使用官方 Demo 原生库；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。该页会写明本机是否支持，以及两个 `.so` 找到了几个。
+- **配置 → 告警图片解密**：按设备序列号循环录入密码（留空则删除该序列号）。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
 
 #### 变更

@@ -33,6 +33,7 @@ from pyimouapi.exceptions import (
 )
 from pyimouapi.openapi import ImouOpenApiClient
 
+from . import pic_thumbnail
 from .const import (
     API_URL_REGIONS,
     BASE_PUSH_ALWAYS,
@@ -76,7 +77,6 @@ from .helpers import (
     notify_service_selector_options,
     parse_notify_services,
 )
-from .pic_thumbnail import native_lib_dir, native_libs_found
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -715,14 +715,21 @@ class ImouOptionsFlow(OptionsFlow):
                 "alarm_image_passwords",
                 "devices",
             ],
-            description_placeholders=self._native_lib_placeholders(),
         )
 
+    def _ui_language(self) -> str:
+        language = getattr(self.hass.config, "language", None)
+        if isinstance(language, str) and language:
+            return language
+        return "en"
+
     def _native_lib_placeholders(self) -> dict[str, str]:
-        """Return native-library path and how many of the two .so files exist."""
+        """Return decrypt-library path, file count, and platform support."""
         return {
-            "native_dir": str(native_lib_dir(self.hass)),
-            "native_libs_found": str(native_libs_found(self.hass)),
+            "native_dir": str(pic_thumbnail.native_lib_dir(self.hass)),
+            "native_libs_found": str(pic_thumbnail.native_libs_found(self.hass)),
+            "native_platform": pic_thumbnail.native_platform_label(),
+            "native_support": pic_thumbnail.native_support_status(self._ui_language()),
         }
 
     def _device_passwords(self) -> dict[str, str]:
@@ -861,10 +868,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return self.async_create_entry(data=self._merge_options(**flat))
             suggested_source = {**stored, **flat}
 
-        placeholders = {
-            **self._event_push_webhook_placeholders(),
-            **self._native_lib_placeholders(),
-        }
+        placeholders = self._event_push_webhook_placeholders()
         if error_detail:
             placeholders["error"] = error_detail
         return self.async_show_form(

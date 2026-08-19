@@ -125,14 +125,41 @@ async def test_options_flow_init_shows_menu(hass) -> None:
         "alarm_image_passwords",
         "devices",
     }
-    native_dir = result["description_placeholders"]["native_dir"]
-    assert native_dir.endswith("imou_life/native")
-    assert result["description_placeholders"]["native_libs_found"] in {"0", "1", "2"}
+    placeholders = result.get("description_placeholders") or {}
+    assert "native_dir" not in placeholders
+    assert "native_support" not in placeholders
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_options_shows_native_lib_count_when_so_files_present(hass) -> None:
-    """Configure menus report 2/2 when both official Demo libraries exist."""
+async def test_options_alarm_image_decrypt_reports_unsupported_platform(hass) -> None:
+    """The decrypt menu states linux x86-64 is required when the host is not."""
+    from custom_components.imou_life import pic_thumbnail
+
+    hass.config.language = "en"
+    with (
+        patch.object(pic_thumbnail, "native_platform_supported", return_value=False),
+        patch.object(
+            pic_thumbnail, "native_platform_label", return_value="linux aarch64"
+        ),
+    ):
+        entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+        entry.add_to_hass(hass)
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+        )
+    assert result["step_id"] == "alarm_image_passwords"
+    placeholders = result["description_placeholders"]
+    assert placeholders["native_dir"].endswith("imou_life/native")
+    assert placeholders["native_platform"] == "linux aarch64"
+    assert "not supported" in placeholders["native_support"].lower()
+    assert "linux x86-64" in placeholders["native_support"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_decrypt_reports_libs_when_supported(hass) -> None:
+    """When the host is supported, the decrypt menu shows the folder and file count."""
+    from custom_components.imou_life import pic_thumbnail
     from custom_components.imou_life.pic_thumbnail import (
         NATIVE_CLIENT_SO,
         NATIVE_SDK_SO,
@@ -144,17 +171,19 @@ async def test_options_shows_native_lib_count_when_so_files_present(hass) -> Non
     (native_dir / NATIVE_CLIENT_SO).write_bytes(b"")
     (native_dir / NATIVE_SDK_SO).write_bytes(b"")
 
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["description_placeholders"]["native_libs_found"] == "2"
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": "alarm_image_passwords"}
-    )
-    assert result["description_placeholders"]["native_dir"] == str(native_dir)
-    assert result["description_placeholders"]["native_libs_found"] == "2"
+    hass.config.language = "en"
+    with patch.object(pic_thumbnail, "native_platform_supported", return_value=True):
+        entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+        entry.add_to_hass(hass)
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+        )
+    placeholders = result["description_placeholders"]
+    assert placeholders["native_dir"] == str(native_dir)
+    assert placeholders["native_libs_found"] == "2"
+    assert "supported" in placeholders["native_support"].lower()
+    assert "not supported" not in placeholders["native_support"].lower()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

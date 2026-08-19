@@ -27,7 +27,11 @@ from .const import (
     imou_life_device_key,
 )
 from .helpers import get_selected_device_ids
-from .pic_thumbnail import native_libs_present
+from .pic_thumbnail import (
+    native_libs_present,
+    native_platform_label,
+    native_platform_supported,
+)
 from .runtime_data import get_runtime_data
 
 # Resolved at import time: reading package metadata touches the filesystem and
@@ -160,6 +164,8 @@ async def async_get_config_entry_diagnostics(
             entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
         ),
         "native_libs_present": native_libs_present(hass),
+        "native_platform": native_platform_label(),
+        "native_platform_supported": native_platform_supported(),
         "device_password_serials": _device_password_serials(entry.options),
         "event_push": event_push,
     }

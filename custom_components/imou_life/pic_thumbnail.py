@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import platform
+import sys
 import threading
 import time
 from collections.abc import Mapping
@@ -44,11 +46,35 @@ _PIC_DECODER_INIT_LOCK = threading.Lock()
 
 NATIVE_CLIENT_SO = "libLCOpenApiClient.so"
 NATIVE_SDK_SO = "libLCOpenSDK.so"
+_SUPPORTED_MACHINES = frozenset({"x86_64", "amd64"})
 
 
 def native_lib_dir(hass: HomeAssistant) -> Path:
     """Return the folder where official Image Decryption Demo libraries go."""
     return Path(hass.config.path("imou_life", "native"))
+
+
+def native_platform_label() -> str:
+    """Return a short os/arch string for UI and logs."""
+    return f"{sys.platform} {platform.machine()}"
+
+
+def native_platform_supported() -> bool:
+    """Official Demo libraries are linux x86-64 only."""
+    return sys.platform.startswith("linux") and (
+        platform.machine().lower() in _SUPPORTED_MACHINES
+    )
+
+
+def native_support_status(language: str) -> str:
+    """Return a localized sentence: supported, or explicitly not supported."""
+    zh = language.lower().startswith("zh")
+    if native_platform_supported():
+        return "支持 (linux x86-64)" if zh else "supported (linux x86-64)"
+    label = native_platform_label()
+    if zh:
+        return f"不支持 (需要 linux x86-64, 本机是 {label})"
+    return f"not supported (needs linux x86-64; this host is {label})"
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -131,6 +157,15 @@ def _sync_decrypt_and_write(
     use_tcm: bool,
     token: str,
 ) -> str | None:
+    if not native_platform_supported():
+        if not runtime.pic_decoder_failed:
+            runtime.pic_decoder_failed = True
+            _LOGGER.warning(
+                "Decrypted alarm thumbnails need linux x86-64; this host is %s",
+                native_platform_label(),
+            )
+        return None
+
     native_dir = native_lib_dir(hass)
     try:
         with _PIC_DECODER_INIT_LOCK:

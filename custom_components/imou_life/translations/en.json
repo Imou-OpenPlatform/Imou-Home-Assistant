@@ -86,7 +86,7 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Pick a section to edit. Decrypted alarm thumbnails need libLCOpenApiClient.so and libLCOpenSDK.so in {native_dir} ({native_libs_found}/2 found).",
+        "description": "Pick a section to edit. Submit saves that section and closes the dialog.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarms, notifications, and recording",
@@ -126,7 +126,7 @@
       },
       "event_push": {
         "title": "Alarms, notifications, and recording",
-        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url} Decrypted thumbnails: copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
+        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
         "data": {
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
@@ -140,7 +140,7 @@
         "sections": {
           "notifications": {
             "name": "Notify on alarm",
-            "description": "Optional. Leave empty to use automations only. Thumbnail .so files go in {native_dir} ({native_libs_found}/2 found).",
+            "description": "Optional. Leave empty to use automations only.",
             "data": {
               "notify_services": "Notification targets",
               "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
@@ -148,8 +148,8 @@
             },
             "data_description": {
               "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device.",
-              "attach_decrypted_thumbnail": "linux x86-64 only; place official Demo libs in /config/imou_life/native/ (libLCOpenApiClient.so and libLCOpenSDK.so). TCM needs the Imou Life device password. /local/imou_life/thumbs/ is unauthenticated (URL holders can view for ~24h). If /config/www was missing, restart Home Assistant after the first thumbnail.",
-              "default_device_password": "Used when a device has no per-serial password in Alarm image decrypt."
+              "attach_decrypted_thumbnail": "linux x86-64 only. Whether this host is supported, and where to copy the Demo libraries, are shown under Configure → Alarm image decrypt. TCM needs the Imou Life device password. /local/imou_life/thumbs/ is unauthenticated (URL holders can view for ~24h). If /config/www was missing, restart Home Assistant after the first thumbnail.",
+              "default_device_password": "Used when a device has no per-serial password in Alarm image decrypt. Stored on this Home Assistant, used only to decrypt."
             }
           },
           "local_recording": {
@@ -168,7 +168,7 @@
       },
       "alarm_image_passwords": {
         "title": "Alarm image decrypt",
-        "description": "{password_count} per-serial password(s) configured. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
+        "description": "{password_count} per-serial password(s). Passwords are stored on this Home Assistant and used only to decrypt. Decrypt libraries: {native_support}. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
         "menu_options": {
           "add_device_password": "Add or update a device password",
           "finish_passwords": "Finish"
@@ -176,7 +176,7 @@
       },
       "add_device_password": {
         "title": "Device alarm image password",
-        "description": "Enter the Imou Life device password for decrypting alarm thumbnails. Leave the password empty to remove a stored serial.",
+        "description": "Enter the Imou Life device password for decrypting alarm thumbnails. Stored on this Home Assistant, used only to decrypt. Leave the password empty to remove a stored serial.",
         "data": {
           "device_id": "Device serial number",
           "password": "Device password"

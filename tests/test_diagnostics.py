@@ -171,3 +171,5 @@ async def test_diagnostics_redacts_device_passwords(hass) -> None:
     assert result["attach_decrypted_thumbnail"] is True
     assert result["device_password_serials"] == ["SN1"]
     assert "native_libs_present" in result
+    assert "native_platform" in result
+    assert "native_platform_supported" in result
