@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -50,7 +51,7 @@ def _native_libs_present(hass: HomeAssistant) -> bool:
     ).is_file()
 
 
-def _device_password_serials(options: dict[str, Any]) -> list[str]:
+def _device_password_serials(options: Mapping[str, Any]) -> list[str]:
     """Return device serials with stored passwords (values never included)."""
     passwords = options.get(PARAM_DEVICE_PASSWORDS)
     if not isinstance(passwords, dict):

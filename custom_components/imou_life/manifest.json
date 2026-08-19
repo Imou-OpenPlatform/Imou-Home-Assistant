@@ -1,15 +1,15 @@
 {
   "domain": "imou_life",
   "name": "Imou Life Official",
+  "after_dependencies": [
+    "stream"
+  ],
   "codeowners": [
     "@Imou-OpenPlatform"
   ],
   "config_flow": true,
   "dependencies": [
     "webhook"
-  ],
-  "after_dependencies": [
-    "stream"
   ],
   "documentation": "https://open.imoulife.com/book/guide/haDev.html",
   "integration_type": "hub",

@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import translation
+from homeassistant.helpers.selector import SelectOptionDict
 from pyimouapi.device import ImouDeviceSummary
 
 from .const import DOMAIN, PARAM_SELECTED_DEVICES, imou_life_device_keys_from_ids
@@ -98,7 +99,7 @@ _NOTIFY_SERVICES_NOT_TARGETS = frozenset({"send_message"})
 
 def notify_service_selector_options(
     hass: HomeAssistant, stored: list[str]
-) -> list[dict[str, str]]:
+) -> list[SelectOptionDict]:
     """Return notify targets plus any saved non-notify actions.
 
     ``notify.send_message`` is a generic action, not a destination, so it is
@@ -113,7 +114,7 @@ def notify_service_selector_options(
     for extra in stored:
         if extra not in values:
             values.append(extra)
-    return [{"value": item, "label": item} for item in sorted(values)]
+    return [SelectOptionDict(value=item, label=item) for item in sorted(values)]
 
 
 async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, str]:

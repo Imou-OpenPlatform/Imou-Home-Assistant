@@ -7,6 +7,7 @@ import hashlib
 import logging
 import threading
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -62,7 +63,7 @@ def preferred_pic_url(urls: list[str]) -> str | None:
     return urls[0] or None
 
 
-def password_for_device(options: dict[str, Any], device_id: str) -> str | None:
+def password_for_device(options: Mapping[str, Any], device_id: str) -> str | None:
     """Resolve per-serial password from entry options."""
     passwords = options.get(PARAM_DEVICE_PASSWORDS)
     if isinstance(passwords, dict):
