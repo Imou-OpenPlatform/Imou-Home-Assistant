@@ -124,6 +124,18 @@ def _device_for_event(
     return None
 
 
+def _preferred_push_pic_url(raw: dict[str, Any]) -> str | None:
+    """Prefer picUrlArray, then a single picUrl / thumbUrl on the push."""
+    pic_url = preferred_pic_url(pic_urls_from_payload(raw))
+    if pic_url:
+        return pic_url
+    for key in ("picUrl", "thumbUrl"):
+        value = raw.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def _thumb_filename(alarm_id: str | None, pic_url: str) -> str:
     if alarm_id:
         return f"{alarm_id}.jpg"
@@ -200,7 +212,7 @@ def _sync_decrypt_and_write(
             use_tcm=use_tcm,
         )
     except PicDecodeError as err:
-        _LOGGER.debug(
+        _LOGGER.warning(
             "DecryptPicture failed for device %s (code=%s)",
             device_id,
             err.code,
@@ -232,7 +244,9 @@ def _sync_decrypt_and_write(
         _LOGGER.warning("Could not write alarm thumb %s", dest, exc_info=True)
         return None
 
-    return f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
+    local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
+    _LOGGER.debug("Wrote decrypted alarm thumb %s", local_url)
+    return local_url
 
 
 async def async_maybe_decrypt_thumbnail(
@@ -243,21 +257,28 @@ async def async_maybe_decrypt_thumbnail(
 ) -> str | None:
     """Decrypt push image when enabled; return /local/... URL or None."""
     if not entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+        _LOGGER.debug("Skip decrypt: attach_decrypted_thumbnail is off")
         return None
     if runtime.pic_decoder_failed:
+        _LOGGER.debug("Skip decrypt: native decoder previously failed to load")
         return None
 
     raw = event_data.get("raw")
     if not isinstance(raw, dict):
+        _LOGGER.debug("Skip decrypt: push has no raw payload")
         return None
 
-    pic_urls = pic_urls_from_payload(raw)
-    pic_url = preferred_pic_url(pic_urls)
+    pic_url = _preferred_push_pic_url(raw)
     if not pic_url:
+        _LOGGER.debug(
+            "Skip decrypt for %s: no picture url (picUrlArray/picUrl)",
+            event_data.get("device_id"),
+        )
         return None
 
     device_id = event_data.get("device_id")
     if not device_id:
+        _LOGGER.debug("Skip decrypt: push has no device_id")
         return None
 
     device = _device_for_event(runtime, event_data)
@@ -270,15 +291,20 @@ async def async_maybe_decrypt_thumbnail(
         device_password=device_password,
     )
     if encrypt_key is None:
-        if is_tcm:
-            _LOGGER.debug(
-                "Skipping TCM decrypt for %s: no device password configured",
-                device_id,
-            )
+        _LOGGER.debug(
+            "Skipping TCM decrypt for %s: no device password configured",
+            device_id,
+        )
         return None
 
     token = event_data.get("token")
     token_str = str(token) if token else ""
+    _LOGGER.debug(
+        "Decrypting alarm thumb for %s tcm=%s url=%s",
+        device_id,
+        is_tcm,
+        pic_url,
+    )
 
     try:
         return await asyncio.wait_for(

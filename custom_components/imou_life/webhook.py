@@ -440,6 +440,11 @@ async def _async_dispatch_imou_push(
                 thumbnail_url = await async_maybe_decrypt_thumbnail(
                     hass, entry, runtime, event_data
                 )
+                _LOGGER.debug(
+                    "Alarm thumbnail for %s: %s",
+                    event_data.get("device_id"),
+                    thumbnail_url or "none",
+                )
                 await _async_send_notifications(
                     hass, event_data, notify_services, thumbnail_url
                 )

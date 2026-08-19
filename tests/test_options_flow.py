@@ -212,7 +212,12 @@ async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"device_id": "SN1", "password": "pw"},
+        {"device_id": "SN1"},
+    )
+    assert result["step_id"] == "edit_device_password"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"password": "pw"},
     )
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "alarm_image_passwords"
@@ -224,7 +229,11 @@ async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"device_id": "SN1", "password": ""},
+        {"device_id": "SN1"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"password": ""},
     )
     assert entry.options[PARAM_DEVICE_PASSWORDS] == {}
     assert result["description_placeholders"]["password_count"] == "0"
@@ -234,6 +243,60 @@ async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_DEVICE_PASSWORDS] == {}
+
+
+def _schema_suggested(schema: vol.Schema, field: str) -> object:
+    """Return suggested_value for a voluptuous schema field."""
+    for key in schema.schema:
+        if getattr(key, "schema", key) == field:
+            return (key.description or {}).get("suggested_value")
+    return None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_password_update_reopens_with_new_value(
+    hass,
+) -> None:
+    """After updating a serial, opening it again must suggest the new password."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_passwords"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"device_id": "SN1"}
+    )
+    assert result["step_id"] == "edit_device_password"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"password": "old-pw"}
+    )
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "old-pw"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"device_id": "SN1"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"password": "new-pw"}
+    )
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "new-pw"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_device_password"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"device_id": "SN1"}
+    )
+    assert result["step_id"] == "edit_device_password"
+    schema = result.get("data_schema") or result.get("schema")
+    assert _schema_suggested(schema, "password") == "new-pw"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

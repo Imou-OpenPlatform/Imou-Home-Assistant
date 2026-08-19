@@ -7,8 +7,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from custom_components.imou_life.const import DOMAIN
-from custom_components.imou_life.pic_thumbnail import _sync_decrypt_and_write
+from custom_components.imou_life.const import DOMAIN, PARAM_ATTACH_DECRYPTED_THUMBNAIL
+from custom_components.imou_life.pic_thumbnail import (
+    _sync_decrypt_and_write,
+    async_maybe_decrypt_thumbnail,
+)
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -150,3 +153,54 @@ def test_sync_decrypt_skips_unsupported_platform(hass: HomeAssistant) -> None:
         )
     assert result is None
     assert runtime.pic_decoder is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_logs_when_push_has_no_picture(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Switch on still logs a skip reason when the push has no image URL."""
+    caplog.set_level("DEBUG", logger="custom_components.imou_life.pic_thumbnail")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    result = await async_maybe_decrypt_thumbnail(
+        hass,
+        entry,
+        runtime,
+        {"device_id": "SN1", "raw": {"msgType": "abAlarmSound"}},
+    )
+    assert result is None
+    assert "no picture url" in caplog.text.lower()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_uses_pic_url_when_array_missing(
+    hass: HomeAssistant,
+) -> None:
+    """PaaS pushes often have picUrl instead of picUrlArray."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with patch(
+        "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+        return_value="/local/imou_life/thumbs/a1.jpg",
+    ) as mock_decrypt:
+        result = await async_maybe_decrypt_thumbnail(
+            hass, entry, runtime, event_data
+        )
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_args.args[4] == "https://example.com/only.jpg"

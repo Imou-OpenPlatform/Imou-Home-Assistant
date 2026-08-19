@@ -444,6 +444,7 @@ class ImouOptionsFlow(OptionsFlow):
         self._devices_map: dict[str, str] = {}
         self._devices_error: str = ""
         self._callback_error: str = ""
+        self._password_device_id: str = ""
 
     @staticmethod
     def _suggested_option_subset(
@@ -738,7 +739,7 @@ class ImouOptionsFlow(OptionsFlow):
         return dict(stored) if isinstance(stored, dict) else {}
 
     def _add_device_password_schema(self) -> vol.Schema:
-        """Build the per-serial password form."""
+        """Build the serial-number picker."""
         runtime = get_runtime_data(self.config_entry)
         if runtime is not None:
             device_ids = sorted(
@@ -753,13 +754,22 @@ class ImouOptionsFlow(OptionsFlow):
             )
         else:
             device_field = TextSelector()
-        return vol.Schema(
-            {
-                vol.Required("device_id"): device_field,
-                vol.Optional("password", default=""): TextSelector(
-                    TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                ),
-            }
+        return vol.Schema({vol.Required("device_id"): device_field})
+
+    def _edit_device_password_schema(self, stored_password: str) -> vol.Schema:
+        """Build the password form, suggesting the value already stored for this SN."""
+        return self.add_suggested_values_to_schema(
+            vol.Schema(
+                {
+                    vol.Optional("password", default=""): TextSelector(
+                        TextSelectorConfig(
+                            type=TextSelectorType.PASSWORD,
+                            autocomplete="new-password",
+                        )
+                    ),
+                }
+            ),
+            {"password": stored_password},
         )
 
     async def async_step_alarm_image_passwords(
@@ -778,9 +788,25 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_add_device_password(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Add or remove a per-serial alarm image password."""
+        """Pick the serial whose alarm image password to edit."""
         if user_input is not None:
-            device_id = str(user_input["device_id"]).strip()
+            self._password_device_id = str(user_input["device_id"]).strip()
+            if self._password_device_id:
+                return await self.async_step_edit_device_password()
+
+        return self.async_show_form(
+            step_id="add_device_password",
+            data_schema=self._add_device_password_schema(),
+        )
+
+    async def async_step_edit_device_password(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Add, update, or remove the password for the selected serial."""
+        device_id = self._password_device_id
+        if not device_id:
+            return await self.async_step_add_device_password()
+        if user_input is not None:
             password = str(user_input.get("password") or "")
             passwords = self._device_passwords()
             if not password:
@@ -796,9 +822,11 @@ class ImouOptionsFlow(OptionsFlow):
             )
             return await self.async_step_alarm_image_passwords()
 
+        stored = self._device_passwords().get(device_id, "")
         return self.async_show_form(
-            step_id="add_device_password",
-            data_schema=self._add_device_password_schema(),
+            step_id="edit_device_password",
+            data_schema=self._edit_device_password_schema(stored),
+            description_placeholders={"device_id": device_id},
         )
 
     async def async_step_finish_passwords(

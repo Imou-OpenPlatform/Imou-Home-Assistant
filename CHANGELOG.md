@@ -13,7 +13,9 @@
 #### Changed
 
 - Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
-- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray`. Many motion pushes have no `picUrlArray`; notifications stay text-only in that case. Phone must reach Home Assistant's external URL for `/local/` images
+- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. Many motion pushes have neither; notifications stay text-only in that case. Phone must reach Home Assistant's external URL for `/local/` images. Skip reasons and decrypt result are debug-logged.
+- Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
+- Alarm image password editor is two steps: pick serial, then edit. Re-opening a serial shows the password already stored for it
 - Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
 
 ### [1.3.6]
@@ -261,7 +263,9 @@
 #### 变更
 
 - 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
-- 开启选项且原生库可用、推送含 `picUrlArray` 时，Companion 告警通知可附带解密缩略图。许多移动侦测推送不含 `picUrlArray`，此时仍为纯文本通知。手机须能访问 Home Assistant 外网 URL 才能加载 `/local/` 图片
+- 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。许多移动侦测推送两者都没有，此时仍为纯文本通知。手机须能访问 Home Assistant 外网 URL 才能加载 `/local/` 图片。跳过原因与解密结果会打 debug 日志。
+- 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
+- 告警图片密码改为先选序列号再编辑；再次打开同一设备会显示已保存的密码
 - Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
 
 ### [1.3.6]

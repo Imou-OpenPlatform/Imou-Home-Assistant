@@ -176,14 +176,22 @@
       },
       "add_device_password": {
         "title": "设备告警图片密码",
-        "description": "输入 Imou Life 设备密码以解密告警缩略图。密码保存在本机，仅用于解密。密码留空可删除该序列号。",
+        "description": "选择要添加或更新密码的序列号。密码保存在本机，仅用于解密。",
         "data": {
-          "device_id": "设备序列号",
+          "device_id": "设备序列号"
+        },
+        "data_description": {
+          "device_id": "摄像头或配件的序列号（SN）"
+        }
+      },
+      "edit_device_password": {
+        "title": "设备告警图片密码",
+        "description": "正在编辑 {device_id} 的密码。保存在本机，仅用于解密。留空则删除该序列号。",
+        "data": {
           "password": "设备密码"
         },
         "data_description": {
-          "device_id": "摄像头或配件的序列号（SN）",
-          "password": "留空可删除该序列号的密码"
+          "password": "显示的是该序列号已保存的密码。留空可删除。"
         }
       },
       "devices_menu": {

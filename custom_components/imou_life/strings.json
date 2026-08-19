@@ -176,14 +176,22 @@
       },
       "add_device_password": {
         "title": "Device alarm image password",
-        "description": "Enter the Imou Life device password for decrypting alarm thumbnails. Stored on this Home Assistant, used only to decrypt. Leave the password empty to remove a stored serial.",
+        "description": "Choose the serial to add or update. Passwords are stored on this Home Assistant and used only to decrypt.",
         "data": {
-          "device_id": "Device serial number",
+          "device_id": "Device serial number"
+        },
+        "data_description": {
+          "device_id": "Serial number (SN) for this camera or accessory"
+        }
+      },
+      "edit_device_password": {
+        "title": "Device alarm image password",
+        "description": "Password for {device_id}. Stored on this Home Assistant, used only to decrypt. Leave empty to remove this serial.",
+        "data": {
           "password": "Device password"
         },
         "data_description": {
-          "device_id": "Serial number (SN) for this camera or accessory",
-          "password": "Leave empty to delete the password for this serial"
+          "password": "Shown value is the password already stored for this serial. Leave empty to delete it."
         }
       },
       "devices_menu": {
