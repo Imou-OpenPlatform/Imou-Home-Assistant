@@ -15,6 +15,7 @@
 - Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
 - Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. Many motion pushes have neither; notifications stay text-only in that case. Phone must reach Home Assistant's external URL for `/local/` images. Skip reasons and decrypt result are debug-logged.
 - DecryptPicture uses the OpenAPI `accessToken` already held by the client, and refreshes only if decrypt fails. The push `token` is a picture id and is rejected by `strongDidCheck` (TK1002). IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
+- `initOpenApi` uses `cacert.pem` beside the native libraries (or certifi) so SDK HTTPS downloads of alarm pictures are not truncated (`code=1`)
 - Debug `Received Imou push` logs include the push `token` (no longer masked)
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
 - Alarm image passwords are one form: every known serial on a page, empty keeps the stored value, a multi-select removes
@@ -267,6 +268,7 @@
 - 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
 - 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。许多移动侦测推送两者都没有，此时仍为纯文本通知。手机须能访问 Home Assistant 外网 URL 才能加载 `/local/` 图片。跳过原因与解密结果会打 debug 日志。
 - DecryptPicture 使用客户端里已有的开放平台 `accessToken`，失败才刷新。推送里的 `token` 是图片 ID，`strongDidCheck` 会返回 TK1002。IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
+- `initOpenApi` 使用原生库目录下的 `cacert.pem`（或 certifi），避免 SDK 下载告警图 TLS 不完整而返回 `code=1`
 - debug 日志 `Received Imou push` 不再把推送 `token` 打码
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
 - 告警图片密码改为一页填写多台设备：密码框留空表示不改，多选可删除

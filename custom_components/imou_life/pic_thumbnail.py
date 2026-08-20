@@ -213,6 +213,12 @@ def _sync_decrypt_and_write(
                     entry.data[PARAM_APP_SECRET],
                 )
                 runtime.pic_decoder_initialized = True
+                ca_file = native_dir / "cacert.pem"
+                _LOGGER.debug(
+                    "LCOpenSDK initOpenApi host=%s cacert=%s",
+                    host,
+                    "native" if ca_file.is_file() else "certifi",
+                )
     except Exception:
         runtime.pic_decoder_failed = True
         _LOGGER.warning(
