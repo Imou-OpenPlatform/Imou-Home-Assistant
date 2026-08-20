@@ -47,17 +47,6 @@ _LOGGER = logging.getLogger(__name__)
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
 
 
-def _redact_push_for_log(data: dict[str, Any]) -> dict[str, Any]:
-    """Copy a push dict with live tokens masked for debug logs."""
-    redacted = dict(data)
-    if redacted.get("token"):
-        redacted["token"] = "***"
-    raw = redacted.get("raw")
-    if isinstance(raw, dict) and raw.get("token"):
-        redacted["raw"] = {**raw, "token": "***"}
-    return redacted
-
-
 def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) -> bool:
     """Return True unless this device's notify-on-alarm switch is off.
 
@@ -471,7 +460,7 @@ async def async_handle_imou_webhook(
 
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
-    _LOGGER.debug("Received Imou push: %s", _redact_push_for_log(event_data))
+    _LOGGER.debug("Received Imou push: %s", event_data)
 
     # Check: is push enabled? If user disabled it, silently ignore.
     entry_and_runtime = _get_entry_and_runtime(hass, webhook_id)

@@ -81,12 +81,7 @@ from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
-_FIELD_EXTRA_DEVICE_ID = "extra_device_id"
-_FIELD_EXTRA_PASSWORD = "extra_password"
 _FIELD_REMOVE_PASSWORDS = "remove_device_passwords"
-_PASSWORD_FORM_RESERVED = frozenset(
-    {_FIELD_EXTRA_DEVICE_ID, _FIELD_EXTRA_PASSWORD, _FIELD_REMOVE_PASSWORDS}
-)
 
 _ENTRY_NAME = "Imou Life Official"
 
@@ -757,7 +752,7 @@ class ImouOptionsFlow(OptionsFlow):
         return sorted(serials)
 
     def _alarm_image_passwords_schema(self) -> vol.Schema:
-        """Build one password field per known serial, plus add/remove extras."""
+        """Build one password field per known serial."""
         stored = self._device_passwords()
         fields: dict[Any, Any] = {}
         suggested: dict[str, Any] = {}
@@ -770,8 +765,6 @@ class ImouOptionsFlow(OptionsFlow):
         for serial in self._device_password_serials():
             fields[vol.Optional(serial, default="")] = password_selector
             suggested[serial] = stored.get(serial, "")
-        fields[vol.Optional(_FIELD_EXTRA_DEVICE_ID, default="")] = TextSelector()
-        fields[vol.Optional(_FIELD_EXTRA_PASSWORD, default="")] = password_selector
         if stored:
             fields[vol.Optional(_FIELD_REMOVE_PASSWORDS, default=[])] = SelectSelector(
                 SelectSelectorConfig(
@@ -788,19 +781,12 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> dict[str, str]:
         """Merge the password form into the stored serial map.
 
-        Empty per-serial fields keep the existing password. Extra serial with an
-        empty password deletes that serial. Checked remove serials are deleted last.
+        Empty per-serial fields keep the existing password. Checked remove
+        serials are deleted last.
         """
         passwords = dict(stored)
-        extra_id = str(user_input.get(_FIELD_EXTRA_DEVICE_ID) or "").strip()
-        extra_pw = str(user_input.get(_FIELD_EXTRA_PASSWORD) or "")
-        if extra_id:
-            if extra_pw:
-                passwords[extra_id] = extra_pw
-            else:
-                passwords.pop(extra_id, None)
         for key, value in user_input.items():
-            if key in _PASSWORD_FORM_RESERVED:
+            if key == _FIELD_REMOVE_PASSWORDS:
                 continue
             serial = str(key).strip()
             if not serial:

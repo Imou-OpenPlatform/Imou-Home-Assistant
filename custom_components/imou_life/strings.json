@@ -170,14 +170,10 @@
         "title": "Alarm image decrypt",
         "description": "{password_count} per-serial password(s) ({configured_serials}). Fill every serial on this page; empty keeps the stored password. Passwords are stored on this Home Assistant and used only to decrypt. Decrypt libraries: {native_support}. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
         "data": {
-          "extra_device_id": "Additional serial number",
-          "extra_password": "Password for additional serial",
           "remove_device_passwords": "Remove stored passwords"
         },
         "data_description": {
-          "extra_device_id": "Use this when the serial is not listed above.",
-          "extra_password": "Required to add the additional serial. Leave empty to delete that serial if it was stored.",
-          "remove_device_passwords": "Checked serials are deleted. Does not affect serials you are filling in unless also checked."
+          "remove_device_passwords": "Checked serials are deleted."
         }
       },
       "devices_menu": {

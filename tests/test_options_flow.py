@@ -187,9 +187,16 @@ async def test_options_alarm_image_decrypt_reports_libs_when_supported(hass) -> 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
-    """Extra serial fields add a password; remove serials deletes it."""
+    """Per-serial fields add a password; remove serials deletes it."""
+    from custom_components.imou_life.runtime_data import ImouRuntimeData
+
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
     entry.add_to_hass(hass)
+    device = MagicMock()
+    device.device_id = "SN1"
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {"SN1_0": device}
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
@@ -201,7 +208,7 @@ async def test_options_alarm_image_passwords_add_and_delete(hass) -> None:
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"extra_device_id": "SN1", "extra_password": "pw"},
+        {"SN1": "pw"},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN1": "pw"}
@@ -277,7 +284,8 @@ async def test_options_alarm_image_passwords_saves_multiple_serials(hass) -> Non
     )
     assert result["type"] is FlowResultType.FORM
     schema = result.get("data_schema") or result.get("schema")
-    assert _schema_field_names(schema) >= {"SN-A", "SN-B", "extra_device_id"}
+    assert _schema_field_names(schema) >= {"SN-A", "SN-B"}
+    assert "extra_device_id" not in _schema_field_names(schema)
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],

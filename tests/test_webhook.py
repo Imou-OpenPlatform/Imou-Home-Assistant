@@ -21,7 +21,6 @@ from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _format_notification_time,
     _load_webhook_strings_file,
-    _redact_push_for_log,
     async_handle_imou_webhook,
 )
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -676,16 +675,6 @@ async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
 
     assert mock_executor.call_count >= 1
     assert mock_executor.call_args.args[0] is _load_webhook_strings_file
-
-
-def test_redact_push_for_log_masks_token() -> None:
-    """Debug logs must not print the live push token."""
-    redacted = _redact_push_for_log(
-        {"msgType": "human", "token": "live-token", "raw": {"token": "live-token"}}
-    )
-    assert redacted["token"] == "***"
-    assert redacted["raw"]["token"] == "***"
-    assert redacted["msgType"] == "human"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

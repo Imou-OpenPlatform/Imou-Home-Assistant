@@ -168,6 +168,7 @@ def _sync_decrypt_and_write(
     device_id: str,
     use_tcm: bool,
     token: str,
+    fallback_token: str = "",
 ) -> str | None:
     if not native_platform_supported():
         if not runtime.pic_decoder_failed:
@@ -203,27 +204,54 @@ def _sync_decrypt_and_write(
         )
         return None
 
-    try:
-        jpeg = decoder.decrypt_picture(
-            pic_url=pic_url,
-            encrypt_key=encrypt_key,
-            device_id=device_id,
-            token=token,
-            use_tcm=use_tcm,
-        )
-    except PicDecodeError as err:
-        _LOGGER.warning(
-            "DecryptPicture failed for device %s (code=%s)",
-            device_id,
-            err.code,
-        )
-        return None
-    except Exception:
-        _LOGGER.warning(
-            "DecryptPicture failed for device %s",
-            device_id,
-            exc_info=True,
-        )
+    tokens: list[str] = []
+    for value in (token, fallback_token):
+        if value and value not in tokens:
+            tokens.append(value)
+    if not tokens:
+        tokens.append("")
+
+    jpeg: bytes | None = None
+    for index, try_token in enumerate(tokens):
+        try:
+            jpeg = decoder.decrypt_picture(
+                pic_url=pic_url,
+                encrypt_key=encrypt_key,
+                device_id=device_id,
+                token=try_token,
+                use_tcm=use_tcm,
+            )
+            break
+        except PicDecodeError as err:
+            can_retry = err.code == -1 and index + 1 < len(tokens)
+            if can_retry:
+                _LOGGER.debug(
+                    "DecryptPicture URL auth or download failed for %s; "
+                    "retrying with alternate token",
+                    device_id,
+                )
+                continue
+            extra = ""
+            if err.code == -1:
+                extra = ", URL auth or download failed"
+            elif err.code == 2:
+                extra = ", wrong key"
+            _LOGGER.warning(
+                "DecryptPicture failed for device %s (code=%s%s, tcm=%s)",
+                device_id,
+                err.code,
+                extra,
+                use_tcm,
+            )
+            return None
+        except Exception:
+            _LOGGER.warning(
+                "DecryptPicture failed for device %s",
+                device_id,
+                exc_info=True,
+            )
+            return None
+    if jpeg is None:
         return None
 
     www_dir = Path(hass.config.path("www"))
@@ -247,6 +275,40 @@ def _sync_decrypt_and_write(
     local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
     _LOGGER.debug("Wrote decrypted alarm thumb %s", local_url)
     return local_url
+
+
+def _push_token(event_data: Mapping[str, Any]) -> str:
+    token = event_data.get("token")
+    return str(token) if token else ""
+
+
+def _token_kind_label(openapi_token: str, push_token: str) -> str:
+    if openapi_token and push_token and openapi_token != push_token:
+        return "openapi+push"
+    if openapi_token:
+        return "openapi"
+    if push_token:
+        return "push"
+    return "empty"
+
+
+async def _async_openapi_access_token(runtime: ImouRuntimeData) -> str:
+    """Return the OpenAPI accessToken the official Demo passes to DecryptPicture."""
+    client = runtime.client
+    if client is None:
+        return ""
+    access = client.access_token
+    if access:
+        return access
+    try:
+        await client.async_get_token()
+    except Exception:
+        _LOGGER.debug(
+            "Could not fetch OpenAPI access token before decrypt",
+            exc_info=True,
+        )
+        return ""
+    return client.access_token or ""
 
 
 async def async_maybe_decrypt_thumbnail(
@@ -297,12 +359,14 @@ async def async_maybe_decrypt_thumbnail(
         )
         return None
 
-    token = event_data.get("token")
-    token_str = str(token) if token else ""
+    openapi_token = await _async_openapi_access_token(runtime)
+    push_token = _push_token(event_data)
+    token_kind = _token_kind_label(openapi_token, push_token)
     _LOGGER.debug(
-        "Decrypting alarm thumb for %s tcm=%s url=%s",
+        "Decrypting alarm thumb for %s tcm=%s token=%s url=%s",
         device_id,
         is_tcm,
+        token_kind,
         pic_url,
     )
 
@@ -318,7 +382,8 @@ async def async_maybe_decrypt_thumbnail(
                 encrypt_key,
                 str(device_id),
                 is_tcm,
-                token_str,
+                openapi_token or push_token,
+                push_token if openapi_token and push_token != openapi_token else "",
             ),
             timeout=_DECRYPT_TIMEOUT_SECONDS,
         )
