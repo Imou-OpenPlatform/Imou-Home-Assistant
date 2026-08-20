@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import DOMAIN, PARAM_ATTACH_DECRYPTED_THUMBNAIL
@@ -17,6 +17,13 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
+
+
+def _runtime_with_access_token(token: str = "openapi-token") -> ImouRuntimeData:
+    client = MagicMock()
+    client.access_token = token
+    client.async_get_token = AsyncMock()
+    return ImouRuntimeData(coordinator=MagicMock(), client=client)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -179,10 +186,10 @@ async def test_maybe_decrypt_logs_when_push_has_no_picture(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_maybe_decrypt_uses_pic_url_when_array_missing(
+async def test_maybe_decrypt_skips_without_openapi_token(
     hass: HomeAssistant,
 ) -> None:
-    """PaaS pushes often have picUrl instead of picUrlArray."""
+    """Push token is not an OpenAPI accessToken; skip rather than call the SDK."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
@@ -193,33 +200,82 @@ async def test_maybe_decrypt_uses_pic_url_when_array_missing(
     event_data = {
         "device_id": "SN1",
         "alarm_id": "a1",
+        "token": "push-token",
         "raw": {"picUrl": "https://example.com/only.jpg"},
     }
     with patch(
         "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
         return_value="/local/imou_life/thumbs/a1.jpg",
     ) as mock_decrypt:
-        result = await async_maybe_decrypt_thumbnail(
-            hass, entry, runtime, event_data
-        )
-    assert result == "/local/imou_life/thumbs/a1.jpg"
-    assert mock_decrypt.call_args.args[4] == "https://example.com/only.jpg"
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert result is None
+    mock_decrypt.assert_not_called()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_maybe_decrypt_prefers_openapi_access_token(
+async def test_maybe_decrypt_uses_pic_url_when_array_missing(
     hass: HomeAssistant,
 ) -> None:
-    """Official Demo token is the OpenAPI accessToken, not the push field."""
+    """PaaS pushes often have picUrl instead of picUrlArray."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
         options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
     )
     entry.add_to_hass(hass)
-    client = MagicMock()
-    client.access_token = "openapi-token"
-    runtime = ImouRuntimeData(coordinator=MagicMock(), client=client)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with patch(
+        "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+        return_value="/local/imou_life/thumbs/a1.jpg",
+    ) as mock_decrypt:
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_args.args[4] == "https://example.com/only.jpg"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_uses_pic_url_arr(
+    hass: HomeAssistant,
+) -> None:
+    """IoT pushes use picUrlArr, not picUrlArray."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+    entry.add_to_hass(hass)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrlArr": ["https://example.com/arr.jpg"]},
+    }
+    with patch(
+        "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+        return_value="/local/imou_life/thumbs/a1.jpg",
+    ) as mock_decrypt:
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_args.args[4] == "https://example.com/arr.jpg"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_prefers_openapi_access_token(
+    hass: HomeAssistant,
+) -> None:
+    """SDK StrongDidCheck only accepts OpenAPI accessToken, not the push field."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+    entry.add_to_hass(hass)
+    runtime = _runtime_with_access_token()
     event_data = {
         "device_id": "SN1",
         "alarm_id": "a1",
@@ -235,51 +291,43 @@ async def test_maybe_decrypt_prefers_openapi_access_token(
         )
     assert result == "/local/imou_life/thumbs/a1.jpg"
     assert mock_decrypt.call_args.args[8] == "openapi-token"
-    assert mock_decrypt.call_args.args[9] == "push-token"
+    runtime.client.async_get_token.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-def test_sync_decrypt_retries_push_token_after_url_auth_fail(
+async def test_maybe_decrypt_refreshes_token_after_failure(
     hass: HomeAssistant,
 ) -> None:
-    """code=-1 with the OpenAPI token still tries the push token."""
-    from pyimouapi.pic_decode import PicDecodeError
-
-    jpeg_bytes = b"\xff\xd8\xff\xe0"
-    mock_decoder = MagicMock()
-    mock_decoder.decrypt_picture.side_effect = [
-        PicDecodeError(-1, "sdk -1"),
-        jpeg_bytes,
-    ]
-
-    runtime = ImouRuntimeData(coordinator=MagicMock())
-    runtime.pic_decoder = mock_decoder
-    runtime.pic_decoder_initialized = True
-
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    """If the stored accessToken fails, fetch a new one and retry once."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
     entry.add_to_hass(hass)
+    runtime = _runtime_with_access_token("stale-token")
 
-    result = _sync_decrypt_and_write(
-        runtime,
-        entry,
-        hass,
-        {"alarm_id": "alarm123", "device_id": "SN1"},
-        "https://example.com/pic",
-        "encrypt_key",
-        "SN1",
-        False,
-        "openapi-token",
-        "push-token",
-    )
+    async def _refresh() -> None:
+        runtime.client.access_token = "fresh-token"
 
-    assert result == "/local/imou_life/thumbs/alarm123.jpg"
-    assert mock_decoder.decrypt_picture.call_count == 2
-    assert mock_decoder.decrypt_picture.call_args_list[0].kwargs["token"] == (
-        "openapi-token"
-    )
-    assert mock_decoder.decrypt_picture.call_args_list[1].kwargs["token"] == (
-        "push-token"
-    )
+    runtime.client.async_get_token = AsyncMock(side_effect=_refresh)
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with patch(
+        "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+        side_effect=[None, "/local/imou_life/thumbs/a1.jpg"],
+    ) as mock_decrypt:
+        result = await async_maybe_decrypt_thumbnail(
+            hass, entry, runtime, event_data
+        )
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_count == 2
+    assert mock_decrypt.call_args_list[0].args[8] == "stale-token"
+    assert mock_decrypt.call_args_list[1].args[8] == "fresh-token"
+    runtime.client.async_get_token.assert_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -313,3 +361,36 @@ def test_sync_decrypt_logs_url_auth_meaning_for_code_minus_one(
     assert result is None
     assert "URL auth or download failed" in caplog.text
     assert "tcm=False" in caplog.text
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_sync_decrypt_logs_incomplete_data_for_code_one(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    from pyimouapi.pic_decode import PicDecodeError
+
+    mock_decoder = MagicMock()
+    mock_decoder.decrypt_picture.side_effect = PicDecodeError(1, "sdk 1")
+
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    runtime.pic_decoder = mock_decoder
+    runtime.pic_decoder_initialized = True
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+
+    with caplog.at_level("WARNING"):
+        result = _sync_decrypt_and_write(
+            runtime,
+            entry,
+            hass,
+            {"alarm_id": "alarm123", "device_id": "SN1"},
+            "https://example.com/pic",
+            "encrypt_key",
+            "SN1",
+            True,
+            "token",
+        )
+    assert result is None
+    assert "incomplete data" in caplog.text
+    assert "tcm=True" in caplog.text
