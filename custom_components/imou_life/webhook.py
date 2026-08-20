@@ -12,7 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiohttp import web
-from homeassistant.components import webhook
+from homeassistant.components import persistent_notification, webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
@@ -39,7 +39,7 @@ from .helpers import (
     resolve_ha_device_name,
 )
 from .local_record import async_maybe_record_from_alarm
-from .pic_thumbnail import async_maybe_decrypt_thumbnail
+from .pic_thumbnail import async_maybe_decrypt_thumbnail, public_media_url
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -337,6 +337,36 @@ async def _async_build_notification_message(
     return title, message
 
 
+async def _async_create_web_notification(
+    hass: HomeAssistant,
+    event_data: dict[str, Any],
+    thumbnail_url: str,
+) -> None:
+    """Show the decrypted still in the Home Assistant web notification drawer.
+
+    One notification id per device keeps the drawer at the latest alarm per
+    camera instead of growing without bound. The relative ``/local/`` path is
+    right here: the browser is already on Home Assistant's own origin.
+    """
+    title, message = await _async_build_notification_message(hass, event_data)
+    device_key = (
+        resolve_ha_device_key(
+            hass,
+            event_data.get("device_id"),
+            event_data.get("channel_id"),
+            event_data.get("product_id"),
+        )
+        or event_data.get("device_id")
+        or "unknown"
+    )
+    persistent_notification.async_create(
+        hass,
+        f"![]({thumbnail_url})\n\n{message}",
+        title=title,
+        notification_id=f"{DOMAIN}_alarm_{device_key}",
+    )
+
+
 def _is_companion_notify(domain: str, service: str) -> bool:
     """Return True for Companion App notify.mobile_app_* services."""
     return domain == "notify" and service.startswith("mobile_app_")
@@ -421,22 +451,36 @@ async def _async_dispatch_imou_push(
     try:
         await _async_apply_event_identifier(runtime, event_data)
         runtime.record_push_msg(event_data.get("msg_type"))
+        thumbnail_local = None
+        is_alarm = is_alarm_msg_type(event_data.get("msg_type"))
+        if is_alarm:
+            thumbnail_local = await async_maybe_decrypt_thumbnail(
+                hass, entry, runtime, event_data
+            )
+            if thumbnail_local:
+                event_data["thumbnail_path"] = thumbnail_local
+            _LOGGER.debug(
+                "Alarm thumbnail for %s: %s",
+                event_data.get("device_id"),
+                thumbnail_local or "none",
+            )
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
-        if is_alarm_msg_type(event_data.get("msg_type")):
+        if is_alarm:
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
-            notify_services = runtime.notify_services
-            if notify_services and _notify_on_alarm_enabled(hass, event_data):
-                thumbnail_url = await async_maybe_decrypt_thumbnail(
-                    hass, entry, runtime, event_data
-                )
-                _LOGGER.debug(
-                    "Alarm thumbnail for %s: %s",
-                    event_data.get("device_id"),
-                    thumbnail_url or "none",
-                )
-                await _async_send_notifications(
-                    hass, event_data, notify_services, thumbnail_url
-                )
+            if _notify_on_alarm_enabled(hass, event_data):
+                if thumbnail_local:
+                    await _async_create_web_notification(
+                        hass, event_data, thumbnail_local
+                    )
+                if runtime.notify_services:
+                    public_thumb = (
+                        public_media_url(hass, thumbnail_local)
+                        if thumbnail_local
+                        else None
+                    )
+                    await _async_send_notifications(
+                        hass, event_data, runtime.notify_services, public_thumb
+                    )
             await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:
         _LOGGER.exception("Failed while processing accepted Imou webhook push")

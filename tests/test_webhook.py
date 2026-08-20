@@ -31,6 +31,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
+    async_get_persistent_notifications,
     async_mock_service,
 )
 
@@ -1389,8 +1390,10 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
     registry = dr.async_get(hass)
     device = registry.async_get_device(identifiers={(DOMAIN, "SN1_0")})
     assert device is not None
+    hass.config.external_url = "https://ha.example.com"
     calls = async_mock_service(hass, "notify", "mobile_app_phone")
     thumb_url = "/local/imou_life/thumbs/1.jpg"
+    public_url = "https://ha.example.com/local/imou_life/thumbs/1.jpg"
 
     async def _inject_thumb(
         _hass: HomeAssistant,
@@ -1425,8 +1428,9 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
     data = calls[0].data["data"]
     assert data["url"] == path
     assert data["clickAction"] == path
-    assert data["image"] == thumb_url
-    assert data["attachment"]["url"] == thumb_url
+    assert data["image"] == public_url
+    assert data["attachment"]["url"] == public_url
+    assert "icon_url" not in data
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -1584,3 +1588,87 @@ async def test_webhook_notify_never_calls_device_image(hass: HomeAssistant) -> N
         await hass.async_block_till_done(wait_background_tasks=True)
 
     runtime.coordinator.device_manager.async_get_device_image.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_decrypts_without_notify_and_sets_event_path(
+    hass: HomeAssistant,
+) -> None:
+    """Decrypt still runs with no notify targets so the camera still can update."""
+    _setup_thumbnail_notify(hass, attach=True, notify_services=[])
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_ALARM, events.append)
+    thumb_url = "/local/imou_life/thumbs/1.jpg"
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value=thumb_url),
+    ) as mock_decrypt:
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    mock_decrypt.assert_awaited_once()
+    assert len(events) == 1
+    assert events[0].data["thumbnail_path"] == thumb_url
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_web_notification_embeds_thumb(hass: HomeAssistant) -> None:
+    """The web notification drawer shows the decrypted still as markdown."""
+    _setup_thumbnail_notify(hass, attach=True, notify_services=[])
+    thumb_url = "/local/imou_life/thumbs/1.jpg"
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value=thumb_url),
+    ):
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    notifications = async_get_persistent_notifications(hass)
+    notification = notifications["imou_life_alarm_SN1_0"]
+    assert notification["message"].startswith(f"![]({thumb_url})")
+    assert notification["title"].startswith("Imou Life ·")
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_no_thumb_creates_no_web_notification(
+    hass: HomeAssistant,
+) -> None:
+    """Text-only alarms must not add entries to the web notification drawer."""
+    _setup_thumbnail_notify(hass, attach=True, notify_services=[])
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value=None),
+    ):
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert async_get_persistent_notifications(hass) == {}

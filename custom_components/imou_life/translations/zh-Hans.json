@@ -67,7 +67,7 @@
   "issues": {
     "event_push_no_external_url": {
       "title": "Imou 事件推送缺少回调 URL",
-      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 **配置 → 告警、通知与录像** 中填写回调地址。"
+      "description": "已启用事件推送，但 Home Assistant 无法生成外部 Webhook URL。请在 **设置 → 系统 → 网络 → Home Assistant URL** 中配置，或在 **配置 → 告警推送与通知** 中填写回调地址。"
     },
     "event_push_callback_failed": {
       "title": "Imou 事件推送注册失败",
@@ -89,9 +89,11 @@
         "description": "选择分区后提交即保存，无需一次改完所有项。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
-          "event_push": "告警、通知与录像",
-          "alarm_image_passwords": "告警图片解密（库文件与密码）",
-          "devices": "选择与绑定设备"
+          "event_push": "告警推送与通知",
+          "alarm_image_decrypt": "告警图片解密",
+          "local_recording": "告警时录像",
+          "select_poll_devices": "选择要轮询的设备",
+          "bind_device": "绑定新设备"
         }
       },
       "general_settings": {
@@ -125,7 +127,7 @@
         }
       },
       "event_push": {
-        "title": "告警、通知与录像",
+        "title": "告警推送与通知",
         "description": "通过 Webhook 接收云端告警。建议地址：{suggested_url}",
         "data": {
           "enable_event_push": "启用事件推送",
@@ -142,46 +144,38 @@
             "name": "告警时通知",
             "description": "可选。留空只靠自动化。",
             "data": {
-              "notify_services": "通知目标",
-              "attach_decrypted_thumbnail": "贴解密告警缩略图",
-              "default_device_password": "默认设备密码"
+              "notify_services": "通知目标"
             },
             "data_description": {
-              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。",
-              "attach_decrypted_thumbnail": "仅 linux x86-64。本机是否支持、以及库文件复制路径，见「配置 → 告警图片解密」。TCM 需要乐橙设备密码。/local/imou_life/thumbs/ 无身份验证（持有 URL 约 24 小时内可查看）。若原先没有 /config/www，首次生成缩略图后需重启 Home Assistant。",
-              "default_device_password": "某设备在「告警图片解密」中未单独设置时使用。保存在本机，仅用于解密。"
-            }
-          },
-          "local_recording": {
-            "name": "本地录像",
-            "description": "共用保存目录与片段时长。各摄像头的 **告警时录像** 在设备页开关。",
-            "data": {
-              "local_record_path": "保存目录",
-              "local_record_duration": "片段时长（秒）"
-            },
-            "data_description": {
-              "local_record_path": "例如 /media/imou。留空则不保存。目录须加入 allowlist_external_dirs。",
-              "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
+              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。想让通知带上告警图，见「告警图片解密」。"
             }
           }
         }
       },
-      "alarm_image_passwords": {
+      "alarm_image_decrypt": {
         "title": "告警图片解密",
-        "description": "已配置 {password_count} 个按序列号的密码（{configured_serials}）。本页可一次填写多台设备；密码框留空表示不改。密码保存在本机，仅用于解密。解密库：{native_support}。将 libLCOpenApiClient.so 与 libLCOpenSDK.so 放到 {native_dir}（已找到 {native_libs_found}/2）。",
+        "description": "告警图片是加密的。Home Assistant 会自己下载并在本机解密，然后把图片贴进告警通知和网页通知栏。状态：{native_hint}。\n\n只有 TCM 设备需要密码，其余设备用序列号解密。已存密码 {password_count} 个（{configured_serials}）。密码框留空表示不改。密码只保存在本机，仅用于解密。",
         "data": {
+          "attach_decrypted_thumbnail": "贴解密告警缩略图",
+          "default_device_password": "默认设备密码",
           "remove_device_passwords": "删除已存密码"
         },
         "data_description": {
+          "attach_decrypted_thumbnail": "须在「设置 → 系统 → 网络」填写 Home Assistant 外网 URL，手机不在局域网才能加载图片。/local/imou_life/thumbs/ 无身份验证（约 24 小时）。若原先没有 /config/www，首次生成后需重启 Home Assistant。",
+          "default_device_password": "下面留空的设备都用这个密码。",
           "remove_device_passwords": "勾选的序列号会删除密码。"
         }
       },
-      "devices_menu": {
-        "title": "选择与绑定设备",
-        "description": "选择要轮询的设备，或绑定新设备。",
-        "menu_options": {
-          "select_poll_devices": "选择要轮询的设备",
-          "bind_device": "绑定新设备"
+      "local_recording": {
+        "title": "告警时录像",
+        "description": "收到告警后从云端流录一小段。各摄像头的 **告警时录像** 开关在设备页。",
+        "data": {
+          "local_record_path": "保存目录",
+          "local_record_duration": "片段时长（秒）"
+        },
+        "data_description": {
+          "local_record_path": "例如 /media/imou。留空则不保存。目录须加入 allowlist_external_dirs。",
+          "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
         }
       },
       "select_poll_devices": {
@@ -203,7 +197,7 @@
         "title": "无法连接 Imou 云",
         "description": "获取设备列表失败：{error}\n\n你可以重试，或者保存其他修改并保持设备选择不变。",
         "menu_options": {
-          "devices": "重试",
+          "select_poll_devices": "重试",
           "save_without_devices": "保存，不修改设备选择"
         }
       },

@@ -67,7 +67,7 @@
   "issues": {
     "event_push_no_external_url": {
       "title": "Imou event push has no callback URL",
-      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a callback URL under **Configure → Alarms, notifications, and recording**."
+      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a callback URL under **Configure → Alarm push and notifications**."
     },
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
@@ -89,9 +89,11 @@
         "description": "Pick a section to edit. Submit saves that section and closes the dialog.",
         "menu_options": {
           "general_settings": "Polling and cameras",
-          "event_push": "Alarms, notifications, and recording",
-          "alarm_image_passwords": "Alarm image decrypt (libraries and passwords)",
-          "devices": "Choose and bind devices"
+          "event_push": "Alarm push and notifications",
+          "alarm_image_decrypt": "Alarm image decrypt",
+          "local_recording": "Record on alarm",
+          "select_poll_devices": "Choose devices to poll",
+          "bind_device": "Bind a new device"
         }
       },
       "general_settings": {
@@ -125,7 +127,7 @@
         }
       },
       "event_push": {
-        "title": "Alarms, notifications, and recording",
+        "title": "Alarm push and notifications",
         "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
         "data": {
           "enable_event_push": "Enable event push",
@@ -142,46 +144,38 @@
             "name": "Notify on alarm",
             "description": "Optional. Leave empty to use automations only.",
             "data": {
-              "notify_services": "Notification targets",
-              "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
-              "default_device_password": "Default device password"
+              "notify_services": "Notification targets"
             },
             "data_description": {
-              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device.",
-              "attach_decrypted_thumbnail": "linux x86-64 only. Whether this host is supported, and where to copy the Demo libraries, are shown under Configure → Alarm image decrypt. TCM needs the Imou Life device password. /local/imou_life/thumbs/ is unauthenticated (URL holders can view for ~24h). If /config/www was missing, restart Home Assistant after the first thumbnail.",
-              "default_device_password": "Used when a device has no per-serial password in Alarm image decrypt. Stored on this Home Assistant, used only to decrypt."
-            }
-          },
-          "local_recording": {
-            "name": "Local recording",
-            "description": "Shared folder and clip length. Per-camera **Record on alarm** is on each device page.",
-            "data": {
-              "local_record_path": "Save folder",
-              "local_record_duration": "Clip duration (seconds)"
-            },
-            "data_description": {
-              "local_record_path": "Example: /media/imou. Leave empty to skip. Folder must be in allowlist_external_dirs.",
-              "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
+              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device. To attach the alarm picture, see Alarm image decrypt."
             }
           }
         }
       },
-      "alarm_image_passwords": {
+      "alarm_image_decrypt": {
         "title": "Alarm image decrypt",
-        "description": "{password_count} per-serial password(s) ({configured_serials}). Fill every serial on this page; empty keeps the stored password. Passwords are stored on this Home Assistant and used only to decrypt. Decrypt libraries: {native_support}. Copy libLCOpenApiClient.so and libLCOpenSDK.so into {native_dir} ({native_libs_found}/2 found).",
+        "description": "Alarm pictures arrive encrypted. Home Assistant downloads and decrypts them locally, then attaches the JPEG to alarm notifications and to the web notification drawer. Status: {native_hint}.\n\nOnly TCM devices need a password; the rest are keyed by their serial. Stored passwords: {password_count} ({configured_serials}). A blank field keeps the stored password. Passwords stay on this Home Assistant and are used only to decrypt.",
         "data": {
+          "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
+          "default_device_password": "Default device password",
           "remove_device_passwords": "Remove stored passwords"
         },
         "data_description": {
+          "attach_decrypted_thumbnail": "Set Home Assistant's external URL (Settings → System → Network) so phones off the LAN can load the still. /local/imou_life/thumbs/ is unauthenticated (~24h). Restart Home Assistant if /config/www was missing.",
+          "default_device_password": "Used for any device left blank below.",
           "remove_device_passwords": "Checked serials are deleted."
         }
       },
-      "devices_menu": {
-        "title": "Choose and bind devices",
-        "description": "Choose devices to poll, or bind a new device.",
-        "menu_options": {
-          "select_poll_devices": "Choose devices to poll",
-          "bind_device": "Bind a new device"
+      "local_recording": {
+        "title": "Record on alarm",
+        "description": "Records a short clip from the cloud stream after an alarm. Per-camera **Record on alarm** is on each device page.",
+        "data": {
+          "local_record_path": "Save folder",
+          "local_record_duration": "Clip duration (seconds)"
+        },
+        "data_description": {
+          "local_record_path": "Example: /media/imou. Leave empty to skip. Folder must be in allowlist_external_dirs.",
+          "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
         }
       },
       "select_poll_devices": {
@@ -203,7 +197,7 @@
         "title": "Could not reach the Imou cloud",
         "description": "The device list could not be fetched: {error}\n\nYou can try again, or save your other changes and leave the device selection as it is.",
         "menu_options": {
-          "devices": "Try again",
+          "select_poll_devices": "Try again",
           "save_without_devices": "Save without changing device selection"
         }
       },

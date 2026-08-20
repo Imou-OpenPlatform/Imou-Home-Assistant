@@ -32,6 +32,7 @@ from pyimouapi.exceptions import (
     RequestFailedException,
 )
 from pyimouapi.openapi import ImouOpenApiClient
+from pyimouapi.pic_decode import is_tcm_ability
 
 from . import pic_thumbnail
 from .const import (
@@ -99,14 +100,9 @@ _EVENT_PUSH_OPTION_KEYS = (
     PARAM_WEBHOOK_URL,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_SERVICES,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DEFAULT_DEVICE_PASSWORD,
-    PARAM_LOCAL_RECORD_PATH,
-    PARAM_LOCAL_RECORD_DURATION,
 )
 
 SECTION_EVENT_PUSH_NOTIFICATIONS = "notifications"
-SECTION_EVENT_PUSH_LOCAL_RECORDING = "local_recording"
 SECTION_CAMERA_DEFAULTS = "camera_defaults"
 
 
@@ -572,18 +568,6 @@ class ImouOptionsFlow(OptionsFlow):
                 PARAM_NOTIFY_SERVICES: parse_notify_services(
                     flat.get(PARAM_NOTIFY_SERVICES)
                 ),
-                PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
-                    flat.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
-                ),
-                PARAM_DEFAULT_DEVICE_PASSWORD: str(
-                    flat.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
-                ),
-            },
-            SECTION_EVENT_PUSH_LOCAL_RECORDING: {
-                PARAM_LOCAL_RECORD_PATH: flat.get(PARAM_LOCAL_RECORD_PATH, ""),
-                PARAM_LOCAL_RECORD_DURATION: flat.get(
-                    PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
-                ),
             },
         }
         if stored_webhook_url:
@@ -611,37 +595,11 @@ class ImouOptionsFlow(OptionsFlow):
             notifications[PARAM_NOTIFY_SERVICES] = parse_notify_services(
                 notifications.get(PARAM_NOTIFY_SERVICES)
             )
-            notifications[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = bool(
-                notifications.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
-            )
-            notifications[PARAM_DEFAULT_DEVICE_PASSWORD] = str(
-                notifications.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
-            )
             flat.update(notifications)
         else:
             flat[PARAM_NOTIFY_SERVICES] = parse_notify_services(
                 stored_options.get(PARAM_NOTIFY_SERVICES)
             )
-            flat[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = bool(
-                stored_options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
-            )
-            flat[PARAM_DEFAULT_DEVICE_PASSWORD] = str(
-                stored_options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
-            )
-        if SECTION_EVENT_PUSH_LOCAL_RECORDING in user_input:
-            recording = dict(user_input[SECTION_EVENT_PUSH_LOCAL_RECORDING])
-            recording[PARAM_LOCAL_RECORD_PATH] = str(
-                recording.get(PARAM_LOCAL_RECORD_PATH) or ""
-            ).strip()
-            flat.update(recording)
-        else:
-            flat[PARAM_LOCAL_RECORD_PATH] = str(
-                stored_options.get(PARAM_LOCAL_RECORD_PATH) or ""
-            ).strip()
-            flat[PARAM_LOCAL_RECORD_DURATION] = stored_options.get(
-                PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
-            )
-        flat[PARAM_DEVICE_PASSWORDS] = stored_options.get(PARAM_DEVICE_PASSWORDS, {})
         return flat
 
     def _event_push_schema(self) -> vol.Schema:
@@ -678,26 +636,6 @@ class ImouOptionsFlow(OptionsFlow):
                                     mode=SelectSelectorMode.DROPDOWN,
                                 )
                             ),
-                            vol.Optional(
-                                PARAM_ATTACH_DECRYPTED_THUMBNAIL, default=False
-                            ): bool,
-                            vol.Optional(
-                                PARAM_DEFAULT_DEVICE_PASSWORD, default=""
-                            ): TextSelector(
-                                TextSelectorConfig(type=TextSelectorType.PASSWORD)
-                            ),
-                        }
-                    ),
-                    {"collapsed": False},
-                ),
-                vol.Required(SECTION_EVENT_PUSH_LOCAL_RECORDING): section(
-                    vol.Schema(
-                        {
-                            vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
-                            vol.Required(
-                                PARAM_LOCAL_RECORD_DURATION,
-                                default=DEFAULT_LOCAL_RECORD_DURATION,
-                            ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
                         }
                     ),
                     {"collapsed": False},
@@ -714,8 +652,10 @@ class ImouOptionsFlow(OptionsFlow):
             menu_options=[
                 "general_settings",
                 "event_push",
-                "alarm_image_passwords",
-                "devices",
+                "alarm_image_decrypt",
+                "local_recording",
+                "select_poll_devices",
+                "bind_device",
             ],
         )
 
@@ -725,46 +665,63 @@ class ImouOptionsFlow(OptionsFlow):
             return language
         return "en"
 
-    def _native_lib_placeholders(self) -> dict[str, str]:
-        """Return decrypt-library path, file count, and platform support."""
-        return {
-            "native_dir": str(pic_thumbnail.native_lib_dir(self.hass)),
-            "native_libs_found": str(pic_thumbnail.native_libs_found(self.hass)),
-            "native_platform": pic_thumbnail.native_platform_label(),
-            "native_support": pic_thumbnail.native_support_status(self._ui_language()),
-        }
-
     def _device_passwords(self) -> dict[str, str]:
         """Return the stored per-serial alarm image passwords."""
         stored = self.config_entry.options.get(PARAM_DEVICE_PASSWORDS, {})
         return dict(stored) if isinstance(stored, dict) else {}
 
-    def _device_password_serials(self) -> list[str]:
-        """Return serials that should appear on the password form."""
-        serials = set(self._device_passwords())
+    def _password_fields(self) -> list[tuple[str, str]]:
+        """Return (form field, serial) pairs for the password form.
+
+        Only TCM devices are keyed by a device password; the rest decrypt from
+        their serial, so listing them would be a form field that does nothing.
+        Serials that already hold a password stay listed either way, so a value
+        stored before a device changed hands can still be seen and cleared.
+        """
+        stored = self._device_passwords()
+        names: dict[str, str] = {}
+        serials = set(stored)
         runtime = get_runtime_data(self.config_entry)
         if runtime is not None:
-            serials.update(
-                device.device_id
-                for device in runtime.coordinator.devices_by_key.values()
-                if device.device_id
-            )
-        return sorted(serials)
+            for device in runtime.coordinator.devices_by_key.values():
+                serial = device.device_id
+                if not serial:
+                    continue
+                if device.device_name:
+                    names[serial] = device.device_name
+                if is_tcm_ability(device.device_ability or ""):
+                    serials.add(serial)
+        fields = []
+        for serial in sorted(serials):
+            name = names.get(serial)
+            fields.append((f"{name} ({serial})" if name else serial, serial))
+        return fields
 
-    def _alarm_image_passwords_schema(self) -> vol.Schema:
-        """Build one password field per known serial."""
+    def _alarm_image_decrypt_schema(self) -> vol.Schema:
+        """Build the decrypt switch, the default password, and per-device ones."""
         stored = self._device_passwords()
-        fields: dict[Any, Any] = {}
-        suggested: dict[str, Any] = {}
+        options = self.config_entry.options
         password_selector = TextSelector(
             TextSelectorConfig(
                 type=TextSelectorType.PASSWORD,
                 autocomplete="new-password",
             )
         )
-        for serial in self._device_password_serials():
-            fields[vol.Optional(serial, default="")] = password_selector
-            suggested[serial] = stored.get(serial, "")
+        fields: dict[Any, Any] = {
+            vol.Optional(PARAM_ATTACH_DECRYPTED_THUMBNAIL, default=False): bool,
+            vol.Optional(PARAM_DEFAULT_DEVICE_PASSWORD, default=""): password_selector,
+        }
+        suggested: dict[str, Any] = {
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
+                options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
+            ),
+            PARAM_DEFAULT_DEVICE_PASSWORD: str(
+                options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+            ),
+        }
+        for field, serial in self._password_fields():
+            fields[vol.Optional(field, default="")] = password_selector
+            suggested[field] = stored.get(serial, "")
         if stored:
             fields[vol.Optional(_FIELD_REMOVE_PASSWORDS, default=[])] = SelectSelector(
                 SelectSelectorConfig(
@@ -775,51 +732,104 @@ class ImouOptionsFlow(OptionsFlow):
             )
         return self.add_suggested_values_to_schema(vol.Schema(fields), suggested)
 
-    @staticmethod
-    def _merge_device_passwords(
-        stored: Mapping[str, str], user_input: Mapping[str, Any]
-    ) -> dict[str, str]:
+    def _merge_device_passwords(self, user_input: Mapping[str, Any]) -> dict[str, str]:
         """Merge the password form into the stored serial map.
 
-        Empty per-serial fields keep the existing password. Checked remove
+        Empty per-device fields keep the existing password. Checked remove
         serials are deleted last.
         """
-        passwords = dict(stored)
-        for key, value in user_input.items():
-            if key == _FIELD_REMOVE_PASSWORDS:
-                continue
-            serial = str(key).strip()
-            if not serial:
-                continue
-            password = str(value or "")
+        passwords = self._device_passwords()
+        for field, serial in self._password_fields():
+            password = str(user_input.get(field) or "")
             if password:
                 passwords[serial] = password
         for serial in user_input.get(_FIELD_REMOVE_PASSWORDS) or []:
             passwords.pop(str(serial).strip(), None)
         return passwords
 
-    async def async_step_alarm_image_passwords(
+    async def async_step_alarm_image_decrypt(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Set per-serial alarm image passwords on one form."""
+        """Turn decryption on and hold every password it needs, on one form."""
         if user_input is not None:
-            passwords = self._merge_device_passwords(
-                self._device_passwords(), user_input
-            )
             return self.async_create_entry(
-                data=self._merge_options(**{PARAM_DEVICE_PASSWORDS: passwords})
+                data=self._merge_options(
+                    **{
+                        PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
+                            user_input.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
+                        ),
+                        PARAM_DEFAULT_DEVICE_PASSWORD: str(
+                            user_input.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+                        ),
+                        PARAM_DEVICE_PASSWORDS: self._merge_device_passwords(
+                            user_input
+                        ),
+                    }
+                )
             )
 
         stored = self._device_passwords()
-        configured = ", ".join(sorted(stored)) if stored else "-"
         return self.async_show_form(
-            step_id="alarm_image_passwords",
-            data_schema=self._alarm_image_passwords_schema(),
+            step_id="alarm_image_decrypt",
+            data_schema=self._alarm_image_decrypt_schema(),
             description_placeholders={
                 "password_count": str(len(stored)),
-                "configured_serials": configured,
-                **self._native_lib_placeholders(),
+                "configured_serials": ", ".join(sorted(stored)) if stored else "-",
+                "native_hint": pic_thumbnail.native_libraries_hint(
+                    self.hass, self._ui_language()
+                ),
             },
+        )
+
+    def _local_recording_schema(self) -> vol.Schema:
+        """Build the local recording form."""
+        return vol.Schema(
+            {
+                vol.Optional(PARAM_LOCAL_RECORD_PATH, default=""): str,
+                vol.Required(
+                    PARAM_LOCAL_RECORD_DURATION,
+                    default=DEFAULT_LOCAL_RECORD_DURATION,
+                ): vol.All(vol.Coerce(int), vol.Range(min=15, max=180)),
+            }
+        )
+
+    async def async_step_local_recording(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage options — where alarm clips go and how long they run."""
+        options = self.config_entry.options
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            folder = str(user_input.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
+            path_error = self._local_record_path_error(folder)
+            if path_error:
+                errors[PARAM_LOCAL_RECORD_PATH] = path_error
+            else:
+                return self.async_create_entry(
+                    data=self._merge_options(
+                        **{
+                            PARAM_LOCAL_RECORD_PATH: folder,
+                            PARAM_LOCAL_RECORD_DURATION: user_input[
+                                PARAM_LOCAL_RECORD_DURATION
+                            ],
+                        }
+                    )
+                )
+            suggested = dict(user_input)
+        else:
+            suggested = {
+                PARAM_LOCAL_RECORD_PATH: options.get(PARAM_LOCAL_RECORD_PATH, ""),
+                PARAM_LOCAL_RECORD_DURATION: options.get(
+                    PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION
+                ),
+            }
+
+        return self.async_show_form(
+            step_id="local_recording",
+            data_schema=self.add_suggested_values_to_schema(
+                self._local_recording_schema(), suggested
+            ),
+            errors=errors,
         )
 
     async def async_step_general_settings(
@@ -853,21 +863,14 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_event_push(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage options — event push, notifications, and local recording."""
+        """Manage options — event push and notification targets."""
         stored = dict(self.config_entry.options)
         errors: dict[str, Any] = {}
         error_detail = ""
         suggested_source: Mapping[str, Any] = stored
         if user_input is not None:
             flat = self._flatten_event_push_input(user_input, stored)
-            path_error = self._local_record_path_error(
-                str(flat.get(PARAM_LOCAL_RECORD_PATH) or "")
-            )
-            if path_error:
-                errors[SECTION_EVENT_PUSH_LOCAL_RECORDING] = {
-                    PARAM_LOCAL_RECORD_PATH: path_error
-                }
-            if not errors and flat[PARAM_ENABLE_EVENT_PUSH]:
+            if flat[PARAM_ENABLE_EVENT_PUSH]:
                 callback_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
                 if not callback_url:
                     errors[PARAM_WEBHOOK_URL] = "callback_url_missing"
@@ -1000,13 +1003,6 @@ class ImouOptionsFlow(OptionsFlow):
             errors=errors or {},
         )
 
-    def _show_devices_menu(self) -> ConfigFlowResult:
-        """Choose poll list vs bind when the account has devices."""
-        return self.async_show_menu(
-            step_id="devices_menu",
-            menu_options=["select_poll_devices", "bind_device"],
-        )
-
     async def _async_bind_device_id(self, device_id: str, code: str) -> str | None:
         """Bind a serial and refresh the account map. Return an error key or None."""
         api_client = ImouOpenApiClient(
@@ -1035,18 +1031,14 @@ class ImouOptionsFlow(OptionsFlow):
             pending.append(device_id)
         return pending
 
-    async def async_step_devices(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Load the account device list, then offer poll or bind."""
-        errors: dict[str, str] = {}
-        error_detail = ""
+    async def _async_load_devices_map(self) -> str:
+        """Fetch the account device list. Return an error detail, or empty."""
+        api_client = ImouOpenApiClient(
+            self.config_entry.data[PARAM_APP_ID],
+            self.config_entry.data[PARAM_APP_SECRET],
+            self.config_entry.data[PARAM_API_URL],
+        )
         try:
-            api_client = ImouOpenApiClient(
-                self.config_entry.data[PARAM_APP_ID],
-                self.config_entry.data[PARAM_APP_SECRET],
-                self.config_entry.data[PARAM_API_URL],
-            )
             try:
                 self._devices_map = await async_build_device_map(self.hass, api_client)
             finally:
@@ -1055,27 +1047,11 @@ class ImouOptionsFlow(OptionsFlow):
             _LOGGER.warning(
                 "Failed to fetch device list for options: %s", exception.message
             )
-            errors["base"] = "request_failed"
-            error_detail = _api_error_placeholder(exception)
+            return _api_error_placeholder(exception)
         except Exception as exception:
             _LOGGER.exception("Failed to fetch device list for options")
-            errors["base"] = "request_failed"
-            error_detail = _api_error_placeholder(exception)
-
-        if errors:
-            self._devices_error = error_detail
-            return await self.async_step_devices_unavailable()
-
-        if not self._devices_map:
-            return await self.async_step_no_devices_menu()
-
-        return self._show_devices_menu()
-
-    async def async_step_devices_menu(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Choose whether to edit the poll list or bind a device."""
-        return self._show_devices_menu()
+            return _api_error_placeholder(exception)
+        return ""
 
     async def async_step_select_poll_devices(
         self, user_input: dict[str, Any] | None = None
@@ -1085,7 +1061,11 @@ class ImouOptionsFlow(OptionsFlow):
             selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
             return self._create_selected_entry(selected)
         if not self._devices_map:
-            return await self.async_step_devices()
+            self._devices_error = await self._async_load_devices_map()
+            if self._devices_error:
+                return await self.async_step_devices_unavailable()
+            if not self._devices_map:
+                return await self.async_step_no_devices_menu()
         return self._show_devices_form()
 
     async def async_step_devices_unavailable(
@@ -1094,7 +1074,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Offer retry or closing without changing devices when listing fails."""
         return self.async_show_menu(
             step_id="devices_unavailable",
-            menu_options=["devices", "save_without_devices"],
+            menu_options=["select_poll_devices", "save_without_devices"],
             description_placeholders={"error": self._devices_error},
         )
 

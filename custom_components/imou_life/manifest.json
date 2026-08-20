@@ -9,6 +9,7 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "persistent_notification",
     "webhook"
   ],
   "documentation": "https://open.imoulife.com/book/guide/haDev.html",

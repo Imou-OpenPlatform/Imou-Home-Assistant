@@ -33,7 +33,6 @@ class ImouRuntimeData:
     local_record_started_at: dict[str, float] = field(default_factory=dict)
     pic_decoder: LCOpenPicDecoder | None = None
     pic_decoder_failed: bool = False
-    pic_decoder_initialized: bool = False
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

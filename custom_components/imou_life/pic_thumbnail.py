@@ -13,9 +13,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aiohttp import ClientError, ClientTimeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from pyimouapi.pic_decode import (
+    CLIENT_LIB,
+    SDK_LIB,
     LCOpenPicDecoder,
     PicDecodeError,
     is_tcm_ability,
@@ -24,9 +29,6 @@ from pyimouapi.pic_decode import (
 from pyimouapi.push import pic_urls_from_payload, preferred_pic_url
 
 from .const import (
-    PARAM_API_URL,
-    PARAM_APP_ID,
-    PARAM_APP_SECRET,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_DEVICE_PASSWORDS,
@@ -40,12 +42,13 @@ _LOGGER = logging.getLogger(__name__)
 
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
-_NATIVE_API_PORT = 443
 _DECRYPT_TIMEOUT_SECONDS = 30
+_DOWNLOAD_TIMEOUT_SECONDS = 20
+_DOWNLOAD_CHUNK_BYTES = 64 * 1024
+_MAX_PICTURE_BYTES = 20 * 1024 * 1024
+_SDK_CODE_WRONG_KEY = 2
 _SDK_CODE_HINT = {
-    -2: "URL does not match deviceId",
-    -1: "URL auth or download failed",
-    1: "incomplete data",
+    1: "truncated or corrupt picture data",
     2: "wrong key",
     3: "not encrypted",
     4: "unsupported encryption",
@@ -53,8 +56,8 @@ _SDK_CODE_HINT = {
 }
 _PIC_DECODER_INIT_LOCK = threading.Lock()
 
-NATIVE_CLIENT_SO = "libLCOpenApiClient.so"
-NATIVE_SDK_SO = "libLCOpenSDK.so"
+NATIVE_CLIENT_SO = CLIENT_LIB
+NATIVE_SDK_SO = SDK_LIB
 _SUPPORTED_MACHINES = frozenset({"x86_64", "amd64"})
 
 
@@ -97,6 +100,32 @@ def native_libs_found(hass: HomeAssistant) -> int:
 def native_libs_present(hass: HomeAssistant) -> bool:
     """Return whether both official Demo native libraries exist."""
     return native_libs_found(hass) == 2
+
+
+def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
+    """Return one line about the decrypt libraries for the options form.
+
+    Spell out the filenames and the folder only while something is missing;
+    a host that is already set up does not need the install instructions.
+    """
+    zh = language.lower().startswith("zh")
+    if not native_platform_supported():
+        return native_support_status(language)
+    found = native_libs_found(hass)
+    if found == 2:
+        if zh:
+            return "解密库已就绪 (linux x86-64)"
+        return "decrypt libraries ready (linux x86-64)"
+    native_dir = native_lib_dir(hass)
+    if zh:
+        return (
+            f"缺少解密库 (已找到 {found}/2)。请将 {NATIVE_CLIENT_SO} 与 "
+            f"{NATIVE_SDK_SO} 复制到 {native_dir}"
+        )
+    return (
+        f"decrypt libraries missing ({found}/2 found). Copy {NATIVE_CLIENT_SO} "
+        f"and {NATIVE_SDK_SO} into {native_dir}"
+    )
 
 
 def _nonempty_password(value: Any) -> str | None:
@@ -177,17 +206,10 @@ def _prune_old_thumbs(thumbs_dir: Path) -> None:
         _LOGGER.debug("Could not list thumb directory %s", thumbs_dir)
 
 
-def _sync_decrypt_and_write(
-    runtime: ImouRuntimeData,
-    entry: ConfigEntry,
-    hass: HomeAssistant,
-    event_data: dict[str, Any],
-    pic_url: str,
-    encrypt_key: str,
-    device_id: str,
-    use_tcm: bool,
-    token: str,
-) -> str | None:
+def _load_decoder(
+    runtime: ImouRuntimeData, hass: HomeAssistant
+) -> LCOpenPicDecoder | None:
+    """Load the native libraries once, or return None when unusable."""
     if not native_platform_supported():
         if not runtime.pic_decoder_failed:
             runtime.pic_decoder_failed = True
@@ -202,23 +224,8 @@ def _sync_decrypt_and_write(
         with _PIC_DECODER_INIT_LOCK:
             if runtime.pic_decoder is None:
                 runtime.pic_decoder = LCOpenPicDecoder(native_dir)
-            decoder = runtime.pic_decoder
-            if not runtime.pic_decoder_initialized:
-                decoder.load()
-                host = str(entry.data[PARAM_API_URL])
-                decoder.init_open_api(
-                    host,
-                    _NATIVE_API_PORT,
-                    entry.data[PARAM_APP_ID],
-                    entry.data[PARAM_APP_SECRET],
-                )
-                runtime.pic_decoder_initialized = True
-                ca_file = native_dir / "cacert.pem"
-                _LOGGER.debug(
-                    "LCOpenSDK initOpenApi host=%s cacert=%s",
-                    host,
-                    "native" if ca_file.is_file() else "certifi",
-                )
+            runtime.pic_decoder.load()
+            return runtime.pic_decoder
     except Exception:
         runtime.pic_decoder_failed = True
         _LOGGER.warning(
@@ -228,33 +235,14 @@ def _sync_decrypt_and_write(
         )
         return None
 
-    try:
-        jpeg = decoder.decrypt_picture(
-            pic_url=pic_url,
-            encrypt_key=encrypt_key,
-            device_id=device_id,
-            token=token,
-            use_tcm=use_tcm,
-        )
-    except PicDecodeError as err:
-        hint = _SDK_CODE_HINT.get(err.code)
-        extra = f", {hint}" if hint else ""
-        _LOGGER.warning(
-            "DecryptPicture failed for device %s (code=%s%s, tcm=%s)",
-            device_id,
-            err.code,
-            extra,
-            use_tcm,
-        )
-        return None
-    except Exception:
-        _LOGGER.warning(
-            "DecryptPicture failed for device %s",
-            device_id,
-            exc_info=True,
-        )
-        return None
 
+def _write_thumb(
+    runtime: ImouRuntimeData,
+    hass: HomeAssistant,
+    event_data: dict[str, Any],
+    pic_url: str,
+    jpeg: bytes,
+) -> str | None:
     www_dir = Path(hass.config.path("www"))
     www_existed = www_dir.is_dir()
     thumbs_dir = www_dir / _THUMB_SUBDIR
@@ -274,34 +262,131 @@ def _sync_decrypt_and_write(
         return None
 
     local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
-    _LOGGER.debug("Wrote decrypted alarm thumb %s", local_url)
+    _LOGGER.debug("Wrote decrypted alarm thumb %s (%s bytes)", local_url, len(jpeg))
     return local_url
 
 
-async def _async_openapi_access_token(
-    runtime: ImouRuntimeData, *, refresh: bool = False
-) -> str:
-    """Return the OpenAPI accessToken DecryptPicture needs.
+def _sync_decrypt_and_write(
+    decoder: LCOpenPicDecoder,
+    runtime: ImouRuntimeData,
+    hass: HomeAssistant,
+    event_data: dict[str, Any],
+    pic_url: str,
+    data: bytes,
+    encrypt_key: str,
+    device_id: str,
+    use_tcm: bool,
+) -> tuple[str | None, int | None]:
+    """Decrypt ciphertext this integration downloaded, then write it under www.
 
-    The push ``token`` is a picture id. The native SDK sends it to
-    ``/openapi/strongDidCheck`` and that API only accepts accessToken.
-    Use the token already held by the OpenAPI client unless ``refresh``
-    is set or none is stored.
+    Returns the ``/local/`` URL and the SDK code, so the caller can tell a
+    wrong device password from one worth reporting differently.
     """
-    client = runtime.client
-    if client is None:
-        return ""
-    if not refresh and client.access_token:
-        return client.access_token
     try:
-        await client.async_get_token()
-    except Exception:
-        _LOGGER.debug(
-            "Could not fetch OpenAPI access token before decrypt",
-            exc_info=True,
+        jpeg = decoder.decrypt_bytes(
+            data,
+            device_id=device_id,
+            encrypt_key=encrypt_key,
+            use_tcm=use_tcm,
         )
-        return client.access_token or ""
-    return client.access_token or ""
+    except PicDecodeError as err:
+        hint = _SDK_CODE_HINT.get(err.code)
+        extra = f", {hint}" if hint else ""
+        _LOGGER.warning(
+            "Alarm picture decrypt failed for device %s (code=%s%s, tcm=%s, %s bytes)",
+            device_id,
+            err.code,
+            extra,
+            use_tcm,
+            len(data),
+        )
+        return None, err.code
+    except Exception:
+        _LOGGER.warning(
+            "Alarm picture decrypt failed for device %s", device_id, exc_info=True
+        )
+        return None, None
+
+    return _write_thumb(runtime, hass, event_data, pic_url, jpeg), 0
+
+
+def _content_length(headers: Mapping[str, Any]) -> int | None:
+    raw = headers.get("Content-Length")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | None:
+    """Download the encrypted alarm picture with Home Assistant's HTTP client.
+
+    The decrypt rejects a short read as corrupt, so the body has to be read to
+    the end and checked against Content-Length rather than taken from a single
+    read() that only returns what has arrived so far.
+    """
+    session = async_get_clientsession(hass)
+    try:
+        async with session.get(
+            pic_url, timeout=ClientTimeout(total=_DOWNLOAD_TIMEOUT_SECONDS)
+        ) as response:
+            if response.status != 200:
+                _LOGGER.warning(
+                    "Alarm picture download returned HTTP %s", response.status
+                )
+                return None
+            expected = _content_length(response.headers)
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_BYTES):
+                total += len(chunk)
+                if total > _MAX_PICTURE_BYTES:
+                    _LOGGER.warning(
+                        "Alarm picture larger than %s bytes; skipping",
+                        _MAX_PICTURE_BYTES,
+                    )
+                    return None
+                chunks.append(chunk)
+    except (TimeoutError, ClientError) as err:
+        _LOGGER.warning("Alarm picture download failed: %s", err)
+        return None
+
+    data = b"".join(chunks)
+    if not data:
+        _LOGGER.warning("Alarm picture download returned no data")
+        return None
+    if expected is not None and len(data) != expected:
+        _LOGGER.warning(
+            "Alarm picture download truncated: got %s of %s bytes",
+            len(data),
+            expected,
+        )
+        return None
+    _LOGGER.debug("Downloaded encrypted alarm picture (%s bytes)", len(data))
+    return data
+
+
+def public_media_url(hass: HomeAssistant, local_path: str) -> str:
+    """Turn ``/local/...`` into an absolute URL phones can fetch off-LAN.
+
+    Companion resolves a relative image against the app's Home Assistant
+    address. If that address is still a LAN IP, the still fails to load
+    on cellular. Prefer the configured external URL.
+    """
+    if local_path.startswith(("http://", "https://")):
+        return local_path
+    if not local_path.startswith("/"):
+        return local_path
+    try:
+        base = get_url(hass, prefer_external=True)
+    except NoURLAvailableError:
+        _LOGGER.warning(
+            "Cannot build a public URL for the alarm thumbnail; set Home "
+            "Assistant's external URL (Settings → System → Network) so phones "
+            "outside the LAN can load /local/ images"
+        )
+        return local_path
+    return f"{base.rstrip('/')}{local_path}"
 
 
 async def async_maybe_decrypt_thumbnail(
@@ -352,57 +437,52 @@ async def async_maybe_decrypt_thumbnail(
         )
         return None
 
-    cached = await _async_openapi_access_token(runtime)
-    fetched = False
-    openapi_token = cached
-    if not openapi_token:
-        openapi_token = await _async_openapi_access_token(runtime, refresh=True)
-        fetched = True
-    if not openapi_token:
-        _LOGGER.debug(
-            "Skip decrypt for %s: no OpenAPI access token",
-            device_id,
-        )
+    # Load before downloading: a host without the libraries can never use the
+    # picture, and the load is cached after the first alarm.
+    decoder = await hass.async_add_executor_job(_load_decoder, runtime, hass)
+    if decoder is None:
         return None
+
     _LOGGER.debug(
-        "Decrypting alarm thumb for %s tcm=%s key=%s token=openapi url=%s",
+        "Decrypting alarm thumb for %s tcm=%s key=%s url=%s",
         device_id,
         is_tcm,
         "password" if device_password else "serial",
         pic_url,
     )
 
-    async def _decrypt_with(token: str) -> str | None:
-        return await asyncio.wait_for(
+    data = await _async_download_picture(hass, pic_url)
+    if not data:
+        return None
+
+    try:
+        result, code = await asyncio.wait_for(
             hass.async_add_executor_job(
                 _sync_decrypt_and_write,
+                decoder,
                 runtime,
-                entry,
                 hass,
                 event_data,
                 pic_url,
+                data,
                 encrypt_key,
                 str(device_id),
                 is_tcm,
-                token,
             ),
             timeout=_DECRYPT_TIMEOUT_SECONDS,
         )
-
-    try:
-        result = await _decrypt_with(openapi_token)
-        if result is None and runtime.client is not None and not fetched:
-            refreshed = await _async_openapi_access_token(runtime, refresh=True)
-            if refreshed and refreshed != openapi_token:
-                _LOGGER.debug(
-                    "Retrying alarm thumb decrypt for %s with refreshed OpenAPI token",
-                    device_id,
-                )
-                result = await _decrypt_with(refreshed)
-        return result
     except TimeoutError:
         _LOGGER.warning(
             "Alarm thumbnail decrypt timed out for device %s",
             device_id,
         )
         return None
+
+    if result is None and code == _SDK_CODE_WRONG_KEY:
+        _LOGGER.warning(
+            "Alarm image decrypt for %s rejected the %s; check Configure → "
+            "Alarm image decrypt",
+            device_id,
+            "configured device password" if device_password else "serial key",
+        )
+    return result
