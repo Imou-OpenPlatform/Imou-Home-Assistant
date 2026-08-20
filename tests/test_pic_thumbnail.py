@@ -403,20 +403,53 @@ async def test_download_picture_reads_whole_body(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_download_picture_rejects_error_status(
+async def test_download_picture_gives_up_after_retries(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """An expired signed URL answers with an error page, not a picture."""
+    """A URL that never serves the picture must not retry forever."""
+    from custom_components.imou_life import pic_thumbnail
+
     aioclient_mock.get("https://example.com/pic", status=403, content=b"denied")
 
-    assert await _async_download_picture(hass, "https://example.com/pic") is None
+    with patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()):
+        assert await _async_download_picture(hass, "https://example.com/pic") is None
+    assert aioclient_mock.call_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS) + 1
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_download_picture_rejects_short_body(
+async def test_download_picture_waits_for_a_late_upload(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A body shorter than Content-Length would decrypt as corrupt data."""
+    """The push often beats the picture onto the CDN, which 404s until it lands."""
+    from custom_components.imou_life import pic_thumbnail
+
+    body = b"DHAV" + b"\x00" * 32
+    missing = MagicMock()
+    missing.status = 404
+    late = MagicMock()
+    late.status = 200
+    late.headers = {"Content-Length": str(len(body))}
+    late.content.iter_chunked = lambda _size: _aiter([body])
+    session = MagicMock()
+    session.get = MagicMock(side_effect=[_AsyncCtx(missing), _AsyncCtx(late)])
+
+    with (
+        patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+        caplog.at_level("DEBUG", logger="custom_components.imou_life.pic_thumbnail"),
+    ):
+        result = await pic_thumbnail._async_download_picture(hass, "https://a/pic")
+
+    assert result == body
+    assert mock_sleep.await_count == 1
+    assert "attempt 2" in caplog.text
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_download_picture_retries_a_short_body(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A body shorter than Content-Length is a half-uploaded picture, so retry."""
     from custom_components.imou_life import pic_thumbnail
 
     response = MagicMock()
@@ -428,12 +461,39 @@ async def test_download_picture_rejects_short_body(
 
     with (
         patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
         caplog.at_level("WARNING"),
     ):
         result = await pic_thumbnail._async_download_picture(hass, "https://a/pic")
 
     assert result is None
     assert "truncated" in caplog.text
+    assert mock_sleep.await_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_download_picture_does_not_retry_an_oversized_body(
+    hass: HomeAssistant,
+) -> None:
+    """An object far too large to be an alarm still will not shrink on a retry."""
+    from custom_components.imou_life import pic_thumbnail
+
+    huge = b"\x00" * (pic_thumbnail._MAX_PICTURE_BYTES + 1)
+    response = MagicMock()
+    response.status = 200
+    response.headers = {}
+    response.content.iter_chunked = lambda _size: _aiter([huge])
+    session = MagicMock()
+    session.get = MagicMock(return_value=_AsyncCtx(response))
+
+    with (
+        patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+    ):
+        result = await pic_thumbnail._async_download_picture(hass, "https://a/pic")
+
+    assert result is None
+    mock_sleep.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

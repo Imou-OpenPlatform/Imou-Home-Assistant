@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from aiohttp import ClientError, ClientTimeout
 from homeassistant.config_entries import ConfigEntry
@@ -46,6 +46,8 @@ _DECRYPT_TIMEOUT_SECONDS = 30
 _DOWNLOAD_TIMEOUT_SECONDS = 20
 _DOWNLOAD_CHUNK_BYTES = 64 * 1024
 _MAX_PICTURE_BYTES = 20 * 1024 * 1024
+# The alarm notification waits on the download, so this budget stays short.
+_DOWNLOAD_RETRY_DELAYS = (1.0, 2.0, 4.0)
 _SDK_CODE_WRONG_KEY = 2
 _SDK_CODE_HINT = {
     1: "truncated or corrupt picture data",
@@ -318,52 +320,85 @@ def _content_length(headers: Mapping[str, Any]) -> int | None:
         return None
 
 
-async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | None:
-    """Download the encrypted alarm picture with Home Assistant's HTTP client.
+class _DownloadFailure(NamedTuple):
+    """Why one download attempt produced no picture."""
+
+    reason: str
+    may_retry: bool
+
+
+async def _async_try_download_picture(
+    session: Any, pic_url: str
+) -> bytes | _DownloadFailure:
+    """Fetch the picture once, or report why it did not arrive.
 
     The decrypt rejects a short read as corrupt, so the body has to be read to
     the end and checked against Content-Length rather than taken from a single
     read() that only returns what has arrived so far.
     """
-    session = async_get_clientsession(hass)
     try:
         async with session.get(
             pic_url, timeout=ClientTimeout(total=_DOWNLOAD_TIMEOUT_SECONDS)
         ) as response:
             if response.status != 200:
-                _LOGGER.warning(
-                    "Alarm picture download returned HTTP %s", response.status
-                )
-                return None
+                return _DownloadFailure(f"HTTP {response.status}", True)
             expected = _content_length(response.headers)
             chunks: list[bytes] = []
             total = 0
             async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_BYTES):
                 total += len(chunk)
                 if total > _MAX_PICTURE_BYTES:
-                    _LOGGER.warning(
-                        "Alarm picture larger than %s bytes; skipping",
-                        _MAX_PICTURE_BYTES,
+                    return _DownloadFailure(
+                        f"larger than {_MAX_PICTURE_BYTES} bytes", False
                     )
-                    return None
                 chunks.append(chunk)
     except (TimeoutError, ClientError) as err:
-        _LOGGER.warning("Alarm picture download failed: %s", err)
-        return None
+        return _DownloadFailure(f"{type(err).__name__}: {err}", True)
 
     data = b"".join(chunks)
     if not data:
-        _LOGGER.warning("Alarm picture download returned no data")
-        return None
+        return _DownloadFailure("empty body", True)
     if expected is not None and len(data) != expected:
-        _LOGGER.warning(
-            "Alarm picture download truncated: got %s of %s bytes",
-            len(data),
-            expected,
-        )
-        return None
-    _LOGGER.debug("Downloaded encrypted alarm picture (%s bytes)", len(data))
+        return _DownloadFailure(f"truncated: got {len(data)} of {expected} bytes", True)
     return data
+
+
+async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | None:
+    """Download the encrypted alarm picture, waiting out a late upload.
+
+    The push regularly beats the picture onto the alarm CDN: the object 404s
+    for a moment, or a half-uploaded one comes back short. Both look permanent
+    on a single try, so retry briefly. The alarm notification is waiting on
+    this, which is what keeps the budget small.
+    """
+    session = async_get_clientsession(hass)
+    started = time.monotonic()
+    attempts = 0
+    last_reason = ""
+    for delay in (*_DOWNLOAD_RETRY_DELAYS, None):
+        attempts += 1
+        result = await _async_try_download_picture(session, pic_url)
+        if not isinstance(result, _DownloadFailure):
+            _LOGGER.debug(
+                "Downloaded encrypted alarm picture (%s bytes, attempt %s, %.1fs)",
+                len(result),
+                attempts,
+                time.monotonic() - started,
+            )
+            return result
+        last_reason = result.reason
+        _LOGGER.debug("Alarm picture attempt %s: %s", attempts, last_reason)
+        if not result.may_retry or delay is None:
+            break
+        await asyncio.sleep(delay)
+
+    _LOGGER.warning(
+        "Alarm picture never downloaded after %s attempt(s) over %.1fs (%s)",
+        attempts,
+        time.monotonic() - started,
+        last_reason,
+    )
+    return None
 
 
 def public_media_url(hass: HomeAssistant, local_path: str) -> str:
