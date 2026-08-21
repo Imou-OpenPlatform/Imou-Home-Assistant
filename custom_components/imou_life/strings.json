@@ -87,11 +87,11 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Alarm push: **{push_state}** · Alarm image decrypt: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}** · Devices polled: **{device_state}**\n\nEach page saves on submit and comes back here. Alarm image decrypt and Record on alarm only do anything while alarm push is on.",
+        "description": "Alarm push: **{push_state}** · Alarm pictures: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}** · Devices polled: **{device_state}**\n\nEach page saves on submit and comes back here. Alarm pictures and Record on alarm only do anything while alarm push is on.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarm push and notifications",
-          "alarm_image_decrypt": "Alarm image decrypt",
+          "alarm_image_decrypt": "Alarm pictures",
           "local_recording": "Record on alarm",
           "select_poll_devices": "Choose devices to poll",
           "bind_device": "Bind a new device",
@@ -147,16 +147,16 @@
               "notify_services": "Notification targets"
             },
             "data_description": {
-              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device. To attach the alarm picture, see Alarm image decrypt."
+              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device. To put the alarm picture in these messages, see **Alarm pictures**."
             }
           }
         }
       },
       "alarm_image_decrypt": {
-        "title": "Alarm image decrypt",
-        "description": "{push_hint}Alarm pictures arrive encrypted. Home Assistant decrypts them locally and attaches the JPEG to alarm notifications.\n\nStatus: {native_hint}\n\nOnly TCM devices need a password; the rest are keyed by their serial. A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
+        "title": "Alarm pictures",
+        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
         "data": {
-          "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
+          "attach_decrypted_thumbnail": "Show the picture in alarm notifications",
           "default_device_password": "Default device password",
           "remove_device_passwords": "Remove stored passwords"
         },

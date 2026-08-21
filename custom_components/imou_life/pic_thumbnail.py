@@ -530,8 +530,8 @@ async def async_maybe_decrypt_thumbnail(
 
     if result is None and code == _SDK_CODE_WRONG_KEY:
         _LOGGER.warning(
-            "Alarm image decrypt for %s rejected the %s; check Configure → "
-            "Alarm image decrypt",
+            "Alarm picture decrypt for %s rejected the %s; check Configure → "
+            "Alarm pictures",
             device_id,
             "configured device password" if device_password else "serial key",
         )

@@ -91,7 +91,7 @@ The built-in switch already calls `camera.record` on `imou_life_alarm`. Keep a Y
 1. **Cloud HLS only** — same source as live preview; latency of several seconds is normal.
 2. **Post-event only** — no dependable pre-alarm buffer without keeping a continuous stream open.
 3. **Quota** — every clip consumes live-stream quota for the AppId.
-4. **Encrypted alarm images** in push payloads need the optional **Attach decrypted alarm thumbnail** (Configure → Alarm image decrypt), which is linux x86-64 only. Without it, use `camera.snapshot` when you need a still for notifications.
+4. **Encrypted alarm images** in push payloads need the optional **Show the picture in alarm notifications** (Configure → Alarm pictures), which is linux x86-64 only. Without it, use `camera.snapshot` when you need a still for notifications.
 5. Overlapping alarms on the same camera are skipped until the current clip duration elapses.
 
 ### Troubleshooting
@@ -200,7 +200,7 @@ data:
 1. **仅云端 HLS** — 与实时预览同源；数秒级延迟属正常。
 2. **仅事后录** — 不做持续拉流缓冲则无法可靠预录。
 3. **配额** — 每段录像都会消耗该 AppId 的直播配额。
-4. 推送中的**告警图片为加密格式**，需开启可选的**贴解密告警缩略图**（配置 → 告警图片解密，仅 linux x86-64）才能当缩略图；不开则通知配图请用 `camera.snapshot`。
+4. 推送中的**告警图片为加密格式**，需开启可选的**在告警通知中显示图片**（配置 → 告警图片，仅 linux x86-64）才能当缩略图；不开则通知配图请用 `camera.snapshot`。
 5. 同一摄像头在当前片段时长内的重复告警会被跳过。
 
 ### 故障排查

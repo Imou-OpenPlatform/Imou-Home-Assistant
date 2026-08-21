@@ -18,8 +18,8 @@
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Record on alarm**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 - Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
-- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Home Assistant downloads the encrypted push `picUrlArray` image itself and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
-- **Configure → Alarm image decrypt** is one page for the whole feature: the switch, the default password, and a password field per TCM device (labelled with the device name). Non-TCM devices decrypt from their serial and are not listed. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
+- Optional **Show the picture in alarm notifications** (default off). Home Assistant downloads the encrypted push `picUrlArray` image itself and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. Some devices additionally need their Imou Life device password. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
+- **Configure → Alarm pictures** is one page for the whole feature: the switch, the default password, and a password field for each device that needs one, labelled with the device name. Devices keyed by their serial need nothing and are not listed. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
 - Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
 - New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
 
@@ -37,15 +37,16 @@
 - IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
 - Debug `Received Imou push` logs include the push `token` (no longer masked)
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
-- The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm image decrypt** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
+- The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm pictures** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
 - Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
 - Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
 - Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
 - The Configure menu leads with a one-line status — alarm push, alarm image decrypt, record on alarm, status polling, and how many devices are polled — so no page has to be opened just to check what is on.
-- **Alarm image decrypt** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
-- **Attach decrypted alarm thumbnail** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
+- **Alarm pictures** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
+- **Show the picture in alarm notifications** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
 - The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
 - Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
+- Labels drop the internals they were leaking. The page is **Alarm pictures** rather than *Alarm image decrypt*, its switch is **Show the picture in alarm notifications** rather than *Attach decrypted alarm thumbnail*, and nothing says **TCM** at the user any more — the page simply lists the devices that need a password and says so. Option keys are unchanged, so saved settings carry over.
 
 #### Fixed
 
@@ -282,8 +283,8 @@
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警时录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
-- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
-- **配置 → 告警图片解密** 一页管完整个功能：开关、默认密码，以及每台 TCM 设备一个密码框（用设备名标注）。非 TCM 设备用序列号解密，不再列出。密码框留空表示不改。密码保存在本机，仅用于解密。
+- 可选 **在告警通知中显示图片**（默认关）：由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。部分设备还需要填写乐橙 App 里的设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
+- **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。密码框留空表示不改。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
 - 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
 
@@ -301,15 +302,15 @@
 - IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
 - debug 日志 `Received Imou push` 不再把推送 `token` 打码
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
-- **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片解密**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
+- **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
 - Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致
 - Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
 - **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
-- 配置菜单开头给出一行状态：告警推送、告警图片解密、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
-- **告警图片解密** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
-- 本机缺少原生库时，**贴解密告警缩略图** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
+- 配置菜单开头给出一行状态：告警推送、告警图片、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
+- **告警图片** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
+- 本机缺少原生库时，**在告警通知中显示图片** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
 - **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
-- 摄像头默认区默认展开，抓图等待时间也说清了到底在等什么。
+- 界面文案不再泄露实现细节。页面从「告警图片解密」改名为 **告警图片**，其中的开关从「贴解密告警缩略图」改为 **在告警通知中显示图片**，面向用户的文案里也不再出现 **TCM** —— 页面直接把需要密码的设备列出来并说明。选项存储键未变，已保存的设置照常生效。
 
 #### 修复
 

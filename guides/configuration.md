@@ -58,21 +58,21 @@ Live streams always use `https`. There is no protocol choice: on an HTTPS Home A
 
 A device page also has a **Notify on alarm** switch, so one noisy camera can be silenced without touching this page.
 
-### Alarm image decrypt
+### Alarm pictures
 
 Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself and decrypts it locally, so no Open API quota is spent.
 
 | Option | What it does | Default |
 | --- | --- | --- |
-| Attach decrypted alarm thumbnail | Decrypt the alarm picture and attach the JPEG to notifications. Cannot be switched on while the native libraries are missing. | Off |
+| Show the picture in alarm notifications | Decrypt the alarm picture and put it in notifications. Cannot be switched on while the native libraries are missing. | Off |
 | Default device password | Used for any device whose own field is left blank. | empty |
-| Per-device password | One field per **TCM** device, labelled with the device name and serial. Blank keeps whatever is already stored. | empty |
+| Per-device password | One field per device that needs a password, labelled with the device name and serial. Blank keeps whatever is already stored. | empty |
 | Remove stored passwords | Deletes the passwords of the serials you check. | — |
 
 Prerequisites:
 
 - **linux x86-64 only.** Put both official Demo libraries in `/config/imou_life/native/`: `libLCOpenSDK.so` does the decrypting and `libLCOpenApiClient.so` supplies the OpenSSL symbols it links against, so one alone will not load. The page reports whether they were found.
-- **Only TCM devices need a password.** Everything else is keyed by its serial number.
+- **A password, but only for some devices.** The page lists exactly the devices that need one; anything not listed derives its key from its serial number and needs nothing from you.
 - **An internet-reachable Home Assistant URL** (Step 0), or phones off the LAN cannot load the picture.
 
 Pictures are written to `/local/imou_life/thumbs/` and served **without authentication** for roughly 24 hours, so anyone holding the URL can view them. If `/config/www` did not exist before, restart Home Assistant once after the first picture is written. Many motion pushes carry no picture URL at all; those notifications stay text-only.
@@ -100,7 +100,7 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 | To get this | You need |
 | --- | --- |
 | Any alarm automation, notification, picture, or recording | **Enable event push** on, with a Callback URL the Imou cloud can reach |
-| A picture in a phone notification | Event push, **Attach decrypted alarm thumbnail**, both `.so` files, a password for TCM devices, and an internet-reachable Home Assistant URL |
+| A picture in a phone notification | Event push, **Show the picture in alarm notifications**, both `.so` files, a password for the devices the page lists, and an internet-reachable Home Assistant URL |
 | A picture in the web notification drawer | The same, plus `notify.persistent_notification` among the notification targets |
 | A clip after an alarm | Event push, an allowlisted save folder, and the per-camera switch on |
 
@@ -165,21 +165,21 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 
 设备页上还有一个 **告警时通知** 开关，可以单独静音某个吵闹的摄像头，不用动这一页。
 
-### 告警图片解密
+### 告警图片
 
 告警图片是加密下发的。Home Assistant 自己下载密文再在本机解密，不消耗开放平台配额。
 
 | 选项 | 作用 | 默认 |
 | --- | --- | --- |
-| 贴解密告警缩略图 | 解密告警图片并把 JPEG 附到通知上。本机缺少原生库时不允许打开。 | 关 |
+| 在告警通知中显示图片 | 解密告警图片并放进通知。本机缺少原生库时不允许打开。 | 关 |
 | 默认设备密码 | 用于下方所有留空的设备。 | 空 |
-| 各设备密码 | 每个 **TCM** 设备一个输入框，标签是设备名和序列号。留空表示保留已存的密码。 | 空 |
+| 各设备密码 | 每个需要密码的设备一个输入框，标签是设备名和序列号。留空表示保留已存的密码。 | 空 |
 | 删除已存密码 | 删除你勾选的那些序列号的密码。 | — |
 
 前置条件：
 
 - **仅 linux x86-64。** 两个官方 Demo 库都要放到 `/config/imou_life/native/`：`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，只放一个是加载不起来的。这一页会报告是否找到。
-- **只有 TCM 设备需要密码**，其余设备用序列号推导密钥。
+- **只有部分设备需要密码。** 页面上列出来的就是需要密码的那些；没有列出的设备用自己的序列号推导密钥，不需要你填任何东西。
 - **一个公网可达的 Home Assistant 地址**（第 0 步），否则不在局域网的手机加载不出图片。
 
 图片写在 `/local/imou_life/thumbs/`，**不做身份验证**，保留约 24 小时，也就是说拿到 URL 的人都能查看。如果 `/config/www` 原先不存在，首次生成图片后需要重启一次 Home Assistant。很多移动侦测推送根本不带图片 URL，这类通知仍是纯文本。
@@ -207,7 +207,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 | 想要 | 需要 |
 | --- | --- |
 | 任何告警自动化、通知、图片或录像 | 开启 **启用事件推送**，且回调地址 Imou 云能访问到 |
-| 手机通知里带图 | 事件推送、**贴解密告警缩略图**、两个 `.so` 文件、TCM 设备的密码，以及一个公网可达的 Home Assistant 地址 |
+| 手机通知里带图 | 事件推送、**在告警通知中显示图片**、两个 `.so` 文件、页面上列出的那些设备的密码，以及一个公网可达的 Home Assistant 地址 |
 | 网页通知栏里带图 | 同上，另外把 `notify.persistent_notification` 加进通知目标 |
 | 告警后有录像片段 | 事件推送、一个已加入白名单的保存目录，以及该摄像头的开关已打开 |
 

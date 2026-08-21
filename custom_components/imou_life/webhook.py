@@ -408,13 +408,12 @@ async def _async_send_notifications(
     thumbnail_url: str | None = None,
     skip_web_drawer: bool = False,
 ) -> None:
-    """Send alarm notifications.
+    """Send alarm notifications to every configured target.
 
-    Supports:
-      - "qiyewechat.send"           -> calls qiyewechat.send service
-      - "notify.mobile_app_xxx"     -> calls legacy notify service
-      - "notify.xxx"                -> tries notify.send_message entity, then legacy
-      - "domain.service"            -> calls any HA service
+    A target is a ``domain.service`` pair; a bare name means ``notify.<name>``.
+    Companion targets also get a link to the device page and the alarm picture,
+    because only they understand those keys. Every other service receives the
+    title and message alone.
 
     ``skip_web_drawer`` drops targets that would post a second, image-less copy
     into the drawer the caller has already filled with the decrypted still.

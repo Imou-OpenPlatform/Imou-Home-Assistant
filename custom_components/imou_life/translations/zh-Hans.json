@@ -87,11 +87,11 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "告警推送：**{push_state}** · 告警图片解密：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}** · 轮询设备数：**{device_state}**\n\n每一页提交后即保存并回到这里。「告警图片解密」和「告警时录像」只在告警推送开启时才会生效。",
+        "description": "告警推送：**{push_state}** · 告警图片：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}** · 轮询设备数：**{device_state}**\n\n每一页提交后即保存并回到这里。「告警图片」和「告警时录像」只在告警推送开启时才会生效。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
-          "alarm_image_decrypt": "告警图片解密",
+          "alarm_image_decrypt": "告警图片",
           "local_recording": "告警时录像",
           "select_poll_devices": "选择要轮询的设备",
           "bind_device": "绑定新设备",
@@ -147,16 +147,16 @@
               "notify_services": "通知目标"
             },
             "data_description": {
-              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。想让通知带上告警图，见「告警图片解密」。"
+              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。想让这些消息带上图片，见「告警图片」。"
             }
           }
         }
       },
       "alarm_image_decrypt": {
-        "title": "告警图片解密",
-        "description": "{push_hint}告警图片是加密的。Home Assistant 会在本机解密，再把图片贴进告警通知。\n\n状态：{native_hint}\n\n只有 TCM 设备需要密码，其余设备用序列号解密。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
+        "title": "告警图片",
+        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
         "data": {
-          "attach_decrypted_thumbnail": "贴解密告警缩略图",
+          "attach_decrypted_thumbnail": "在告警通知中显示图片",
           "default_device_password": "默认设备密码",
           "remove_device_passwords": "删除已存密码"
         },
