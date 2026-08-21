@@ -4,8 +4,6 @@
 
 ### [1.4.0]
 
-1.3.6 was prepared but never published, so everything below ships in 1.4.0. Upgrading from 1.3.4 means taking both sets of changes at once, including the two breaking ones.
-
 #### Breaking
 
 - `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. After upgrade, leftover `select` registry rows may be deleted manually
@@ -268,8 +266,6 @@
 ## 中文
 
 ### [1.4.0]
-
-1.3.6 准备好了但从未发布，所以下面这些全部随 1.4.0 一起交付。从 1.3.4 升级会一次性拿到两批变更，包括其中两条破坏性变更。
 
 #### 破坏性变更
 

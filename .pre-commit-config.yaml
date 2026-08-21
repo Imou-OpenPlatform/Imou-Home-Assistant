@@ -8,7 +8,8 @@ repos:
       - id: check-json
         exclude: (.vscode|.devcontainer)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.3
+    # Match the ruff version locked in uv.lock / used by CI (uv run ruff).
+    rev: v0.15.16
     hooks:
       - id: ruff
         args: [--fix]
