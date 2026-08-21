@@ -116,8 +116,11 @@ def setup_imou_runtime(
     options: dict | None = None,
 ) -> ImouRuntimeData:
     """Attach ImouRuntimeData to a mock config entry for webhook tests."""
+    from custom_components.imou_life.const import PARAM_ENABLE_EVENT_PUSH
+
+    entry_options = {PARAM_ENABLE_EVENT_PUSH: push_enabled, **(options or {})}
     entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
-    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options=options or {})
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options=entry_options)
     entry.add_to_hass(hass)
     if register_ha_devices and selected_devices:
         for device_id in selected_devices:

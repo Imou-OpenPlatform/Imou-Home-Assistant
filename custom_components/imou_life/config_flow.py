@@ -82,6 +82,7 @@ from .runtime_data import get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 _FIELD_REMOVE_PASSWORDS = "remove_device_passwords"
+_FIELD_CLEAR_DEFAULT_PASSWORD = "clear_default_device_password"
 
 _ENTRY_NAME = "Imou Life Official"
 
@@ -827,6 +828,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Build the decrypt switch, the default password, and per-device ones."""
         stored = self._device_passwords()
         options = self.config_entry.options
+        stored_default = str(options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or "")
         password_selector = TextSelector(
             TextSelectorConfig(
                 type=TextSelectorType.PASSWORD,
@@ -837,17 +839,20 @@ class ImouOptionsFlow(OptionsFlow):
             vol.Optional(PARAM_ATTACH_DECRYPTED_THUMBNAIL, default=False): bool,
             vol.Optional(PARAM_DEFAULT_DEVICE_PASSWORD, default=""): password_selector,
         }
+        # Never suggest stored secrets into the UI. Empty fields keep the
+        # previous values on save; rejected submits may still re-show typed text.
         suggested: dict[str, Any] = {
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
                 options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
             ),
-            PARAM_DEFAULT_DEVICE_PASSWORD: str(
-                options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
-            ),
+            PARAM_DEFAULT_DEVICE_PASSWORD: "",
         }
-        for field, serial in self._password_fields():
+        for field, _serial in self._password_fields():
             fields[vol.Optional(field, default="")] = password_selector
-            suggested[field] = stored.get(serial, "")
+            suggested[field] = ""
+        if stored_default:
+            fields[vol.Optional(_FIELD_CLEAR_DEFAULT_PASSWORD, default=False)] = bool
+            suggested[_FIELD_CLEAR_DEFAULT_PASSWORD] = False
         if overrides:
             # A rejected submit must not throw away what was just typed.
             suggested.update(
@@ -878,6 +883,17 @@ class ImouOptionsFlow(OptionsFlow):
             passwords.pop(str(serial).strip(), None)
         return passwords
 
+    def _merged_default_device_password(self, user_input: Mapping[str, Any]) -> str:
+        """Keep the stored default when the password box is left empty."""
+        if user_input.get(_FIELD_CLEAR_DEFAULT_PASSWORD):
+            return ""
+        typed = str(user_input.get(PARAM_DEFAULT_DEVICE_PASSWORD) or "")
+        if typed:
+            return typed
+        return str(
+            self.config_entry.options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+        )
+
     async def async_step_alarm_image_decrypt(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -898,8 +914,8 @@ class ImouOptionsFlow(OptionsFlow):
                 self._save_options(
                     **{
                         PARAM_ATTACH_DECRYPTED_THUMBNAIL: attach,
-                        PARAM_DEFAULT_DEVICE_PASSWORD: str(
-                            user_input.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
+                        PARAM_DEFAULT_DEVICE_PASSWORD: self._merged_default_device_password(
+                            user_input
                         ),
                         PARAM_DEVICE_PASSWORDS: self._merge_device_passwords(
                             user_input

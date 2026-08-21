@@ -30,6 +30,7 @@ from .const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
+    PARAM_ENABLE_EVENT_PUSH,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
 )
@@ -45,6 +46,15 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
+
+
+def _redacted_push_for_log(event_data: dict[str, Any]) -> dict[str, Any]:
+    """Copy push fields for debug logs without the push token or raw body."""
+    safe = dict(event_data)
+    if safe.get("token"):
+        safe["token"] = "***"
+    safe.pop("raw", None)
+    return safe
 
 
 def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) -> bool:
@@ -556,14 +566,16 @@ async def async_handle_imou_webhook(
 
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
-    _LOGGER.debug("Received Imou push: %s", event_data)
+    _LOGGER.debug("Received Imou push: %s", _redacted_push_for_log(event_data))
 
     # Check: is push enabled? If user disabled it, silently ignore.
+    # Prefer entry.options over runtime: options are saved before reload, and
+    # the cloud may already POST while setup is still finishing.
     entry_and_runtime = _get_entry_and_runtime(hass, webhook_id)
     if entry_and_runtime is None:
         return web.Response(status=200, text="ok")
     entry, runtime = entry_and_runtime
-    if not runtime.push_enabled:
+    if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 

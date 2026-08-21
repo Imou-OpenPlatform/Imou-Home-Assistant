@@ -277,6 +277,45 @@ async def test_options_update_soft_path_skips_reload(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_update_soft_path_clears_pic_decoder_failed(hass) -> None:
+    """Soft-saving decrypt options must allow the native decoder to be retried."""
+    from custom_components.imou_life import (
+        async_update_options,
+        options_reload_signature,
+    )
+    from custom_components.imou_life.const import PARAM_ATTACH_DECRYPTED_THUMBNAIL
+    from custom_components.imou_life.runtime_data import ImouRuntimeData
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(
+        coordinator=MagicMock(),
+        pic_decoder_failed=True,
+        pic_decoder=object(),
+        reload_signature=options_reload_signature(entry.options),
+    )
+    entry.runtime_data = runtime
+    hass.config_entries.async_update_entry(
+        entry,
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
+    )
+
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        AsyncMock(),
+    ) as reload:
+        await async_update_options(hass, entry)
+        reload.assert_not_awaited()
+
+    assert runtime.pic_decoder_failed is False
+    assert runtime.pic_decoder is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_update_reloads_when_polling_changes(hass) -> None:
     """Changing the poll interval still forces a full reload."""
     from custom_components.imou_life import (

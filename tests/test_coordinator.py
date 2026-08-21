@@ -318,6 +318,30 @@ async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_detail_failure_still_removes_devices(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Detail failure must not skip account removals for the same rediscovery."""
+    from pyimouapi.exceptions import RequestFailedException
+
+    first = [_mock_device("d1"), _mock_device("gone")]
+    coordinator = await _run_update(hass, device_manager, first)
+    assert {d.device_id for d in coordinator.devices} == {"d1", "gone"}
+
+    remaining = [_mock_device("d1"), _mock_device("new")]
+    device_manager.async_get_devices.reset_mock()
+    device_manager.async_get_devices.side_effect = [
+        remaining,
+        RequestFailedException("detail failed"),
+    ]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    assert {d.device_id for d in coordinator.devices} == {"d1"}
+    assert coordinator._last_discovery is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_status_poll_uses_shared_device_update(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

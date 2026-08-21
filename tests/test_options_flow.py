@@ -458,7 +458,8 @@ async def test_options_alarm_image_password_empty_keeps_stored_value(hass) -> No
         result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
     )
     schema = result.get("data_schema") or result.get("schema")
-    assert _schema_suggested(schema, "SN1") == "old-pw"
+    # Stored secrets are never suggested back into the password box.
+    assert _schema_suggested(schema, "SN1") == ""
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -466,6 +467,61 @@ async def test_options_alarm_image_password_empty_keeps_stored_value(hass) -> No
     )
     _assert_returned_to_menu(result)
     assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "old-pw"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_default_password_empty_keeps_stored(hass) -> None:
+    """Leaving the default password blank must keep the previously saved value."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_DEFAULT_DEVICE_PASSWORD: "secret-pw"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
+    )
+    schema = result.get("data_schema") or result.get("schema")
+    assert _schema_suggested(schema, PARAM_DEFAULT_DEVICE_PASSWORD) == ""
+    assert "clear_default_device_password" in _schema_field_names(schema)
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {PARAM_DEFAULT_DEVICE_PASSWORD: ""},
+    )
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_clear_default_password(hass) -> None:
+    """The clear checkbox removes the stored default without touching per-device."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_DEFAULT_DEVICE_PASSWORD: "secret-pw",
+            PARAM_DEVICE_PASSWORDS: {"SN1": "device-pw"},
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_DEFAULT_DEVICE_PASSWORD: "",
+            "clear_default_device_password": True,
+        },
+    )
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEFAULT_DEVICE_PASSWORD] == ""
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "device-pw"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

@@ -158,11 +158,13 @@
         "data": {
           "attach_decrypted_thumbnail": "在告警通知中显示图片",
           "default_device_password": "默认设备密码",
+          "clear_default_device_password": "清除默认设备密码",
           "remove_device_passwords": "删除已存密码"
         },
         "data_description": {
           "attach_decrypted_thumbnail": "手机不在局域网时，需要在「设置 → 系统 → 网络」填好 Home Assistant 外网 URL。图片存放在 /local/imou_life/thumbs/，无身份验证，保留约 24 小时。密码只留在本机，仅用于解密。",
-          "default_device_password": "下面留空的设备都用这个密码。",
+          "default_device_password": "下面留空的设备都用这个密码。留空表示不改已存默认密码。",
+          "clear_default_device_password": "删除已存的默认密码；各设备单独密码不变。",
           "remove_device_passwords": "勾选的序列号会删除密码。"
         }
       },

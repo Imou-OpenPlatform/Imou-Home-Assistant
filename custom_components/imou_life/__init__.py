@@ -22,6 +22,7 @@ from .const import (
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -53,8 +54,11 @@ def options_reload_signature(options: Mapping[str, Any]) -> tuple[object, ...]:
     selected = options.get(PARAM_SELECTED_DEVICES, _UNSET)
     if selected is _UNSET:
         selected_sig: object = None
+    elif isinstance(selected, list):
+        # Order must not force a reload when the same set was re-saved.
+        selected_sig = tuple(sorted(str(item) for item in selected))
     else:
-        selected_sig = tuple(selected) if isinstance(selected, list) else selected
+        selected_sig = selected
     event_types = options.get(PARAM_EVENT_PUSH_TYPES) or []
     return (
         bool(options.get(PARAM_ENABLE_POLLING, True)),
@@ -165,6 +169,11 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
             entry.options.get(PARAM_NOTIFY_SERVICES)
         )
         runtime.selected_devices = get_selected_device_ids(entry)
+        # Soft path never rebuilds the decoder. Clearing the sticky failure
+        # flag lets a later alarm retry after the user drops the .so files in.
+        if entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+            runtime.pic_decoder_failed = False
+            runtime.pic_decoder = None
         _LOGGER.debug(
             "Applied soft option changes for entry %s without reload", entry.entry_id
         )

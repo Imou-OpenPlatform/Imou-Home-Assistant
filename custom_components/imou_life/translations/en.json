@@ -158,11 +158,13 @@
         "data": {
           "attach_decrypted_thumbnail": "Show the picture in alarm notifications",
           "default_device_password": "Default device password",
+          "clear_default_device_password": "Clear default device password",
           "remove_device_passwords": "Remove stored passwords"
         },
         "data_description": {
           "attach_decrypted_thumbnail": "Needs Home Assistant's external URL (Settings → System → Network) for phones off the LAN. Pictures are saved unauthenticated under /local/imou_life/thumbs/ for about 24 hours. Passwords stay on this Home Assistant and are used only to decrypt.",
-          "default_device_password": "Used for any device left blank below.",
+          "default_device_password": "Used for any device left blank below. Leave empty to keep the stored default.",
+          "clear_default_device_password": "Deletes the stored default. Per-device passwords are unchanged.",
           "remove_device_passwords": "Checked serials are deleted."
         }
       },

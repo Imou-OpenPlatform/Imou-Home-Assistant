@@ -156,11 +156,21 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             except InvalidAppIdOrSecretException as err:
                 raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
             except ImouException as err:
+                # Keep removals from the shallow list. Leave brand-new keys out
+                # until detail succeeds (shallow IoT shells have no configured
+                # refs yet) and rewind the discovery clock to retry soon.
                 _LOGGER.warning(
                     "Could not load new Imou device details: %s", err.message or err
                 )
+                for key in new_keys:
+                    fresh_by_key.pop(key, None)
+                self._last_discovery = None
+                self._async_add_remove_devices(fresh_by_key, account_by_key)
                 return
-            account_by_key = {imou_life_device_key(d): d for d in detailed}
+            # Merge into the shallow account map; never replace it with a
+            # partial list if a future library change returns only new ids.
+            for device in detailed:
+                account_by_key[imou_life_device_key(device)] = device
             detailed_by_key = {
                 imou_life_device_key(d): d for d in self._filter_devices(detailed)
             }
