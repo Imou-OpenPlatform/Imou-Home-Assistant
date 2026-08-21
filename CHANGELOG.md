@@ -21,6 +21,21 @@
 - Debug `Received Imou push` logs include the push `token` (no longer masked)
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
 - The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm image decrypt** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
+
+- Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
+- The Configure menu leads with a one-line status — alarm push, alarm image decrypt, record on alarm, status polling, and how many devices are polled — so no page has to be opened just to check what is on.
+- **Alarm image decrypt** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
+- **Attach decrypted alarm thumbnail** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
+- The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
+- Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
+
+#### Fixed
+
+- Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
+
+#### Removed
+
+- The **Video protocol** camera default is gone; live streams always request `https`. It was a choice with one sensible answer, and plain `http` stream URLs are blocked as mixed content by browsers on an HTTPS Home Assistant anyway. A stored `live_protocol` is ignored.
 - Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
 
 ### [1.3.6]
@@ -277,6 +292,21 @@
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
 - **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片解密**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
 - Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
+
+- **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
+- 配置菜单开头给出一行状态：告警推送、告警图片解密、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
+- **告警图片解密** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
+- 本机缺少原生库时，**贴解密告警缩略图** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
+- **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
+- 摄像头默认区默认展开，抓图等待时间也说清了到底在等什么。
+
+#### 修复
+
+- 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
+
+#### 移除
+
+- 去掉摄像头默认里的 **视频协议**，直播固定用 `https`。这个选项实际只有一个合理答案：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。已存的 `live_protocol` 值会被忽略。
 
 ### [1.3.6]
 

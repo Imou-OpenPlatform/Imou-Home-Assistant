@@ -81,24 +81,26 @@
       "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。",
       "callback_failed": "向 Imou 注册回调地址失败：{error}",
       "callback_url_missing": "开启事件推送时必须填写回调地址。",
+      "decrypt_libs_missing": "本机没有装解密库，这个开关打开也不会有任何效果。请先放好库文件，或者保持关闭。",
       "record_path_not_allowed": "该目录不在 allowlist_external_dirs 中。请先在 Home Assistant 的外部目录白名单中加入该路径，然后再保存。"
     },
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "选择分区后提交即保存，无需一次改完所有项。",
+        "description": "告警推送：**{push_state}** · 告警图片解密：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}** · 轮询设备数：**{device_state}**\n\n每一页提交后即保存并回到这里。「告警图片解密」和「告警时录像」只在告警推送开启时才会生效。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
           "alarm_image_decrypt": "告警图片解密",
           "local_recording": "告警时录像",
           "select_poll_devices": "选择要轮询的设备",
-          "bind_device": "绑定新设备"
+          "bind_device": "绑定新设备",
+          "finish": "完成"
         }
       },
       "general_settings": {
         "title": "轮询间隔与摄像头默认",
-        "description": "Home Assistant 多久刷新一次设备状态。",
+        "description": "Home Assistant 多久刷新一次设备状态，以及本账号下每台摄像头的直播与云台默认值。",
         "data": {
           "enable_polling": "启用状态轮询",
           "update_interval": "轮询间隔（秒）"
@@ -114,14 +116,12 @@
             "data": {
               "download_snap_wait_time": "抓图等待时间（秒）",
               "live_resolution": "视频分辨率",
-              "live_protocol": "视频协议",
               "rotation_duration": "云台转动时间（毫秒）"
             },
             "data_description": {
-              "download_snap_wait_time": "下载截图前等待的秒数，默认 3 秒。",
-              "live_resolution": "HD = 高清，SD = 标清。",
-              "live_protocol": "一般用 https 即可。",
-              "rotation_duration": "按一次云台方向按钮转动多久，默认 500 毫秒。"
+              "download_snap_wait_time": "摄像头要先拍好并上传，乐橙云才能给出这张图。这里是 Home Assistant 取图前等待的时间。抓到的图偏旧或为空时把它调大。默认 3 秒。",
+              "live_resolution": "HD = 高清，SD = 标清。用于「实时画面」摄像头实体。",
+              "rotation_duration": "按一次云台方向按钮转多远，按转动时间计。默认 500 毫秒。"
             }
           }
         }
@@ -154,21 +154,21 @@
       },
       "alarm_image_decrypt": {
         "title": "告警图片解密",
-        "description": "告警图片是加密的。Home Assistant 会自己下载并在本机解密，然后把图片贴进告警通知和网页通知栏。状态：{native_hint}。\n\n只有 TCM 设备需要密码，其余设备用序列号解密。已存密码 {password_count} 个（{configured_serials}）。密码框留空表示不改。密码只保存在本机，仅用于解密。",
+        "description": "{push_hint}告警图片是加密的。Home Assistant 会在本机解密，再把图片贴进告警通知。\n\n状态：{native_hint}\n\n只有 TCM 设备需要密码，其余设备用序列号解密。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
         "data": {
           "attach_decrypted_thumbnail": "贴解密告警缩略图",
           "default_device_password": "默认设备密码",
           "remove_device_passwords": "删除已存密码"
         },
         "data_description": {
-          "attach_decrypted_thumbnail": "须在「设置 → 系统 → 网络」填写 Home Assistant 外网 URL，手机不在局域网才能加载图片。/local/imou_life/thumbs/ 无身份验证（约 24 小时）。若原先没有 /config/www，首次生成后需重启 Home Assistant。",
+          "attach_decrypted_thumbnail": "手机不在局域网时，需要在「设置 → 系统 → 网络」填好 Home Assistant 外网 URL。图片存放在 /local/imou_life/thumbs/，无身份验证，保留约 24 小时。密码只留在本机，仅用于解密。",
           "default_device_password": "下面留空的设备都用这个密码。",
           "remove_device_passwords": "勾选的序列号会删除密码。"
         }
       },
       "local_recording": {
         "title": "告警时录像",
-        "description": "收到告警后从云端流录一小段。各摄像头的 **告警时录像** 开关在设备页。",
+        "description": "{push_hint}收到告警后从云端流录一小段。各摄像头的 **告警时录像** 开关在设备页。",
         "data": {
           "local_record_path": "保存目录",
           "local_record_duration": "片段时长（秒）"
@@ -227,6 +227,19 @@
     "webhook_placeholder": {
       "options": {
         "not_generated": "未生成"
+      }
+    },
+    "status": {
+      "options": {
+        "on": "已开",
+        "off": "已关",
+        "missing_libs": "已开，但缺少解密库",
+        "all_devices": "全部"
+      }
+    },
+    "prerequisite": {
+      "options": {
+        "push_off": "告警推送未开启，这一页的设置暂时不会生效。请到「配置 → 告警推送与通知」中打开。"
       }
     },
     "event_push_type": {

@@ -49,9 +49,9 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry to open a menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm image decrypt**, **Record on alarm**, **Choose devices to poll**, or **Bind a new device**. Each section saves when you submit that form; you do not need to visit the other sections in the same session.
+Use **Configure** on the integration entry to open a menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm image decrypt**, **Record on alarm**, **Choose devices to poll**, or **Bind a new device**. The menu leads with a one-line status of what is on. Each section saves when you submit that form and returns to the menu, so you can edit several in one visit; **Done** closes the dialog.
 
-- **Polling and cameras** — polling on/off and interval. Snapshot wait, live stream, and PTZ defaults are under **Camera defaults**.  
+- **Polling and cameras** — polling on/off and interval. Snapshot wait, live stream, and PTZ defaults are under **Camera defaults**.
 
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
@@ -75,7 +75,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Choose and bind devices** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
   - Device selection at setup and in **Configure → Choose and bind devices** (poll only chosen devices)
-  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm image decrypt**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently
+  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm image decrypt**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English and Simplified Chinese (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 for Open Platform API access
@@ -116,7 +116,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 ## Troubleshooting
 
 - **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
-- **Event push not working** — Open **Configure → Alarm push and notifications**. Confirm **Enable event push** is on. Paste the suggested URL into **Callback URL**, or change hostname and port if it is not public. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
+- **Event push not working** — Open **Configure → Alarm push and notifications**. Confirm **Enable event push** is on. **Callback URL** comes prefilled with the generated address; change its hostname and port if that address is not reachable from the internet. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification). A push that does not match a Home Assistant device is discarded (still HTTP 200).
@@ -185,9 +185,9 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点击 **配置** 会打开菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片解密**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**。每一项提交即保存，同一次会话中无需进入其他分区。
+在集成条目上点击 **配置** 会打开菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片解密**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**。菜单开头会给出一行当前状态。每一项提交即保存并回到菜单，一次可以连着改好几项；点 **完成** 关闭对话框。
 
-- **轮询与摄像头** — 轮询开关与间隔。抓图等待、直播与云台默认参数在 **摄像头默认**。  
+- **轮询与摄像头** — 轮询开关与间隔。抓图等待、直播与云台默认参数在 **摄像头默认**。
 
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
@@ -195,7 +195,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - **告警图片解密** — 打开解密缩略图开关，并集中管理它需要的设备密码。
 - **告警时录像** — 账号共用的保存目录和片段时长，只对打开了 **告警时录像** 开关的摄像头生效。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
 
-先打开 **启用事件推送**，再填 **回调地址**（须公网可达；建议地址不可达时只改主机名和端口）和 **订阅类型**。
+先打开 **启用事件推送**，再确认 **回调地址**（已预填生成的地址，须公网可达；不可达时只改主机名和端口）和 **订阅类型**。
 
 <img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
 
@@ -212,7 +212,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 * **集成与账号**
   - 在 **配置 → 绑定新设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
   - 安装时及 **配置 → 选择要轮询的设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片解密**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存
+  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片解密**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 访问开放平台 API
@@ -253,7 +253,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 故障排查
 
 - **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
-- **事件推送不工作** — 打开 **配置 → 告警推送与通知**。确认 **启用事件推送** 已开启。把建议地址填进 **回调地址**，或把主机名和端口改成公网可达的。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
+- **事件推送不工作** — 打开 **配置 → 告警推送与通知**。确认 **启用事件推送** 已开启。**回调地址** 已预填生成的地址，若该地址公网不可达，就把主机名和端口改掉。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。对不上 Home Assistant 设备的推送会被丢弃（仍返回 HTTP 200）。

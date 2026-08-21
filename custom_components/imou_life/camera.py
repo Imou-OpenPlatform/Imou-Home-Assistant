@@ -12,10 +12,11 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    CONF_HD,
+    CONF_HTTPS,
     DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
-    PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_MOTION_DETECT,
 )
@@ -64,8 +65,8 @@ class ImouCamera(ImouEntity, Camera):
         try:
             return await self.coordinator.device_manager.async_get_device_stream(
                 self.device,
-                self._config_entry.options.get(PARAM_LIVE_RESOLUTION, "SD"),
-                self._config_entry.options.get(PARAM_LIVE_PROTOCOL, "https"),
+                self._config_entry.options.get(PARAM_LIVE_RESOLUTION, CONF_HD),
+                CONF_HTTPS,
             )
         except ImouException as e:
             raise HomeAssistantError(

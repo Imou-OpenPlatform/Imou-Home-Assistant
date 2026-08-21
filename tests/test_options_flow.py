@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +13,6 @@ from custom_components.imou_life.config_flow import (
 )
 from custom_components.imou_life.const import (
     CONF_HD,
-    CONF_HTTPS,
     CONF_SD,
     DOMAIN,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
@@ -22,7 +22,6 @@ from custom_components.imou_life.const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
-    PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_LOCAL_RECORD_DURATION,
     PARAM_LOCAL_RECORD_PATH,
@@ -97,6 +96,21 @@ async def _open_poll_devices(hass, flow_id):
     return result
 
 
+def _assert_returned_to_menu(result) -> None:
+    """A page that saved successfully hands control back to the options menu."""
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "init"
+
+
+@contextmanager
+def _decrypt_libs(present: bool = True):
+    """Pin the native library probe; the testing config folder is shared."""
+    from custom_components.imou_life import pic_thumbnail
+
+    with patch.object(pic_thumbnail, "native_libs_present", return_value=present):
+        yield
+
+
 def _mock_device(serial: str, *, name: str = "", ability: str = "WLAN,TCM"):
     """Build a coordinator device stub for the password form."""
     device = MagicMock()
@@ -122,9 +136,67 @@ async def test_options_flow_init_shows_menu(hass) -> None:
         "local_recording",
         "select_poll_devices",
         "bind_device",
+        "finish",
     }
     placeholders = result.get("description_placeholders") or {}
     assert "native_hint" not in placeholders
+    # The menu summarises what is on, so no page has to be opened to check.
+    assert placeholders["push_state"] == "off"
+    assert placeholders["decrypt_state"] == "off"
+    assert placeholders["record_state"] == "off"
+    assert placeholders["polling_state"] == "on"
+    assert placeholders["device_state"] == "all"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_finish_closes_the_dialog(hass) -> None:
+    """Done is the only exit now that each page returns to the menu."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_UPDATE_INTERVAL: 60},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "finish"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][PARAM_UPDATE_INTERVAL] == 60
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("step", ["alarm_image_decrypt", "local_recording"])
+async def test_options_alarm_pages_warn_when_push_is_off(hass, step) -> None:
+    """Both pages run off the webhook, so they say nothing happens without it."""
+    hass.config.language = "en"
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": step}
+    )
+    assert "Alarm push is off" in result["description_placeholders"]["push_hint"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("step", ["alarm_image_decrypt", "local_recording"])
+async def test_options_alarm_pages_drop_the_warning_when_push_is_on(hass, step) -> None:
+    """With push on the warning has to disappear, not sit there as stale text."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_EVENT_PUSH: True},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": step}
+    )
+    assert result["description_placeholders"]["push_hint"] == ""
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -221,16 +293,77 @@ async def test_options_alarm_image_decrypt_saves_switch_and_default_password(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
     )
+    with _decrypt_libs():
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+                PARAM_DEFAULT_DEVICE_PASSWORD: "secret-pw",
+            },
+        )
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_ATTACH_DECRYPTED_THUMBNAIL] is True
+    assert entry.options[PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_decrypt_rejects_switch_without_libraries(
+    hass,
+) -> None:
+    """Turning the switch on where it cannot decrypt would do nothing silently."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
+        result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
+    )
+    with _decrypt_libs(False):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+                PARAM_DEFAULT_DEVICE_PASSWORD: "typed-pw",
+            },
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"][PARAM_ATTACH_DECRYPTED_THUMBNAIL] == "decrypt_libs_missing"
+    assert PARAM_ATTACH_DECRYPTED_THUMBNAIL not in entry.options
+    # A rejected submit keeps what was typed rather than clearing the form.
+    schema = result.get("data_schema") or result.get("schema")
+    assert _schema_suggested(schema, PARAM_DEFAULT_DEVICE_PASSWORD) == "typed-pw"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_decrypt_edits_with_libraries_gone(hass) -> None:
+    """Libraries lost after the fact must not lock the passwords on this page."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
-            PARAM_DEFAULT_DEVICE_PASSWORD: "secret-pw",
+            PARAM_DEVICE_PASSWORDS: {"SN1": "old-pw"},
         },
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_ATTACH_DECRYPTED_THUMBNAIL] is True
-    assert result["data"][PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
+    )
+    with _decrypt_libs(False):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {PARAM_ATTACH_DECRYPTED_THUMBNAIL: True, "SN1": "new-pw"},
+        )
+
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "new-pw"}
+    # The menu is where that half-configured state gets reported.
+    assert result["description_placeholders"]["decrypt_state"] == (
+        "on, but libraries are missing"
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -279,8 +412,8 @@ async def test_options_alarm_image_decrypt_add_and_delete(hass) -> None:
         result["flow_id"],
         {"Hallway (SN1)": "pw"},
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN1": "pw"}
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "pw"}
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
@@ -292,7 +425,8 @@ async def test_options_alarm_image_decrypt_add_and_delete(hass) -> None:
         result["flow_id"],
         {"remove_device_passwords": ["SN1"]},
     )
-    assert result["data"][PARAM_DEVICE_PASSWORDS] == {}
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {}
 
 
 def _schema_suggested(schema: vol.Schema, field: str) -> object:
@@ -329,7 +463,8 @@ async def test_options_alarm_image_password_empty_keeps_stored_value(hass) -> No
         result["flow_id"],
         {"SN1": ""},
     )
-    assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN1": "old-pw"}
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "old-pw"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -359,8 +494,8 @@ async def test_options_alarm_image_passwords_saves_multiple_serials(hass) -> Non
         result["flow_id"],
         {"SN-A": "pw-a", "SN-B": "pw-b"},
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN-A": "pw-a", "SN-B": "pw-b"}
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN-A": "pw-a", "SN-B": "pw-b"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -393,15 +528,14 @@ async def test_options_general_settings_saves_without_devices(hass) -> None:
             SECTION_CAMERA_DEFAULTS: {
                 PARAM_DOWNLOAD_SNAP_WAIT_TIME: 3,
                 PARAM_LIVE_RESOLUTION: CONF_HD,
-                PARAM_LIVE_PROTOCOL: CONF_HTTPS,
                 PARAM_ROTATION_DURATION: 500,
             },
         },
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_UPDATE_INTERVAL] == 120
-    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_UPDATE_INTERVAL] == 120
+    assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -429,10 +563,10 @@ async def test_options_general_omitting_camera_defaults_keeps_stored(hass) -> No
             PARAM_UPDATE_INTERVAL: 180,
         },
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_UPDATE_INTERVAL] == 180
-    assert result["data"][PARAM_LIVE_RESOLUTION] == CONF_SD
-    assert result["data"][PARAM_ROTATION_DURATION] == 800
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_UPDATE_INTERVAL] == 180
+    assert entry.options[PARAM_LIVE_RESOLUTION] == CONF_SD
+    assert entry.options[PARAM_ROTATION_DURATION] == 800
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -465,11 +599,11 @@ async def test_options_local_recording_saves_shared_settings(hass) -> None:
             },
         )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_LOCAL_RECORD_PATH] == "/media/imou"
-    assert result["data"][PARAM_LOCAL_RECORD_DURATION] == 45
-    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_LOCAL_RECORD_PATH] == "/media/imou"
+    assert entry.options[PARAM_LOCAL_RECORD_DURATION] == 45
+    assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -517,9 +651,9 @@ async def test_options_local_recording_empty_path_is_allowed(hass) -> None:
         {PARAM_LOCAL_RECORD_PATH: "", PARAM_LOCAL_RECORD_DURATION: 60},
     )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_LOCAL_RECORD_PATH] == ""
-    assert result["data"][PARAM_LOCAL_RECORD_DURATION] == 60
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_LOCAL_RECORD_PATH] == ""
+    assert entry.options[PARAM_LOCAL_RECORD_DURATION] == 60
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -590,10 +724,10 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
             }
         ),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
-    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/hook"
-    assert result["data"][PARAM_EVENT_PUSH_TYPES] == ["alarm"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
+    assert entry.options[PARAM_WEBHOOK_URL] == "https://example.test/hook"
+    assert entry.options[PARAM_EVENT_PUSH_TYPES] == ["alarm"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -622,8 +756,8 @@ async def test_options_event_push_saves_notify_services_as_list(hass) -> None:
             }
         ),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_NOTIFY_SERVICES] == ["notify.mobile_app_phone"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_NOTIFY_SERVICES] == ["notify.mobile_app_phone"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -663,8 +797,8 @@ async def test_options_event_push_migrates_comma_notify_string(hass) -> None:
             }
         ),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_NOTIFY_SERVICES] == [
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_NOTIFY_SERVICES] == [
         "notify.mobile_app_phone",
         "qiyewechat.send",
     ]
@@ -692,8 +826,8 @@ async def test_options_event_push_keeps_custom_webhook_url(hass) -> None:
             }
         ),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/kept"
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_WEBHOOK_URL] == "https://example.test/kept"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -718,10 +852,10 @@ async def test_options_event_push_preserves_decrypt_settings(hass) -> None:
         result["flow_id"],
         _event_push_input(**{PARAM_WEBHOOK_URL: ""}),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_DEVICE_PASSWORDS] == {"SN1": "x"}
-    assert result["data"][PARAM_ATTACH_DECRYPTED_THUMBNAIL] is True
-    assert result["data"][PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_DEVICE_PASSWORDS] == {"SN1": "x"}
+    assert entry.options[PARAM_ATTACH_DECRYPTED_THUMBNAIL] is True
+    assert entry.options[PARAM_DEFAULT_DEVICE_PASSWORD] == "secret-pw"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -749,11 +883,11 @@ async def test_options_event_push_preserves_general_and_devices(hass) -> None:
             }
         ),
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_ENABLE_EVENT_PUSH] is True
-    assert result["data"][PARAM_WEBHOOK_URL] == "https://example.test/hook"
-    assert result["data"][PARAM_UPDATE_INTERVAL] == 90
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
+    assert entry.options[PARAM_WEBHOOK_URL] == "https://example.test/hook"
+    assert entry.options[PARAM_UPDATE_INTERVAL] == 90
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -817,10 +951,14 @@ async def test_options_event_push_requires_callback_url_when_enabled(hass) -> No
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_options_event_push_does_not_prefill_generated_callback_url(
+async def test_options_event_push_prefills_generated_callback_url(
     hass,
 ) -> None:
-    """The callback field stays empty; the suggested URL is only in the description."""
+    """The generated address lands in the field, not just in the description.
+
+    Turning push on with an empty field only ever produced a validation error
+    the user had to fix by copying the address out of the text above it.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={**USER_INPUT, PARAM_WEBHOOK_ID: "hook-id"},
@@ -841,12 +979,34 @@ async def test_options_event_push_does_not_prefill_generated_callback_url(
         "http://192.168.1.2:8123/api/webhook/hook-id"
     )
     schema = result.get("data_schema") or result.get("schema")
-    suggested = None
-    for key in schema.schema:
-        if getattr(key, "schema", key) == PARAM_WEBHOOK_URL:
-            suggested = (key.description or {}).get("suggested_value")
-            break
-    assert suggested in (None, "")
+    assert _schema_suggested(schema, PARAM_WEBHOOK_URL) == (
+        "http://192.168.1.2:8123/api/webhook/hook-id"
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_prefers_the_stored_callback_url(hass) -> None:
+    """A saved address the user edited must win over the generated one."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "hook-id"},
+        options={PARAM_WEBHOOK_URL: "https://public.example/api/webhook/hook-id"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch(
+        "custom_components.imou_life.config_flow.webhook.async_generate_url",
+        return_value="http://192.168.1.2:8123/api/webhook/hook-id",
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "event_push"}
+        )
+
+    schema = result.get("data_schema") or result.get("schema")
+    assert _schema_suggested(schema, PARAM_WEBHOOK_URL) == (
+        "https://public.example/api/webhook/hook-id"
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -865,9 +1025,9 @@ async def test_options_select_poll_submits_and_saves(hass) -> None:
         result["flow_id"],
         {PARAM_SELECTED_DEVICES: ["device_1"]},
     )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1"]
-    assert result["data"][PARAM_UPDATE_INTERVAL] == 60
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
+    assert entry.options[PARAM_UPDATE_INTERVAL] == 60
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -1056,8 +1216,8 @@ async def test_options_bind_from_devices_form(hass) -> None:
             result["flow_id"],
             user_input={"device_id": "SN001", "code": "123456"},
         )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1", "SN001"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
@@ -1089,9 +1249,9 @@ async def test_options_bind_device_success_merges_selection(hass) -> None:
             result["flow_id"],
             user_input={"device_id": "SN001", "code": "123456"},
         )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+    _assert_returned_to_menu(result)
     # Binding from Devices records the new device for polling.
-    assert result["data"][PARAM_SELECTED_DEVICES] == ["SN001"]
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["SN001"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")

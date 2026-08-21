@@ -39,8 +39,6 @@ from .const import (
     API_URL_REGIONS,
     BASE_PUSH_ALWAYS,
     CONF_HD,
-    CONF_HTTP,
-    CONF_HTTPS,
     CONF_SD,
     DEFAULT_API_URL_REGION,
     DEFAULT_EVENT_PUSH_TYPES,
@@ -58,7 +56,6 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
-    PARAM_LIVE_PROTOCOL,
     PARAM_LIVE_RESOLUTION,
     PARAM_LOCAL_RECORD_DURATION,
     PARAM_LOCAL_RECORD_PATH,
@@ -91,7 +88,6 @@ _GENERAL_OPTION_KEYS = (
     PARAM_UPDATE_INTERVAL,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_LIVE_RESOLUTION,
-    PARAM_LIVE_PROTOCOL,
     PARAM_ROTATION_DURATION,
 )
 
@@ -471,15 +467,12 @@ class ImouOptionsFlow(OptionsFlow):
                             vol.Required(
                                 PARAM_LIVE_RESOLUTION, default=CONF_HD
                             ): vol.In([CONF_HD, CONF_SD]),
-                            vol.Required(
-                                PARAM_LIVE_PROTOCOL, default=CONF_HTTPS
-                            ): vol.In([CONF_HTTPS, CONF_HTTP]),
                             vol.Required(PARAM_ROTATION_DURATION, default=500): vol.All(
                                 vol.Coerce(int), vol.Range(min=100, max=10000)
                             ),
                         }
                     ),
-                    {"collapsed": True},
+                    {"collapsed": False},
                 ),
             }
         )
@@ -497,7 +490,6 @@ class ImouOptionsFlow(OptionsFlow):
                     PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3
                 ),
                 PARAM_LIVE_RESOLUTION: flat.get(PARAM_LIVE_RESOLUTION, CONF_HD),
-                PARAM_LIVE_PROTOCOL: flat.get(PARAM_LIVE_PROTOCOL, CONF_HTTPS),
                 PARAM_ROTATION_DURATION: flat.get(PARAM_ROTATION_DURATION, 500),
             },
         }
@@ -519,7 +511,6 @@ class ImouOptionsFlow(OptionsFlow):
             for key, default in (
                 (PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
                 (PARAM_LIVE_RESOLUTION, CONF_HD),
-                (PARAM_LIVE_PROTOCOL, CONF_HTTPS),
                 (PARAM_ROTATION_DURATION, 500),
             ):
                 flat[key] = stored_options.get(key, default)
@@ -559,7 +550,12 @@ class ImouOptionsFlow(OptionsFlow):
         if isinstance(event_push_types, list):
             event_push_types = callback_flags_to_event_push_types(event_push_types)
 
-        stored_webhook_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
+        # Prefill the generated address so turning push on does not first fail
+        # on an empty field the user has to copy out of the description.
+        webhook_url = (
+            str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
+            or self._generated_webhook_url()
+        )
 
         nested: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: enable_push,
@@ -570,8 +566,8 @@ class ImouOptionsFlow(OptionsFlow):
                 ),
             },
         }
-        if stored_webhook_url:
-            nested[PARAM_WEBHOOK_URL] = stored_webhook_url
+        if webhook_url:
+            nested[PARAM_WEBHOOK_URL] = webhook_url
         return nested
 
     @staticmethod
@@ -656,7 +652,26 @@ class ImouOptionsFlow(OptionsFlow):
                 "local_recording",
                 "select_poll_devices",
                 "bind_device",
+                "finish",
             ],
+            description_placeholders=self._menu_summary_placeholders(),
+        )
+
+    async def async_step_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Close the options dialog. Every page has already saved itself."""
+        return self.async_create_entry(data=self._merge_options())
+
+    def _save_options(self, **updates: Any) -> None:
+        """Persist option changes without closing the dialog.
+
+        Each page saves on submit and hands control back to the menu, so a
+        visit that touches two sections no longer means opening Configure
+        twice. Closing is its own menu entry.
+        """
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, options=self._merge_options(**updates)
         )
 
     def _ui_language(self) -> str:
@@ -664,6 +679,62 @@ class ImouOptionsFlow(OptionsFlow):
         if isinstance(language, str) and language:
             return language
         return "en"
+
+    def _status_label(self, key: str, fallback: str) -> str:
+        """Return a translated status word for the menu summary."""
+        return _selector_option_label(
+            self.hass, self._ui_language(), "status", key, fallback
+        )
+
+    def _push_enabled(self) -> bool:
+        """Return True when event push is on, which alarm features require."""
+        return bool(self.config_entry.options.get(PARAM_ENABLE_EVENT_PUSH))
+
+    def _push_prerequisite_hint(self) -> str:
+        """Warn that alarm pages stay inert while event push is off.
+
+        Decryption and recording both run off the webhook dispatch, so with
+        push off they read as configured but never fire.
+        """
+        if self._push_enabled():
+            return ""
+        text = _selector_option_label(
+            self.hass,
+            self._ui_language(),
+            "prerequisite",
+            "push_off",
+            "Event push is off, so nothing on this page takes effect yet. "
+            "Turn it on under Configure → Alarm push and notifications.",
+        )
+        return f"**{text}**\n\n"
+
+    def _menu_summary_placeholders(self) -> dict[str, str]:
+        """Summarise what is on, so the menu reads without opening each page."""
+        options = self.config_entry.options
+        on = self._status_label("on", "on")
+        off = self._status_label("off", "off")
+        if options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+            decrypt = (
+                on
+                if pic_thumbnail.native_libs_present(self.hass)
+                else self._status_label("missing_libs", "on, libraries missing")
+            )
+        else:
+            decrypt = off
+        selected = self._stored_selected_devices()
+        return {
+            "push_state": on if options.get(PARAM_ENABLE_EVENT_PUSH) else off,
+            "polling_state": on if options.get(PARAM_ENABLE_POLLING, True) else off,
+            "device_state": (
+                str(len(selected))
+                if selected is not None
+                else self._status_label("all_devices", "all")
+            ),
+            "decrypt_state": decrypt,
+            "record_state": (
+                on if str(options.get(PARAM_LOCAL_RECORD_PATH) or "").strip() else off
+            ),
+        }
 
     def _device_passwords(self) -> dict[str, str]:
         """Return the stored per-serial alarm image passwords."""
@@ -697,7 +768,9 @@ class ImouOptionsFlow(OptionsFlow):
             fields.append((f"{name} ({serial})" if name else serial, serial))
         return fields
 
-    def _alarm_image_decrypt_schema(self) -> vol.Schema:
+    def _alarm_image_decrypt_schema(
+        self, overrides: Mapping[str, Any] | None = None
+    ) -> vol.Schema:
         """Build the decrypt switch, the default password, and per-device ones."""
         stored = self._device_passwords()
         options = self.config_entry.options
@@ -722,6 +795,11 @@ class ImouOptionsFlow(OptionsFlow):
         for field, serial in self._password_fields():
             fields[vol.Optional(field, default="")] = password_selector
             suggested[field] = stored.get(serial, "")
+        if overrides:
+            # A rejected submit must not throw away what was just typed.
+            suggested.update(
+                {key: overrides[key] for key in suggested if key in overrides}
+            )
         if stored:
             fields[vol.Optional(_FIELD_REMOVE_PASSWORDS, default=[])] = SelectSelector(
                 SelectSelectorConfig(
@@ -751,13 +829,22 @@ class ImouOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Turn decryption on and hold every password it needs, on one form."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(
-                data=self._merge_options(
+            attach = bool(user_input.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False))
+            turning_on = attach and not self.config_entry.options.get(
+                PARAM_ATTACH_DECRYPTED_THUMBNAIL
+            )
+            if turning_on and not pic_thumbnail.native_libs_present(self.hass):
+                # Switching it on here would silently do nothing. Something
+                # already on is left alone: the libraries can go missing later,
+                # and passwords still need to be editable. The menu reports
+                # that state instead.
+                errors[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = "decrypt_libs_missing"
+            else:
+                self._save_options(
                     **{
-                        PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
-                            user_input.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
-                        ),
+                        PARAM_ATTACH_DECRYPTED_THUMBNAIL: attach,
                         PARAM_DEFAULT_DEVICE_PASSWORD: str(
                             user_input.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
                         ),
@@ -766,18 +853,20 @@ class ImouOptionsFlow(OptionsFlow):
                         ),
                     }
                 )
-            )
+                return await self.async_step_init()
 
         stored = self._device_passwords()
         return self.async_show_form(
             step_id="alarm_image_decrypt",
-            data_schema=self._alarm_image_decrypt_schema(),
+            data_schema=self._alarm_image_decrypt_schema(user_input),
+            errors=errors,
             description_placeholders={
                 "password_count": str(len(stored)),
                 "configured_serials": ", ".join(sorted(stored)) if stored else "-",
                 "native_hint": pic_thumbnail.native_libraries_hint(
                     self.hass, self._ui_language()
                 ),
+                "push_hint": self._push_prerequisite_hint(),
             },
         )
 
@@ -805,16 +894,15 @@ class ImouOptionsFlow(OptionsFlow):
             if path_error:
                 errors[PARAM_LOCAL_RECORD_PATH] = path_error
             else:
-                return self.async_create_entry(
-                    data=self._merge_options(
-                        **{
-                            PARAM_LOCAL_RECORD_PATH: folder,
-                            PARAM_LOCAL_RECORD_DURATION: user_input[
-                                PARAM_LOCAL_RECORD_DURATION
-                            ],
-                        }
-                    )
+                self._save_options(
+                    **{
+                        PARAM_LOCAL_RECORD_PATH: folder,
+                        PARAM_LOCAL_RECORD_DURATION: user_input[
+                            PARAM_LOCAL_RECORD_DURATION
+                        ],
+                    }
                 )
+                return await self.async_step_init()
             suggested = dict(user_input)
         else:
             suggested = {
@@ -830,6 +918,7 @@ class ImouOptionsFlow(OptionsFlow):
                 self._local_recording_schema(), suggested
             ),
             errors=errors,
+            description_placeholders={"push_hint": self._push_prerequisite_hint()},
         )
 
     async def async_step_general_settings(
@@ -837,11 +926,10 @@ class ImouOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage options — polling, camera, and PTZ settings."""
         if user_input is not None:
-            return self.async_create_entry(
-                data=self._merge_options(
-                    **self._flatten_general_input(user_input, self.config_entry.options)
-                )
+            self._save_options(
+                **self._flatten_general_input(user_input, self.config_entry.options)
             )
+            return await self.async_step_init()
 
         return self.async_show_form(
             step_id="general_settings",
@@ -883,7 +971,8 @@ class ImouOptionsFlow(OptionsFlow):
                         errors["base"] = error_key
                         error_detail = self._callback_error
             if not errors:
-                return self.async_create_entry(data=self._merge_options(**flat))
+                self._save_options(**flat)
+                return await self.async_step_init()
             suggested_source = {**stored, **flat}
 
         placeholders = self._event_push_webhook_placeholders()
@@ -964,12 +1053,10 @@ class ImouOptionsFlow(OptionsFlow):
             },
         )
 
-    def _create_selected_entry(self, selected: list[str]) -> ConfigFlowResult:
-        """Write the poll list and close the options dialog."""
+    def _save_selected_devices(self, selected: list[str]) -> None:
+        """Write the poll list, dropping any setup-time fallback."""
         self._clear_selected_from_entry_data()
-        return self.async_create_entry(
-            data=self._merge_options(**{PARAM_SELECTED_DEVICES: selected})
-        )
+        self._save_options(**{PARAM_SELECTED_DEVICES: selected})
 
     def _devices_schema(self) -> vol.Schema:
         """Build the poll-list form."""
@@ -1056,10 +1143,11 @@ class ImouOptionsFlow(OptionsFlow):
     async def async_step_select_poll_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick which account devices to poll. Submit saves and closes."""
+        """Pick which account devices to poll. Submit saves and returns."""
         if user_input is not None and PARAM_SELECTED_DEVICES in user_input:
             selected = list(user_input.get(PARAM_SELECTED_DEVICES, []))
-            return self._create_selected_entry(selected)
+            self._save_selected_devices(selected)
+            return await self.async_step_init()
         if not self._devices_map:
             self._devices_error = await self._async_load_devices_map()
             if self._devices_error:
@@ -1106,7 +1194,8 @@ class ImouOptionsFlow(OptionsFlow):
         failures that cannot list the account use save_without_devices and
         keep the selection.
         """
-        return self._create_selected_entry([])
+        self._save_selected_devices([])
+        return self.async_create_entry(data=self._merge_options())
 
     async def async_step_bind_device(
         self, user_input: dict[str, Any] | None = None
@@ -1131,4 +1220,5 @@ class ImouOptionsFlow(OptionsFlow):
             )
 
         selected = self._merge_bound_device(device_id, self._options_current_selected())
-        return self._create_selected_entry(selected)
+        self._save_selected_devices(selected)
+        return await self.async_step_init()

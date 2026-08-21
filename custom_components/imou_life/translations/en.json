@@ -81,24 +81,26 @@
       "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
       "callback_failed": "Failed to register the callback URL with Imou: {error}",
       "callback_url_missing": "A callback URL is required when event push is on.",
+      "decrypt_libs_missing": "The decrypt libraries are not installed on this host, so this switch would do nothing. Add them first, or leave it off.",
       "record_path_not_allowed": "This folder is not in allowlist_external_dirs. Add it under Home Assistant → Allowlist external directories, then try again."
     },
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Pick a section to edit. Submit saves that section and closes the dialog.",
+        "description": "Alarm push: **{push_state}** · Alarm image decrypt: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}** · Devices polled: **{device_state}**\n\nEach page saves on submit and comes back here. Alarm image decrypt and Record on alarm only do anything while alarm push is on.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarm push and notifications",
           "alarm_image_decrypt": "Alarm image decrypt",
           "local_recording": "Record on alarm",
           "select_poll_devices": "Choose devices to poll",
-          "bind_device": "Bind a new device"
+          "bind_device": "Bind a new device",
+          "finish": "Done"
         }
       },
       "general_settings": {
         "title": "Status polling and camera defaults",
-        "description": "How often Home Assistant refreshes device status.",
+        "description": "How often Home Assistant refreshes device status, plus the live stream and PTZ defaults every camera on this account starts from.",
         "data": {
           "enable_polling": "Enable status polling",
           "update_interval": "Polling interval (seconds)"
@@ -114,14 +116,12 @@
             "data": {
               "download_snap_wait_time": "Snapshot wait time (seconds)",
               "live_resolution": "Video resolution",
-              "live_protocol": "Video protocol",
               "rotation_duration": "PTZ rotation duration (ms)"
             },
             "data_description": {
-              "download_snap_wait_time": "Seconds to wait before downloading a snapshot. Default 3s.",
-              "live_resolution": "HD = high definition, SD = standard.",
-              "live_protocol": "Usually https is fine.",
-              "rotation_duration": "How long a single PTZ button press moves. Default 500ms."
+              "download_snap_wait_time": "The camera has to take the snapshot and upload it before Imou can serve it. This is how long Home Assistant waits before fetching. Raise it if snapshots come back stale or empty. Default 3s.",
+              "live_resolution": "HD = high definition, SD = standard. Used for the Live camera entity.",
+              "rotation_duration": "How far one press of a PTZ direction button moves, as movement time. Default 500ms."
             }
           }
         }
@@ -154,21 +154,21 @@
       },
       "alarm_image_decrypt": {
         "title": "Alarm image decrypt",
-        "description": "Alarm pictures arrive encrypted. Home Assistant downloads and decrypts them locally, then attaches the JPEG to alarm notifications and to the web notification drawer. Status: {native_hint}.\n\nOnly TCM devices need a password; the rest are keyed by their serial. Stored passwords: {password_count} ({configured_serials}). A blank field keeps the stored password. Passwords stay on this Home Assistant and are used only to decrypt.",
+        "description": "{push_hint}Alarm pictures arrive encrypted. Home Assistant decrypts them locally and attaches the JPEG to alarm notifications.\n\nStatus: {native_hint}\n\nOnly TCM devices need a password; the rest are keyed by their serial. A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
         "data": {
           "attach_decrypted_thumbnail": "Attach decrypted alarm thumbnail",
           "default_device_password": "Default device password",
           "remove_device_passwords": "Remove stored passwords"
         },
         "data_description": {
-          "attach_decrypted_thumbnail": "Set Home Assistant's external URL (Settings → System → Network) so phones off the LAN can load the still. /local/imou_life/thumbs/ is unauthenticated (~24h). Restart Home Assistant if /config/www was missing.",
+          "attach_decrypted_thumbnail": "Needs Home Assistant's external URL (Settings → System → Network) for phones off the LAN. Pictures are saved unauthenticated under /local/imou_life/thumbs/ for about 24 hours. Passwords stay on this Home Assistant and are used only to decrypt.",
           "default_device_password": "Used for any device left blank below.",
           "remove_device_passwords": "Checked serials are deleted."
         }
       },
       "local_recording": {
         "title": "Record on alarm",
-        "description": "Records a short clip from the cloud stream after an alarm. Per-camera **Record on alarm** is on each device page.",
+        "description": "{push_hint}Records a short clip from the cloud stream after an alarm. Per-camera **Record on alarm** is on each device page.",
         "data": {
           "local_record_path": "Save folder",
           "local_record_duration": "Clip duration (seconds)"
@@ -227,6 +227,19 @@
     "webhook_placeholder": {
       "options": {
         "not_generated": "Not generated"
+      }
+    },
+    "status": {
+      "options": {
+        "on": "on",
+        "off": "off",
+        "missing_libs": "on, but libraries are missing",
+        "all_devices": "all"
+      }
+    },
+    "prerequisite": {
+      "options": {
+        "push_off": "Alarm push is off, so nothing on this page takes effect yet. Turn it on under Configure → Alarm push and notifications."
       }
     },
     "event_push_type": {

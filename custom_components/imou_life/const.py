@@ -111,7 +111,6 @@ def api_url_region_from_value(value: str) -> str:
 CONF_HD = "HD"
 CONF_SD = "SD"
 
-CONF_HTTP = "http"
 CONF_HTTPS = "https"
 
 
@@ -166,7 +165,6 @@ PARAM_UPDATE_INTERVAL = "update_interval"
 DEFAULT_UPDATE_INTERVAL = 300
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
-PARAM_LIVE_PROTOCOL = "live_protocol"
 PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
