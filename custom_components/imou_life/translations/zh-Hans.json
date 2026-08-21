@@ -128,7 +128,7 @@
       },
       "event_push": {
         "title": "告警推送与通知",
-        "description": "通过 Webhook 接收云端告警。建议地址：{suggested_url}",
+        "description": "{lan_hint}通过 Webhook 接收云端告警。建议地址：{suggested_url}",
         "data": {
           "enable_event_push": "启用事件推送",
           "webhook_url": "回调地址",
@@ -239,7 +239,8 @@
     },
     "prerequisite": {
       "options": {
-        "push_off": "告警推送未开启，这一页的设置暂时不会生效。请到「配置 → 告警推送与通知」中打开。"
+        "push_off": "告警推送未开启，这一页的设置暂时不会生效。请到「配置 → 告警推送与通知」中打开。",
+        "callback_not_public": "这个地址只能在局域网内访问，Imou 云无法向它推送告警，不在局域网的手机也加载不出告警图片。请到「设置 → 系统 → 网络 → Home Assistant URL」填一个公网可达的地址，或者直接填你反向代理对外暴露的地址。"
       }
     },
     "event_push_type": {

@@ -115,6 +115,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 
 ## Troubleshooting
 
+- **What does this option do / how do I set it?** — See [Configure reference](guides/configuration.md#english) for every option page by page, and for the **Settings → System → Network** steps that alarm push and alarm pictures both depend on.
 - **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
 - **Event push not working** — Open **Configure → Alarm push and notifications**. Confirm **Enable event push** is on. **Callback URL** comes prefilled with the generated address; change its hostname and port if that address is not reachable from the internet. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
@@ -252,6 +253,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 ## 故障排查
 
+- **某个选项是干什么的 / 该怎么填？** — 见 [配置项参考](guides/configuration.md#zh-hans)，逐页说明每个选项，并给出告警推送和告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤。
 - **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
 - **事件推送不工作** — 打开 **配置 → 告警推送与通知**。确认 **启用事件推送** 已开启。**回调地址** 已预填生成的地址，若该地址公网不可达，就把主机名和端口改掉。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。

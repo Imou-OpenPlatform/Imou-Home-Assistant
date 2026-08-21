@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
+from custom_components.imou_life import config_flow
 from custom_components.imou_life.config_flow import (
     SECTION_CAMERA_DEFAULTS,
     SECTION_EVENT_PUSH_NOTIFICATIONS,
@@ -982,6 +983,74 @@ async def test_options_event_push_prefills_generated_callback_url(
     assert _schema_suggested(schema, PARAM_WEBHOOK_URL) == (
         "http://192.168.1.2:8123/api/webhook/hook-id"
     )
+
+
+@pytest.mark.parametrize(
+    ("url", "public"),
+    [
+        ("https://ha.example.com/api/webhook/x", True),
+        ("http://8.8.8.8:8123/api/webhook/x", True),
+        # RFC 5737 documentation space is not routable either.
+        ("http://203.0.113.9:8123/api/webhook/x", False),
+        # get_url falls back to the internal address without saying so, and
+        # these are exactly what that fallback produces.
+        ("http://192.168.1.2:8123/api/webhook/x", False),
+        ("http://10.0.0.4:8123/api/webhook/x", False),
+        ("http://172.16.3.4:8123/api/webhook/x", False),
+        ("http://127.0.0.1:8123/api/webhook/x", False),
+        ("http://[::1]:8123/api/webhook/x", False),
+        ("http://169.254.7.7:8123/api/webhook/x", False),
+        ("http://localhost:8123/api/webhook/x", False),
+        ("http://homeassistant.local:8123/api/webhook/x", False),
+        ("http://ha.lan:8123/api/webhook/x", False),
+        # A bare hostname only resolves on the LAN.
+        ("http://homeassistant:8123/api/webhook/x", False),
+        ("", False),
+    ],
+)
+def test_looks_publicly_reachable(url: str, public: bool) -> None:
+    """The Imou cloud POSTs from the internet, so LAN addresses never work."""
+    assert config_flow._looks_publicly_reachable(url) is public
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_flags_a_lan_callback_url(hass) -> None:
+    """A LAN callback address must be called out, not silently offered."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "hook-id"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with patch(
+        "custom_components.imou_life.config_flow.webhook.async_generate_url",
+        return_value="http://192.168.1.2:8123/api/webhook/hook-id",
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "event_push"}
+        )
+
+    assert "local network" in result["description_placeholders"]["lan_hint"]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_event_push_does_not_flag_a_public_callback_url(hass) -> None:
+    """A properly exposed instance must not be nagged."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "hook-id"},
+        options={PARAM_WEBHOOK_URL: "https://ha.example.com/api/webhook/hook-id"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+
+    assert result["description_placeholders"]["lan_hint"] == ""
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

@@ -128,7 +128,7 @@
       },
       "event_push": {
         "title": "Alarm push and notifications",
-        "description": "Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
+        "description": "{lan_hint}Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
         "data": {
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
@@ -239,7 +239,8 @@
     },
     "prerequisite": {
       "options": {
-        "push_off": "Alarm push is off, so nothing on this page takes effect yet. Turn it on under Configure → Alarm push and notifications."
+        "push_off": "Alarm push is off, so nothing on this page takes effect yet. Turn it on under Configure → Alarm push and notifications.",
+        "callback_not_public": "This address is only reachable on your local network, so the Imou cloud cannot POST alarms to it and phones off the LAN cannot load alarm pictures. Set an internet-reachable address under Settings → System → Network → Home Assistant URL, or type the address your reverse proxy exposes."
       }
     },
     "event_push_type": {

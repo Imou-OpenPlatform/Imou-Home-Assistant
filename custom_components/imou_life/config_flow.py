@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Mapping
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -145,6 +147,32 @@ async def _async_run_bind(
     manager = ImouDeviceManager(api_client)
     await manager.async_bind_device(device_id, code)
     return await async_build_device_map(hass, api_client)
+
+
+_PRIVATE_HOST_SUFFIXES = (".local", ".lan", ".home", ".internal", ".arpa")
+
+
+def _looks_publicly_reachable(url: str) -> bool:
+    """Return True when a URL could be reached from outside the LAN.
+
+    The Imou cloud POSTs alarms to this address from the internet, so a LAN
+    address can never work. ``webhook.async_generate_url`` defaults to
+    ``prefer_external=True``, which falls back to the internal address without
+    saying so, so the generated suggestion has to be checked before it is
+    offered as usable.
+    """
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    host = host.rstrip(".").lower()
+    try:
+        return ip_address(host).is_global
+    except ValueError:
+        pass
+    if host == "localhost" or host.endswith(_PRIVATE_HOST_SUFFIXES):
+        return False
+    # A bare hostname resolves on the LAN only; public names carry a domain.
+    return "." in host
 
 
 def _selector_option_label(
@@ -526,7 +554,32 @@ class ImouOptionsFlow(OptionsFlow):
         except Exception:
             return ""
 
-    def _event_push_webhook_placeholders(self) -> dict[str, str]:
+    def _effective_callback_url(self, options: Mapping[str, Any]) -> str:
+        """Return the callback URL the form shows: stored, else generated."""
+        return (
+            str(options.get(PARAM_WEBHOOK_URL) or "").strip()
+            or self._generated_webhook_url()
+        )
+
+    def _callback_reach_hint(self, callback_url: str) -> str:
+        """Warn that a LAN callback address can never receive cloud alarms."""
+        if not callback_url or _looks_publicly_reachable(callback_url):
+            return ""
+        text = _selector_option_label(
+            self.hass,
+            self._ui_language(),
+            "prerequisite",
+            "callback_not_public",
+            "This address looks reachable only on your local network, so the "
+            "Imou cloud cannot POST alarms to it. Set an internet-reachable "
+            "address under Settings → System → Network → Home Assistant URL, "
+            "or type the address your reverse proxy exposes.",
+        )
+        return f"**{text}**\n\n"
+
+    def _event_push_webhook_placeholders(
+        self, options: Mapping[str, Any]
+    ) -> dict[str, str]:
         """Return webhook reference values for the step description."""
         language = self.hass.config.language
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
@@ -538,6 +591,9 @@ class ImouOptionsFlow(OptionsFlow):
             # Keep webhook_id for cached frontend strings that still reference it.
             "webhook_id": webhook_id or not_generated,
             "suggested_url": suggested_webhook_url or not_generated,
+            "lan_hint": self._callback_reach_hint(
+                self._effective_callback_url(options)
+            ),
         }
 
     def _nested_event_push_suggestions(
@@ -552,10 +608,7 @@ class ImouOptionsFlow(OptionsFlow):
 
         # Prefill the generated address so turning push on does not first fail
         # on an empty field the user has to copy out of the description.
-        webhook_url = (
-            str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
-            or self._generated_webhook_url()
-        )
+        webhook_url = self._effective_callback_url(flat)
 
         nested: dict[str, Any] = {
             PARAM_ENABLE_EVENT_PUSH: enable_push,
@@ -975,7 +1028,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
             suggested_source = {**stored, **flat}
 
-        placeholders = self._event_push_webhook_placeholders()
+        placeholders = self._event_push_webhook_placeholders(suggested_source)
         if error_detail:
             placeholders["error"] = error_detail
         return self.async_show_form(

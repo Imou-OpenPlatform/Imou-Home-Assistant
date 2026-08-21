@@ -31,6 +31,8 @@
 
 #### Fixed
 
+- **Alarm push and notifications** says so when the callback address is only reachable on the LAN. `webhook.async_generate_url` defaults to `prefer_external=True`, which falls back to the internal address without saying so, so the prefilled suggestion could be one the Imou cloud can never POST to. The field stays editable, since a reverse proxy may expose a different hostname, port, or path.
+- New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
 - Alarm pictures show up on iOS again. The iOS Companion app reads the `attachment` block and ignores `image` (`attachment.url` overrides it), and its `content-type` is a *file extension*, not a MIME type. Sending `image/jpeg` made iOS discard the attachment, so the notification arrived with no picture while Android — which reads `image` — was fine. It now sends `jpg`.
 - A missing external URL no longer fails silently. The thumbnail URL sent to phones came from `get_url(prefer_external=True)`, which quietly falls back to the **internal** address, so an instance with only a LAN address sent notifications carrying `http://192.168.x.x:8123/local/...` — unreachable from cellular, no picture, and nothing in the log to explain it. That fallback now logs a warning naming the address it used and what to set. The address that was attached is debug-logged too.
 - Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
@@ -304,6 +306,8 @@
 
 #### 修复
 
+- **告警推送与通知** 会在回调地址只能局域网访问时明确提示。`webhook.async_generate_url` 的默认参数是 `prefer_external=True`，没配外网地址时会悄悄退回内网地址，于是预填的建议地址可能是 Imou 云永远推不到的。输入框仍可编辑，因为反向代理对外的主机名、端口甚至路径都可能不同。
+- 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
 - iOS 上报警图片能正常显示了。iOS 版 Companion 读的是 `attachment` 而不是 `image`（`attachment.url` 会覆盖 `image`），并且它的 `content-type` 要的是**文件扩展名**而不是 MIME 类型。之前发的 `image/jpeg` 会让 iOS 直接丢掉附件，通知里就没有图；而 Android 读的是 `image`，所以一直正常。现在改为发 `jpg`。
 - 没配外网地址不再静默失败。发给手机的缩略图地址来自 `get_url(prefer_external=True)`，而它在没有外网地址时会悄悄退回**内网**地址，于是只配了局域网地址的实例发出的通知里带的是 `http://192.168.x.x:8123/local/...`——手机在蜂窝网下根本拉不到，图片不显示，日志里也没有任何线索。现在这种退化会打一条告警，写明用了哪个地址、该去配什么。实际附带的地址也会记进 debug 日志。
 - 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
