@@ -1430,6 +1430,10 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
     assert data["clickAction"] == path
     assert data["image"] == public_url
     assert data["attachment"]["url"] == public_url
+    # iOS wants a file extension here, not a MIME type: an unrecognised value
+    # makes it drop the attachment, and attachment.url overrides "image", so
+    # the notification arrives with no picture at all.
+    assert data["attachment"]["content-type"] == "jpg"
     assert "icon_url" not in data
 
 

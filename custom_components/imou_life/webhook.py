@@ -447,10 +447,18 @@ async def _async_send_notifications(
                 notify_data["clickAction"] = path
             if thumbnail_url:
                 notify_data["image"] = thumbnail_url
+                # iOS reads "attachment" and ignores "image"; Android does the
+                # opposite. content-type is a file extension, not a MIME type.
                 notify_data["attachment"] = {
                     "url": thumbnail_url,
-                    "content-type": "image/jpeg",
+                    "content-type": "jpg",
                 }
+                _LOGGER.debug(
+                    "Attaching alarm picture %s to %s.%s",
+                    thumbnail_url,
+                    svc_domain,
+                    svc_name,
+                )
             if notify_data:
                 service_data["data"] = notify_data
         try:

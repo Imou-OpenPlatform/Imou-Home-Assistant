@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import AsyncIterator, Iterable
 from pathlib import Path
 from typing import Any
@@ -508,3 +509,62 @@ def test_public_media_url_uses_external_url(hass: HomeAssistant) -> None:
         public_media_url(hass, "https://cdn.example/a.jpg")
         == "https://cdn.example/a.jpg"
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_public_media_url_external_url_is_not_warned_about(
+    hass: HomeAssistant, caplog
+) -> None:
+    """A properly configured instance must not be nagged."""
+    hass.config.external_url = "https://ha.example.com"
+    hass.config.internal_url = "http://192.168.1.5:8123"
+
+    with caplog.at_level(logging.WARNING):
+        public_media_url(hass, "/local/imou_life/thumbs/a.jpg")
+
+    assert caplog.text == ""
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_public_media_url_warns_when_only_internal_is_set(
+    hass: HomeAssistant, caplog
+) -> None:
+    """A LAN address silently produces notifications with no picture on cellular.
+
+    ``get_url`` falls back to the internal URL, which looks like success, so
+    the fallback has to say so or the missing picture is undiagnosable.
+    """
+    hass.config.external_url = None
+    hass.config.internal_url = "http://192.168.1.5:8123"
+
+    with caplog.at_level(logging.WARNING):
+        url = public_media_url(hass, "/local/imou_life/thumbs/a.jpg")
+
+    # Still absolute: a phone that is on the LAN can load this one.
+    assert url == "http://192.168.1.5:8123/local/imou_life/thumbs/a.jpg"
+    assert "http://192.168.1.5:8123" in caplog.text
+    assert "external url" in caplog.text.lower()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_public_media_url_warns_when_no_url_is_available(
+    hass: HomeAssistant, caplog
+) -> None:
+    """With no address at all the relative path is all that is left."""
+    from custom_components.imou_life import pic_thumbnail
+
+    hass.config.external_url = None
+    hass.config.internal_url = None
+
+    with (
+        patch.object(
+            pic_thumbnail,
+            "get_url",
+            side_effect=pic_thumbnail.NoURLAvailableError,
+        ),
+        caplog.at_level(logging.WARNING),
+    ):
+        url = public_media_url(hass, "/local/imou_life/thumbs/a.jpg")
+
+    assert url == "/local/imou_life/thumbs/a.jpg"
+    assert "external url" in caplog.text.lower()

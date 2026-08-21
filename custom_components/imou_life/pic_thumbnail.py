@@ -404,23 +404,38 @@ async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | 
 def public_media_url(hass: HomeAssistant, local_path: str) -> str:
     """Turn ``/local/...`` into an absolute URL phones can fetch off-LAN.
 
-    Companion resolves a relative image against the app's Home Assistant
-    address. If that address is still a LAN IP, the still fails to load
-    on cellular. Prefer the configured external URL.
+    The phone fetches this URL itself, so a LAN address means no picture on
+    cellular. ``get_url(prefer_external=True)`` quietly falls back to the
+    internal URL, which is indistinguishable from success; ask for an
+    externally reachable address on its own first so the fallback can say what
+    happened. The internal address is still returned, since a phone on the LAN
+    can load it.
     """
     if local_path.startswith(("http://", "https://")):
         return local_path
     if not local_path.startswith("/"):
         return local_path
     try:
+        return f"{get_url(hass, allow_internal=False).rstrip('/')}{local_path}"
+    except NoURLAvailableError:
+        pass
+    try:
         base = get_url(hass, prefer_external=True)
     except NoURLAvailableError:
         _LOGGER.warning(
-            "Cannot build a public URL for the alarm thumbnail; set Home "
-            "Assistant's external URL (Settings → System → Network) so phones "
-            "outside the LAN can load /local/ images"
+            "Cannot build a URL for the alarm thumbnail; set Home Assistant's "
+            "external URL (Settings → System → Network) so phones outside the "
+            "LAN can load /local/ images"
         )
         return local_path
+    _LOGGER.warning(
+        "Alarm thumbnails will be sent as %s%s because no externally reachable "
+        "address is configured. A phone that is not on this LAN cannot load "
+        "that, so the notification arrives without a picture. Set Home "
+        "Assistant's external URL (Settings → System → Network)",
+        base.rstrip("/"),
+        local_path,
+    )
     return f"{base.rstrip('/')}{local_path}"
 
 

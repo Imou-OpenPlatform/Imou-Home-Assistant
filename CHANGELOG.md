@@ -31,6 +31,8 @@
 
 #### Fixed
 
+- Alarm pictures show up on iOS again. The iOS Companion app reads the `attachment` block and ignores `image` (`attachment.url` overrides it), and its `content-type` is a *file extension*, not a MIME type. Sending `image/jpeg` made iOS discard the attachment, so the notification arrived with no picture while Android — which reads `image` — was fine. It now sends `jpg`.
+- A missing external URL no longer fails silently. The thumbnail URL sent to phones came from `get_url(prefer_external=True)`, which quietly falls back to the **internal** address, so an instance with only a LAN address sent notifications carrying `http://192.168.x.x:8123/local/...` — unreachable from cellular, no picture, and nothing in the log to explain it. That fallback now logs a warning naming the address it used and what to set. The address that was attached is debug-logged too.
 - Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
 
 #### Removed
@@ -302,6 +304,8 @@
 
 #### 修复
 
+- iOS 上报警图片能正常显示了。iOS 版 Companion 读的是 `attachment` 而不是 `image`（`attachment.url` 会覆盖 `image`），并且它的 `content-type` 要的是**文件扩展名**而不是 MIME 类型。之前发的 `image/jpeg` 会让 iOS 直接丢掉附件，通知里就没有图；而 Android 读的是 `image`，所以一直正常。现在改为发 `jpg`。
+- 没配外网地址不再静默失败。发给手机的缩略图地址来自 `get_url(prefer_external=True)`，而它在没有外网地址时会悄悄退回**内网**地址，于是只配了局域网地址的实例发出的通知里带的是 `http://192.168.x.x:8123/local/...`——手机在蜂窝网下根本拉不到，图片不显示，日志里也没有任何线索。现在这种退化会打一条告警，写明用了哪个地址、该去配什么。实际附带的地址也会记进 debug 日志。
 - 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
 
 #### 移除
