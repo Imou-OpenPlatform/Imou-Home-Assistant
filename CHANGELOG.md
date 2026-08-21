@@ -14,7 +14,7 @@
 
 - Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
 - Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. The image URL is built from Home Assistant's **external URL** so phones off the LAN can load it. Many motion pushes have no picture URL; notifications stay text-only. Skip reasons and decrypt result are debug-logged.
-- The decrypted still is also shown in the Home Assistant **web notification drawer**, one entry per device replaced by each new alarm. `imou_life_alarm` includes `thumbnail_path`.
+- Pick **`notify.persistent_notification`** as a notify target to get the decrypted still in the Home Assistant **web notification drawer** too, one entry per device replaced by each new alarm. That entry stands in for the plain text one the target would otherwise post, so a single alarm never shows up twice; alarms with no decrypted still fall through to the target as before. With no drawer target selected nothing is written to the drawer. `imou_life_alarm` includes `thumbnail_path`.
 - The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
 - The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
 - IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
@@ -269,7 +269,7 @@
 
 - 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
 - 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。图片地址用 Home Assistant **外网 URL** 拼成绝对路径，手机不在局域网也能加载。许多移动侦测推送没有图片 URL，此时仍为纯文本通知。跳过原因与解密结果会打 debug 日志。
-- 解密图同时显示在 Home Assistant **网页通知栏**：每台设备一条，新告警覆盖旧的。`imou_life_alarm` 事件带 `thumbnail_path`。
+- 想在 Home Assistant **网页通知栏**里也看到解密图，把 **`notify.persistent_notification`** 选进通知目标：每台设备一条，新告警覆盖旧的。这条带图的会顶替该目标本来要发的纯文本，同一个告警不会出现两条；没有解密图的告警仍照常走该目标。没选网页通知目标时，通知栏不会写入任何内容。`imou_life_alarm` 事件带 `thumbnail_path`。
 - 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
 - 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
 - IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用

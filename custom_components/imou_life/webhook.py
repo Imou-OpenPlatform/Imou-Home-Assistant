@@ -344,9 +344,11 @@ async def _async_create_web_notification(
 ) -> None:
     """Show the decrypted still in the Home Assistant web notification drawer.
 
-    One notification id per device keeps the drawer at the latest alarm per
-    camera instead of growing without bound. The relative ``/local/`` path is
-    right here: the browser is already on Home Assistant's own origin.
+    Only called when the user picked a drawer target, so this stays opt-in
+    like every other notification channel. One notification id per device
+    keeps the drawer at the latest alarm per camera instead of growing without
+    bound. The relative ``/local/`` path is right here: the browser is already
+    on Home Assistant's own origin, and it does not need an external URL.
     """
     title, message = await _async_build_notification_message(hass, event_data)
     device_key = (
@@ -372,11 +374,39 @@ def _is_companion_notify(domain: str, service: str) -> bool:
     return domain == "notify" and service.startswith("mobile_app_")
 
 
+def _is_web_drawer_notify(domain: str, service: str) -> bool:
+    """Return True for services that post into the web notification drawer."""
+    if domain == "notify" and service == "persistent_notification":
+        return True
+    return domain == "persistent_notification" and service == "create"
+
+
+def _split_notify_target(target: str) -> tuple[str, str] | None:
+    """Split a configured target into (domain, service); bare names are notify."""
+    target = target.strip()
+    if not target:
+        return None
+    if "." in target:
+        domain, service = target.split(".", 1)
+        return domain, service
+    return "notify", target
+
+
+def _has_web_drawer_target(notify_services: list[str]) -> bool:
+    """Return True when a configured target writes to the web drawer."""
+    for target in notify_services:
+        parts = _split_notify_target(target)
+        if parts is not None and _is_web_drawer_notify(*parts):
+            return True
+    return False
+
+
 async def _async_send_notifications(
     hass: HomeAssistant,
     event_data: dict[str, Any],
     notify_services: list[str],
     thumbnail_url: str | None = None,
+    skip_web_drawer: bool = False,
 ) -> None:
     """Send alarm notifications.
 
@@ -385,6 +415,9 @@ async def _async_send_notifications(
       - "notify.mobile_app_xxx"     -> calls legacy notify service
       - "notify.xxx"                -> tries notify.send_message entity, then legacy
       - "domain.service"            -> calls any HA service
+
+    ``skip_web_drawer`` drops targets that would post a second, image-less copy
+    into the drawer the caller has already filled with the decrypted still.
     """
     title, message = await _async_build_notification_message(hass, event_data)
     ha_device = resolve_ha_device_entry(
@@ -394,26 +427,32 @@ async def _async_send_notifications(
         event_data.get("product_id"),
     )
     for svc in notify_services:
-        svc = svc.strip()
-        if not svc:
+        parts = _split_notify_target(svc)
+        if parts is None:
             continue
-        # Parse domain.service
-        if "." in svc:
-            svc_domain, svc_name = svc.split(".", 1)
-        else:
-            svc_domain = "notify"
-            svc_name = svc
+        svc_domain, svc_name = parts
+        if skip_web_drawer and _is_web_drawer_notify(svc_domain, svc_name):
+            _LOGGER.debug(
+                "Skipping %s.%s: the alarm image already covers the web drawer",
+                svc_domain,
+                svc_name,
+            )
+            continue
         service_data: dict[str, Any] = {"message": message, "title": title}
-        if _is_companion_notify(svc_domain, svc_name) and ha_device is not None:
-            path = f"/config/devices/device/{ha_device.id}"
-            notify_data: dict[str, Any] = {"url": path, "clickAction": path}
+        if _is_companion_notify(svc_domain, svc_name):
+            notify_data: dict[str, Any] = {}
+            if ha_device is not None:
+                path = f"/config/devices/device/{ha_device.id}"
+                notify_data["url"] = path
+                notify_data["clickAction"] = path
             if thumbnail_url:
                 notify_data["image"] = thumbnail_url
                 notify_data["attachment"] = {
                     "url": thumbnail_url,
                     "content-type": "image/jpeg",
                 }
-            service_data["data"] = notify_data
+            if notify_data:
+                service_data["data"] = notify_data
         try:
             await hass.services.async_call(
                 svc_domain,
@@ -468,10 +507,12 @@ async def _async_dispatch_imou_push(
         if is_alarm:
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
             if _notify_on_alarm_enabled(hass, event_data):
-                if thumbnail_local:
+                web_notified = False
+                if thumbnail_local and _has_web_drawer_target(runtime.notify_services):
                     await _async_create_web_notification(
                         hass, event_data, thumbnail_local
                     )
+                    web_notified = True
                 if runtime.notify_services:
                     public_thumb = (
                         public_media_url(hass, thumbnail_local)
@@ -479,7 +520,11 @@ async def _async_dispatch_imou_push(
                         else None
                     )
                     await _async_send_notifications(
-                        hass, event_data, runtime.notify_services, public_thumb
+                        hass,
+                        event_data,
+                        runtime.notify_services,
+                        public_thumb,
+                        skip_web_drawer=web_notified,
                     )
             await async_maybe_record_from_alarm(hass, entry, event_data)
     except Exception:

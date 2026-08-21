@@ -1625,8 +1625,13 @@ async def test_webhook_decrypts_without_notify_and_sets_event_path(
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_web_notification_embeds_thumb(hass: HomeAssistant) -> None:
-    """The web notification drawer shows the decrypted still as markdown."""
-    _setup_thumbnail_notify(hass, attach=True, notify_services=[])
+    """A drawer target gets one entry carrying the decrypted still as markdown."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.persistent_notification"],
+    )
+    calls = async_mock_service(hass, "notify", "persistent_notification")
     thumb_url = "/local/imou_life/thumbs/1.jpg"
 
     with patch(
@@ -1647,6 +1652,8 @@ async def test_webhook_web_notification_embeds_thumb(hass: HomeAssistant) -> Non
         )
         await hass.async_block_till_done(wait_background_tasks=True)
 
+    # The image entry stands in for the target, so it must not fire as well.
+    assert calls == []
     notifications = async_get_persistent_notifications(hass)
     notification = notifications["imou_life_alarm_SN1_0"]
     assert notification["message"].startswith(f"![]({thumb_url})")
@@ -1654,11 +1661,49 @@ async def test_webhook_web_notification_embeds_thumb(hass: HomeAssistant) -> Non
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_no_thumb_creates_no_web_notification(
+async def test_webhook_no_web_notification_without_drawer_target(
     hass: HomeAssistant,
 ) -> None:
-    """Text-only alarms must not add entries to the web notification drawer."""
-    _setup_thumbnail_notify(hass, attach=True, notify_services=[])
+    """A decrypted still alone must not push into the drawer; it is opt-in."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.mobile_app_phone"],
+    )
+    async_mock_service(hass, "notify", "mobile_app_phone")
+
+    with patch(
+        "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+        AsyncMock(return_value="/local/imou_life/thumbs/1.jpg"),
+    ):
+        await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": "human",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                    "picUrlArray": ["https://a/big"],
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert async_get_persistent_notifications(hass) == {}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_drawer_target_still_fires_without_thumb(
+    hass: HomeAssistant,
+) -> None:
+    """Text-only alarms leave the drawer target as the only web notification."""
+    _setup_thumbnail_notify(
+        hass,
+        attach=True,
+        notify_services=["notify.persistent_notification"],
+    )
+    calls = async_mock_service(hass, "notify", "persistent_notification")
 
     with patch(
         "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
@@ -1671,4 +1716,5 @@ async def test_webhook_no_thumb_creates_no_web_notification(
         )
         await hass.async_block_till_done(wait_background_tasks=True)
 
-    assert async_get_persistent_notifications(hass) == {}
+    assert len(calls) == 1
+    assert "imou_life_alarm_SN1_0" not in async_get_persistent_notifications(hass)
