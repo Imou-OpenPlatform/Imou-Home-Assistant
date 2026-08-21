@@ -133,6 +133,43 @@ def test_sync_decrypt_and_write_sha256_filename(hass: HomeAssistant) -> None:
     )
 
     assert result == (f"/local/imou_life/thumbs/{digest}.jpg", 0)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_thumb_filename_rejects_path_traversal() -> None:
+    """Hostile alarm_id values must not become relative path segments."""
+    from custom_components.imou_life.pic_thumbnail import _thumb_filename
+
+    assert ".." not in _thumb_filename("../../etc/passwd", "https://x")
+    assert "/" not in _thumb_filename("a/b", "https://x")
+    assert "\\" not in _thumb_filename("a\\b", "https://x")
+    assert _thumb_filename("safe-Alarm_1.id", "https://x") == "safe-Alarm_1.id.jpg"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_sync_decrypt_and_write_hashes_unsafe_alarm_id(hass: HomeAssistant) -> None:
+    """Traversal-style alarm_id falls back to a hashed single-segment name."""
+    runtime, decoder = _runtime_with_decoder()
+    _entry(hass)
+    alarm_id = "../../escape"
+    digest = hashlib.sha256(alarm_id.encode()).hexdigest()[:16]
+
+    result = _sync_decrypt_and_write(
+        decoder,
+        runtime,
+        hass,
+        {"alarm_id": alarm_id, "device_id": "SN1"},
+        "https://example.com/pic",
+        CIPHERTEXT,
+        "encrypt_key",
+        "SN1",
+        False,
+    )
+
+    assert result == (f"/local/imou_life/thumbs/{digest}.jpg", 0)
+    thumbs = Path(hass.config.path("www", "imou_life", "thumbs"))
+    assert (thumbs / f"{digest}.jpg").is_file()
+    assert not (thumbs.parent.parent / "escape.jpg").exists()
     dest = Path(hass.config.path("www", "imou_life", "thumbs", f"{digest}.jpg"))
     assert dest.read_bytes() == JPEG
 

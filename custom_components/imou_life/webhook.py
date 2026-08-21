@@ -35,6 +35,7 @@ from .const import (
     PARAM_WEBHOOK_ID,
 )
 from .helpers import (
+    get_selected_device_ids,
     resolve_ha_device_entry,
     resolve_ha_device_key,
     resolve_ha_device_name,
@@ -588,8 +589,10 @@ async def async_handle_imou_webhook(
         )
         return web.Response(status=200, text="ok")
 
-    # Filter: None = all devices; [] = none; otherwise allow-list
-    selected_devices = runtime.selected_devices
+    # Filter: None = all devices; [] = none; otherwise allow-list.
+    # Prefer entry.options over runtime so a just-saved selection applies
+    # before the full reload finishes (same race as enable_event_push).
+    selected_devices = get_selected_device_ids(entry)
     if selected_devices is not None and (
         not device_id or device_id not in selected_devices
     ):

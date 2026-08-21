@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import logging
 import platform
+import re
 import sys
 import threading
 import time
@@ -42,6 +43,8 @@ _LOGGER = logging.getLogger(__name__)
 
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
+# Push alarm ids become www filenames; reject path separators and traversal.
+_SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
 _DOWNLOAD_TIMEOUT_SECONDS = 20
 _DOWNLOAD_CHUNK_BYTES = 64 * 1024
@@ -187,9 +190,11 @@ def _preferred_push_pic_url(raw: dict[str, Any]) -> str | None:
 
 
 def _thumb_filename(alarm_id: str | None, pic_url: str) -> str:
-    if alarm_id:
+    """Return a single-segment jpeg name that cannot escape the thumbs dir."""
+    if isinstance(alarm_id, str) and _SAFE_THUMB_STEM.fullmatch(alarm_id):
         return f"{alarm_id}.jpg"
-    digest = hashlib.sha256(pic_url.encode()).hexdigest()[:16]
+    digest_source = alarm_id if isinstance(alarm_id, str) and alarm_id else pic_url
+    digest = hashlib.sha256(digest_source.encode()).hexdigest()[:16]
     return f"{digest}.jpg"
 
 
@@ -256,7 +261,11 @@ def _write_thumb(
         )
     _prune_old_thumbs(thumbs_dir)
     filename = _thumb_filename(event_data.get("alarm_id"), pic_url)
-    dest = thumbs_dir / filename
+    thumbs_root = thumbs_dir.resolve()
+    dest = (thumbs_dir / filename).resolve()
+    if not dest.is_relative_to(thumbs_root):
+        _LOGGER.warning("Refusing alarm thumb path outside thumbs dir: %s", dest)
+        return None
     try:
         dest.write_bytes(jpeg)
     except OSError:

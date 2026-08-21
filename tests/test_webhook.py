@@ -171,6 +171,40 @@ async def test_webhook_respects_entry_options_over_runtime_push_flag(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_respects_entry_options_over_runtime_selected_devices(
+    hass: HomeAssistant,
+) -> None:
+    """A just-saved device selection must apply before reload finishes."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["device_1", "device_2"],
+        options={"selected_devices": ["device_2"]},
+    )
+    assert runtime.selected_devices == ["device_1", "device_2"]
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert response.status == 200
+    assert events == []
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_2"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert response.status == 200
+    assert len(events) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_ignores_push_without_ha_device(hass: HomeAssistant) -> None:
     """Pushes with no matching device registry row are ACKed but not dispatched."""
     events: list[Event] = []
