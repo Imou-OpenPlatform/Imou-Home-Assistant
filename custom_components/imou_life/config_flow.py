@@ -890,9 +890,7 @@ class ImouOptionsFlow(OptionsFlow):
         typed = str(user_input.get(PARAM_DEFAULT_DEVICE_PASSWORD) or "")
         if typed:
             return typed
-        return str(
-            self.config_entry.options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or ""
-        )
+        return str(self.config_entry.options.get(PARAM_DEFAULT_DEVICE_PASSWORD) or "")
 
     async def async_step_alarm_image_decrypt(
         self, user_input: dict[str, Any] | None = None
@@ -911,12 +909,11 @@ class ImouOptionsFlow(OptionsFlow):
                 # that state instead.
                 errors[PARAM_ATTACH_DECRYPTED_THUMBNAIL] = "decrypt_libs_missing"
             else:
+                default_password = self._merged_default_device_password(user_input)
                 self._save_options(
                     **{
                         PARAM_ATTACH_DECRYPTED_THUMBNAIL: attach,
-                        PARAM_DEFAULT_DEVICE_PASSWORD: self._merged_default_device_password(
-                            user_input
-                        ),
+                        PARAM_DEFAULT_DEVICE_PASSWORD: default_password,
                         PARAM_DEVICE_PASSWORDS: self._merge_device_passwords(
                             user_input
                         ),

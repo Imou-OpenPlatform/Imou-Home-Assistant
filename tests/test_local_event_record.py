@@ -185,10 +185,9 @@ async def test_alarm_records_only_the_armed_camera(hass: HomeAssistant) -> None:
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_alarm_uses_local_record_helper(hass: HomeAssistant) -> None:
     """A security alarm from the webhook records when the camera switch is on."""
-    setup_imou_runtime(hass, selected_devices=["SN1"])
-    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
-    hass.config_entries.async_update_entry(
-        entry,
+    setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
         options={
             PARAM_LOCAL_RECORD_PATH: "/media/imou",
             PARAM_LOCAL_RECORD_DURATION: 30,
