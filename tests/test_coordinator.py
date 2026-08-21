@@ -36,6 +36,7 @@ def device_manager() -> MagicMock:
     manager = MagicMock()
     manager.async_get_devices = AsyncMock()
     manager.async_update_device_status = AsyncMock(return_value=None)
+    manager.async_update_devices_status = AsyncMock(return_value=None)
     return manager
 
 
@@ -123,9 +124,9 @@ async def test_coordinator_skips_poll_when_all_entities_disabled(
         disabled_by=RegistryEntryDisabler.USER,
     )
 
-    device_manager.async_update_device_status.reset_mock()
+    device_manager.async_update_devices_status.reset_mock()
     await coordinator._async_update_data()
-    device_manager.async_update_device_status.assert_not_called()
+    device_manager.async_update_devices_status.assert_not_called()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -262,3 +263,76 @@ async def test_coordinator_default_interval_is_five_minutes(
     coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
     assert coordinator.update_interval is not None
     assert coordinator.update_interval.total_seconds() == DEFAULT_UPDATE_INTERVAL
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_skips_ability_refs_when_device_set_unchanged(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A rediscovery that finds the same devices must not re-fetch ability refs."""
+    devices = [_mock_device("d1")]
+    coordinator = await _run_update(hass, device_manager, devices)
+    device_manager.async_get_devices.assert_awaited()
+    assert (
+        device_manager.async_get_devices.await_args.kwargs.get(
+            "fetch_ability_refs", True
+        )
+        is True
+    )
+
+    device_manager.async_get_devices.reset_mock()
+    device_manager.async_get_devices.return_value = devices
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    device_manager.async_get_devices.assert_awaited_once()
+    assert (
+        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
+        is False
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A newly appeared device is the only one that spends a detail call."""
+    first = [_mock_device("d1")]
+    coordinator = await _run_update(hass, device_manager, first)
+
+    second = [_mock_device("d1"), _mock_device("d2")]
+    device_manager.async_get_devices.reset_mock()
+    device_manager.async_get_devices.side_effect = [second, second]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    assert device_manager.async_get_devices.await_count == 2
+    assert (
+        device_manager.async_get_devices.await_args_list[0].kwargs["fetch_ability_refs"]
+        is False
+    )
+    assert device_manager.async_get_devices.await_args_list[1].kwargs[
+        "fetch_ability_refs"
+    ] == {"d2"}
+    assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_status_poll_uses_shared_device_update(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """The status poll batches devices so multi-channel reads can be shared."""
+    devices = [_mock_device("d1", "0"), _mock_device("d1", "1")]
+    coordinator = await _run_update(hass, device_manager, devices)
+
+    device_manager.async_update_devices_status.reset_mock()
+    coordinator._last_discovery = 1e18  # discovery not due
+    await coordinator._async_update_data()
+
+    device_manager.async_update_devices_status.assert_awaited_once()
+    polled = device_manager.async_update_devices_status.await_args.args[0]
+    assert {imou_life_device_key(d) for d in polled} == {
+        imou_life_device_key(devices[0]),
+        imou_life_device_key(devices[1]),
+    }
+    device_manager.async_update_device_status.assert_not_called()

@@ -756,7 +756,7 @@ class ImouOptionsFlow(OptionsFlow):
             self._ui_language(),
             "prerequisite",
             "push_off",
-            "Event push is off, so nothing on this page takes effect yet. "
+            "Alarm push is off, so nothing on this page takes effect yet. "
             "Turn it on under Configure → Alarm push and notifications.",
         )
         return f"**{text}**\n\n"
@@ -770,7 +770,7 @@ class ImouOptionsFlow(OptionsFlow):
             decrypt = (
                 on
                 if pic_thumbnail.native_libs_present(self.hass)
-                else self._status_label("missing_libs", "on, libraries missing")
+                else self._status_label("missing_libs", "on, but libraries are missing")
             )
         else:
             decrypt = off

@@ -33,6 +33,10 @@ class ImouRuntimeData:
     local_record_started_at: dict[str, float] = field(default_factory=dict)
     pic_decoder: LCOpenPicDecoder | None = None
     pic_decoder_failed: bool = False
+    # Options that force unload/setup when they change. Soft keys (passwords,
+    # decrypt switch, notify targets, camera defaults, local record path) are
+    # read from entry.options on use or refreshed in place.
+    reload_signature: tuple[object, ...] = ()
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

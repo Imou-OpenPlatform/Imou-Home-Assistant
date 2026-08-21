@@ -43,6 +43,9 @@
 - **Alarm pictures** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
 - **Show the picture in alarm notifications** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
 - The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
+- Periodic rediscovery no longer spends a `getIotDeviceDetailInfo` call on every already-known IoT device. Ability refs are fetched on first discovery, and again only for device ids that just appeared.
+- Status polling shares `deviceOnline` and IoT detail reads across every Home Assistant channel of the same physical device, so an NVR no longer multiplies those calls by its channel count.
+- Saving Configure options that only affect decrypt, passwords, notify targets, camera defaults, or local recording updates the live runtime and does **not** unload the entry. That avoids a useless `setMessageCallback` off/on and a full rediscovery. Changing polling, selected devices, or event-push registration still reloads as before.
 - Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
 - Labels drop the internals they were leaking. The page is **Alarm pictures** rather than *Alarm image decrypt*, its switch is **Show the picture in alarm notifications** rather than *Attach decrypted alarm thumbnail*, and nothing says **TCM** at the user any more — the page simply lists the devices that need a password and says so. Option keys are unchanged, so saved settings carry over.
 
@@ -306,6 +309,9 @@
 - **告警图片** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
 - 本机缺少原生库时，**在告警通知中显示图片** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
 - **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
+- 周期性重新发现不再对每台已有 IoT 设备再打一次 `getIotDeviceDetailInfo`。能力 refs 只在首次发现时拉取，之后只为新出现的设备 id 再取。
+- 状态轮询在同一物理设备的多个 Home Assistant 通道之间共享 `deviceOnline` 与 IoT detail，NVR 不再按通道数倍增这两类调用。
+- 只改解密、密码、通知目标、摄像头默认或本地录像相关选项时，会就地更新运行时，**不会**卸载重载集成，从而避免无意义的 `setMessageCallback` 关/开和全量重新发现。改轮询、所选设备或事件推送注册仍会重载。
 - 界面文案不再泄露实现细节。页面从「告警图片解密」改名为 **告警图片**，其中的开关从「贴解密告警缩略图」改为 **在告警通知中显示图片**，面向用户的文案里也不再出现 **TCM** —— 页面直接把需要密码的设备列出来并说明。选项存储键未变，已保存的设置照常生效。
 
 #### 修复

@@ -230,3 +230,77 @@ async def test_remove_ghost_device_when_coordinator_map_is_empty(hass) -> None:
 
     assert await async_remove_config_entry_device(hass, entry, device_entry) is True
     assert PARAM_SELECTED_DEVICES not in entry.options
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_update_soft_path_skips_reload(hass) -> None:
+    """Changing decrypt/notify options must not unload and re-setup the entry."""
+    from custom_components.imou_life import (
+        async_update_options,
+        options_reload_signature,
+    )
+    from custom_components.imou_life.const import (
+        PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+        PARAM_NOTIFY_SERVICES,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh"},
+        options={PARAM_NOTIFY_SERVICES: ["notify.old"]},
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(
+        coordinator=MagicMock(),
+        notify_services=["notify.old"],
+        reload_signature=options_reload_signature(entry.options),
+    )
+    entry.runtime_data = runtime
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            PARAM_NOTIFY_SERVICES: ["notify.new"],
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+        },
+    )
+
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        AsyncMock(),
+    ) as reload:
+        await async_update_options(hass, entry)
+        reload.assert_not_awaited()
+
+    assert runtime.notify_services == ["notify.new"]
+    assert runtime.reload_signature == options_reload_signature(entry.options)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_update_reloads_when_polling_changes(hass) -> None:
+    """Changing the poll interval still forces a full reload."""
+    from custom_components.imou_life import (
+        async_update_options,
+        options_reload_signature,
+    )
+    from custom_components.imou_life.const import PARAM_UPDATE_INTERVAL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh"},
+        options={PARAM_UPDATE_INTERVAL: 300},
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(
+        coordinator=MagicMock(),
+        reload_signature=options_reload_signature(entry.options),
+    )
+    entry.runtime_data = runtime
+    hass.config_entries.async_update_entry(entry, options={PARAM_UPDATE_INTERVAL: 120})
+
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        AsyncMock(),
+    ) as reload:
+        await async_update_options(hass, entry)
+        reload.assert_awaited_once_with(entry.entry_id)

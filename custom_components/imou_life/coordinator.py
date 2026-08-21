@@ -104,17 +104,26 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         return monotonic() - self._last_discovery >= DISCOVERY_INTERVAL
 
     async def _async_discover_devices(self) -> None:
-        """Refresh which devices the account holds."""
+        """Refresh which devices the account holds.
+
+        Ability-ref detail calls are only needed to register entities for a
+        device Home Assistant has not seen yet. A rediscovery that finds the
+        same keys therefore lists without spending those calls; when something
+        new appears, only that device's ids are queried again.
+        """
         _LOGGER.debug("Listing Imou devices")
+        first_discovery = not self._devices_initialized
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                fresh_devices = await self._device_manager.async_get_devices()
+                fresh_devices = await self._device_manager.async_get_devices(
+                    fetch_ability_refs=first_discovery
+                )
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
             raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
-            if not self._devices_initialized:
+            if first_discovery:
                 raise UpdateFailed(
                     f"Error fetching Imou devices: {err.message or err}"
                 ) from err
@@ -129,6 +138,36 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         account_by_key = {imou_life_device_key(d): d for d in fresh_devices}
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
+
+        if first_discovery:
+            self._async_add_remove_devices(fresh_by_key, account_by_key)
+            return
+
+        new_keys = set(fresh_by_key) - set(self.devices_by_key)
+        if new_keys:
+            new_ids = {fresh_by_key[key].device_id for key in new_keys}
+            try:
+                async with asyncio.timeout(UPDATE_TIMEOUT):
+                    detailed = await self._device_manager.async_get_devices(
+                        fetch_ability_refs=new_ids
+                    )
+            except TimeoutError as err:
+                raise UpdateFailed(f"Timeout while fetching data: {err}") from err
+            except InvalidAppIdOrSecretException as err:
+                raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+            except ImouException as err:
+                _LOGGER.warning(
+                    "Could not load new Imou device details: %s", err.message or err
+                )
+                return
+            account_by_key = {imou_life_device_key(d): d for d in detailed}
+            detailed_by_key = {
+                imou_life_device_key(d): d for d in self._filter_devices(detailed)
+            }
+            for key in new_keys:
+                if key in detailed_by_key:
+                    fresh_by_key[key] = detailed_by_key[key]
+
         self._async_add_remove_devices(fresh_by_key, account_by_key)
 
     async def _async_update_data(self) -> None:
@@ -152,40 +191,19 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                results = await asyncio.gather(
-                    *(
-                        self._device_manager.async_update_device_status(device)
-                        for device in devices_to_update
-                    ),
-                    return_exceptions=True,
+                await self._device_manager.async_update_devices_status(
+                    devices_to_update
                 )
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
-
-        failures: list[Exception] = []
-        for device, result in zip(devices_to_update, results, strict=True):
-            if isinstance(result, BaseException) and not isinstance(result, Exception):
-                raise result
-            if not isinstance(result, Exception):
-                continue
-            device_key = imou_life_device_key(device)
-            _LOGGER.warning(
-                "Error updating status for Imou device %s: %s",
-                device_key,
-                result,
-            )
-            failures.append(result)
-        # Credentials can be revoked between two listings, and the status calls
-        # are what notice it first now that listing is on a slow clock.
-        for failure in failures:
-            if isinstance(failure, InvalidAppIdOrSecretException):
-                raise ConfigEntryAuthFailed(
-                    f"Invalid Imou credentials: {failure}"
-                ) from failure
-        if failures and len(failures) == len(devices_to_update):
+        except InvalidAppIdOrSecretException as err:
+            # Credentials can be revoked between two listings, and the status
+            # calls are what notice it first now that listing is on a slow clock.
+            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+        except ImouException as err:
             raise UpdateFailed(
-                f"Error updating Imou devices: {failures[0]}"
-            ) from failures[0]
+                f"Error updating Imou devices: {err.message or err}"
+            ) from err
 
     def _async_add_remove_devices(
         self,

@@ -47,7 +47,7 @@ def loaded_entry(hass: HomeAssistant):
         entry.add_to_hass(hass)
         manager = MagicMock()
         manager.async_get_devices = AsyncMock(return_value=[_device()])
-        manager.async_update_device_status = AsyncMock(return_value=None)
+        manager.async_update_devices_status = AsyncMock(return_value=None)
         client = MagicMock()
         client.async_close = AsyncMock()
         with (

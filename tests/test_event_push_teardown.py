@@ -113,7 +113,7 @@ async def test_turning_push_on_and_off_leaves_the_cloud_off(
     client.async_close = AsyncMock()
     manager = MagicMock()
     manager.async_get_devices = AsyncMock(return_value=[])
-    manager.async_update_device_status = AsyncMock(return_value=None)
+    manager.async_update_devices_status = AsyncMock(return_value=None)
 
     with (
         patch("custom_components.imou_life.ImouOpenApiClient", return_value=client),
