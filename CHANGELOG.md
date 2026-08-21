@@ -4,45 +4,7 @@
 
 ### [1.4.0]
 
-#### Added
-
-- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Home Assistant downloads the encrypted push `picUrlArray` image itself and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
-- **Configure → Alarm image decrypt** is one page for the whole feature: the switch, the default password, and a password field per TCM device (labelled with the device name). Non-TCM devices decrypt from their serial and are not listed. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
-- Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
-
-#### Changed
-
-- Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
-- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. The image URL is built from Home Assistant's **external URL** so phones off the LAN can load it. Many motion pushes have no picture URL; notifications stay text-only. Skip reasons and decrypt result are debug-logged.
-- Pick **`notify.persistent_notification`** as a notify target to get the decrypted still in the Home Assistant **web notification drawer** too, one entry per device replaced by each new alarm. That entry stands in for the plain text one the target would otherwise post, so a single alarm never shows up twice; alarms with no decrypted still fall through to the target as before. With no drawer target selected nothing is written to the drawer. `imou_life_alarm` includes `thumbnail_path`.
-- The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
-- The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
-- IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
-- Debug `Received Imou push` logs include the push `token` (no longer masked)
-- Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
-- The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm image decrypt** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
-
-- Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
-- The Configure menu leads with a one-line status — alarm push, alarm image decrypt, record on alarm, status polling, and how many devices are polled — so no page has to be opened just to check what is on.
-- **Alarm image decrypt** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
-- **Attach decrypted alarm thumbnail** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
-- The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
-- Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
-
-#### Fixed
-
-- **Alarm push and notifications** says so when the callback address is only reachable on the LAN. `webhook.async_generate_url` defaults to `prefer_external=True`, which falls back to the internal address without saying so, so the prefilled suggestion could be one the Imou cloud can never POST to. The field stays editable, since a reverse proxy may expose a different hostname, port, or path.
-- New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
-- Alarm pictures show up on iOS again. The iOS Companion app reads the `attachment` block and ignores `image` (`attachment.url` overrides it), and its `content-type` is a *file extension*, not a MIME type. Sending `image/jpeg` made iOS discard the attachment, so the notification arrived with no picture while Android — which reads `image` — was fine. It now sends `jpg`.
-- A missing external URL no longer fails silently. The thumbnail URL sent to phones came from `get_url(prefer_external=True)`, which quietly falls back to the **internal** address, so an instance with only a LAN address sent notifications carrying `http://192.168.x.x:8123/local/...` — unreachable from cellular, no picture, and nothing in the log to explain it. That fallback now logs a warning naming the address it used and what to set. The address that was attached is debug-logged too.
-- Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
-
-#### Removed
-
-- The **Video protocol** camera default is gone; live streams always request `https`. It was a choice with one sensible answer, and plain `http` stream URLs are blocked as mixed content by browsers on an HTTPS Home Assistant anyway. A stored `live_protocol` is ignored.
-- Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
-
-### [1.3.6]
+1.3.6 was prepared but never published, so everything below ships in 1.4.0. Upgrading from 1.3.4 means taking both sets of changes at once, including the two breaking ones.
 
 #### Breaking
 
@@ -56,14 +18,34 @@
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Record on alarm**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 - Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
+- Optional **Attach decrypted alarm thumbnail** for Companion App alarm notifications (default off). Home Assistant downloads the encrypted push `picUrlArray` image itself and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. **TCM** devices require the Imou Life device password via **Configure → Alarm image decrypt** or **Default device password**. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
+- **Configure → Alarm image decrypt** is one page for the whole feature: the switch, the default password, and a password field per TCM device (labelled with the device name). Non-TCM devices decrypt from their serial and are not listed. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
+- Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
+- New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
 
 #### Changed
 
-- Depend on `pyimouapi==1.3.6` (publish that library first; do not install it on Imou Life 1.3.5)
+- Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
 - Enabling event push requires a public **Callback URL**. Notify targets are a `notify.*` multi-select; an empty list means automations only. A previously saved comma-separated string is still read
 - Push notification titles use `Imou Life · {alarm_type}` in both English and Simplified Chinese
-- Companion App alarm notifications include the Home Assistant area (when set) and a local date-time. Tapping the notification opens that device's Home Assistant device page. No snapshot is attached (Open API quota)
+- Companion App alarm notifications include the Home Assistant area (when set) and a local date-time. Tapping the notification opens that device's Home Assistant device page
 - English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point name **Go to collection point** / **转到收藏点**, placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
+- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries `picUrlArray` or `picUrl`. The image URL is built from Home Assistant's **external URL** so phones off the LAN can load it. Many motion pushes have no picture URL; notifications stay text-only. Skip reasons and decrypt result are debug-logged.
+- Pick **`notify.persistent_notification`** as a notify target to get the decrypted still in the Home Assistant **web notification drawer** too, one entry per device replaced by each new alarm. That entry stands in for the plain text one the target would otherwise post, so a single alarm never shows up twice; alarms with no decrypted still fall through to the target as before. With no drawer target selected nothing is written to the drawer. `imou_life_alarm` includes `thumbnail_path`.
+- The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
+- The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
+- IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
+- Debug `Received Imou push` logs include the push `token` (no longer masked)
+- Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
+- The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm image decrypt** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
+- Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
+- Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, `picUrlArray`) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
+- Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
+- The Configure menu leads with a one-line status — alarm push, alarm image decrypt, record on alarm, status polling, and how many devices are polled — so no page has to be opened just to check what is on.
+- **Alarm image decrypt** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
+- **Attach decrypted alarm thumbnail** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
+- The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
+- Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
 
 #### Fixed
 
@@ -72,6 +54,14 @@
 - IoT identifier rewrite now happens before alarm classification and notify, so product-model events such as `e_storageEmpty` are no longer treated as alarms or double-notified
 - **Notify on alarm** stays on when the switch is `unavailable` or `unknown` (only an explicit off silences the device)
 - Accessory `iotEvent` with `monitor.channel` resolves to the accessory, not the parent camera, when both are registered
+- **Alarm push and notifications** says so when the callback address is only reachable on the LAN. `webhook.async_generate_url` defaults to `prefer_external=True`, which falls back to the internal address without saying so, so the prefilled suggestion could be one the Imou cloud can never POST to. The field stays editable, since a reverse proxy may expose a different hostname, port, or path.
+- Alarm pictures show up on iOS again. The iOS Companion app reads the `attachment` block and ignores `image` (`attachment.url` overrides it), and its `content-type` is a *file extension*, not a MIME type. Sending `image/jpeg` made iOS discard the attachment, so the notification arrived with no picture while Android — which reads `image` — was fine. It now sends `jpg`.
+- A missing external URL no longer fails silently. The thumbnail URL sent to phones came from `get_url(prefer_external=True)`, which quietly falls back to the **internal** address, so an instance with only a LAN address sent notifications carrying `http://192.168.x.x:8123/local/...` — unreachable from cellular, no picture, and nothing in the log to explain it. That fallback now logs a warning naming the address it used and what to set. The address that was attached is debug-logged too.
+- Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
+
+#### Removed
+
+- The **Video protocol** camera default is gone; live streams always request `https`. It was a choice with one sensible answer, and plain `http` stream URLs are blocked as mixed content by browsers on an HTTPS Home Assistant anyway. A stored `live_protocol` is ignored.
 
 ### [1.3.4]
 
@@ -278,45 +268,7 @@
 
 ### [1.4.0]
 
-#### 新增
-
-- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
-- **配置 → 告警图片解密** 一页管完整个功能：开关、默认密码，以及每台 TCM 设备一个密码框（用设备名标注）。非 TCM 设备用序列号解密，不再列出。密码框留空表示不改。密码保存在本机，仅用于解密。
-- 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
-
-#### 变更
-
-- 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
-- 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。图片地址用 Home Assistant **外网 URL** 拼成绝对路径，手机不在局域网也能加载。许多移动侦测推送没有图片 URL，此时仍为纯文本通知。跳过原因与解密结果会打 debug 日志。
-- 想在 Home Assistant **网页通知栏**里也看到解密图，把 **`notify.persistent_notification`** 选进通知目标：每台设备一条，新告警覆盖旧的。这条带图的会顶替该目标本来要发的纯文本，同一个告警不会出现两条；没有解密图的告警仍照常走该目标。没选网页通知目标时，通知栏不会写入任何内容。`imou_life_alarm` 事件带 `thumbnail_path`。
-- 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
-- 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
-- IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
-- debug 日志 `Received Imou push` 不再把推送 `token` 打码
-- 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
-- **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片解密**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
-- Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
-
-- **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
-- 配置菜单开头给出一行状态：告警推送、告警图片解密、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
-- **告警图片解密** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
-- 本机缺少原生库时，**贴解密告警缩略图** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
-- **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
-- 摄像头默认区默认展开，抓图等待时间也说清了到底在等什么。
-
-#### 修复
-
-- **告警推送与通知** 会在回调地址只能局域网访问时明确提示。`webhook.async_generate_url` 的默认参数是 `prefer_external=True`，没配外网地址时会悄悄退回内网地址，于是预填的建议地址可能是 Imou 云永远推不到的。输入框仍可编辑，因为反向代理对外的主机名、端口甚至路径都可能不同。
-- 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
-- iOS 上报警图片能正常显示了。iOS 版 Companion 读的是 `attachment` 而不是 `image`（`attachment.url` 会覆盖 `image`），并且它的 `content-type` 要的是**文件扩展名**而不是 MIME 类型。之前发的 `image/jpeg` 会让 iOS 直接丢掉附件，通知里就没有图；而 Android 读的是 `image`，所以一直正常。现在改为发 `jpg`。
-- 没配外网地址不再静默失败。发给手机的缩略图地址来自 `get_url(prefer_external=True)`，而它在没有外网地址时会悄悄退回**内网**地址，于是只配了局域网地址的实例发出的通知里带的是 `http://192.168.x.x:8123/local/...`——手机在蜂窝网下根本拉不到，图片不显示，日志里也没有任何线索。现在这种退化会打一条告警，写明用了哪个地址、该去配什么。实际附带的地址也会记进 debug 日志。
-- 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
-
-#### 移除
-
-- 去掉摄像头默认里的 **视频协议**，直播固定用 `https`。这个选项实际只有一个合理答案：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。已存的 `live_protocol` 值会被忽略。
-
-### [1.3.6]
+1.3.6 准备好了但从未发布，所以下面这些全部随 1.4.0 一起交付。从 1.3.4 升级会一次性拿到两批变更，包括其中两条破坏性变更。
 
 #### 破坏性变更
 
@@ -330,14 +282,34 @@
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警时录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
+- 可选 **贴解密告警缩略图**：Companion App 告警通知可附带解密后的推送 `picUrlArray` 图片（默认关）。由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。**TCM** 设备须在 **配置 → 告警图片解密** 或 **默认设备密码** 中填写乐橙设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
+- **配置 → 告警图片解密** 一页管完整个功能：开关、默认密码，以及每台 TCM 设备一个密码框（用设备名标注）。非 TCM 设备用序列号解密，不再列出。密码框留空表示不改。密码保存在本机，仅用于解密。
+- 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
+- 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
 
 #### 变更
 
-- 依赖 `pyimouapi==1.3.6`（须先发布该库；不要在 Imou Life 1.3.5 上单独安装）
+- 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
 - 启用事件推送必须填写公网 **回调地址**。通知目标改为 `notify.*` 多选；留空则只走自动化。以前保存的逗号分隔字符串仍能读
 - 推送通知标题中英均为 `Imou Life · {alarm_type}`
-- Companion App 告警通知会带上 Home Assistant 区域（若已设置）和本地日期时间。点通知打开该设备的 Home Assistant 设备页。不附抓图（避免占用开放平台额度）
+- Companion App 告警通知会带上 Home Assistant 区域（若已设置）和本地日期时间。点通知打开该设备的 Home Assistant 设备页
 - 中英文界面文案对齐（实体名称、事件推送、收藏点名称 **转到收藏点** / **Go to collection point**、占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
+- 开启选项且原生库可用、推送含 `picUrlArray` 或 `picUrl` 时，Companion 告警通知可附带解密缩略图。图片地址用 Home Assistant **外网 URL** 拼成绝对路径，手机不在局域网也能加载。许多移动侦测推送没有图片 URL，此时仍为纯文本通知。跳过原因与解密结果会打 debug 日志。
+- 想在 Home Assistant **网页通知栏**里也看到解密图，把 **`notify.persistent_notification`** 选进通知目标：每台设备一条，新告警覆盖旧的。这条带图的会顶替该目标本来要发的纯文本，同一个告警不会出现两条；没有解密图的告警仍照常走该目标。没选网页通知目标时，通知栏不会写入任何内容。`imou_life_alarm` 事件带 `thumbnail_path`。
+- 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
+- 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
+- IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
+- debug 日志 `Received Imou push` 不再把推送 `token` 打码
+- 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
+- **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片解密**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
+- Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致
+- Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、`picUrlArray`）改走 `pyimouapi.push`；用户可见事件与通知不变
+- **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
+- 配置菜单开头给出一行状态：告警推送、告警图片解密、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
+- **告警图片解密** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
+- 本机缺少原生库时，**贴解密告警缩略图** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
+- **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
+- 摄像头默认区默认展开，抓图等待时间也说清了到底在等什么。
 
 #### 修复
 
@@ -346,6 +318,14 @@
 - IoT 先改写 identifier 再分类/通知，因此 `e_storageEmpty` 等产品型号事件不再当告警、也不再双发通知
 - **告警时通知** 在开关为 `unavailable` / `unknown` 时仍视为开（只有显式关掉才静音）
 - 配件 `iotEvent` 带 `monitor.channel` 时，若摄像头和配件都已注册，会打到配件而不是父摄像头
+- **告警推送与通知** 会在回调地址只能局域网访问时明确提示。`webhook.async_generate_url` 的默认参数是 `prefer_external=True`，没配外网地址时会悄悄退回内网地址，于是预填的建议地址可能是 Imou 云永远推不到的。输入框仍可编辑，因为反向代理对外的主机名、端口甚至路径都可能不同。
+- iOS 上报警图片能正常显示了。iOS 版 Companion 读的是 `attachment` 而不是 `image`（`attachment.url` 会覆盖 `image`），并且它的 `content-type` 要的是**文件扩展名**而不是 MIME 类型。之前发的 `image/jpeg` 会让 iOS 直接丢掉附件，通知里就没有图；而 Android 读的是 `image`，所以一直正常。现在改为发 `jpg`。
+- 没配外网地址不再静默失败。发给手机的缩略图地址来自 `get_url(prefer_external=True)`，而它在没有外网地址时会悄悄退回**内网**地址，于是只配了局域网地址的实例发出的通知里带的是 `http://192.168.x.x:8123/local/...`——手机在蜂窝网下根本拉不到，图片不显示，日志里也没有任何线索。现在这种退化会打一条告警，写明用了哪个地址、该去配什么。实际附带的地址也会记进 debug 日志。
+- 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
+
+#### 移除
+
+- 去掉摄像头默认里的 **视频协议**，直播固定用 `https`。这个选项实际只有一个合理答案：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。已存的 `live_protocol` 值会被忽略。
 
 ### [1.3.4]
 
