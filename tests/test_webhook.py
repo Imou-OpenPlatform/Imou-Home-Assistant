@@ -323,6 +323,90 @@ async def test_webhook_iot_property_is_not_alarm(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_property_with_pid_is_not_alarm(
+    hass: HomeAssistant,
+) -> None:
+    """IoT iotProperty is accepted, fires the generic event, never alarm."""
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["device_1"],
+    )
+    register_imou_ha_device(
+        hass,
+        hass.config_entries.async_entries(DOMAIN)[0],
+        "device_1",
+        product_id="pid1",
+        channel_id="0",
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotProperty",
+                "pid": "pid1",
+                "did": "device_1",
+                "cid": 0,
+                "content": {"properties": {"10001": 1}},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert alarm_events == []
+    assert generic_events[0].data["msg_type"] == "iotProperty"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_property_applies_switch_state(
+    hass: HomeAssistant,
+) -> None:
+    """Matching refs update the coordinator device before the bus event."""
+    from pyimouapi.const import PARAM_REF, PARAM_STATE
+    from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass, push_enabled=True, selected_devices=["dev1"]
+    )
+    device = ImouHaDevice("dev1", "Plug", "Imou", "Plug", "1.0")
+    device.set_product_id("pid1")
+    device.set_channel_id("0")
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    runtime.coordinator.devices = [device]
+    runtime.coordinator.device_manager = ImouHaDeviceManager(MagicMock())
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotProperty",
+                "pid": "pid1",
+                "did": "dev1",
+                "cid": 0,
+                "content": {"properties": {"10001": 1}},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert device.switches["relay"][PARAM_STATE] is True
+    runtime.coordinator.async_set_updated_data.assert_called_once_with(None)
+    assert events[0].data["msg_type"] == "iotProperty"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> None:
     """Alarm notifications use webhook translation strings."""
     title, message = await _async_build_notification_message(

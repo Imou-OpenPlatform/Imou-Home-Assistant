@@ -23,6 +23,7 @@ from pyimouapi.push import (
     event_ref_lookup_key,
     is_alarm_msg_type,
     is_iot_non_event,
+    iot_property_values,
     normalize_push_payload,
 )
 
@@ -33,6 +34,8 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
+    imou_life_device_key,
+    imou_life_device_keys_from_ids,
 )
 from .helpers import (
     get_selected_device_ids,
@@ -509,6 +512,36 @@ def _get_entry_and_runtime(
     return None
 
 
+def _apply_iot_property_push(
+    runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> None:
+    """Write iotProperty refs onto matching devices, then notify listeners."""
+    raw = event_data.get("raw")
+    values = iot_property_values(raw if isinstance(raw, dict) else {})
+    if not values:
+        _LOGGER.debug(
+            "iotProperty with no properties for %s", event_data.get("device_id")
+        )
+        return
+    keys = imou_life_device_keys_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    coordinator = runtime.coordinator
+    devices = getattr(coordinator, "devices", None)
+    if not isinstance(devices, list):
+        return
+    changed = False
+    for device in devices:
+        if imou_life_device_key(device) not in keys:
+            continue
+        if coordinator.device_manager.apply_iot_property_values(device, values):
+            changed = True
+    if changed:
+        coordinator.async_set_updated_data(None)
+
+
 async def _async_dispatch_imou_push(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -532,6 +565,8 @@ async def _async_dispatch_imou_push(
                 event_data.get("device_id"),
                 thumbnail_local or "none",
             )
+        if event_data.get("msg_type") == "iotProperty":
+            _apply_iot_property_push(runtime, event_data)
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
         if is_alarm:
             hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
