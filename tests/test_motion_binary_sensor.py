@@ -20,9 +20,11 @@ from custom_components.imou_life.const import (
     PARAM_MOTION,
 )
 from custom_components.imou_life.webhook import async_handle_imou_webhook
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+from pyimouapi.const import BINARY_SENSOR_TYPE_REF
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -106,6 +108,11 @@ def test_iter_motion_sensors_cameras_only() -> None:
     assert [(key, device) for key, device in pairs] == [(PARAM_MOTION, camera)]
 
 
+def test_motion_unique_id_does_not_collide_with_library_binary_sensors() -> None:
+    """HA-only motion must not share a type key with a polled library sensor."""
+    assert PARAM_MOTION not in BINARY_SENSOR_TYPE_REF
+
+
 def test_motion_entity_is_a_motion_class() -> None:
     """Dashboards and HomeKit treat this as a motion sensor."""
     device = _device(channel_id="0")
@@ -176,7 +183,9 @@ async def test_motion_auto_off(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_repeat_motion_resets_auto_off(hass: HomeAssistant, freezer) -> None:
+async def test_repeat_motion_resets_auto_off(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
     """A second motion push must not flash off; it restarts the 30s hold."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])

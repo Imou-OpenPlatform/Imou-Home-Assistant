@@ -123,7 +123,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification). A push that does not match a Home Assistant device is discarded (still HTTP 200).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
-  - If the **Motion** binary sensor never turns on: same check (event push on, types include **alarm**). The sensor does not poll the cloud.
+  - If the **Motion** binary sensor never turns on: confirm event push is on and types include **alarm**, then download **Diagnostics** and check `event_push.recent_msg_type_counts`. Region / line-crossing / mixed AI types (for example `e_aiPerArea`, `crossLineDetection`) still fire notify and `imou_life_alarm` but do not drive this entity. The sensor does not poll the cloud.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
@@ -263,7 +263,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。对不上 Home Assistant 设备的推送会被丢弃（仍返回 HTTP 200）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
-  - **运动** 实体一直不亮：同样先查事件推送与 **alarm**。该实体不轮询云端。
+  - **运动** 实体一直不亮：确认已开事件推送且类型含 **alarm**，再下载**诊断**查看 `event_push.recent_msg_type_counts`。区域 / 越线 / 混合 AI 类型（例如 `e_aiPerArea`、`crossLineDetection`）仍会发通知和 `imou_life_alarm`，但不驱动该实体。该实体不轮询云端。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
