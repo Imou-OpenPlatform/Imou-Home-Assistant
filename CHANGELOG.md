@@ -283,7 +283,7 @@
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警时录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
-- 有通道的摄像头增加 `binary_sensor` **移动**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR 置位，约 30 秒后关，PIR 清除立即关。宠物 / 火警 / 燃气 / 区域入侵 / 越线 / 混合 AI 仍走通知和 `imou_life_alarm`。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，只是一直 `off`。与 **画面变化** / **人形检测** 开关不是同一实体
+- 有通道的摄像头增加 `binary_sensor` **动态侦测**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR 置位，约 30 秒后关，PIR 清除立即关。宠物 / 火警 / 燃气 / 区域入侵 / 越线 / 混合 AI 仍走通知和 `imou_life_alarm`。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，只是一直 `off`。与 **画面变化** / **人形检测** 开关不是同一实体
 - 可选 **在告警通知中显示图片**（默认关）：由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。部分设备还需要填写乐橙 App 里的设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
 - **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。密码框留空表示不改。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
