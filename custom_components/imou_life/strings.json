@@ -106,7 +106,7 @@
           "update_interval": "Polling interval (seconds)"
         },
         "data_description": {
-          "enable_polling": "Turn off to skip periodic cloud refreshes. Entity states may become outdated. Setup and reload still fetch the device list once.",
+          "enable_polling": "Turn off to skip periodic cloud refreshes. Entity states may become outdated. Setup and reload still fetch the device list once. When event push is on and subscribe types include IoT device messages, thing-model device *properties* are not refreshed on this interval (setup and reload still take one snapshot). Online status, PaaS abilities, and service-backed entities still poll.",
           "update_interval": "Default 300s (5 minutes), range 30–900s. Ignored when polling is off."
         },
         "sections": {
@@ -249,7 +249,7 @@
       "options": {
         "alarm": "Device alarms (smoke, gas, human, picture change, etc.)",
         "device_status": "Device online/offline",
-        "iot": "IoT device messages",
+        "iot": "IoT device messages. When this is selected and event push is on, thing-model devices update switches/sensors/arming from iotProperty immediately and skip the interval property poll. Turn event push off or uncheck this to poll those properties again.",
         "numberstat": "People counting",
         "face_analysis": "Face analysis"
       }
