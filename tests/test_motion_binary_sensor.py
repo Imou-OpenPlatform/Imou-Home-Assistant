@@ -90,6 +90,12 @@ async def _listening_motion(
         ("e_multiVideoAiPerArea", True),
         ("e_multiVideoAiPerAreaAlarm", True),
         ("e_smartMixDetect", True),
+        ("crossLineDetection", True),
+        ("e_crossLineDetection", True),
+        ("e_areaDetect", True),
+        ("e_areaDetectAlarm", True),
+        ("e_multiVideoAreaDetect", True),
+        ("e_multiVideoDetectAlarm", True),
         ("e_clearAlarmPIR", False),
         ("pir_cleared", False),
         ("smokeAlarm", None),
@@ -97,12 +103,11 @@ async def _listening_motion(
         ("abAlarmSound", None),
         ("e_pet", None),
         ("e_aiVehArea", None),
-        ("e_areaDetect", None),
         (None, None),
     ],
 )
 def test_motion_binary_state(msg_type: str | None, expected: bool | None) -> None:
-    """Picture / human / PIR / person-in-area AI drive the motion sensor."""
+    """Picture / human / PIR / person-in-area / line-crossing drive motion."""
     assert motion_binary_state(msg_type) is expected
 
 

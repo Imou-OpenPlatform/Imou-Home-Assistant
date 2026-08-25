@@ -30,6 +30,11 @@ _MOTION_ON = frozenset(
         "multivideoaiperarea",
         "multivideoaiperareaalarm",
         "smartmixdetect",
+        "crosslinedetection",
+        "areadetect",
+        "areadetectalarm",
+        "multivideoareadetect",
+        "multivideodetectalarm",
     }
 )
 _MOTION_OFF = frozenset(

@@ -94,7 +94,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
   - **Collection points** — `select.collection_point` (**Go to collection point**) lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
   - Detection: picture change, human, pet
-  - **Motion** (`binary_sensor`, `device_class: motion`) — on for about 15 seconds after a picture-change / human / PIR / person-in-area AI push, or off immediately on PIR-clear. Pet / vehicle / line-crossing alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; the entity still exists if push is off. Distinct from the **Picture change** / **Human detection** switches (those enable detection; this reports a detection)
+  - **Motion** (`binary_sensor`, `device_class: motion`) — on for about 15 seconds after a picture-change / human / PIR / person-in-area / line-crossing / area-intrusion push, or off immediately on PIR-clear. Pet / vehicle alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; the entity still exists if push is off. Distinct from the **Picture change** / **Human detection** switches (those enable detection; this reports a detection)
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
   - White light, alarm-linked white light, alarm-linked siren (configuration switches)
   - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; does not require event push for manual control. Entity state auto-clears after about 15 seconds (typical firmware hold), or immediately on a `sirenOff` push when event push is enabled
@@ -123,7 +123,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification). A push that does not match a Home Assistant device is discarded (still HTTP 200).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
-  - If the **Motion** binary sensor never turns on: confirm event push is on and types include **alarm**, then download **Diagnostics** and check `event_push.recent_msg_type_counts`. Newer IoT PTZ cameras often push `e_multiVideoAiPerArea` / `e_smartMixDetect` rather than `human` / `videoMotion` — those person-in-area types now drive this entity. Line-crossing / vehicle / pet still do not. The sensor does not poll the cloud.
+  - If the **Motion** binary sensor never turns on: confirm event push is on and types include **alarm**, then download **Diagnostics** and check `event_push.recent_msg_type_counts`. Newer IoT PTZ cameras often push `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection` rather than `human` / `videoMotion` — those now drive this entity. Vehicle / pet still do not. The sensor does not poll the cloud.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
@@ -234,7 +234,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
   - **收藏点** — `select.collection_point`（**转到收藏点**）列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
   - 检测：画面变化、人形、宠物
-  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 画面变化 / 人形 / PIR / 区域人形 AI 推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆 / 越线告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在。与 **画面变化** / **人形检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
+  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 画面变化 / 人形 / PIR / 区域人形 AI / 越线 / 区域入侵推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在。与 **画面变化** / **人形检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
   - 白光灯、告警联动白光灯、告警联动警笛（配置区开关）
   - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
@@ -263,7 +263,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。对不上 Home Assistant 设备的推送会被丢弃（仍返回 HTTP 200）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
-  - **动态侦测** 实体一直不亮：确认已开事件推送且类型含 **alarm**，再下载**诊断**查看 `event_push.recent_msg_type_counts`。较新的物模型云台常推 `e_multiVideoAiPerArea` / `e_smartMixDetect`，而不是 `human` / `videoMotion`——这些「有人出现」类型现在会驱动该实体。越线 / 车辆 / 宠物仍不会。该实体不轮询云端。
+  - **动态侦测** 实体一直不亮：确认已开事件推送且类型含 **alarm**，再下载**诊断**查看 `event_push.recent_msg_type_counts`。较新的物模型云台常推 `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection`，而不是 `human` / `videoMotion`——这些现在会驱动该实体。车辆 / 宠物仍不会。该实体不轮询云端。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
