@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
+from typing import Any
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import PARAM_MOTION
+from .const import (
+    EVENT_IMOU_ALARM,
+    MOTION_OFF_DELAY,
+    PARAM_MOTION,
+    imou_life_device_key,
+    imou_life_device_keys_from_ids,
+)
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
@@ -79,6 +90,9 @@ async def async_setup_entry(
     async_add_imou_entities(
         entry, async_add_entities, ImouBinarySensor, _iter_binary_sensors
     )
+    async_add_imou_entities(
+        entry, async_add_entities, ImouMotionBinarySensor, _iter_motion_sensors
+    )
 
 
 class ImouBinarySensor(ImouEntity, BinarySensorEntity):
@@ -97,3 +111,76 @@ class ImouBinarySensor(ImouEntity, BinarySensorEntity):
                 return BinarySensorDeviceClass.DOOR
             case _:
                 return None
+
+
+class ImouMotionBinarySensor(ImouEntity, BinarySensorEntity):
+    """Camera motion from Imou alarm pushes; auto-off if the cloud sends no clear."""
+
+    _attr_device_class = BinarySensorDeviceClass.MOTION
+    _attr_is_on = False
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+        entity_type: str,
+        device: ImouHaDevice,
+    ) -> None:
+        """Initialize the motion sensor."""
+        super().__init__(coordinator, config_entry, entity_type, device)
+        self._unsub_off: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Listen for alarm pushes that belong to this camera."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_IMOU_ALARM, self._async_handle_alarm)
+        )
+        self.async_on_remove(self._cancel_off_timer)
+
+    @callback
+    def _cancel_off_timer(self) -> None:
+        """Drop a pending auto-off, if any."""
+        if self._unsub_off is not None:
+            self._unsub_off()
+            self._unsub_off = None
+
+    def _event_matches_this_camera(self, event_data: dict[str, Any]) -> bool:
+        """Return True when the push is for this entity's device key."""
+        keys = imou_life_device_keys_from_ids(
+            event_data.get("device_id"),
+            event_data.get("channel_id"),
+            event_data.get("product_id"),
+        )
+        return imou_life_device_key(self.device) in keys
+
+    @callback
+    def _set_motion(self, is_on: bool, *, auto_off: bool) -> None:
+        """Update motion state and optionally schedule auto-off."""
+        self._cancel_off_timer()
+        self._attr_is_on = is_on
+        if is_on and auto_off:
+            self._unsub_off = async_call_later(
+                self.hass, MOTION_OFF_DELAY, self._async_auto_off
+            )
+        if self.platform is not None:
+            self.async_write_ha_state()
+
+    @callback
+    def _async_auto_off(self, _now: datetime) -> None:
+        """Clear motion after the hold interval."""
+        self._unsub_off = None
+        self._attr_is_on = False
+        if self.platform is not None:
+            self.async_write_ha_state()
+
+    @callback
+    def _async_handle_alarm(self, event: Event[dict[str, Any]]) -> None:
+        """Turn on, hold, or clear from a classified Imou alarm push."""
+        event_data = event.data
+        if not self._event_matches_this_camera(event_data):
+            return
+        state = motion_binary_state(event_data.get("msg_type"))
+        if state is None:
+            return
+        self._set_motion(state, auto_off=state)
