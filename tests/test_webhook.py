@@ -407,6 +407,56 @@ async def test_webhook_iot_property_applies_switch_state(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_iot_property_applies_to_accessory_not_parent(
+    hass: HomeAssistant,
+) -> None:
+    """Pid push with cid=0 updates the accessory, not the parent camera."""
+    from custom_components.imou_life.const import imou_life_device_key
+    from pyimouapi.const import PARAM_REF, PARAM_STATE
+    from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass, push_enabled=True, selected_devices=["dev1"]
+    )
+    parent = ImouHaDevice("dev1", "Camera", "Imou", "IPC", "1.0")
+    parent.set_channel_id("0")
+    parent.switches["motion"] = {PARAM_REF: "10001", PARAM_STATE: False}
+
+    accessory = ImouHaDevice("dev1", "Plug", "Imou", "Plug", "1.0")
+    accessory.set_product_id("pid1")
+    accessory.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+
+    runtime.coordinator.devices_by_key = {
+        imou_life_device_key(parent): parent,
+        imou_life_device_key(accessory): accessory,
+    }
+    runtime.coordinator.device_manager = ImouHaDeviceManager(MagicMock())
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "iotProperty",
+                "pid": "pid1",
+                "did": "dev1",
+                "cid": 0,
+                "content": {"properties": {"10001": 1}},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert accessory.switches["relay"][PARAM_STATE] is True
+    assert parent.switches["motion"][PARAM_STATE] is False
+    runtime.coordinator.async_set_updated_data.assert_called_once_with(None)
+    assert events[0].data["msg_type"] == "iotProperty"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> None:
     """Alarm notifications use webhook translation strings."""
     title, message = await _async_build_notification_message(

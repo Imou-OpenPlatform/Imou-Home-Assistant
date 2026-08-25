@@ -523,22 +523,25 @@ def _apply_iot_property_push(
             "iotProperty with no properties for %s", event_data.get("device_id")
         )
         return
-    keys = imou_life_device_keys_from_ids(
+    coordinator = runtime.coordinator
+    devices_by_key = getattr(coordinator, "devices_by_key", None)
+    if not isinstance(devices_by_key, dict):
+        devices = getattr(coordinator, "devices", None)
+        if not isinstance(devices, list):
+            return
+        devices_by_key = {imou_life_device_key(d): d for d in devices}
+    device = None
+    for key in imou_life_device_keys_from_ids(
         event_data.get("device_id"),
         event_data.get("channel_id"),
         event_data.get("product_id"),
-    )
-    coordinator = runtime.coordinator
-    devices = getattr(coordinator, "devices", None)
-    if not isinstance(devices, list):
+    ):
+        device = devices_by_key.get(key)
+        if device is not None:
+            break
+    if device is None:
         return
-    changed = False
-    for device in devices:
-        if imou_life_device_key(device) not in keys:
-            continue
-        if coordinator.device_manager.apply_iot_property_values(device, values):
-            changed = True
-    if changed:
+    if coordinator.device_manager.apply_iot_property_values(device, values):
         coordinator.async_set_updated_data(None)
 
 
