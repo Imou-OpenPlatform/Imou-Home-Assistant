@@ -176,7 +176,7 @@ async def test_motion_auto_off(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_repeat_motion_resets_auto_off(hass: HomeAssistant) -> None:
+async def test_repeat_motion_resets_auto_off(hass: HomeAssistant, freezer) -> None:
     """A second motion push must not flash off; it restarts the 30s hold."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
@@ -187,15 +187,15 @@ async def test_repeat_motion_resets_auto_off(hass: HomeAssistant) -> None:
         payload = {"device_id": "SN1", "channel_id": "0", "msg_type": "human"}
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=15))
-        await hass.async_block_till_done()
-        now = dt_util.utcnow()
+        freezer.tick(timedelta(seconds=15))
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        async_fire_time_changed(hass, now + timedelta(seconds=15))
+        freezer.tick(timedelta(seconds=16))
+        async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert entity.is_on is True
-        async_fire_time_changed(hass, now + timedelta(seconds=30))
+        freezer.tick(timedelta(seconds=15))
+        async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert entity.is_on is False
 
