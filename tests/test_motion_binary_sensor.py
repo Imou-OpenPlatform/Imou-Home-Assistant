@@ -192,7 +192,7 @@ async def test_motion_auto_off(hass: HomeAssistant) -> None:
 async def test_repeat_motion_resets_auto_off(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A second motion push must not flash off; it restarts the 30s hold."""
+    """A second motion push must not flash off; it restarts the 15s hold."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
@@ -202,14 +202,14 @@ async def test_repeat_motion_resets_auto_off(
         payload = {"device_id": "SN1", "channel_id": "0", "msg_type": "human"}
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        freezer.tick(timedelta(seconds=15))
+        freezer.tick(timedelta(seconds=7))
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        freezer.tick(timedelta(seconds=16))
+        freezer.tick(timedelta(seconds=9))
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert entity.is_on is True
-        freezer.tick(timedelta(seconds=15))
+        freezer.tick(timedelta(seconds=7))
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
         assert entity.is_on is False

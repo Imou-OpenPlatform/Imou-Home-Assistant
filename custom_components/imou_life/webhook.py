@@ -47,15 +47,26 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 _WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
+_PUSH_SECRET_KEYS = frozenset({"token", "accessToken", "access_token"})
+
+
+def _redact_push_secrets(value: Any) -> Any:
+    """Copy a push payload, replacing token-like fields with ``***``."""
+    if isinstance(value, dict):
+        return {
+            key: (
+                "***" if key in _PUSH_SECRET_KEYS and val else _redact_push_secrets(val)
+            )
+            for key, val in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_push_secrets(item) for item in value]
+    return value
 
 
 def _redacted_push_for_log(event_data: dict[str, Any]) -> dict[str, Any]:
-    """Copy push fields for debug logs without the push token or raw body."""
-    safe = dict(event_data)
-    if safe.get("token"):
-        safe["token"] = "***"
-    safe.pop("raw", None)
-    return safe
+    """Copy push fields for debug logs, including the raw body, minus secrets."""
+    return _redact_push_secrets(event_data)
 
 
 def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) -> bool:

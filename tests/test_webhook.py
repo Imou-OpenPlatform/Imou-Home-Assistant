@@ -21,6 +21,7 @@ from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _format_notification_time,
     _load_webhook_strings_file,
+    _redacted_push_for_log,
     async_handle_imou_webhook,
 )
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -36,6 +37,29 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from .conftest import register_imou_ha_device, setup_imou_runtime
+
+
+def test_redacted_push_log_keeps_raw_body_without_token() -> None:
+    """Debug logs must show the original push body, minus the push token."""
+    event_data = {
+        "msg_type": "iotEvent",
+        "token": "secret-token",
+        "raw": {
+            "msgType": "iotEvent",
+            "token": "secret-token",
+            "did": "SN1",
+            "content": {"event": "33000", "monitor": {"channel": 0}},
+        },
+    }
+
+    safe = _redacted_push_for_log(event_data)
+
+    assert safe["token"] == "***"
+    assert safe["raw"]["msgType"] == "iotEvent"
+    assert safe["raw"]["did"] == "SN1"
+    assert safe["raw"]["content"]["event"] == "33000"
+    assert safe["raw"]["token"] == "***"
+    assert event_data["raw"]["token"] == "secret-token"
 
 
 class MockRequest:
