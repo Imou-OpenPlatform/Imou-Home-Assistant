@@ -124,10 +124,7 @@ def setup_imou_runtime(
     entry_options = {PARAM_ENABLE_EVENT_PUSH: push_enabled, **(options or {})}
     # Webhook filters by entry.options; keep the helper argument as the source
     # of truth unless the caller already set selected_devices in options.
-    if (
-        selected_devices is not None
-        and PARAM_SELECTED_DEVICES not in entry_options
-    ):
+    if selected_devices is not None and PARAM_SELECTED_DEVICES not in entry_options:
         entry_options[PARAM_SELECTED_DEVICES] = list(selected_devices)
     entry_data = {**USER_INPUT, "app_id": app_id, PARAM_WEBHOOK_ID: webhook_id}
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options=entry_options)
