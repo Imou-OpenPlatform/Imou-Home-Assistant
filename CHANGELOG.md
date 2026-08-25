@@ -16,6 +16,7 @@
 - **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Record on alarm**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
 - Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
 - Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
+- Cameras with a channel get `binary_sensor` **Motion** (`device_class: motion`) from event-push `videoMotion` / `human` / `mobileDetect` / PIR. It stays on for 30 seconds, or turns off immediately on a PIR-clear push. Pet / fire / gas / area-invasion alarms stay on notify + `imou_life_alarm`. Needs event push with type **alarm**; the entity remains if push is off, but stays `off`. Distinct from **Picture change** / **Human detection** switches
 - Optional **Show the picture in alarm notifications** (default off). Home Assistant downloads the encrypted push `picUrlArray` image itself and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. Some devices additionally need their Imou Life device password. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
 - **Configure → Alarm pictures** is one page for the whole feature: the switch, the default password, and a password field for each device that needs one, labelled with the device name. Devices keyed by their serial need nothing and are not listed. Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
 - Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
@@ -282,6 +283,7 @@
 - **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警时录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
 - 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
 - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
+- 有通道的摄像头增加 `binary_sensor` **运动**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR 置位，约 30 秒后关，PIR 清除立即关。宠物 / 火警 / 燃气 / 区域入侵仍走通知和 `imou_life_alarm`。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，只是一直 `off`。与 **画面变化** / **人形检测** 开关不是同一实体
 - 可选 **在告警通知中显示图片**（默认关）：由 Home Assistant 自己下载密文图片，再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。部分设备还需要填写乐橙 App 里的设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
 - **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。密码框留空表示不改。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
