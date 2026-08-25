@@ -376,9 +376,7 @@ async def test_property_push_skips_iot_detail_after_first_fetch(
         PARAM_ENABLE_EVENT_PUSH: True,
         PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
     }
-    coordinator = await _run_update(
-        hass, device_manager, [device], options=options
-    )
+    coordinator = await _run_update(hass, device_manager, [device], options=options)
     first_skip = device_manager.async_update_devices_status.await_args.kwargs.get(
         "skip_iot_property_ids"
     )

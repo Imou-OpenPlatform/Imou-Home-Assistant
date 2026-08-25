@@ -135,6 +135,7 @@ def setup_imou_runtime(
     coordinator = MagicMock()
     coordinator.devices = []
     coordinator.async_set_updated_data = MagicMock()
+    coordinator.async_update_listeners = MagicMock()
     delegate = MagicMock()
     delegate.async_resolve_event_identifier = AsyncMock(return_value=None)
     coordinator.device_manager.delegate = delegate

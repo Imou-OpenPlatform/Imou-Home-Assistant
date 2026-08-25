@@ -21,9 +21,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from pyimouapi.push import (
     event_ref_lookup_key,
+    iot_property_values,
     is_alarm_msg_type,
     is_iot_non_event,
-    iot_property_values,
     normalize_push_payload,
 )
 
@@ -515,7 +515,7 @@ def _get_entry_and_runtime(
 def _apply_iot_property_push(
     runtime: ImouRuntimeData, event_data: dict[str, Any]
 ) -> None:
-    """Write iotProperty refs onto matching devices, then notify listeners."""
+    """Write iotProperty refs onto the matching device."""
     raw = event_data.get("raw")
     values = iot_property_values(raw if isinstance(raw, dict) else {})
     if not values:
@@ -542,7 +542,7 @@ def _apply_iot_property_push(
     if device is None:
         return
     if coordinator.device_manager.apply_iot_property_values(device, values):
-        coordinator.async_set_updated_data(None)
+        coordinator.async_update_listeners()
 
 
 async def _async_dispatch_imou_push(
@@ -629,10 +629,10 @@ async def async_handle_imou_webhook(
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 
-    # IoT devices (product id present) only accept the iotEvent envelope.
+    # IoT devices (product id present) only accept iotEvent or iotProperty envelopes.
     if is_iot_non_event(event_data.get("product_id"), event_data.get("msg_type")):
         _LOGGER.debug(
-            "Ignoring non-iotEvent push for IoT device %s (msg_type=%s)",
+            "Ignoring non-iotEvent/iotProperty push for IoT device %s (msg_type=%s)",
             device_id,
             event_data.get("msg_type"),
         )

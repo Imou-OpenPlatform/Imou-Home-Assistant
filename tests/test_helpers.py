@@ -5,7 +5,6 @@ from custom_components.imou_life.const import (
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
-    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     imou_life_device_key_from_ids,

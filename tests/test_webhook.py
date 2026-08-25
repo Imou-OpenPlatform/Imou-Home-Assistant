@@ -331,7 +331,7 @@ async def test_webhook_iot_property_with_pid_is_not_alarm(
     alarm_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
     hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
-    runtime = setup_imou_runtime(
+    setup_imou_runtime(
         hass,
         push_enabled=True,
         selected_devices=["device_1"],
@@ -375,9 +375,7 @@ async def test_webhook_iot_property_applies_switch_state(
 
     events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["dev1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["dev1"])
     device = ImouHaDevice("dev1", "Plug", "Imou", "Plug", "1.0")
     device.set_product_id("pid1")
     device.set_channel_id("0")
@@ -402,7 +400,7 @@ async def test_webhook_iot_property_applies_switch_state(
 
     assert response.status == 200
     assert device.switches["relay"][PARAM_STATE] is True
-    runtime.coordinator.async_set_updated_data.assert_called_once_with(None)
+    runtime.coordinator.async_update_listeners.assert_called_once()
     assert events[0].data["msg_type"] == "iotProperty"
 
 
@@ -417,9 +415,7 @@ async def test_webhook_iot_property_applies_to_accessory_not_parent(
 
     events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
-    runtime = setup_imou_runtime(
-        hass, push_enabled=True, selected_devices=["dev1"]
-    )
+    runtime = setup_imou_runtime(hass, push_enabled=True, selected_devices=["dev1"])
     parent = ImouHaDevice("dev1", "Camera", "Imou", "IPC", "1.0")
     parent.set_channel_id("0")
     parent.switches["motion"] = {PARAM_REF: "10001", PARAM_STATE: False}
@@ -452,7 +448,7 @@ async def test_webhook_iot_property_applies_to_accessory_not_parent(
     assert response.status == 200
     assert accessory.switches["relay"][PARAM_STATE] is True
     assert parent.switches["motion"][PARAM_STATE] is False
-    runtime.coordinator.async_set_updated_data.assert_called_once_with(None)
+    runtime.coordinator.async_update_listeners.assert_called_once()
     assert events[0].data["msg_type"] == "iotProperty"
 
 
