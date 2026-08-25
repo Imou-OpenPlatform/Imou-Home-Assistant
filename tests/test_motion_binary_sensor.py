@@ -81,22 +81,28 @@ async def _listening_motion(
         ("e_videoMotion", True),
         ("human", True),
         ("mobileDetect", True),
+        ("motionDetect", True),
         ("alarmPIR", True),
         ("e_alarmPIR", True),
         ("pir_alarm", True),
+        ("e_aiPerArea", True),
+        ("aiPerArea", True),
+        ("e_multiVideoAiPerArea", True),
+        ("e_multiVideoAiPerAreaAlarm", True),
+        ("e_smartMixDetect", True),
         ("e_clearAlarmPIR", False),
         ("pir_cleared", False),
         ("smokeAlarm", None),
         ("gasAlarm", None),
         ("abAlarmSound", None),
         ("e_pet", None),
-        ("e_multiVideoAiPerArea", None),
-        ("e_multiVideoAiPerAreaAlarm", None),
+        ("e_aiVehArea", None),
+        ("e_areaDetect", None),
         (None, None),
     ],
 )
 def test_motion_binary_state(msg_type: str | None, expected: bool | None) -> None:
-    """Only picture / human / PIR pushes drive the motion sensor."""
+    """Picture / human / PIR / person-in-area AI drive the motion sensor."""
     assert motion_binary_state(msg_type) is expected
 
 
@@ -247,6 +253,27 @@ async def test_smoke_alarm_does_not_touch_motion(hass: HomeAssistant) -> None:
         )
         await hass.async_block_till_done()
         assert entity.is_on is False
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_iot_person_area_turns_motion_on(hass: HomeAssistant) -> None:
+    """IoT PTZ person-in-area identifiers drive the same motion entity."""
+    device = _device(channel_id="0")
+    coordinator = _coordinator([device])
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    async with _listening_motion(hass, entity):
+        hass.bus.async_fire(
+            EVENT_IMOU_ALARM,
+            {
+                "device_id": "SN1",
+                "channel_id": "0",
+                "msg_type": "e_multiVideoAiPerArea",
+            },
+        )
+        await hass.async_block_till_done()
+        assert entity.is_on is True
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

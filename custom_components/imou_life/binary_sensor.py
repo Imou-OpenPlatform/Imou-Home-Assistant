@@ -22,8 +22,14 @@ _MOTION_ON = frozenset(
         "videomotion",
         "human",
         "mobiledetect",
+        "motiondetect",
         "alarmpir",
         "pir_alarm",
+        "aiperarea",
+        "aiperareaalarm",
+        "multivideoaiperarea",
+        "multivideoaiperareaalarm",
+        "smartmixdetect",
     }
 )
 _MOTION_OFF = frozenset(
