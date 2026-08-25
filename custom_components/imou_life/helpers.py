@@ -11,7 +11,16 @@ from homeassistant.helpers import translation
 from homeassistant.helpers.selector import SelectOptionDict
 from pyimouapi.device import ImouDeviceSummary
 
-from .const import DOMAIN, PARAM_SELECTED_DEVICES, imou_life_device_keys_from_ids
+from .const import (
+    DEFAULT_EVENT_PUSH_TYPES,
+    DOMAIN,
+    EVENT_PUSH_TYPE_IOT,
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
+    PARAM_SELECTED_DEVICES,
+    callback_flags_to_event_push_types,
+    imou_life_device_keys_from_ids,
+)
 
 
 def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
@@ -25,6 +34,15 @@ def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
     if PARAM_SELECTED_DEVICES in entry.data:
         return list(entry.data[PARAM_SELECTED_DEVICES])
     return None
+
+
+def iot_property_push_active(entry: ConfigEntry) -> bool:
+    """Return True when IoT devices should take state from iotProperty pushes."""
+    if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
+        return False
+    raw = entry.options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
+    types = callback_flags_to_event_push_types(list(raw) if raw else [])
+    return EVENT_PUSH_TYPE_IOT in types
 
 
 def resolve_ha_device_key(

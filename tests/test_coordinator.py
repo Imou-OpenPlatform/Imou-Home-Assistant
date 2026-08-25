@@ -4,9 +4,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
+    DEFAULT_EVENT_PUSH_TYPES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     imou_life_device_key,
@@ -360,3 +363,49 @@ async def test_status_poll_uses_shared_device_update(
         imou_life_device_key(devices[1]),
     }
     device_manager.async_update_device_status.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_property_push_skips_iot_detail_after_first_fetch(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """First status update snapshots; the next interval skips those ids."""
+    device = _mock_device("d1", "0")
+    device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
+    options = {
+        PARAM_ENABLE_EVENT_PUSH: True,
+        PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+    }
+    coordinator = await _run_update(
+        hass, device_manager, [device], options=options
+    )
+    first_skip = device_manager.async_update_devices_status.await_args.kwargs.get(
+        "skip_iot_property_ids"
+    )
+    assert first_skip in (None, set())
+
+    device_manager.async_update_devices_status.reset_mock()
+    device_manager.async_update_devices_status.return_value = set()
+    await coordinator._async_update_data()
+    skipped = device_manager.async_update_devices_status.await_args.kwargs[
+        "skip_iot_property_ids"
+    ]
+    assert "d1" in skipped
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_property_push_inactive_never_skips_iot_detail(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """With event push off, every interval still requests a detail fetch."""
+    device = _mock_device("d1", "0")
+    device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
+    coordinator = await _run_update(
+        hass,
+        device_manager,
+        [device],
+        options={PARAM_ENABLE_EVENT_PUSH: False},
+    )
+    await coordinator._async_update_data()
+    kwargs = device_manager.async_update_devices_status.await_args.kwargs
+    assert kwargs.get("skip_iot_property_ids") in (None, set())

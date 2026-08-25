@@ -26,7 +26,7 @@ from .const import (
     UPDATE_TIMEOUT,
     imou_life_device_key,
 )
-from .helpers import get_selected_device_ids
+from .helpers import get_selected_device_ids, iot_property_push_active
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self.devices_by_key: dict[str, ImouHaDevice] = {}
         self._devices_initialized = False
         self._last_discovery: float | None = None
+        self._iot_detail_fetched: set[str] = set()
         self.new_device_callbacks: list[Callable[[list[ImouHaDevice]], None]] = []
 
     @property
@@ -199,10 +200,16 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if not devices_to_update:
             return
 
+        skip_ids = (
+            set(self._iot_detail_fetched)
+            if iot_property_push_active(self.config_entry)
+            else None
+        )
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                await self._device_manager.async_update_devices_status(
-                    devices_to_update
+                fetched = await self._device_manager.async_update_devices_status(
+                    devices_to_update,
+                    skip_iot_property_ids=skip_ids,
                 )
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
@@ -214,6 +221,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             raise UpdateFailed(
                 f"Error updating Imou devices: {err.message or err}"
             ) from err
+        else:
+            if isinstance(fetched, set) and fetched:
+                self._iot_detail_fetched.update(fetched)
 
     def _async_add_remove_devices(
         self,
