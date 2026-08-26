@@ -43,7 +43,7 @@ class ImouRuntimeData:
     push_dispatch_sema: asyncio.Semaphore = field(
         default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
     )
-    thumb_decrypt_in_flight: set[str] = field(default_factory=set)
+    thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

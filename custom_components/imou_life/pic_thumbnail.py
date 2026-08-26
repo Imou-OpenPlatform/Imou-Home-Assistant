@@ -27,7 +27,7 @@ from pyimouapi.pic_decode import (
     is_tcm_ability,
     resolve_encrypt_key,
 )
-from pyimouapi.push import pic_urls_from_payload, preferred_pic_url
+from pyimouapi.push import preferred_pic_url
 
 from .const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
@@ -172,20 +172,21 @@ def _device_for_event(
     return None
 
 
+def _field_pic_urls(value: Any) -> list[str]:
+    """Return non-empty URL strings from a list or a single string."""
+    if isinstance(value, str) and value:
+        return [value]
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
 def _preferred_push_pic_url(raw: dict[str, Any]) -> str | None:
-    """Prefer picUrlArray / picUrlArr, then a single picUrl / thumbUrl."""
-    urls = pic_urls_from_payload(raw)
-    if not urls:
-        alt = raw.get("picUrlArr")
-        if isinstance(alt, list):
-            urls = [item for item in alt if isinstance(item, str) and item]
-    pic_url = preferred_pic_url(urls)
-    if pic_url:
-        return pic_url
-    for key in ("picUrl", "thumbUrl"):
-        value = raw.get(key)
-        if isinstance(value, str) and value:
-            return value
+    """Prefer thumbUrl, then picUrlArray / picUrlArr / picUrl."""
+    for key in ("thumbUrl", "picUrlArray", "picUrlArr", "picUrl"):
+        picked = preferred_pic_url(_field_pic_urls(raw.get(key)))
+        if picked:
+            return picked
     return None
 
 
@@ -470,7 +471,7 @@ async def async_maybe_decrypt_thumbnail(
     pic_url = _preferred_push_pic_url(raw)
     if not pic_url:
         _LOGGER.debug(
-            "Skip decrypt for %s: no picture url (picUrlArray/picUrl)",
+            "Skip decrypt for %s: no picture url (thumbUrl/picUrlArray/picUrl)",
             event_data.get("device_id"),
         )
         return None
@@ -497,15 +498,12 @@ async def async_maybe_decrypt_thumbnail(
         return None
 
     # Keyed per channel, not per serial: the lenses of one camera alarm
-    # independently, and each alarm carries its own picture.
+    # independently, and each alarm carries its own picture. Same-lens
+    # decrypts wait in line so every notification can still attach a still.
     channel_id = event_data.get("channel_id")
     inflight_key = f"{device_id}_{'x' if channel_id is None else channel_id}"
-    if inflight_key in runtime.thumb_decrypt_in_flight:
-        _LOGGER.debug("Skip decrypt: already in flight for %s", inflight_key)
-        return None
-    runtime.thumb_decrypt_in_flight.add(inflight_key)
-
-    try:
+    lock = runtime.thumb_decrypt_locks.setdefault(inflight_key, asyncio.Lock())
+    async with lock:
         return await _async_decrypt_thumbnail_locked(
             hass,
             runtime,
@@ -516,8 +514,6 @@ async def async_maybe_decrypt_thumbnail(
             encrypt_key,
             bool(device_password),
         )
-    finally:
-        runtime.thumb_decrypt_in_flight.discard(inflight_key)
 
 
 async def _async_decrypt_thumbnail_locked(

@@ -34,11 +34,11 @@
 - Pick **`notify.persistent_notification`** as a notify target to get the decrypted still in the Home Assistant **web notification drawer** too, one entry per device replaced by each new alarm. That entry stands in for the plain text one the target would otherwise post, so a single alarm never shows up twice; alarms with no decrypted still fall through to the target as before. With no drawer target selected nothing is written to the drawer. `imou_life_alarm` includes `thumbnail_path`.
 - The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
 - The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
-- IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
+- IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`. `picUrl` may be a list of URLs, not only a string. `thumbUrl` is tried first (usually smaller), then the other fields
 - Debug `Received Imou push` logs include the original push `raw` body (`token` / `accessToken` still masked)
 - INFO logs for `setMessageCallback` redact the webhook id inside the callback URL
 - A total status-poll failure (every physical device group) is reported as a failed refresh instead of leaving stale values marked current
-- Accepted webhook pushes run at most eight dispatches at once; a second alarm picture decrypt for the same camera channel is skipped while one is already in flight
+- Accepted webhook pushes run at most eight dispatches at once; same-lens picture decrypts wait in line so the later alarm still gets a still
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
 - The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm pictures** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
 - Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
@@ -305,11 +305,11 @@
 - 想在 Home Assistant **网页通知栏**里也看到解密图，把 **`notify.persistent_notification`** 选进通知目标：每台设备一条，新告警覆盖旧的。这条带图的会顶替该目标本来要发的纯文本，同一个告警不会出现两条；没有解密图的告警仍照常走该目标。没选网页通知目标时，通知栏不会写入任何内容。`imou_life_alarm` 事件带 `thumbnail_path`。
 - 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
 - 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
-- IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
+- IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用；`picUrl` 可以是 URL 数组，不限于单个字符串。取图优先 `thumbUrl`（通常更小），再才是其它字段
 - debug 日志 `Received Imou push` 会带上原始推送 `raw` 消息体（`token` / `accessToken` 仍打码）
 - `setMessageCallback` 的 INFO 日志会打码回调地址里的 webhook id
 - 整账号状态轮询全部失败时标为刷新失败，而不再把过期值当成当前状态
-- 已接受的 webhook 推送最多同时跑 8 条后台任务；同一镜头的告警图若已在解密，后到的会跳过下载
+- 已接受的 webhook 推送最多同时跑 8 条后台任务；同一镜头上重叠的告警图解密会排队，后到的仍会带图
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
 - **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
 - Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致

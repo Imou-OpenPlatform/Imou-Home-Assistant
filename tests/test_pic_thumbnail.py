@@ -302,10 +302,10 @@ async def test_maybe_decrypt_downloads_then_decrypts_without_token(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_maybe_decrypt_skips_overlapping_download_for_same_device(
+async def test_maybe_decrypt_queues_overlapping_download_for_same_device(
     hass: HomeAssistant,
 ) -> None:
-    """A second alarm for the same serial must not start another 20 MB download."""
+    """Same lens serializes downloads; the later alarm still gets a picture."""
     entry = _entry(hass)
     runtime = _runtime_with_access_token()
     event_data = {
@@ -345,11 +345,12 @@ async def test_maybe_decrypt_skips_overlapping_download_for_same_device(
                 )
             )
             await asyncio.sleep(0)
-            assert second.done()
-            assert await second is None
+            assert not second.done()
+            assert mock_download.await_count == 1
             blocked.set()
             assert await first == "/local/imou_life/thumbs/a1.jpg"
-            assert mock_download.await_count == 1
+            assert await second == "/local/imou_life/thumbs/a1.jpg"
+            assert mock_download.await_count == 2
     finally:
         blocked.set()
         for task in (second, first):
@@ -449,6 +450,72 @@ async def test_maybe_decrypt_uses_pic_url_arr(hass: HomeAssistant) -> None:
 
     assert result == "/local/imou_life/thumbs/a1.jpg"
     assert mock_download.await_args.args[1] == "https://example.com/arr.jpg"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_uses_pic_url_list(hass: HomeAssistant) -> None:
+    """picUrl is sometimes an array; prefer the small thumb at index 1."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {
+            "picUrl": [
+                "https://example.com/big.jpg",
+                "https://example.com/small.jpg",
+            ]
+        },
+    }
+
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ) as mock_download,
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ),
+    ):
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_download.await_args.args[1] == "https://example.com/small.jpg"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_prefers_thumb_url(hass: HomeAssistant) -> None:
+    """thumbUrl is used before picUrlArray / picUrlArr / picUrl."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {
+            "thumbUrl": "https://example.com/thumb.jpg",
+            "picUrlArray": ["https://example.com/big.jpg"],
+            "picUrlArr": ["https://example.com/arr.jpg"],
+            "picUrl": ["https://example.com/pic.jpg"],
+        },
+    }
+
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ) as mock_download,
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ),
+    ):
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_download.await_args.args[1] == "https://example.com/thumb.jpg"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
