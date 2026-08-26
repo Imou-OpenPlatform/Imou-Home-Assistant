@@ -51,7 +51,7 @@ Live streams always use `https`. There is no protocol choice: on an HTTPS Home A
 
 | Option | What it does | Default |
 | --- | --- | --- |
-| Enable event push | Registers this Home Assistant's webhook with the Imou cloud. Everything alarm-driven — notifications, image decrypt, record on alarm — runs off this. Alarms still reach the Imou Life app either way. | Off |
+| Enable event push | Registers this Home Assistant's webhook with the Imou cloud. Everything alarm-driven — notifications, alarm pictures, record on alarm — runs off this. Alarms still reach the Imou Life app either way. | Off |
 | Callback URL | Where the Imou cloud POSTs alarms. Prefilled from **Step 0**; must be reachable from the internet. Only change the hostname and port unless a proxy also rewrites the path. | generated |
 | Subscribe to | Which cloud message types to receive. | Device alarms, online/offline, IoT messages |
 | Notification targets | Registered notify services to message on an alarm, one message per alarm. Leave empty to drive everything from automations instead. Add `notify.persistent_notification` to also get the alarm in the Home Assistant web notification drawer. | empty |
@@ -149,7 +149,7 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 | 启用状态轮询 | 定期从云端刷新设备状态。关闭后实体状态可能过期；但初始化和重新加载仍会拉取一次设备列表。 | 开 |
 | 轮询间隔 | 两次刷新之间的秒数，30–900。轮询关闭时此项无效。 | 300 |
 | 抓图等待时间 | 向摄像头请求抓图后等待多久再去取——因为摄像头要先拍好并上传。取回的图偏旧或为空时调大。范围 1–9。 | 3 |
-| 视频分辨率 | `HD` 或 `SD`，用于 Live 摄像头实体。 | HD |
+| 视频分辨率 | `HD` 或 `SD`，用于「直播」摄像头实体。 | HD |
 | 云台转动时长 | 方向键按一次转多远，以移动时间（毫秒）表示。范围 100–10000。 | 500 |
 
 直播固定使用 `https`，不提供协议选择：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。
