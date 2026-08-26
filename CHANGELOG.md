@@ -2,12 +2,6 @@
 
 ## English
 
-### [Unreleased]
-
-#### Changed
-
-- README leads with the guides (Configure reference, Record on alarm). The install section no longer walks through the old General / Event push wizard or its screenshots; those options live in `guides/configuration.md`
-
 ### [1.4.0]
 
 #### Breaking
@@ -279,12 +273,6 @@
 ---
 
 ## 中文
-
-### [Unreleased]
-
-#### 变更
-
-- README 文首增加文档入口（配置项参考、告警时录像）。安装步骤不再走旧的「常规 / 事件推送」向导和截图；选项说明改在 `guides/configuration.md`
 
 ### [1.4.0]
 
