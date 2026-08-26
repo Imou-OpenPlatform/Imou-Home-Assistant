@@ -19,7 +19,7 @@
 - Cameras with a channel get `binary_sensor` **Motion** (`device_class: motion`) from event-push `videoMotion` / `human` / `mobileDetect` / PIR / person-in-area AI (`e_aiPerArea`, `e_multiVideoAiPerArea`, `e_smartMixDetect`) / line-crossing / area intrusion (`crossLineDetection`, `e_areaDetect`, `e_multiVideoAreaDetect`). It stays on for 15 seconds, or turns off immediately on a PIR-clear push. Pet / fire / gas / vehicle alarms stay on notify + `imou_life_alarm`. Needs event push with type **alarm**; the entity remains if push is off, but stays `off`. Distinct from **Picture change** / **Human detection** switches
 - Thing-model devices update switch / sensor / arming state from `iotProperty` when event push is on and subscribe types include **IoT device messages**. Interval polling skips `getIotDeviceDetailInfo` after one snapshot. Not an alarm: no phone notify, not gated by **Notify on alarm**. Uncheck `iot` or turn push off to poll properties again.
 - Optional **Show the picture in alarm notifications** (default off). Home Assistant downloads the encrypted push picture itself (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`) and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. Some devices additionally need their Imou Life device password. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
-- **Configure → Alarm pictures** is one page for the whole feature: the switch, the default password, and a password field for each device that needs one, labelled with the device name. Devices keyed by their serial need nothing and are not listed. Saved passwords are filled back in (masked). Empty keeps the stored value. Passwords are stored on this Home Assistant and used only to decrypt.
+- **Configure → Alarm pictures** is one page for the whole feature: the switch, the default password, and a password field for each device that needs one, labelled with the device name. Devices keyed by their serial need nothing and are not listed. Saved passwords are filled back in (masked). To delete one, use **Remove stored passwords** / **Clear default device password**. Passwords are stored on this Home Assistant and used only to decrypt.
 - Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
 - New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
 
@@ -44,7 +44,7 @@
 - Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
 - Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, picture URLs) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
 - Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
-- The Configure menu leads with a one-line status — alarm push, alarm pictures, record on alarm, status polling, and how many devices are polled — so no page has to be opened just to check what is on.
+- The Configure menu leads with a one-line status — alarm push, alarm pictures, record on alarm, and status polling (with a device count only while polling is on) — so no page has to be opened just to check what is on.
 - **Alarm pictures** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
 - **Show the picture in alarm notifications** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
 - The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
@@ -56,6 +56,7 @@
 
 #### Fixed
 
+- The Configure menu no longer reports a device-poll count next to **Status polling: off**
 - Enabling event push no longer saves as success when Imou rejects the callback URL. The options form stays open and shows the API error
 - A push that does not match a Home Assistant device is acknowledged (HTTP 200) and discarded, so unmatched cloud devices do not fire events or notifications
 - IoT identifier rewrite now happens before alarm classification and notify, so product-model events such as `e_storageEmpty` are no longer treated as alarms or double-notified
@@ -290,7 +291,7 @@
 - 有通道的摄像头增加 `binary_sensor` **动态侦测**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR / 区域人形 AI（`e_aiPerArea`、`e_multiVideoAiPerArea`、`e_smartMixDetect`）/ 越线与区域入侵（`crossLineDetection`、`e_areaDetect`、`e_multiVideoAreaDetect`）置位，约 15 秒后关，PIR 清除立即关。宠物 / 火警 / 燃气 / 车辆仍走通知和 `imou_life_alarm`。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，只是一直 `off`。与 **画面变化** / **人形检测** 开关不是同一实体
 - 启用事件推送且订阅含 **物模型设备消息** 时，物模型设备的开关 / 传感器 / 布防由 `iotProperty` 即时更新；间隔轮询在一次快照后不再拉 `getIotDeviceDetailInfo`。这不是告警：不发手机通知，也不受 **告警时通知** 约束。取消勾选 `iot` 或关掉推送则属性重新轮询。
 - 可选 **在告警通知中显示图片**（默认关）：由 Home Assistant 自己下载推送里的密文图片（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`），再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。部分设备还需要填写乐橙 App 里的设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
-- **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。已存密码会回填（掩码显示）；密码框留空表示不改。密码保存在本机，仅用于解密。
+- **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。已存密码会回填（掩码显示）；要删除用 **删除已存密码** / **清除默认设备密码**。密码保存在本机，仅用于解密。
 - 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
 - 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
 
@@ -315,7 +316,7 @@
 - Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致
 - Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、图片 URL）改走 `pyimouapi.push`；用户可见事件与通知不变
 - **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
-- 配置菜单开头给出一行状态：告警推送、告警图片、告警时录像、状态轮询，以及正在轮询几台设备。不必逐页点进去看开没开。
+- 配置菜单开头给出一行状态：告警推送、告警图片、告警时录像、状态轮询（仅在轮询开启时带设备数）。不必逐页点进去看开没开。
 - **告警图片** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
 - 本机缺少原生库时，**在告警通知中显示图片** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
 - **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
@@ -327,6 +328,7 @@
 
 #### 修复
 
+- 状态轮询关闭时，配置菜单不再在「已关」后面再写一轮询设备数
 - 启用事件推送时，若 Imou 拒绝回调地址，不再当作成功保存。选项表单会留在当前页并显示接口错误
 - 对不上 Home Assistant 设备注册表的推送仍返回 HTTP 200，但会丢弃，避免未接入的云端设备触发事件或通知
 - IoT 先改写 identifier 再分类/通知，因此 `e_storageEmpty` 等产品型号事件不再当告警、也不再双发通知

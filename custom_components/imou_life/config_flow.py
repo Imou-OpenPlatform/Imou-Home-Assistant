@@ -775,15 +775,20 @@ class ImouOptionsFlow(OptionsFlow):
             )
         else:
             decrypt = off
-        selected = self._stored_selected_devices()
-        return {
-            "push_state": on if options.get(PARAM_ENABLE_EVENT_PUSH) else off,
-            "polling_state": on if options.get(PARAM_ENABLE_POLLING, True) else off,
-            "device_state": (
+        polling_on = bool(options.get(PARAM_ENABLE_POLLING, True))
+        if polling_on:
+            selected = self._stored_selected_devices()
+            count = (
                 str(len(selected))
                 if selected is not None
                 else self._status_label("all_devices", "all")
-            ),
+            )
+            polling = f"{on} · {count}"
+        else:
+            polling = off
+        return {
+            "push_state": on if options.get(PARAM_ENABLE_EVENT_PUSH) else off,
+            "polling_state": polling,
             "decrypt_state": decrypt,
             "record_state": (
                 on if str(options.get(PARAM_LOCAL_RECORD_PATH) or "").strip() else off

@@ -145,8 +145,27 @@ async def test_options_flow_init_shows_menu(hass) -> None:
     assert placeholders["push_state"] == "off"
     assert placeholders["decrypt_state"] == "off"
     assert placeholders["record_state"] == "off"
-    assert placeholders["polling_state"] == "on"
-    assert placeholders["device_state"] == "all"
+    assert placeholders["polling_state"] == "on · all"
+    assert "device_state" not in placeholders
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_menu_hides_device_count_when_polling_is_off(hass) -> None:
+    """A selected-device count next to polling-off reads as if those cameras were still polled."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={
+            PARAM_ENABLE_POLLING: False,
+            PARAM_SELECTED_DEVICES: ["SN1", "SN2"],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    placeholders = result.get("description_placeholders") or {}
+    assert placeholders["polling_state"] == "off"
+    assert "device_state" not in placeholders
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

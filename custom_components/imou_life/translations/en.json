@@ -87,7 +87,7 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Alarm push: **{push_state}** · Alarm pictures: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}** · Devices polled: **{device_state}**\n\nEach page saves on submit and comes back here. Alarm pictures and Record on alarm only do anything while alarm push is on.",
+        "description": "Alarm push: **{push_state}** · Alarm pictures: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}**\n\nEach page saves on submit and comes back here. Alarm pictures and Record on alarm only do anything while alarm push is on.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarm push and notifications",
@@ -154,7 +154,7 @@
       },
       "alarm_image_decrypt": {
         "title": "Alarm pictures",
-        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. Saved passwords are filled back in (masked). A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
+        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. Saved passwords are filled back in (masked). To delete one, use **Remove stored passwords**. Stored: {password_count} ({configured_serials}).",
         "data": {
           "attach_decrypted_thumbnail": "Show the picture in alarm notifications",
           "default_device_password": "Default device password",
@@ -163,7 +163,7 @@
         },
         "data_description": {
           "attach_decrypted_thumbnail": "Needs Home Assistant's external URL (Settings → System → Network) for phones off the LAN. Pictures are saved unauthenticated under /local/imou_life/thumbs/ for about 24 hours. Passwords stay on this Home Assistant and are used only to decrypt.",
-          "default_device_password": "Used for any device left blank below. Leave empty to keep the stored default.",
+          "default_device_password": "Fallback for devices that do not have their own password below.",
           "clear_default_device_password": "Deletes the stored default. Per-device passwords are unchanged.",
           "remove_device_passwords": "Checked serials are deleted."
         }

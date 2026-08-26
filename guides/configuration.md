@@ -65,8 +65,8 @@ Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself 
 | Option | What it does | Default |
 | --- | --- | --- |
 | Show the picture in alarm notifications | Decrypt the alarm picture and put it in notifications. Cannot be switched on while the native libraries are missing. | Off |
-| Default device password | Used for any device whose own field is left blank. Saved values are filled back in (masked). | empty |
-| Per-device password | One field per device that needs a password, labelled with the device name and serial. Saved values are filled back in (masked). Blank keeps whatever is already stored. | empty |
+| Default device password | Fallback for devices that do not have their own password. Saved values are filled back in (masked). | empty |
+| Per-device password | One field per device that needs a password, labelled with the device name and serial. Saved values are filled back in (masked). | empty |
 | Remove stored passwords | Deletes the passwords of the serials you check. | — |
 
 Prerequisites:
@@ -172,8 +172,8 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 | 选项 | 作用 | 默认 |
 | --- | --- | --- |
 | 在告警通知中显示图片 | 解密告警图片并放进通知。本机缺少原生库时不允许打开。 | 关 |
-| 默认设备密码 | 用于下方所有留空的设备。已存密码会回填（掩码显示）。 | 空 |
-| 各设备密码 | 每个需要密码的设备一个输入框，标签是设备名和序列号。已存密码会回填（掩码显示）。留空表示保留已存的密码。 | 空 |
+| 默认设备密码 | 没有单独填写密码的设备用这个。已存密码会回填（掩码显示）。 | 空 |
+| 各设备密码 | 每个需要密码的设备一个输入框，标签是设备名和序列号。已存密码会回填（掩码显示）。 | 空 |
 | 删除已存密码 | 删除你勾选的那些序列号的密码。 | — |
 
 前置条件：

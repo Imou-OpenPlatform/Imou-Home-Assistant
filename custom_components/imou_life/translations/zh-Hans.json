@@ -87,7 +87,7 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "告警推送：**{push_state}** · 告警图片：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}** · 轮询设备数：**{device_state}**\n\n每一页提交后即保存并回到这里。「告警图片」和「告警时录像」只在告警推送开启时才会生效。",
+        "description": "告警推送：**{push_state}** · 告警图片：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}**\n\n每一页提交后即保存并回到这里。「告警图片」和「告警时录像」只在告警推送开启时才会生效。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
@@ -120,7 +120,7 @@
             },
             "data_description": {
               "download_snap_wait_time": "摄像头要先拍好并上传，乐橙云才能给出这张图。这里是 Home Assistant 取图前等待的时间。抓到的图偏旧或为空时把它调大。默认 3 秒。",
-              "live_resolution": "HD = 高清，SD = 标清。用于「实时画面」摄像头实体。",
+              "live_resolution": "HD = 高清，SD = 标清。用于「直播」摄像头实体。",
               "rotation_duration": "按一次云台方向按钮转多远，按转动时间计。默认 500 毫秒。"
             }
           }
@@ -154,7 +154,7 @@
       },
       "alarm_image_decrypt": {
         "title": "告警图片",
-        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。已存密码会回填到输入框（掩码显示）。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
+        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。已存密码会回填到输入框（掩码显示）。要删掉某个密码，用「删除已存密码」。已存 {password_count} 个（{configured_serials}）。",
         "data": {
           "attach_decrypted_thumbnail": "在告警通知中显示图片",
           "default_device_password": "默认设备密码",
@@ -163,7 +163,7 @@
         },
         "data_description": {
           "attach_decrypted_thumbnail": "手机不在局域网时，需要在「设置 → 系统 → 网络」填好 Home Assistant 外网 URL。图片存放在 /local/imou_life/thumbs/，无身份验证，保留约 24 小时。密码只留在本机，仅用于解密。",
-          "default_device_password": "下面留空的设备都用这个密码。留空表示不改已存默认密码。",
+          "default_device_password": "没有单独填写密码的设备用这个。",
           "clear_default_device_password": "删除已存的默认密码；各设备单独密码不变。",
           "remove_device_passwords": "勾选的序列号会删除密码。"
         }
