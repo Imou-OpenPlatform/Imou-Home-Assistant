@@ -56,7 +56,7 @@ Use **Configure** on the integration entry to open a menu: **Polling and cameras
 <img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
 
 - **Alarm push and notifications** — enable the webhook callback, pick message types, and choose notification targets.
-- **Alarm pictures** — turn the decrypted thumbnail on and hold the device passwords it needs.
+- **Alarm pictures** — turn the decrypted thumbnail on and hold the device passwords it needs. For now you must [download the official decrypt libraries yourself](#obtain-the-official-decrypt-libraries).
 - **Record on alarm** — shared save folder and clip duration for cameras whose **Record on alarm** switch is on. See [guides/local-event-recording.md](guides/local-event-recording.md#english).
 
 Turn on **Enable event push**, then fill **Callback URL** (must be public; change hostname and port if the suggested address is not reachable) and **Subscribe to**.
@@ -71,6 +71,17 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
 >Cloud API calls and video playback consume the resource quota of your AppId account — check **My Resources** in the [international console](https://open.imoulife.com/consoleNew/resourceManage/myResource).
 
+### Obtain the official decrypt libraries
+
+The integration does not ship the native libraries that decrypt alarm pictures. **For now, download them yourself.** linux x86-64 only.
+
+| Region | Download |
+| --- | --- |
+| China | [openapi.lechange.cn … resourceType=ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) |
+| Overseas | [openapi.easy4ip.com … resourceType=HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo) |
+
+The link yields a zip. After you extract it, the two libraries are under `Open-PicDecode/src/main/resources/linux-x86-64`. Copy **both** `libLCOpenApiClient.so` and `libLCOpenSDK.so` into `/config/imou_life/native/`. One file alone will not load.
+
 ## Features
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Choose and bind devices** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
@@ -84,7 +95,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications**. Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
-  - Optional **Show the picture in alarm notifications** (default off): Home Assistant downloads the encrypted push `picUrlArray` image itself, then decrypts it locally with the official Demo libraries — no Open API quota is spent and no access token is involved. **linux x86-64 only**; place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/` (the SDK does the decrypting, the client library supplies the OpenSSL symbols it links against). Some devices additionally need their Imou Life device password; **Configure → Alarm pictures** lists exactly those, and takes a **Default device password** for the rest of them. Companion notifications use Home Assistant's **external URL** (Settings → System → Network) so phones outside the LAN can load the JPEG. Add `notify.persistent_notification` to the notify targets to get the same picture in the Home Assistant web notification drawer as well (one entry per device, and it replaces that target's plain text so one alarm never shows up twice). Files live under `/local/imou_life/thumbs/` with no authentication (anyone with the URL can view them for about 24 hours). If `/config/www` did not exist, restart Home Assistant after the first thumbnail. Many motion pushes have no picture URL; then notifications stay text-only
+  - Optional **Show the picture in alarm notifications** (default off): Home Assistant downloads the encrypted push `picUrlArray` image itself, then decrypts it locally with the official Demo libraries — no Open API quota is spent and no access token is involved. **linux x86-64 only**; [download the official Demo package](#obtain-the-official-decrypt-libraries) and copy `libLCOpenApiClient.so` and `libLCOpenSDK.so` into `/config/imou_life/native/` (the SDK does the decrypting, the client library supplies the OpenSSL symbols it links against). Some devices additionally need their Imou Life device password; **Configure → Alarm pictures** lists exactly those, and takes a **Default device password** for the rest of them. Companion notifications use Home Assistant's **external URL** (Settings → System → Network) so phones outside the LAN can load the JPEG. Add `notify.persistent_notification` to the notify targets to get the same picture in the Home Assistant web notification drawer as well (one entry per device, and it replaces that target's plain text so one alarm never shows up twice). Files live under `/local/imou_life/thumbs/` with no authentication (anyone with the URL can view them for about 24 hours). If `/config/www` did not exist, restart Home Assistant after the first thumbnail. Many motion pushes have no picture URL; then notifications stay text-only
   - Choose push message types—including IoT device messages so thing-model switches, sensors, and arming update from property push instead of interval polling; messages are also synced to the Imou Life app
   - Push payload alarm images are encrypted. Without the optional thumbnail, no snapshot is attached (Open API quota); use automations with `camera.snapshot` / `camera_proxy` if you need other notification images
   - **Record on alarm** — per-camera switch (default off, stored in Home Assistant only). When an alarm is pushed, the integration records a short cloud-HLS clip with `camera.record`. Shared folder and duration: **Configure → Record on alarm**. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
@@ -117,6 +128,7 @@ Turn on **Enable event push**, then fill **Callback URL** (must be public; chang
 ## Troubleshooting
 
 - **What does this option do / how do I set it?** — See [Configure reference](guides/configuration.md#english) for every option page by page, and for the **Settings → System → Network** steps that alarm push and alarm pictures both depend on.
+- **Cannot enable alarm pictures / decrypt libraries missing** — Download the official Demo zip yourself ([China](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) / [overseas](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)), extract it, and copy both `.so` files from `Open-PicDecode/src/main/resources/linux-x86-64` into `/config/imou_life/native/`. See [Obtain the official decrypt libraries](#obtain-the-official-decrypt-libraries).
 - **Invalid App ID / App secret** — Home Assistant opens a **re-authentication** flow; enter a new App secret under **Settings → Devices & services → Imou Life** (notification or three-dot menu → **Re-authenticate**).
 - **Event push not working** — Open **Configure → Alarm push and notifications**. Confirm **Enable event push** is on. **Callback URL** comes prefilled with the generated address; change its hostname and port if that address is not reachable from the internet. Also check **Settings → System → Network → Home Assistant URL**. Review repair issues under **Settings → System → Repairs**.
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
@@ -196,7 +208,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 <img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
 
 - **告警推送与通知** — 启用 Webhook 回调、选择消息类型、指定通知目标。
-- **告警图片** — 打开解密缩略图开关，并集中管理它需要的设备密码。
+- **告警图片** — 打开解密缩略图开关，并集中管理它需要的设备密码。现阶段需要[自行下载官方解密库](#获取官方解密库)。
 - **告警时录像** — 账号共用的保存目录和片段时长，只对打开了 **告警时录像** 开关的摄像头生效。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
 
 先打开 **启用事件推送**，再确认 **回调地址**（已预填生成的地址，须公网可达；不可达时只改主机名和端口）和 **订阅类型**。
@@ -210,6 +222,17 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
 >云端 API 调用与视频播放会消耗 AppId 账号的资源配额 — 请在 [国内控制台](https://open.imou.com/consoleNew/resourceManage/myResource) 的 **我的资源** 中查看。
+
+### 获取官方解密库
+
+集成**不附带**告警图解密用的原生库。**现阶段请自行下载。** 仅 linux x86-64。
+
+| 区域 | 下载地址 |
+| --- | --- |
+| 国内 | [openapi.lechange.cn … resourceType=ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) |
+| 海外 | [openapi.easy4ip.com … resourceType=HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo) |
+
+打开地址后下载到的是压缩包。解压后，两个 `.so` 在 `Open-PicDecode/src/main/resources/linux-x86-64`。把 **`libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都** 复制到 `/config/imou_life/native/`，只放一个加载不起来。
 
 ## 功能
 
@@ -225,7 +248,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
   - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
-  - 可选 **在告警通知中显示图片**（默认关）：推送含 `picUrlArray` 时，由 Home Assistant 自己下载密文图片，再用官方 Demo 库在本机解密——不消耗开放平台配额，也不需要 access token。**仅 linux x86-64**；将官方 Demo 库放到 `/config/imou_life/native/`（`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，两个都要放）。部分设备还需要填写乐橙 App 里的设备密码；**配置 → 告警图片** 会把需要密码的设备列出来，其余留空的可以用 **默认设备密码** 统一填。Companion 通知使用 Home Assistant **外网 URL**（设置 → 系统 → 网络），手机不在局域网也能加载。想在 Home Assistant 网页通知栏也看到这张图，把 `notify.persistent_notification` 加进通知目标（每台设备一条，并顶替该目标的纯文本，同一告警不会出现两条）。文件在 `/local/imou_life/thumbs/`，无身份验证（持有 URL 者约 24 小时内可查看）。若原先没有 `/config/www`，首次生成后需重启 Home Assistant。许多移动侦测推送没有图片 URL，此时通知仍为纯文本
+  - 可选 **在告警通知中显示图片**（默认关）：推送含 `picUrlArray` 时，由 Home Assistant 自己下载密文图片，再用官方 Demo 库在本机解密——不消耗开放平台配额，也不需要 access token。**仅 linux x86-64**；[自行下载官方 Demo 包](#获取官方解密库)，把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`（`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，两个都要放）。部分设备还需要填写乐橙 App 里的设备密码；**配置 → 告警图片** 会把需要密码的设备列出来，其余留空的可以用 **默认设备密码** 统一填。Companion 通知使用 Home Assistant **外网 URL**（设置 → 系统 → 网络），手机不在局域网也能加载。想在 Home Assistant 网页通知栏也看到这张图，把 `notify.persistent_notification` 加进通知目标（每台设备一条，并顶替该目标的纯文本，同一告警不会出现两条）。文件在 `/local/imou_life/thumbs/`，无身份验证（持有 URL 者约 24 小时内可查看）。若原先没有 `/config/www`，首次生成后需重启 Home Assistant。许多移动侦测推送没有图片 URL，此时通知仍为纯文本
   - 可选择推送消息类型；消息也会同步到乐橙 App
   - 推送载荷中的告警图片为加密格式。未开启可选缩略图时不附带抓图（避免占用开放平台额度）；若需其他通知图片，请在自动化中使用 `camera.snapshot` / `camera_proxy`
   - **告警时录像** — 每路镜头一个开关（默认关，只存在 Home Assistant）。收到告警推送后，用 `camera.record` 从云端 HLS 录一段短视频。保存目录和时长在 **配置 → 告警时录像**。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)
@@ -258,6 +281,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 故障排查
 
 - **某个选项是干什么的 / 该怎么填？** — 见 [配置项参考](guides/configuration.md#zh-hans)，逐页说明每个选项，并给出告警推送和告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤。
+- **告警图片开不了 / 提示缺少解密库** — 现阶段需自行下载官方 Demo 压缩包（[国内](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) / [海外](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)），解压后把 `Open-PicDecode/src/main/resources/linux-x86-64` 下的两个 `.so` 复制到 `/config/imou_life/native/`。见 [获取官方解密库](#获取官方解密库)。
 - **App ID / App secret 无效** — Home Assistant 会打开**重新认证**流程；在 **设置 → 设备与服务 → Imou Life** 中输入新的 App secret（通知或三点菜单 → **重新认证**）。
 - **事件推送不工作** — 打开 **配置 → 告警推送与通知**。确认 **启用事件推送** 已开启。**回调地址** 已预填生成的地址，若该地址公网不可达，就把主机名和端口改掉。同时检查 **设置 → 系统 → 网络 → Home Assistant URL**。在 **设置 → 系统 → 修复** 中查看 repair 提示。
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。

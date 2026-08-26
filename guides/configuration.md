@@ -71,7 +71,7 @@ Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself 
 
 Prerequisites:
 
-- **linux x86-64 only.** Put both official Demo libraries in `/config/imou_life/native/`: `libLCOpenSDK.so` does the decrypting and `libLCOpenApiClient.so` supplies the OpenSSL symbols it links against, so one alone will not load. The page reports whether they were found.
+- **linux x86-64 only.** The integration does not ship the native libraries; download the official Demo package yourself. China: [ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt). Overseas: [HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). The download is a zip; after extracting, copy both `libLCOpenApiClient.so` and `libLCOpenSDK.so` from `Open-PicDecode/src/main/resources/linux-x86-64` into `/config/imou_life/native/`. `libLCOpenSDK.so` does the decrypting and `libLCOpenApiClient.so` supplies the OpenSSL symbols it links against, so one alone will not load. The page reports whether they were found.
 - **A password, but only for some devices.** The page lists exactly the devices that need one; anything not listed derives its key from its serial number and needs nothing from you.
 - **An internet-reachable Home Assistant URL** (Step 0), or phones off the LAN cannot load the picture.
 
@@ -178,7 +178,7 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 
 前置条件：
 
-- **仅 linux x86-64。** 两个官方 Demo 库都要放到 `/config/imou_life/native/`：`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，只放一个是加载不起来的。这一页会报告是否找到。
+- **仅 linux x86-64。** 集成不附带原生库，现阶段请自行下载官方 Demo 包。国内：[ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt)。海外：[HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)。下载到的是压缩包，解压后从 `Open-PicDecode/src/main/resources/linux-x86-64` 把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都复制到 `/config/imou_life/native/`。`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，只放一个加载不起来。这一页会报告是否找到。
 - **只有部分设备需要密码。** 页面上列出来的就是需要密码的那些；没有列出的设备用自己的序列号推导密钥，不需要你填任何东西。
 - **一个公网可达的 Home Assistant 地址**（第 0 步），否则不在局域网的手机加载不出图片。
 
