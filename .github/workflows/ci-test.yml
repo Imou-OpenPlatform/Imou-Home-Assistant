@@ -14,6 +14,11 @@ concurrency:
 permissions:
   contents: read
 
+# HA `dev` must test against unreleased pyimouapi on library `dev`.
+# HA `main` / PRs into `main` follow the published library on `main`.
+env:
+  PYIMOUAPI_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
+
 jobs:
   test:
     name: Test
@@ -26,7 +31,7 @@ jobs:
         with:
           repository: Imou-OpenPlatform/Py-Imou-Open-Api
           path: Py-Imou-Open-Api
-          ref: main
+          ref: ${{ env.PYIMOUAPI_REF }}
       - name: Link pyimouapi for uv path dependency
         run: ln -sfn "$GITHUB_WORKSPACE/Py-Imou-Open-Api" "$(dirname "$GITHUB_WORKSPACE")/Py-Imou-Open-Api"
       - uses: astral-sh/setup-uv@v7

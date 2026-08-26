@@ -30,34 +30,34 @@
       },
       "no_devices_menu": {
         "title": "No devices found",
-        "description": "This account has no Imou devices yet. Bind a device now, or finish setup. Devices bound later in the Imou app are not polled until you select them under Configure → Manage devices.",
+        "description": "This account has no Imou devices yet. Bind one now, or finish setup.",
         "menu_options": {
           "bind_device": "Bind a device",
           "finish_without_devices": "Continue without devices"
         }
       },
       "bind_device": {
-        "title": "Bind device",
-        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "title": "Bind a new device",
+        "description": "Enter the device serial number and binding code from the Imou Life app or device label.",
         "data": {
           "device_id": "Device serial number",
           "code": "Binding code"
         },
         "data_description": {
-          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app",
           "code": "Optional. Leave empty if the device does not require a binding code"
         }
       },
       "select_devices": {
-        "title": "Select Devices",
-        "description": "Found {device_count} device(s). Select the devices you want to add. Unselected devices will NOT be polled, saving API quota. You can bind more devices later under Settings → Devices & services → Imou Life → Configure → Manage Devices.",
+        "title": "Select devices",
+        "description": "Found {device_count} device(s). Unselected devices are not polled.",
         "data": {
           "selected_devices": "Devices"
         }
       },
       "reauth_confirm": {
         "title": "Re-authenticate Imou Life",
-        "description": "Your App Secret is no longer valid. Enter a new App Secret for AppId {app_id}.",
+        "description": "Your app secret is no longer valid. Enter a new app secret for App ID {app_id}.",
         "data": {
           "app_secret": "App secret"
         }
@@ -67,107 +67,124 @@
   "issues": {
     "event_push_no_external_url": {
       "title": "Imou event push has no callback URL",
-      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a manual callback URL in Imou Life options."
+      "description": "Event push is enabled but Home Assistant could not build an external webhook URL. Set **Settings → System → Network → Home Assistant URL**, or enter a callback URL under **Configure → Alarm push and notifications**."
     },
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
-      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your AppId resource quota, then reload the integration."
+      "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your App ID resource quota, then reload the integration."
     }
   },
   "options": {
     "error": {
       "request_failed": "Failed to load device list: {error}",
       "bind_failed": "Failed to bind device: {error}",
-      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment."
+      "bind_device_not_listed": "Device was bound but does not appear in the account device list yet. Try again in a moment.",
+      "callback_failed": "Failed to register the callback URL with Imou: {error}",
+      "callback_url_missing": "A callback URL is required when event push is on.",
+      "decrypt_libs_missing": "The decrypt libraries are not installed on this host, so this switch would do nothing. Add them first, or leave it off.",
+      "record_path_not_allowed": "This folder is not in allowlist_external_dirs. Add it under Home Assistant → Allowlist external directories, then try again."
     },
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Choose which settings to change. Each section saves when you submit that form.",
+        "description": "Alarm push: **{push_state}** · Alarm pictures: **{decrypt_state}** · Record on alarm: **{record_state}** · Status polling: **{polling_state}**\n\nEach page saves on submit and comes back here. Alarm pictures and Record on alarm only do anything while alarm push is on.",
         "menu_options": {
-          "general_settings": "General settings",
-          "event_push": "Event push",
-          "devices": "Manage devices"
+          "general_settings": "Polling and cameras",
+          "event_push": "Alarm push and notifications",
+          "alarm_image_decrypt": "Alarm pictures",
+          "local_recording": "Record on alarm",
+          "select_poll_devices": "Choose devices to poll",
+          "bind_device": "Bind a new device",
+          "finish": "Done"
         }
       },
       "general_settings": {
-        "title": "General",
-        "description": "Polling interval and camera defaults.",
+        "title": "Status polling and camera defaults",
+        "description": "How often Home Assistant refreshes device status, plus the live stream and PTZ defaults every camera on this account starts from.",
         "data": {
           "enable_polling": "Enable status polling",
-          "update_interval": "Polling interval (seconds)",
-          "download_snap_wait_time": "Snapshot wait time (seconds)",
-          "live_resolution": "Video resolution",
-          "live_protocol": "Video protocol",
-          "rotation_duration": "PTZ rotation duration (ms)"
+          "update_interval": "Polling interval (seconds)"
         },
         "data_description": {
-          "enable_polling": "When disabled, the integration does not periodically refresh device status from Imou cloud. Use this if you only need on-demand controls (e.g. siren, collection point). Entity states may become outdated. Setup and reload still fetch the device list once.",
-          "update_interval": "How often to poll device status from Imou cloud. Default 300s (5 minutes), range 30–900s. Ignored when status polling is disabled.",
-          "download_snap_wait_time": "Seconds to wait before downloading a camera snapshot. Default 3s.",
-          "live_resolution": "Camera live stream resolution. HD = high definition, SD = standard.",
-          "live_protocol": "Video stream protocol. Usually https is fine.",
-          "rotation_duration": "How long a single PTZ button press moves. Default 500ms."
+          "enable_polling": "Turn off to skip periodic cloud refreshes. Entity states may become outdated. Setup and reload still fetch the device list once. When event push is on and subscribe types include IoT device messages, thing-model device *properties* are not refreshed on this interval (setup and reload still take one snapshot). Online status, PaaS abilities, and service-backed entities still poll.",
+          "update_interval": "Default 300s (5 minutes), range 30–900s. Ignored when polling is off."
+        },
+        "sections": {
+          "camera_defaults": {
+            "name": "Camera defaults",
+            "description": "Live stream and PTZ defaults for this account.",
+            "data": {
+              "download_snap_wait_time": "Snapshot wait time (seconds)",
+              "live_resolution": "Video resolution",
+              "rotation_duration": "PTZ rotation duration (ms)"
+            },
+            "data_description": {
+              "download_snap_wait_time": "The camera has to take the snapshot and upload it before Imou can serve it. This is how long Home Assistant waits before fetching. Raise it if snapshots come back stale or empty. Default 3s.",
+              "live_resolution": "HD = high definition, SD = standard. Used for the Live camera entity.",
+              "rotation_duration": "How far one press of a PTZ direction button moves, as movement time. Default 500ms."
+            }
+          }
         }
       },
       "event_push": {
-        "title": "Event push",
-        "description": "Receive Imou alarm events in Home Assistant in real time.\n\nWebhook ID: {webhook_id}\nSuggested callback URL: {suggested_url}",
+        "title": "Alarm push and notifications",
+        "description": "{lan_hint}Receive cloud alarms via webhook. Suggested callback: {suggested_url}",
         "data": {
-          "enable_event_push": "Enable event push"
+          "enable_event_push": "Enable event push",
+          "webhook_url": "Callback URL",
+          "event_push_types": "Subscribe to"
         },
         "data_description": {
-          "enable_event_push": "Registers the callback URL with Imou cloud. Alarm events also sync to the Imou app."
+          "enable_event_push": "Imou cloud POSTs alarms to this Home Assistant webhook. Alarms also sync to the Imou Life app.",
+          "webhook_url": "Required when event push is on. Must be reachable from the internet; if the suggested address is not, change only the hostname and port.",
+          "event_push_types": "Which cloud messages Home Assistant should receive."
         },
         "sections": {
-          "callback": {
-            "name": "Callback URL",
-            "description": "Leave **Custom callback URL** empty to use the suggested URL above. Enter a public URL only if the suggested address is not reachable from the internet.",
-            "data": {
-              "webhook_url": "Custom callback URL"
-            },
-            "data_description": {
-              "webhook_url": "Optional. Example: https://yourdomain:8123/api/webhook/xxxxx"
-            }
-          },
-          "subscriptions": {
-            "name": "Message types",
-            "description": "Choose which Imou cloud messages to receive after event push is enabled.",
-            "data": {
-              "event_push_types": "Subscribe to"
-            }
-          },
           "notifications": {
-            "name": "Alarm notifications",
-            "description": "Optional automatic notifications when an alarm arrives.",
+            "name": "Notify on alarm",
+            "description": "Optional. Leave empty to use automations only.",
             "data": {
-              "notify_services": "Notify services"
+              "notify_services": "Notification targets"
             },
             "data_description": {
-              "notify_services": "Comma-separated HA actions, e.g. notify.mobile_app_phone. Leave empty to use automations only."
+              "notify_services": "Registered notify services on this Home Assistant. One message per alarm. Turn off **Notify on alarm** on a device page to skip that device. To put the alarm picture in these messages, see **Alarm pictures**."
             }
           }
         }
       },
-      "devices": {
-        "title": "Manage devices",
-        "description": "Found {device_count} device(s). Select which devices to poll. Unselected devices stay in Home Assistant but are not polled, saving API quota. Submit saves and closes.",
+      "alarm_image_decrypt": {
+        "title": "Alarm pictures",
+        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. Saved passwords are filled back in (masked). To delete one, use **Remove stored passwords**. Stored: {password_count} ({configured_serials}).",
+        "data": {
+          "attach_decrypted_thumbnail": "Show the picture in alarm notifications",
+          "default_device_password": "Default device password",
+          "clear_default_device_password": "Clear default device password",
+          "remove_device_passwords": "Remove stored passwords"
+        },
+        "data_description": {
+          "attach_decrypted_thumbnail": "Needs Home Assistant's external URL (Settings → System → Network) for phones off the LAN. Pictures are saved unauthenticated under /local/imou_life/thumbs/ for about 24 hours. Passwords stay on this Home Assistant and are used only to decrypt.",
+          "default_device_password": "Fallback for devices that do not have their own password below.",
+          "clear_default_device_password": "Deletes the stored default. Per-device passwords are unchanged.",
+          "remove_device_passwords": "Checked serials are deleted."
+        }
+      },
+      "local_recording": {
+        "title": "Record on alarm",
+        "description": "{push_hint}Records a short clip from the cloud stream after an alarm. Per-camera **Record on alarm** is on each device page.",
+        "data": {
+          "local_record_path": "Save folder",
+          "local_record_duration": "Clip duration (seconds)"
+        },
+        "data_description": {
+          "local_record_path": "Example: /media/imou. Leave empty to skip. Folder must be in allowlist_external_dirs.",
+          "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
+        }
+      },
+      "select_poll_devices": {
+        "title": "Choose devices to poll",
+        "description": "Found {device_count} device(s). Unselected devices stay in Home Assistant but are not polled.",
         "data": {
           "selected_devices": "Devices"
-        },
-        "sections": {
-          "bind_new_device": {
-            "name": "Bind a new device",
-            "description": "Optional. Bind another camera to this account, then it is added to the poll list.",
-            "data": {
-              "device_id": "Device serial number",
-              "code": "Binding code"
-            },
-            "data_description": {
-              "device_id": "Serial number (SN) printed on the device or shown in the Imou app. Leave empty to skip binding.",
-              "code": "Optional. Leave empty if the device does not require a binding code"
-            }
-          }
         }
       },
       "no_devices_menu": {
@@ -182,19 +199,19 @@
         "title": "Could not reach the Imou cloud",
         "description": "The device list could not be fetched: {error}\n\nYou can try again, or save your other changes and leave the device selection as it is.",
         "menu_options": {
-          "devices": "Try again",
+          "select_poll_devices": "Try again",
           "save_without_devices": "Save without changing device selection"
         }
       },
       "bind_device": {
-        "title": "Bind device",
-        "description": "Enter the device serial number and binding code from the Imou app or device label.",
+        "title": "Bind a new device",
+        "description": "Enter the device serial number and binding code from the Imou Life app or device label.",
         "data": {
           "device_id": "Device serial number",
           "code": "Binding code"
         },
         "data_description": {
-          "device_id": "Serial number (SN) printed on the device or shown in the Imou app",
+          "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app",
           "code": "Optional. Leave empty if the device does not require a binding code"
         }
       }
@@ -214,11 +231,25 @@
         "not_generated": "Not generated"
       }
     },
+    "status": {
+      "options": {
+        "on": "on",
+        "off": "off",
+        "missing_libs": "on, but libraries are missing",
+        "all_devices": "all"
+      }
+    },
+    "prerequisite": {
+      "options": {
+        "push_off": "Alarm push is off, so nothing on this page takes effect yet. Turn it on under Configure → Alarm push and notifications.",
+        "callback_not_public": "This address is only reachable on your local network, so the Imou cloud cannot POST alarms to it and phones off the LAN cannot load alarm pictures. Set an internet-reachable address under Settings → System → Network → Home Assistant URL, or type the address your reverse proxy exposes."
+      }
+    },
     "event_push_type": {
       "options": {
-        "alarm": "Device alarms (smoke, gas, human, motion, etc.)",
+        "alarm": "Device alarms (smoke, gas, human, picture change, etc.)",
         "device_status": "Device online/offline",
-        "iot": "IoT device messages",
+        "iot": "IoT device messages. When this is selected and event push is on, thing-model devices update switches/sensors/arming from iotProperty immediately and skip the interval property poll. Turn event push off or uncheck this to poll those properties again.",
         "numberstat": "People counting",
         "face_analysis": "Face analysis"
       }
@@ -231,72 +262,40 @@
     }
   },
   "entity": {
-    "sensor": {
-      "storage_used": {
-        "name": "Storage Used",
+    "alarm_control_panel": {
+      "arming": {
+        "name": "Arming",
         "state": {
-          "e1": "No Storage Medium",
-          "e2": "Abnormal"
+          "armed_home": "Armed home",
+          "armed_away": "Armed away",
+          "disarmed": "Disarmed"
         }
-      },
+      }
+    },
+    "sensor": {
       "status": {
         "name": "Status",
         "state": {
-          "online": "Online",
           "offline": "Offline",
+          "online": "Online",
           "sleep": "Sleep",
           "upgrading": "Upgrading"
         }
       },
-      "battery": {
-        "name": "Battery"
-      },
-      "temperature_current": {
-        "name": "Temperature"
-      },
-      "humidity_current": {
-        "name": "Humidity"
-      },
-      "power": {
-        "name": "Power"
-      },
-      "voltage": {
-        "name": "Voltage"
-      },
-      "current": {
-        "name": "Current"
+      "storage_used": {
+        "name": "Storage used"
       },
       "switch_cnt": {
         "name": "Switch cycles today"
       },
       "use_electricity": {
-        "name": "Consumption"
+        "name": "Energy consumption"
       },
       "use_time": {
-        "name": "Runtime"
+        "name": "Usage duration"
       }
     },
     "select": {
-      "night_vision_mode": {
-        "name": "Night Vision Mode",
-        "state": {
-          "custom": "Custom Mode",
-          "fullcolor": "Bright Color Night Vision",
-          "infrared": "Infrared Night Vision",
-          "intelligent": "Smart Night Vision",
-          "lowlight": "Low Light Night Vision",
-          "off": "Off",
-          "smartlowlight": "Smart Low Light Night Vision"
-        }
-      },
-      "mode": {
-        "name": "Mode",
-        "state": {
-          "away": "Away",
-          "disarm": "Disarm",
-          "home": "Home"
-        }
-      },
       "device_volume": {
         "name": "Volume",
         "state": {
@@ -306,63 +305,102 @@
           "mute": "Mute"
         }
       },
-      "collection_point": {
-        "name": "Collection Point",
+      "night_vision_mode": {
+        "name": "Night vision mode",
         "state": {
-          "select_collection_point": "Select a preset…"
+          "custom": "Custom night vision",
+          "fullcolor": "Full-color night vision",
+          "infrared": "Infrared night vision",
+          "intelligent": "Smart night vision",
+          "lowlight": "Low-light night vision",
+          "off": "Off",
+          "smartlowlight": "Smart low-light night vision"
+        }
+      },
+      "collection_point": {
+        "name": "Go to collection point",
+        "state": {
+          "select_collection_point": "Select a collection point…"
         }
       }
     },
     "switch": {
-      "motion_detect": {
-        "name": "Motion Detect"
-      },
       "ab_alarm_sound": {
-        "name": "Abnormal sound detection"
+        "name": "Abnormal sound alarm"
+      },
+      "audio_encode_control": {
+        "name": "Audio recording"
       },
       "close_camera": {
         "name": "Privacy mode"
       },
-      "white_light": {
-        "name": "White Light"
-      },
-      "audio_encode_control": {
-        "name": "Audio Encode Control"
+      "frame_reverse": {
+        "name": "Flip image"
       },
       "header_detect": {
-        "name": "Human Detect"
+        "name": "Human detection"
       },
       "light": {
-        "name": "Light"
+        "name": "Indicator light"
+      },
+      "local_event_record": {
+        "name": "Record on alarm"
+      },
+      "notify_on_alarm": {
+        "name": "Notify on alarm"
+      },
+      "linkage_siren": {
+        "name": "Alarm-linked siren"
+      },
+      "linkage_white_light": {
+        "name": "Alarm-linked white light"
+      },
+      "motion_detect": {
+        "name": "Picture change"
+      },
+      "pet_detect": {
+        "name": "Pet detection"
+      },
+      "play_sound": {
+        "name": "Prompt sound"
+      },
+      "smart_track": {
+        "name": "Smart tracking"
       },
       "switch": {
-        "name": "Plug Switch"
+        "name": "Plug switch"
+      },
+      "white_light": {
+        "name": "White light"
+      },
+      "wide_dynamic": {
+        "name": "Wide dynamic range"
       }
     },
     "button": {
       "ptz_up": {
-        "name": "PTZ Up"
+        "name": "PTZ up"
       },
       "ptz_down": {
-        "name": "PTZ Down"
+        "name": "PTZ down"
       },
       "ptz_left": {
-        "name": "PTZ Left"
+        "name": "PTZ left"
       },
       "ptz_right": {
-        "name": "PTZ Right"
+        "name": "PTZ right"
       },
       "restart_device": {
-        "name": "Restart Device"
+        "name": "Restart device"
       },
       "mute": {
         "name": "Mute"
       },
       "siren_start": {
-        "name": "Start Siren"
+        "name": "Start siren"
       },
       "siren_stop": {
-        "name": "Stop Siren"
+        "name": "Stop siren"
       }
     },
     "camera": {
@@ -377,14 +415,22 @@
           "on": "Open",
           "off": "Closed"
         }
+      },
+      "motion": {
+        "name": "Motion"
+      }
+    },
+    "siren": {
+      "siren": {
+        "name": "Siren"
       }
     },
     "text": {
       "count_down_switch": {
-        "name": "Countdown Timer (min)"
+        "name": "Countdown timer (min)"
       },
       "overcharge_switch": {
-        "name": "Max Power (W)"
+        "name": "Max power (W)"
       }
     }
   },
@@ -412,6 +458,9 @@
     },
     "button_press_failed": {
       "message": "Imou rejected the button press: {error}"
+    },
+    "alarm_arm_disarm_failed": {
+      "message": "Imou rejected the arming change: {error}"
     },
     "stream_source_failed": {
       "message": "Could not get the live stream URL from Imou: {error}"

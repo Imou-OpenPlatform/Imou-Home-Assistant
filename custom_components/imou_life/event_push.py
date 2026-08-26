@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from typing import Literal
+from urllib.parse import urlparse, urlunparse
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -19,7 +20,7 @@ from .const import (
     PARAM_WEBHOOK_URL,
     event_push_types_to_callback_flags,
 )
-from .helpers import get_selected_device_ids
+from .helpers import get_selected_device_ids, parse_notify_services
 from .repairs import (
     async_create_event_push_callback_failed_issue,
     async_create_event_push_no_url_issue,
@@ -33,6 +34,22 @@ from .webhook import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _redact_callback_url(url: str) -> str:
+    """Hide the webhook id that authenticates the callback URL."""
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/")
+    if not path:
+        return url
+    prefix, separator, last = path.rpartition("/")
+    if not separator or not last:
+        return url
+    hidden = f"{last[:4]}…" if len(last) > 4 else "…"
+    new_path = f"{prefix}/{hidden}"
+    if parsed.path.endswith("/"):
+        new_path += "/"
+    return urlunparse(parsed._replace(path=new_path, query="", fragment=""))
 
 
 async def async_setup_event_push(
@@ -64,11 +81,9 @@ async def async_setup_event_push(
     else:
         async_delete_event_push_issues(hass, entry)
 
-    raw_services = entry.options.get(PARAM_NOTIFY_SERVICES, "")
-    if raw_services:
-        runtime.notify_services = [
-            s.strip() for s in raw_services.split(",") if s.strip()
-        ]
+    runtime.notify_services = parse_notify_services(
+        entry.options.get(PARAM_NOTIFY_SERVICES)
+    )
 
     return webhook_id, generated_url
 
@@ -122,7 +137,7 @@ async def _async_set_message_callback(
             _LOGGER.info(
                 "Imou message callback set to %s (url=%s)",
                 status,
-                callback_url,
+                _redact_callback_url(callback_url),
             )
             async_delete_event_push_issues(hass, entry)
         except Exception:
@@ -137,7 +152,7 @@ async def _async_set_message_callback(
             _LOGGER.info(
                 "Imou message callback set to %s (url=%s)",
                 status,
-                callback_url or "N/A",
+                _redact_callback_url(callback_url) if callback_url else "N/A",
             )
         except Exception:
             _LOGGER.exception("Failed to set Imou message callback")

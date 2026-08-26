@@ -6,6 +6,7 @@ from pyimouapi.ha_device import ImouHaDevice
 # Internal constants
 DOMAIN = "imou_life"
 UPDATE_TIMEOUT = 300
+PUSH_DISPATCH_LIMIT = 8
 
 # Listing the account costs a paged request plus one detail round trip per iot
 # device, and every object it builds is dropped for devices we already know. It
@@ -29,17 +30,51 @@ def imou_life_device_key_from_ids(
     channel_id: object | None,
     product_id: str | None,
 ) -> str | None:
-    """Build the device registry identifier key from push / API ids.
+    """Build the preferred device registry key from API ids.
 
-    Same format as ``imou_life_device_key``: ``{device_id}_{channel_id|product_id}``.
-    Uses ``is not None`` for channel so channel 0 is kept.
+    Cameras register as ``{device_id}_{channel_id}`` (channel 0 is kept).
+    Channel-less IoT accessories use ``{device_id}_{product_id}``. Push
+    lookup uses ``imou_life_device_keys_from_ids``, which tries the product
+    key first so a spurious monitor.channel does not steal the accessory.
     """
     if not device_id:
         return None
-    suffix = channel_id if channel_id is not None else product_id
-    if suffix is None:
-        return None
-    return f"{device_id}_{suffix}"
+    if channel_id is not None:
+        return f"{device_id}_{channel_id}"
+    if product_id is not None and product_id != "":
+        return f"{device_id}_{product_id}"
+    return f"{device_id}_0"
+
+
+def imou_life_device_keys_from_ids(
+    device_id: str | None,
+    channel_id: object | None,
+    product_id: str | None,
+) -> list[str]:
+    """Return candidate registry keys for an Imou push.
+
+    Order:
+    1. Product-based key (IoT accessory). ``iotEvent`` often includes
+       ``monitor.channel=0``, which would otherwise match the parent camera.
+    2. Channel-based key (IPC / multi-lens channel from the push)
+    3. Primary channel ``0`` when the push omitted channel_id — multi-lens
+       devices are registered per channel (``did_0``, ``did_1``, …), not as
+       ``did_pid``, so a missing channel still resolves to the main lens.
+    """
+    if not device_id:
+        return []
+    keys: list[str] = []
+    if product_id is not None and product_id != "":
+        keys.append(f"{device_id}_{product_id}")
+    if channel_id is not None:
+        key = f"{device_id}_{channel_id}"
+        if key not in keys:
+            keys.append(key)
+    if channel_id is None:
+        zero = f"{device_id}_0"
+        if zero not in keys:
+            keys.append(zero)
+    return keys
 
 
 # Configuration definitions
@@ -77,7 +112,6 @@ def api_url_region_from_value(value: str) -> str:
 CONF_HD = "HD"
 CONF_SD = "SD"
 
-CONF_HTTP = "http"
 CONF_HTTPS = "https"
 
 
@@ -91,12 +125,31 @@ PARAM_SELECTED_DEVICES = "selected_devices"
 PARAM_ENABLE_EVENT_PUSH = "enable_event_push"
 PARAM_EVENT_PUSH_TYPES = "event_push_types"
 PARAM_NOTIFY_SERVICES = "notify_services"
+PARAM_NOTIFY_ON_ALARM = "notify_on_alarm"
+PARAM_ATTACH_DECRYPTED_THUMBNAIL = "attach_decrypted_thumbnail"
+PARAM_DEFAULT_DEVICE_PASSWORD = "default_device_password"
+PARAM_DEVICE_PASSWORDS = "device_passwords"
+PARAM_LOCAL_EVENT_RECORD = "local_event_record"
+PARAM_LOCAL_RECORD_PATH = "local_record_path"
+PARAM_LOCAL_RECORD_DURATION = "local_record_duration"
+DEFAULT_LOCAL_RECORD_DURATION = 60
 # Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
 BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
+PARAM_MOTION = "motion"
+MOTION_OFF_DELAY = 15
+PARAM_SIREN = "siren"
+SIREN_OFF_DELAY = 15
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
+PARAM_PET_DETECT = "pet_detect"
+PARAM_FRAME_REVERSE = "frame_reverse"
+PARAM_WIDE_DYNAMIC = "wide_dynamic"
+PARAM_SMART_TRACK = "smart_track"
+PARAM_PLAY_SOUND = "play_sound"
+PARAM_LINKAGE_SIREN = "linkage_siren"
+PARAM_LINKAGE_WHITE_LIGHT = "linkage_white_light"
 PARAM_AB_ALARM_SOUND = "ab_alarm_sound"
 PARAM_CLOSE_CAMERA = "close_camera"
 PARAM_WHITE_LIGHT = "white_light"
@@ -115,7 +168,6 @@ PARAM_UPDATE_INTERVAL = "update_interval"
 DEFAULT_UPDATE_INTERVAL = 300
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
-PARAM_LIVE_PROTOCOL = "live_protocol"
 PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
@@ -195,10 +247,12 @@ SERVICE_CONTROL_MOVE_PTZ = "control_move_ptz"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.ALARM_CONTROL_PANEL,
     Platform.BUTTON,
     Platform.CAMERA,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SIREN,
     Platform.SWITCH,
     Platform.TEXT,
 ]

@@ -4,31 +4,88 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_ENABLE_POLLING,
+    PARAM_EVENT_PUSH_TYPES,
+    PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
+    PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
+    PARAM_WEBHOOK_URL,
     PLATFORMS,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
-from .helpers import get_selected_device_ids
+from .helpers import get_selected_device_ids, parse_notify_services
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+_UNSET = object()
+
+_REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
+
+
+def async_remove_replaced_legacy_entities(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Drop leftover select.mode and siren button rows from 1.3.x upgrades."""
+    registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        drop_select = entity_entry.domain == "select" and unique_id.endswith("$mode")
+        drop_button = entity_entry.domain == "button" and unique_id.endswith(
+            _REPLACED_BUTTON_SUFFIXES
+        )
+        if drop_select or drop_button:
+            registry.async_remove(entity_entry.entity_id)
+
+
+def options_reload_signature(options: Mapping[str, Any]) -> tuple[object, ...]:
+    """Return the subset of options that require unload and setup to apply.
+
+    Everything else (decrypt switch and passwords, notify targets, camera
+    defaults, local-record path) is read from ``entry.options`` on use, or
+    refreshed on the live runtime, so changing it must not cost a full
+    ``setMessageCallback`` off/on cycle and a rediscovery.
+    """
+    selected = options.get(PARAM_SELECTED_DEVICES, _UNSET)
+    if selected is _UNSET:
+        selected_sig: object = None
+    elif isinstance(selected, list):
+        # Order must not force a reload when the same set was re-saved.
+        selected_sig = tuple(sorted(str(item) for item in selected))
+    else:
+        selected_sig = selected
+    event_types = options.get(PARAM_EVENT_PUSH_TYPES) or []
+    return (
+        bool(options.get(PARAM_ENABLE_POLLING, True)),
+        int(options.get(PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)),
+        selected_sig,
+        bool(options.get(PARAM_ENABLE_EVENT_PUSH)),
+        str(options.get(PARAM_WEBHOOK_URL) or ""),
+        tuple(event_types),
+    )
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -59,6 +116,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     imou_device_manager = ImouHaDeviceManager(device_manager)
     coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
     runtime = ImouRuntimeData(coordinator=coordinator, client=imou_client)
+    runtime.reload_signature = options_reload_signature(entry.options)
     entry.runtime_data = runtime
 
     try:
@@ -69,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         )
 
     await coordinator.async_config_entry_first_refresh()
+    async_remove_replaced_legacy_entities(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
@@ -76,7 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         pass
 
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
     return True
 
 
@@ -118,6 +177,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
             await spare_client.async_close()
 
     return True
+
+
+async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Apply option changes, reloading only when setup-time settings change."""
+    runtime = get_runtime_data(entry)
+    new_signature = options_reload_signature(entry.options)
+    if runtime is not None and runtime.reload_signature == new_signature:
+        runtime.notify_services = parse_notify_services(
+            entry.options.get(PARAM_NOTIFY_SERVICES)
+        )
+        runtime.selected_devices = get_selected_device_ids(entry)
+        # Soft path never rebuilds the decoder. Clearing the sticky failure
+        # flag lets a later alarm retry after the user drops the .so files in.
+        if entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+            runtime.pic_decoder_failed = False
+            runtime.pic_decoder = None
+        _LOGGER.debug(
+            "Applied soft option changes for entry %s without reload", entry.entry_id
+        )
+        return
+
+    _LOGGER.debug("Reloading entry %s after option changes", entry.entry_id)
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

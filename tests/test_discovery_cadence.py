@@ -1,8 +1,8 @@
 """Tests for how often the coordinator lists the Imou account.
 
-Listing costs a paged request plus a detail round trip per iot device and its
-results are thrown away for devices already known, so it runs on a slower clock
-than the status poll. These tests pin that split.
+Listing costs a paged request, and ability-ref detail calls only run for
+devices Home Assistant has not seen yet. Status polling is on a faster clock.
+These tests pin that split.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,7 +36,7 @@ def device_manager() -> MagicMock:
     """Mock ImouHaDeviceManager returning one device."""
     manager = MagicMock()
     manager.async_get_devices = AsyncMock(return_value=[_mock_device("d1")])
-    manager.async_update_device_status = AsyncMock(return_value=None)
+    manager.async_update_devices_status = AsyncMock(return_value=None)
     return manager
 
 
@@ -66,7 +66,7 @@ async def test_status_polls_do_not_list_the_account_every_time(
     await coordinator._async_update_data()
 
     assert device_manager.async_get_devices.await_count == 1
-    assert device_manager.async_update_device_status.await_count == 3
+    assert device_manager.async_update_devices_status.await_count == 3
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -84,9 +84,9 @@ async def test_listing_resumes_once_the_interval_passes(
         await coordinator._async_update_data()
     assert len(coordinator.devices) == 1
 
-    device_manager.async_get_devices.return_value = [
-        _mock_device("d1"),
-        _mock_device("d2"),
+    device_manager.async_get_devices.side_effect = [
+        [_mock_device("d1"), _mock_device("d2")],
+        [_mock_device("d1"), _mock_device("d2")],
     ]
     with patch(
         "custom_components.imou_life.coordinator.monotonic",
@@ -94,7 +94,8 @@ async def test_listing_resumes_once_the_interval_passes(
     ):
         await coordinator._async_update_data()
 
-    assert device_manager.async_get_devices.await_count == 2
+    # First discovery + list-only rediscovery + ability refs for the new id.
+    assert device_manager.async_get_devices.await_count == 3
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
     assert [d.device_id for batch in added for d in batch] == ["d2"]
 
@@ -128,7 +129,7 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
     await coordinator._async_update_data()
     assert not hass.config_entries.flow.async_progress()
 
-    device_manager.async_update_device_status.side_effect = (
+    device_manager.async_update_devices_status.side_effect = (
         InvalidAppIdOrSecretException("bad secret")
     )
     # Going through the public refresh is the point: reporting the refusal as
@@ -146,6 +147,24 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_total_status_poll_failure_marks_update_failed(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A cloud outage on every device group must not look like a successful poll."""
+    coordinator = _make_coordinator(hass, device_manager)
+    await coordinator._async_update_data()
+    assert coordinator.last_update_success
+
+    device_manager.async_update_devices_status.side_effect = RequestFailedException(
+        "cloud down"
+    )
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert not coordinator.last_update_success
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_bad_credentials_stop_the_polling_instead_of_retrying(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
@@ -154,7 +173,7 @@ async def test_bad_credentials_stop_the_polling_instead_of_retrying(
     await coordinator.async_config_entry_first_refresh()
     unsubscribe = coordinator.async_add_listener(lambda: None)
 
-    device_manager.async_update_device_status.side_effect = (
+    device_manager.async_update_devices_status.side_effect = (
         InvalidAppIdOrSecretException("bad secret")
     )
     await coordinator.async_refresh()
@@ -185,11 +204,12 @@ async def test_a_failed_listing_leaves_known_devices_alone(
 
     assert coordinator.last_update_success
     assert coordinator.devices_by_key == known
-    assert device_manager.async_update_device_status.await_count == 2
+    assert device_manager.async_update_devices_status.await_count == 2
 
     # The clock stayed put, so the next poll retries rather than waiting out
     # the rest of the interval.
     device_manager.async_get_devices.side_effect = None
+    device_manager.async_get_devices.return_value = [_mock_device("d1")]
     with patch(
         "custom_components.imou_life.coordinator.monotonic",
         return_value=1000.0 + DISCOVERY_INTERVAL + 1,

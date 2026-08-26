@@ -1,5 +1,7 @@
 """Imou binary sensor entities."""
 
+from __future__ import annotations
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -9,10 +11,52 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
+from .const import MOTION_OFF_DELAY, PARAM_MOTION
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .entity import ImouEntity, async_add_imou_entities
+from .entity import ImouAlarmPushEntity, ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 0
+
+_MOTION_ON = frozenset(
+    {
+        "videomotion",
+        "human",
+        "mobiledetect",
+        "motiondetect",
+        "alarmpir",
+        "pir_alarm",
+        "aiperarea",
+        "aiperareaalarm",
+        "multivideoaiperarea",
+        "multivideoaiperareaalarm",
+        "smartmixdetect",
+        "crosslinedetection",
+        "areadetect",
+        "areadetectalarm",
+        "multivideoareadetect",
+        "multivideodetectalarm",
+    }
+)
+_MOTION_OFF = frozenset(
+    {
+        "clearalarmpir",
+        "pir_cleared",
+    }
+)
+
+
+def motion_binary_state(msg_type: str | None) -> bool | None:
+    """Return True/False when msg_type drives motion, else None."""
+    if not msg_type:
+        return None
+    key = msg_type.lower()
+    if key.startswith("e_"):
+        key = key[2:]
+    if key in _MOTION_OFF:
+        return False
+    if key in _MOTION_ON:
+        return True
+    return None
 
 
 def _iter_binary_sensors(
@@ -26,6 +70,17 @@ def _iter_binary_sensors(
     ]
 
 
+def _iter_motion_sensors(
+    coordinator: ImouDataUpdateCoordinator,
+) -> list[tuple[str, ImouHaDevice]]:
+    """One HA-only motion sensor per camera channel."""
+    return [
+        (PARAM_MOTION, device)
+        for device in coordinator.devices
+        if device.channel_id is not None
+    ]
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ImouConfigEntry,
@@ -34,6 +89,9 @@ async def async_setup_entry(
     """Set up Imou binary_sensor entities."""
     async_add_imou_entities(
         entry, async_add_entities, ImouBinarySensor, _iter_binary_sensors
+    )
+    async_add_imou_entities(
+        entry, async_add_entities, ImouMotionBinarySensor, _iter_motion_sensors
     )
 
 
@@ -53,3 +111,15 @@ class ImouBinarySensor(ImouEntity, BinarySensorEntity):
                 return BinarySensorDeviceClass.DOOR
             case _:
                 return None
+
+
+class ImouMotionBinarySensor(ImouAlarmPushEntity, BinarySensorEntity):
+    """Camera motion from Imou alarm pushes; auto-off if the cloud sends no clear."""
+
+    _attr_device_class = BinarySensorDeviceClass.MOTION
+    _attr_is_on = False
+    _hold_seconds = MOTION_OFF_DELAY
+
+    def _alarm_state(self, msg_type: str | None) -> bool | None:
+        """Map picture / human / PIR pushes onto held motion state."""
+        return motion_binary_state(msg_type)

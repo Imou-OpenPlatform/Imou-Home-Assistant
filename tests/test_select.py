@@ -47,7 +47,8 @@ def test_iter_selects_whitelist_only() -> None:
     )
     pairs = _iter_selects(_mock_coordinator([device]))
     keys = {description.key for description, _ in pairs}
-    assert keys == {PARAM_NIGHT_VISION_MODE, PARAM_MODE}
+    assert PARAM_MODE not in keys
+    assert keys == {PARAM_NIGHT_VISION_MODE}
 
 
 def test_select_types_match_core_whitelist() -> None:
@@ -55,6 +56,5 @@ def test_select_types_match_core_whitelist() -> None:
     assert {description.key for description in SELECT_TYPES} == {
         PARAM_COLLECTION_POINT,
         PARAM_DEVICE_VOLUME,
-        PARAM_MODE,
         PARAM_NIGHT_VISION_MODE,
     }

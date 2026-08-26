@@ -1,11 +1,15 @@
 {
   "domain": "imou_life",
   "name": "Imou Life Official",
+  "after_dependencies": [
+    "stream"
+  ],
   "codeowners": [
     "@Imou-OpenPlatform"
   ],
   "config_flow": true,
   "dependencies": [
+    "persistent_notification",
     "webhook"
   ],
   "documentation": "https://open.imoulife.com/book/guide/haDev.html",
@@ -17,7 +21,7 @@
   ],
   "quality_scale": "bronze",
   "requirements": [
-    "pyimouapi==1.3.5"
+    "pyimouapi==1.4.0"
   ],
-  "version": "1.3.4"
+  "version": "1.4.0"
 }

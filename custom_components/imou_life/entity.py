@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from datetime import datetime
 from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
+from homeassistant.core import Event, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
-from .const import DOMAIN, PARAM_STATUS, imou_life_device_key
+from .const import (
+    DOMAIN,
+    EVENT_IMOU_ALARM,
+    PARAM_STATUS,
+    imou_life_device_key,
+    imou_life_device_keys_from_ids,
+)
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 
 
@@ -76,6 +84,87 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         return (
             self.device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
         )
+
+
+class ImouAlarmPushEntity(ImouEntity):
+    """Hold on/off from ``EVENT_IMOU_ALARM`` until an off push or a timer.
+
+    Subclasses set ``_hold_seconds`` and implement ``_alarm_state``.
+    They must also set ``_attr_is_on`` on the leaf class so Home Assistant
+    wraps it and invalidates the cached ``is_on``.
+    """
+
+    _hold_seconds: int
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ConfigEntry,
+        entity_type: str,
+        device: ImouHaDevice,
+    ) -> None:
+        """Initialize the push-hold entity."""
+        super().__init__(coordinator, config_entry, entity_type, device)
+        self._unsub_off: Callable[[], None] | None = None
+
+    def _alarm_state(self, msg_type: str | None) -> bool | None:
+        """Return True/False when this entity should change, else None."""
+        raise NotImplementedError
+
+    async def async_added_to_hass(self) -> None:
+        """Listen for alarm pushes that belong to this device."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_IMOU_ALARM, self._async_handle_alarm)
+        )
+        self.async_on_remove(self._cancel_off_timer)
+
+    @callback
+    def _cancel_off_timer(self) -> None:
+        """Drop a pending auto-off, if any."""
+        if self._unsub_off is not None:
+            self._unsub_off()
+            self._unsub_off = None
+
+    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
+        """Return True when the push is for this entity's device key."""
+        keys = imou_life_device_keys_from_ids(
+            event_data.get("device_id"),
+            event_data.get("channel_id"),
+            event_data.get("product_id"),
+        )
+        return imou_life_device_key(self.device) in keys
+
+    @callback
+    def _set_push_state(self, is_on: bool, *, auto_off: bool) -> None:
+        """Update held state and optionally schedule auto-off."""
+        self._cancel_off_timer()
+        self._attr_is_on = is_on
+        if is_on and auto_off:
+            self._unsub_off = async_call_later(
+                self.hass, self._hold_seconds, self._async_auto_off
+            )
+        if self.platform is not None:
+            self.async_write_ha_state()
+
+    @callback
+    def _async_auto_off(self, _now: datetime) -> None:
+        """Clear the held state after the interval when the cloud sends no off."""
+        self._unsub_off = None
+        self._attr_is_on = False
+        if self.platform is not None:
+            self.async_write_ha_state()
+
+    @callback
+    def _async_handle_alarm(self, event: Event[dict[str, Any]]) -> None:
+        """Turn on, hold, or clear from a classified Imou alarm push."""
+        event_data = event.data
+        if not self._event_matches_this_device(event_data):
+            return
+        state = self._alarm_state(event_data.get("msg_type"))
+        if state is None:
+            return
+        self._set_push_state(state, auto_off=state)
 
 
 @callback

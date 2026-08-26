@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 
+from .const import PUSH_DISPATCH_LIMIT
+
 if TYPE_CHECKING:
     from pyimouapi.openapi import ImouOpenApiClient
+    from pyimouapi.pic_decode import LCOpenPicDecoder
 
     from .coordinator import ImouDataUpdateCoordinator
 
@@ -29,6 +33,17 @@ class ImouRuntimeData:
     push_msg_type_counts: dict[str, int] = field(default_factory=dict)
     push_last_msg_type: str | None = None
     push_last_received_at: datetime | None = None
+    local_record_started_at: dict[str, float] = field(default_factory=dict)
+    pic_decoder: LCOpenPicDecoder | None = None
+    pic_decoder_failed: bool = False
+    # Options that force unload/setup when they change. Soft keys (passwords,
+    # decrypt switch, notify targets, camera defaults, local record path) are
+    # read from entry.options on use or refreshed in place.
+    reload_signature: tuple[object, ...] = ()
+    push_dispatch_sema: asyncio.Semaphore = field(
+        default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
+    )
+    thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

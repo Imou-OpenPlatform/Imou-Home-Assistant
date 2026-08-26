@@ -2,6 +2,75 @@
 
 ## English
 
+### [1.4.0]
+
+#### Breaking
+
+- `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. Leftover `select` registry rows are removed on setup
+- `button.siren_start` / `button.siren_stop` are replaced by a `siren` entity. Use `siren.turn_on` / `siren.turn_off` instead; leftover button registry rows are removed on setup
+
+#### Added
+
+- Config switches for pet detection, flip image, wide dynamic range, smart tracking, prompt sound, alarm-linked siren, and alarm-linked white light (shown when the device has the matching IoT ref / PaaS ability; pet detection is IoT-only)
+- Per-device **Notify on alarm** switch (default on, Home Assistant only). Account notify targets still apply; turning the switch off silences phone notifications for that device without stopping `imou_life_alarm` or local recording
+- **Local event recording**: per-camera switch (default off, Home Assistant only) plus shared save folder and clip duration under **Configure → Record on alarm**. On an alarm push, records a short cloud-HLS clip with `camera.record` (no pre-roll; uses live-stream quota; folder must be in `allowlist_external_dirs`)
+- Devices with IoT ref `15200` get an arming panel (home / away / disarm). No PIN; alarm pushes do not set triggered
+- Devices with Siren capability or IoT refs `25500`/`22200` get a `siren` entity for manual on/off (no event push required). State assumes on for about 15 seconds (typical firmware hold), or turns off immediately on a `sirenOff` push when event push is enabled
+- Cameras with a channel get `binary_sensor` **Motion** (`device_class: motion`) from event-push `videoMotion` / `human` / `mobileDetect` / PIR / person-in-area AI (`e_aiPerArea`, `e_multiVideoAiPerArea`, `e_smartMixDetect`) / line-crossing / area intrusion (`crossLineDetection`, `e_areaDetect`, `e_multiVideoAreaDetect`). It stays on for 15 seconds, or turns off immediately on a PIR-clear push. Pet / fire / gas / vehicle alarms stay on notify + `imou_life_alarm`. Needs event push with type **alarm**; the entity remains if push is off, but stays `off`. Distinct from **Picture change** / **Human detection** switches
+- Thing-model devices update switch / sensor / arming state from `iotProperty` when event push is on and subscribe types include **IoT device messages**. Interval polling skips `getIotDeviceDetailInfo` after one snapshot. Not an alarm: no phone notify, not gated by **Notify on alarm**. Uncheck `iot` or turn push off to poll properties again.
+- Optional **Show the picture in alarm notifications** (default off). Home Assistant downloads the encrypted push picture itself (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`) and decrypts it locally with the official Demo native libraries; **linux x86-64 only**, place `libLCOpenApiClient.so` and `libLCOpenSDK.so` in `/config/imou_life/native/`. Some devices additionally need their Imou Life device password. That page reports whether this host can decrypt at all, and names the missing files only while something is missing.
+- **Configure → Alarm pictures** is one page for the whole feature: the switch, the default password, and a password field for each device that needs one, labelled with the device name. Devices keyed by their serial need nothing and are not listed. Saved passwords are filled back in (masked). To delete one, use **Remove stored passwords** / **Clear default device password**. Passwords are stored on this Home Assistant and used only to decrypt.
+- Diagnostics expose `attach_decrypted_thumbnail`, `native_libs_present`, and `device_password_serials` (serial keys only; password values never included)
+- New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what.
+
+#### Changed
+
+- Depend on `pyimouapi==1.4.0` (publish that library first; do not install it on Imou Life 1.3.4)
+- Enabling event push requires a public **Callback URL**. Notify targets are a `notify.*` multi-select; an empty list means automations only. A previously saved comma-separated string is still read
+- Push notification titles use `Imou Life · {alarm_type}` in both English and Simplified Chinese
+- Companion App alarm notifications include the Home Assistant area (when set) and a local date-time. Tapping the notification opens that device's Home Assistant device page
+- English and Simplified Chinese copy aligned with the UI (entity names, event push, collection-point name **Go to collection point** / **转到收藏点**, placeholder **Select a collection point…** / **选择收藏点…**, 告警 vs 报警)
+- Companion alarm notifications can include a decrypted still when the option is on, native libs load, and the push carries a picture URL (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`). The image URL is built from Home Assistant's **external URL** so phones off the LAN can load it. Many motion pushes have no picture URL; notifications stay text-only. Skip reasons and decrypt result are debug-logged.
+- Pick **`notify.persistent_notification`** as a notify target to get the decrypted still in the Home Assistant **web notification drawer** too, one entry per device replaced by each new alarm. That entry stands in for the plain text one the target would otherwise post, so a single alarm never shows up twice; alarms with no decrypted still fall through to the target as before. With no drawer target selected nothing is written to the drawer. `imou_life_alarm` includes `thumbnail_path`.
+- The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
+- The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
+- IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`. `picUrl` may be a list of URLs, not only a string. `thumbUrl` is tried first (usually smaller), then the other fields
+- Debug `Received Imou push` logs include the original push `raw` body (`token` / `accessToken` still masked)
+- INFO logs for `setMessageCallback` redact the webhook id inside the callback URL
+- A total status-poll failure (every physical device group) is reported as a failed refresh instead of leaving stale values marked current
+- Accepted webhook pushes run at most eight dispatches at once; same-lens picture decrypts wait in line so the later alarm still gets a still
+- Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
+- The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm pictures** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
+- Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
+- Webhook push-body parse (field aliases, alarm `msgType` classify, IoT envelope, event-ref lookup, picture URLs) now uses `pyimouapi.push`. User-visible events and notifications are unchanged
+- Each **Configure** page saves on submit and returns to the menu instead of closing the dialog, so changing two sections no longer means opening Configure twice. **Done** closes it.
+- The Configure menu leads with a one-line status — alarm push, alarm pictures, record on alarm, and status polling (with a device count only while polling is on) — so no page has to be opened just to check what is on.
+- **Alarm pictures** and **Record on alarm** both say so when alarm push is off. Both run off the webhook dispatch, so until push is on they read as configured but never fire.
+- **Show the picture in alarm notifications** cannot be switched on where the native libraries are missing; the form says why instead of saving a switch that does nothing. Something already on is left editable, since the libraries can go missing later and passwords still need changing; the menu reports that state.
+- The **Callback URL** field is prefilled with the address Home Assistant generates, rather than only naming it in the description for the user to copy. A saved address still wins. If the generated one is not reachable from the internet, change the hostname and port as before.
+- Periodic rediscovery no longer spends a `getIotDeviceDetailInfo` call on every already-known IoT device. Ability refs are fetched on first discovery, and again only for device ids that just appeared.
+- Status polling shares `deviceOnline` and IoT detail reads across every Home Assistant channel of the same physical device, so an NVR no longer multiplies those calls by its channel count.
+- Saving Configure options that only affect decrypt, passwords, notify targets, camera defaults, or local recording updates the live runtime and does **not** unload the entry. That avoids a useless `setMessageCallback` off/on and a full rediscovery. Changing polling, selected devices, or event-push registration still reloads as before.
+- Camera defaults are expanded rather than collapsed, and the snapshot wait time explains what is being waited for.
+- Labels drop the internals they were leaking. The page is **Alarm pictures** rather than *Alarm image decrypt*, its switch is **Show the picture in alarm notifications** rather than *Attach decrypted alarm thumbnail*, and nothing says **TCM** at the user any more — the page simply lists the devices that need a password and says so. Option keys are unchanged, so saved settings carry over.
+
+#### Fixed
+
+- The Configure menu no longer reports a device-poll count next to **Status polling: off**
+- Enabling event push no longer saves as success when Imou rejects the callback URL. The options form stays open and shows the API error
+- A push that does not match a Home Assistant device is acknowledged (HTTP 200) and discarded, so unmatched cloud devices do not fire events or notifications
+- IoT identifier rewrite now happens before alarm classification and notify, so product-model events such as `e_storageEmpty` are no longer treated as alarms or double-notified
+- **Notify on alarm** stays on when the switch is `unavailable` or `unknown` (only an explicit off silences the device)
+- Accessory `iotEvent` with `monitor.channel` resolves to the accessory, not the parent camera, when both are registered
+- **Alarm push and notifications** says so when the callback address is only reachable on the LAN. `webhook.async_generate_url` defaults to `prefer_external=True`, which falls back to the internal address without saying so, so the prefilled suggestion could be one the Imou cloud can never POST to. The field stays editable, since a reverse proxy may expose a different hostname, port, or path.
+- Alarm pictures show up on iOS again. The iOS Companion app reads the `attachment` block and ignores `image` (`attachment.url` overrides it), and its `content-type` is a *file extension*, not a MIME type. Sending `image/jpeg` made iOS discard the attachment, so the notification arrived with no picture while Android — which reads `image` — was fine. It now sends `jpg`.
+- A missing external URL no longer fails silently. The thumbnail URL sent to phones came from `get_url(prefer_external=True)`, which quietly falls back to the **internal** address, so an instance with only a LAN address sent notifications carrying `http://192.168.x.x:8123/local/...` — unreachable from cellular, no picture, and nothing in the log to explain it. That fallback now logs a warning naming the address it used and what to set. The address that was attached is debug-logged too.
+- Live streams honour the **Video resolution** default. The camera fell back to `SD` while the options page defaulted to `HD`, so an account that never saved the page streamed standard definition while the UI said high.
+
+#### Removed
+
+- The **Video protocol** camera default is gone; live streams always request `https`. It was a choice with one sensible answer, and plain `http` stream URLs are blocked as mixed content by browsers on an HTTPS Home Assistant anyway. A stored `live_protocol` is ignored.
+
 ### [1.3.4]
 
 #### Breaking
@@ -21,10 +90,10 @@
 - Config / options flows surface Imou Open API `code`/`msg` in the UI (e.g. `OP1013` quota exceeded) instead of a generic “request failed” (#67)
 - All entity writes (switch, select, button, text) use optimistic local updates and no longer trigger an immediate full cloud poll
 - Errors raised while operating a device are translated, so the UI shows them in your language instead of the raw English message from the API
-- Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou app appears within ten minutes
+- Listing the account now runs on its own ten minute clock rather than on every status poll. Status still refreshes at the interval you configured; only the check for devices added to or removed from the account slowed down, which is where most of the Open API quota was going. A device added in the Imou Life app appears within ten minutes
 - Settings that configure a device (detection switches, volume, night vision, thresholds, timers, restart) are filed under the device's configuration section instead of sitting among its primary controls. Entities in that section are hidden from auto-generated dashboards and are not exposed to Assist by default; the entities themselves are unchanged, so anything referring to them by entity id keeps working
 - Invalid credentials now end the polling and ask you to sign in again, rather than retrying a secret the integration already knows is refused
-- Setting up an account that holds no devices stores an empty device list. A device bound later from the Imou app is not polled until you select it under Configure → Manage devices — same as when the account already had cameras at setup
+- Setting up an account that holds no devices stores an empty device list. A device bound later from the Imou Life app is not polled until you select it under Configure → Manage devices — same as when the account already had cameras at setup
 - Depend on `pyimouapi==1.3.5`, which brings concurrent status reads, a per-host connection cap so snapshot downloads cannot stall status polling, credentials kept out of debug logs, and several connection-leak and paging fixes
 - A camera that cannot produce a snapshot reports why, in your language, instead of showing a blank tile
 - One unreadable accessory no longer leaves the whole account showing as unavailable
@@ -34,8 +103,8 @@
 #### Fixed
 
 - On IPC-K7C (product_id `FKX9UYL4`), `motion_detect` skips advertised but unusable refs `14800` and `305000` and binds `108800`, so `switch.turn_on` / `turn_off` no longer returns `40999` (#77). The switch remains
-- Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou app kept showing after save
-- Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou app
+- Saving options with **Continue without binding** when the account has no devices replaces the old device selection with an empty list (including one stored from setup in entry data). Previously the previous ids were written back, so devices deleted in the Imou Life app kept showing after save
+- Submitting **General** or **Event push** does not write a device whitelist. A list is stored only when you submit **Manage devices** (or bind there). The old options wizard always ended on the device list, which could snapshot the account and filter out a camera bound later from the Imou Life app
 - After a reload, the first account listing detaches Home Assistant devices that are no longer on the account. Unload leaves registry entries alone by design; the next setup used to skip cleanup when starting from an empty map, so deleted devices stayed visible with their last status. Deselecting a device in options only stops polling — it does not remove the Home Assistant device
 - Refusing to delete a multi-channel camera/NVR channel raises a clear error in the UI instead of a silent rejection that the frontend showed as `[object Object]`. Devices already gone from the account can be removed from Home Assistant again
 - Device **Download diagnostics** now includes that device's ids, model, status, and entity summaries (secrets still redacted). Previously only account-level diagnostics existed, so the device-page download had almost nothing useful for a single camera
@@ -73,7 +142,7 @@
 
 #### Changed
 
-- Event push always syncs to the Imou app (`basePush=1`); removed the Base push option from Configure
+- Event push always syncs to the Imou Life app (`basePush=1`); removed the Base push option from Configure
 - Webhook `msg_type` uses top-level `msgType` only; still expose `product_id` (`pid`) and `outputData`; treat `iotEvent` / `sirenOn` / `sirenOff` as alarms
 - Webhook: resolve numeric / `iotEvent` push types to product-model event identifiers via pyimouapi 1.3.2 (alarm classification still uses top-level `msgType`)
 - Depend on `pyimouapi==1.3.2`
@@ -204,6 +273,75 @@
 ---
 
 ## 中文
+
+### [1.4.0]
+
+#### 破坏性变更
+
+- `select.*_mode` 已替换为 `alarm_control_panel`。自动化需从 `select.select_option`（`home`/`away`/`disarm`）改为 `alarm_control_panel.alarm_arm_home`、`alarm_control_panel.alarm_arm_away`、`alarm_control_panel.alarm_disarm`。升级后遗留的 `select` 注册行会在加载时删除
+- `button.siren_start` / `button.siren_stop` 已替换为 `siren` 实体。请改用 `siren.turn_on` / `siren.turn_off`；遗留的 button 注册行会在加载时删除
+
+#### 新增
+
+- 配置区开关：宠物检测、画面翻转、宽动态、智能追踪、设备提示音、告警联动警笛、告警联动白光灯（设备具备对应 IoT ref / PaaS 能力时出现；宠物检测仅 IoT）
+- 每台设备一个 **告警时通知** 开关（默认开，只存在 Home Assistant）。账号级通知目标仍生效；关掉后只静音该设备的手机通知，不影响 `imou_life_alarm` 和本地录像
+- **告警本地录像**：每路镜头一个开关（默认关，只存在 Home Assistant），账号共用保存目录和片段时长在 **配置 → 告警时录像**。收到告警推送后用 `camera.record` 从云端 HLS 录短视频（无预录、消耗直播配额、目录须加入 `allowlist_external_dirs`）
+- 具备 IoT ref `15200` 的设备提供布防面板（在家 / 离家 / 撤防）。无密码，告警不会把面板打成 triggered
+- 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体手动开/关（不依赖事件推送）；状态约 15 秒后自动复位（与固件常见鸣响时长一致），若已开事件推送则收到 `sirenOff` 立即关
+- 有通道的摄像头增加 `binary_sensor` **动态侦测**（`device_class: motion`），由事件推送的画面变化 / 人形 / PIR / 区域人形 AI（`e_aiPerArea`、`e_multiVideoAiPerArea`、`e_smartMixDetect`）/ 越线与区域入侵（`crossLineDetection`、`e_areaDetect`、`e_multiVideoAreaDetect`）置位，约 15 秒后关，PIR 清除立即关。宠物 / 火警 / 燃气 / 车辆仍走通知和 `imou_life_alarm`。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，只是一直 `off`。与 **画面变化** / **人形检测** 开关不是同一实体
+- 启用事件推送且订阅含 **物模型设备消息** 时，物模型设备的开关 / 传感器 / 布防由 `iotProperty` 即时更新；间隔轮询在一次快照后不再拉 `getIotDeviceDetailInfo`。这不是告警：不发手机通知，也不受 **告警时通知** 约束。取消勾选 `iot` 或关掉推送则属性重新轮询。
+- 可选 **在告警通知中显示图片**（默认关）：由 Home Assistant 自己下载推送里的密文图片（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`），再用官方 Demo 原生库在本机解密；**仅 linux x86-64**，将 `libLCOpenApiClient.so` 与 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`。部分设备还需要填写乐橙 App 里的设备密码。该页会写明本机能否解密；只有缺文件时才提示要放哪两个 `.so`。
+- **配置 → 告警图片** 一页管完整个功能：开关、默认密码，以及每台需要密码的设备一个密码框（用设备名标注）。用序列号解密的设备不需要填，也不会列出。已存密码会回填（掩码显示）；要删除用 **删除已存密码** / **清除默认设备密码**。密码保存在本机，仅用于解密。
+- 诊断信息包含 `attach_decrypted_thumbnail`、`native_libs_present`、`device_password_serials`（仅序列号列表，不含密码值）
+- 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表。
+
+#### 变更
+
+- 依赖 `pyimouapi==1.4.0`（须先发布该库；不要在 Imou Life 1.3.4 上单独安装）
+- 启用事件推送必须填写公网 **回调地址**。通知目标改为 `notify.*` 多选；留空则只走自动化。以前保存的逗号分隔字符串仍能读
+- 推送通知标题中英均为 `Imou Life · {alarm_type}`
+- Companion App 告警通知会带上 Home Assistant 区域（若已设置）和本地日期时间。点通知打开该设备的 Home Assistant 设备页
+- 中英文界面文案对齐（实体名称、事件推送、收藏点名称 **转到收藏点** / **Go to collection point**、占位 **选择收藏点…** / **Select a collection point…**，「告警」统一用语）
+- 开启选项且原生库可用、推送带图片 URL（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`）时，Companion 告警通知可附带解密缩略图。图片地址用 Home Assistant **外网 URL** 拼成绝对路径，手机不在局域网也能加载。许多移动侦测推送没有图片 URL，此时仍为纯文本通知。跳过原因与解密结果会打 debug 日志。
+- 想在 Home Assistant **网页通知栏**里也看到解密图，把 **`notify.persistent_notification`** 选进通知目标：每台设备一条，新告警覆盖旧的。这条带图的会顶替该目标本来要发的纯文本，同一个告警不会出现两条；没有解密图的告警仍照常走该目标。没选网页通知目标时，通知栏不会写入任何内容。`imou_life_alarm` 事件带 `thumbnail_path`。
+- 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
+- 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
+- IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用；`picUrl` 可以是 URL 数组，不限于单个字符串。取图优先 `thumbUrl`（通常更小），再才是其它字段
+- debug 日志 `Received Imou push` 会带上原始推送 `raw` 消息体（`token` / `accessToken` 仍打码）
+- `setMessageCallback` 的 INFO 日志会打码回调地址里的 webhook id
+- 整账号状态轮询全部失败时标为刷新失败，而不再把过期值当成当前状态
+- 已接受的 webhook 推送最多同时跑 8 条后台任务；同一镜头上重叠的告警图解密会排队，后到的仍会带图
+- 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
+- **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
+- Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致
+- Webhook 消息体解析（字段别名、报警 `msgType` 分类、IoT 信封、event ref、图片 URL）改走 `pyimouapi.push`；用户可见事件与通知不变
+- **配置** 里每一页提交后即保存并回到菜单，不再直接关掉整个对话框；要改两处设置不用再进两次「配置」。关闭改由 **完成** 这一项。
+- 配置菜单开头给出一行状态：告警推送、告警图片、告警时录像、状态轮询（仅在轮询开启时带设备数）。不必逐页点进去看开没开。
+- **告警图片** 和 **告警时录像** 在告警推送未开启时会明确提示。这两项都跑在 Webhook 派发链路上，推送没开时看着像配好了，实际永远不会触发。
+- 本机缺少原生库时，**在告警通知中显示图片** 不允许打开，表单会说明原因，而不是存下一个打开了也没用的开关。已经打开的不受影响：库文件可能是后来丢的，密码仍然要能改；这种状态由菜单那行状态负责说明。
+- **回调地址** 输入框会预填 Home Assistant 生成的地址，不再只写在说明里让用户自己抄。已保存的地址优先。生成的地址若公网不可达，照旧只改主机名和端口。
+- 周期性重新发现不再对每台已有 IoT 设备再打一次 `getIotDeviceDetailInfo`。能力 refs 只在首次发现时拉取，之后只为新出现的设备 id 再取。
+- 状态轮询在同一物理设备的多个 Home Assistant 通道之间共享 `deviceOnline` 与 IoT detail，NVR 不再按通道数倍增这两类调用。
+- 只改解密、密码、通知目标、摄像头默认或本地录像相关选项时，会就地更新运行时，**不会**卸载重载集成，从而避免无意义的 `setMessageCallback` 关/开和全量重新发现。改轮询、所选设备或事件推送注册仍会重载。
+- 摄像头默认改为展开而不是折叠，抓图等待时间的说明写清在等什么。
+- 界面文案不再泄露实现细节。页面从「告警图片解密」改名为 **告警图片**，其中的开关从「贴解密告警缩略图」改为 **在告警通知中显示图片**，面向用户的文案里也不再出现 **TCM** —— 页面直接把需要密码的设备列出来并说明。选项存储键未变，已保存的设置照常生效。
+
+#### 修复
+
+- 状态轮询关闭时，配置菜单不再在「已关」后面再写一轮询设备数
+- 启用事件推送时，若 Imou 拒绝回调地址，不再当作成功保存。选项表单会留在当前页并显示接口错误
+- 对不上 Home Assistant 设备注册表的推送仍返回 HTTP 200，但会丢弃，避免未接入的云端设备触发事件或通知
+- IoT 先改写 identifier 再分类/通知，因此 `e_storageEmpty` 等产品型号事件不再当告警、也不再双发通知
+- **告警时通知** 在开关为 `unavailable` / `unknown` 时仍视为开（只有显式关掉才静音）
+- 配件 `iotEvent` 带 `monitor.channel` 时，若摄像头和配件都已注册，会打到配件而不是父摄像头
+- **告警推送与通知** 会在回调地址只能局域网访问时明确提示。`webhook.async_generate_url` 的默认参数是 `prefer_external=True`，没配外网地址时会悄悄退回内网地址，于是预填的建议地址可能是 Imou 云永远推不到的。输入框仍可编辑，因为反向代理对外的主机名、端口甚至路径都可能不同。
+- iOS 上报警图片能正常显示了。iOS 版 Companion 读的是 `attachment` 而不是 `image`（`attachment.url` 会覆盖 `image`），并且它的 `content-type` 要的是**文件扩展名**而不是 MIME 类型。之前发的 `image/jpeg` 会让 iOS 直接丢掉附件，通知里就没有图；而 Android 读的是 `image`，所以一直正常。现在改为发 `jpg`。
+- 没配外网地址不再静默失败。发给手机的缩略图地址来自 `get_url(prefer_external=True)`，而它在没有外网地址时会悄悄退回**内网**地址，于是只配了局域网地址的实例发出的通知里带的是 `http://192.168.x.x:8123/local/...`——手机在蜂窝网下根本拉不到，图片不显示，日志里也没有任何线索。现在这种退化会打一条告警，写明用了哪个地址、该去配什么。实际附带的地址也会记进 debug 日志。
+- 直播按 **视频分辨率** 的默认值走。此前相机侧兜底是 `SD`，而配置页默认写的是 `HD`，从没保存过这一页的账号实际在看标清，界面却显示高清。
+
+#### 移除
+
+- 去掉摄像头默认里的 **视频协议**，直播固定用 `https`。这个选项实际只有一个合理答案：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。已存的 `live_protocol` 值会被忽略。
 
 ### [1.3.4]
 

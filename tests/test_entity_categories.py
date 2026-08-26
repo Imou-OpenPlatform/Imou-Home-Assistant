@@ -22,11 +22,18 @@ from homeassistant.const import EntityCategory
 CONFIG_SWITCHES = {
     "ab_alarm_sound",
     "audio_encode_control",
+    "frame_reverse",
     "header_detect",
     "light",
+    "linkage_siren",
+    "linkage_white_light",
     "motion_detect",
+    "pet_detect",
+    "play_sound",
+    "smart_track",
+    "wide_dynamic",
 }
-CONFIG_SELECTS = {"device_volume", "mode", "night_vision_mode"}
+CONFIG_SELECTS = {"device_volume", "night_vision_mode"}
 DIAGNOSTIC_SENSORS = {PARAM_STATUS, "battery", "storage_used"}
 
 
@@ -73,7 +80,6 @@ def test_text_entities_are_configuration() -> None:
     [
         (PARAM_RESTART_DEVICE, EntityCategory.CONFIG),
         ("ptz_up", None),
-        ("siren_start", None),
         ("mute", None),
     ],
 )

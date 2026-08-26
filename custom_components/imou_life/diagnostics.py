@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from importlib.metadata import version
 from typing import Any
 
@@ -16,6 +17,8 @@ from .const import (
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEVICE_PASSWORDS,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_STATUS,
@@ -24,6 +27,11 @@ from .const import (
     imou_life_device_key,
 )
 from .helpers import get_selected_device_ids
+from .pic_thumbnail import (
+    native_libs_present,
+    native_platform_label,
+    native_platform_supported,
+)
 from .runtime_data import get_runtime_data
 
 # Resolved at import time: reading package metadata touches the filesystem and
@@ -34,6 +42,14 @@ _PYIMOUAPI_VERSION = version("pyimouapi")
 def _redact_id(value: str, keep: int) -> str:
     """Return a partially redacted identifier for diagnostics."""
     return f"{value[:keep]}…" if len(value) > keep else value
+
+
+def _device_password_serials(options: Mapping[str, Any]) -> list[str]:
+    """Return device serials with stored passwords (values never included)."""
+    passwords = options.get(PARAM_DEVICE_PASSWORDS)
+    if not isinstance(passwords, dict):
+        return []
+    return sorted(key for key in passwords if key)
 
 
 def _entity_state_summary(entities: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -85,6 +101,7 @@ def _device_diagnostics_payload(
             "selects": _entity_state_summary(device.selects),
             "buttons": sorted(device.buttons.keys()),
             "texts": _entity_state_summary(device.texts),
+            "alarm_control_panel": device.alarm_control_panel,
         },
     }
 
@@ -143,6 +160,13 @@ async def async_get_config_entry_diagnostics(
         "webhook_url_configured": bool(webhook_url),
         "last_update_success": last_update_success,
         "pyimouapi_version": _PYIMOUAPI_VERSION,
+        "attach_decrypted_thumbnail": bool(
+            entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
+        ),
+        "native_libs_present": native_libs_present(hass),
+        "native_platform": native_platform_label(),
+        "native_platform_supported": native_platform_supported(),
+        "device_password_serials": _device_password_serials(entry.options),
         "event_push": event_push,
     }
 

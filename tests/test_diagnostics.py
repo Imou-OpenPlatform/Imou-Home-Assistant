@@ -7,6 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DEFAULT_DEVICE_PASSWORD,
+    PARAM_DEVICE_PASSWORDS,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_WEBHOOK_ID,
     imou_life_device_key,
@@ -17,7 +20,7 @@ from custom_components.imou_life.diagnostics import (
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.helpers import device_registry as dr
-from pyimouapi.const import PARAM_STATE
+from pyimouapi.const import PARAM_REF, PARAM_STATE, PARAM_SUPPORTED, PARAM_VALUE_TYPE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -127,4 +130,46 @@ async def test_device_diagnostics_includes_device_fields(hass) -> None:
     assert result["selected"] is True
     assert result["status"] == DeviceStatus.ONLINE.value
     assert result["entities"]["switches"] == {"motion_detect": True}
+    assert result["entities"]["alarm_control_panel"] is None
+
+    panel = {
+        PARAM_REF: "15200",
+        PARAM_STATE: "away",
+        PARAM_SUPPORTED: ["home", "away", "disarm"],
+        PARAM_VALUE_TYPE: "int",
+    }
+    device.alarm_control_panel = panel
+    result = await async_get_device_diagnostics(hass, entry, device_entry)
+    assert result["entities"]["alarm_control_panel"] == panel
     assert "app_secret" not in result
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_diagnostics_redacts_device_passwords(hass) -> None:
+    """Diagnostics must not expose stored device password values."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "abcd1234efgh5678"},
+        options={
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+            PARAM_DEFAULT_DEVICE_PASSWORD: "default-secret-pw",
+            PARAM_DEVICE_PASSWORDS: {"SN1": "per-device-secret-pw"},
+        },
+    )
+    entry.add_to_hass(hass)
+    coordinator = MagicMock()
+    coordinator.last_update_success = True
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator)
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    dump = str(result)
+
+    assert "default-secret-pw" not in dump
+    assert "per-device-secret-pw" not in dump
+    assert "default_device_password" not in result
+    assert PARAM_DEVICE_PASSWORDS not in result
+    assert result["attach_decrypted_thumbnail"] is True
+    assert result["device_password_serials"] == ["SN1"]
+    assert "native_libs_present" in result
+    assert "native_platform" in result
+    assert "native_platform_supported" in result

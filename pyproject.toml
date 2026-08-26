@@ -14,7 +14,7 @@ pyimouapi = { path = "../Py-Imou-Open-Api", editable = true }
 [dependency-groups]
 dev = [
   "homeassistant==2025.4.4",
-  "pyimouapi==1.3.5",
+  "pyimouapi==1.4.0",
   "pytest-homeassistant-custom-component==0.13.236",
   "pytest-asyncio>=0.24.0",
   "pytest-timeout>=2.3.0",
