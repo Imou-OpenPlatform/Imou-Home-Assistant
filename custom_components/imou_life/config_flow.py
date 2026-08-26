@@ -839,17 +839,18 @@ class ImouOptionsFlow(OptionsFlow):
             vol.Optional(PARAM_ATTACH_DECRYPTED_THUMBNAIL, default=False): bool,
             vol.Optional(PARAM_DEFAULT_DEVICE_PASSWORD, default=""): password_selector,
         }
-        # Never suggest stored secrets into the UI. Empty fields keep the
-        # previous values on save; rejected submits may still re-show typed text.
+        # Prefill stored passwords so reopening the page does not look empty.
+        # Empty fields still keep the previous values on save; rejected
+        # submits may still re-show typed text.
         suggested: dict[str, Any] = {
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: bool(
                 options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL, False)
             ),
-            PARAM_DEFAULT_DEVICE_PASSWORD: "",
+            PARAM_DEFAULT_DEVICE_PASSWORD: stored_default,
         }
-        for field, _serial in self._password_fields():
+        for field, serial in self._password_fields():
             fields[vol.Optional(field, default="")] = password_selector
-            suggested[field] = ""
+            suggested[field] = str(stored.get(serial) or "")
         if stored_default:
             fields[vol.Optional(_FIELD_CLEAR_DEFAULT_PASSWORD, default=False)] = bool
             suggested[_FIELD_CLEAR_DEFAULT_PASSWORD] = False

@@ -154,7 +154,7 @@
       },
       "alarm_image_decrypt": {
         "title": "告警图片",
-        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
+        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。已存密码会回填到输入框（掩码显示）。密码框留空表示不改。已存 {password_count} 个（{configured_serials}）。",
         "data": {
           "attach_decrypted_thumbnail": "在告警通知中显示图片",
           "default_device_password": "默认设备密码",

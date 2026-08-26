@@ -422,6 +422,8 @@ async def test_options_alarm_image_decrypt_add_and_delete(hass) -> None:
     )
     assert result["description_placeholders"]["password_count"] == "1"
     assert "SN1" in result["description_placeholders"]["configured_serials"]
+    schema = result.get("data_schema") or result.get("schema")
+    assert _schema_suggested(schema, "Hallway (SN1)") == "pw"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {"remove_device_passwords": ["SN1"]},
@@ -458,8 +460,7 @@ async def test_options_alarm_image_password_empty_keeps_stored_value(hass) -> No
         result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
     )
     schema = result.get("data_schema") or result.get("schema")
-    # Stored secrets are never suggested back into the password box.
-    assert _schema_suggested(schema, "SN1") == ""
+    assert _schema_suggested(schema, "SN1") == "old-pw"
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -484,7 +485,7 @@ async def test_options_alarm_image_default_password_empty_keeps_stored(hass) -> 
         result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
     )
     schema = result.get("data_schema") or result.get("schema")
-    assert _schema_suggested(schema, PARAM_DEFAULT_DEVICE_PASSWORD) == ""
+    assert _schema_suggested(schema, PARAM_DEFAULT_DEVICE_PASSWORD) == "secret-pw"
     assert "clear_default_device_password" in _schema_field_names(schema)
 
     result = await hass.config_entries.options.async_configure(

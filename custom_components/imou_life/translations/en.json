@@ -154,7 +154,7 @@
       },
       "alarm_image_decrypt": {
         "title": "Alarm pictures",
-        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
+        "description": "{push_hint}Alarm pictures arrive encrypted, so Home Assistant has to decrypt one locally before it can go into a notification.\n\nStatus: {native_hint}\n\nThe devices listed below need their Imou Life device password; devices that are not listed need nothing. Saved passwords are filled back in (masked). A blank field keeps the stored password. Stored: {password_count} ({configured_serials}).",
         "data": {
           "attach_decrypted_thumbnail": "Show the picture in alarm notifications",
           "default_device_password": "Default device password",
