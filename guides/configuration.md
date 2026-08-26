@@ -79,14 +79,37 @@ Pictures are written to `/local/imou_life/thumbs/` and served **without authenti
 
 On iOS an unexpanded notification shows a small thumbnail — long-press or pull it down to see the full-size picture. Alarm stills come from the cloud at the resolution it chose, commonly 640×480.
 
+<a id="record-on-alarm"></a>
+
 ### Record on alarm
+
+When an Imou **alarm** is pushed, cameras whose **Record on alarm** switch is on save a short MP4 from the **cloud HLS live stream**. The integration does this itself — you do not write an automation. This is post-event recording, not an NVR. Dual-lens devices have one switch per channel. Each clip consumes **Open Platform live-view quota**.
 
 | Option | What it does | Default |
 | --- | --- | --- |
-| Save folder | Where clips are written, for example `/media/imou`. Must be listed in `allowlist_external_dirs`. Empty means no recording. | empty |
+| Save folder | Where clips are written, for example `/media/imou`. Must be listed in `allowlist_external_dirs` (creating the folder alone is not enough). Empty means no recording. | empty |
 | Clip duration | Seconds recorded after an alarm, 15–180. Uses live-stream quota. | 60 |
 
-Each camera has its own **Record on alarm** switch on the device page. The integration records on the alarm push itself — no automation. See [Record on alarm](local-event-recording.md#english) for the full walkthrough.
+These two fields apply to every camera on this account and do not turn recording on by themselves. On each camera device page, turn on **Record on alarm** (configuration section) for the lenses you want. Default is off so one alarm does not start pulling live streams for every device.
+
+On Home Assistant OS, `/media/imou` is typical. Merge this into your existing `homeassistant:` block, then restart. Core / development installs should use an absolute path under the config folder instead.
+
+```yaml
+homeassistant:
+  allowlist_external_dirs:
+    - /media/imou
+```
+
+After a real alarm, a file like `/media/imou/<deviceId>_<channel>_<timestamp>.mp4` should appear. Wait until the camera entity is not `unavailable`.
+
+Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch back to the Imou cloud, downloading Imou **cloud** history clips, or local RTSP (live view is cloud HLS). Overlapping alarms on the same camera are skipped until the current clip duration elapses.
+
+| Symptom | What to do |
+| --- | --- |
+| Switch on but no file | Confirm this page has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
+| Options save refused / path not allowed | Folder is not under `allowlist_external_dirs`, directory missing, or absolute path mismatch. Fix and restart. |
+| Camera unavailable | Wait until the camera state is not `unavailable` after restart. |
+| Empty / failed MP4 | Stream URL expired, network issue, or quota; retry; check logs around `getLiveStreamInfo` / stream / ffmpeg. On Home Assistant Core, if logs say Stream is not set up, add `stream:` to `configuration.yaml` and restart. |
 
 ### Devices
 
@@ -107,7 +130,6 @@ Each camera has its own **Record on alarm** switch on the device page. The integ
 ### Related
 
 - [README](../README.md#english) — installation and features
-- [Record on alarm](local-event-recording.md) — end-to-end recording setup
 
 ---
 
@@ -186,14 +208,37 @@ Each camera has its own **Record on alarm** switch on the device page. The integ
 
 iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是原图**。告警图由云端按它选定的清晰度下发，常见是 640×480。
 
+<a id="record-on-alarm-zh"></a>
+
 ### 告警时录像
+
+乐橙**告警**推送到 Home Assistant 后，打开了 **告警时录像** 开关的摄像头会从**云端 HLS 直播流**保存一段短 MP4。集成自己完成，不用写自动化。这是事后短视频，不是 NVR。双目设备按通道各有一个开关。每次录制消耗开放平台**直播配额**。
 
 | 选项 | 作用 | 默认 |
 | --- | --- | --- |
-| 保存目录 | 片段写到哪里，例如 `/media/imou`。必须在 `allowlist_external_dirs` 中。留空表示不录。 | 空 |
+| 保存目录 | 片段写到哪里，例如 `/media/imou`。必须在 `allowlist_external_dirs` 中（只建文件夹不够）。留空表示不录。 | 空 |
 | 片段时长 | 告警后录制的秒数，15–180。会占用直播配额。 | 60 |
 
-每个摄像头在设备页上都有自己的 **告警时录像** 开关。集成在告警推送时自己录，不用写自动化。完整步骤见 [告警时录像](local-event-recording.md#zh-hans)。
+这两项对账号下所有摄像头共用，本身不会打开录像。在各摄像头设备页打开 **告警时录像**（配置区），只给需要的镜头打开。默认关闭，避免一次告警把账号下所有设备都拉去直播。
+
+Home Assistant OS 上常用 `/media/imou`。把下面这段**合并**进已有的 `homeassistant:`，然后重启。Core / 开发环境请用配置目录下的绝对路径。
+
+```yaml
+homeassistant:
+  allowlist_external_dirs:
+    - /media/imou
+```
+
+真实告警之后应出现类似 `/media/imou/<deviceId>_<channel>_<时间戳>.mp4` 的文件。等相机实体不是 `unavailable` 再测。
+
+不支持：可靠预录、7×24 NVR 式录像、把开关写回乐橙云、下载乐橙**云端历史**录像、局域网 RTSP（当前直播为云端 HLS）。同一摄像头在当前片段时长内的重复告警会被跳过。
+
+| 现象 | 处理 |
+| --- | --- |
+| 开关已开但没有文件 | 确认本页已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
+| 选项保存被拒 / 路径不在白名单 | 目录不在 `allowlist_external_dirs`、文件夹不存在、或绝对路径不一致。修正后重启。 |
+| 相机不可用 | 重启后等待相机状态非 `unavailable`。 |
+| MP4 为空或失败 | 流地址过期、网络或配额问题；重试；查看 `getLiveStreamInfo` / stream / ffmpeg 相关日志。Home Assistant Core 若日志说 Stream 未启用，在 `configuration.yaml` 增加 `stream:` 后重启。 |
 
 ### 设备
 
@@ -214,4 +259,3 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 ### 相关文档
 
 - [README](../README.md#zh-hans) —— 安装与功能
-- [告警时录像](local-event-recording.md#zh-hans) —— 录像的完整配置流程
