@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDeviceManager
@@ -41,6 +42,23 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 _UNSET = object()
+
+_REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
+
+
+def async_remove_replaced_legacy_entities(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Drop leftover select.mode and siren button rows from 1.3.x upgrades."""
+    registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        drop_select = entity_entry.domain == "select" and unique_id.endswith("$mode")
+        drop_button = entity_entry.domain == "button" and unique_id.endswith(
+            _REPLACED_BUTTON_SUFFIXES
+        )
+        if drop_select or drop_button:
+            registry.async_remove(entity_entry.entity_id)
 
 
 def options_reload_signature(options: Mapping[str, Any]) -> tuple[object, ...]:
@@ -109,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         )
 
     await coordinator.async_config_entry_first_refresh()
+    async_remove_replaced_legacy_entities(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback

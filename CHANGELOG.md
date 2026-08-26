@@ -6,8 +6,8 @@
 
 #### Breaking
 
-- `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. After upgrade, leftover `select` registry rows may be deleted manually
-- `button.siren_start` / `button.siren_stop` are replaced by a `siren` entity. Use `siren.turn_on` / `siren.turn_off` instead; delete leftover button registry rows after upgrade
+- `select.*_mode` has been replaced by `alarm_control_panel`. Automations must switch from `select.select_option` (`home`/`away`/`disarm`) to `alarm_control_panel.alarm_arm_home`, `alarm_control_panel.alarm_arm_away`, and `alarm_control_panel.alarm_disarm`. Leftover `select` registry rows are removed on setup
+- `button.siren_start` / `button.siren_stop` are replaced by a `siren` entity. Use `siren.turn_on` / `siren.turn_off` instead; leftover button registry rows are removed on setup
 
 #### Added
 
@@ -35,8 +35,10 @@
 - The alarm picture download retries for a few seconds. The push regularly reaches Home Assistant before the camera has finished uploading the still, so the CDN answers `404` or hands back a half-written object; both used to be treated as a permanent failure. Attempts and elapsed time are debug-logged.
 - The integration downloads the encrypted picture itself and calls the SDK's `CDecrypter` on those bytes, instead of `DecryptPicture` / `DecryptPictureEx`. Those wrappers download the picture themselves after an `/openapi/strongDidCheck` call, and their downloader truncates on some alarm CDNs, failing as `code=1` on pictures that decrypt fine. Decrypting locally means **no `strongDidCheck`, no OpenAPI `accessToken` per alarm, and no `cacert.pem`**; only the two `.so` files are still required. Downloads are checked against `Content-Length` and rejected when short.
 - IoT `picUrlArr` is accepted as well as `picUrlArray` / `picUrl` / `thumbUrl`
-- Debug `Received Imou push` logs include the push `token` (no longer masked)
 - Debug `Received Imou push` logs include the original push `raw` body (`token` / `accessToken` still masked)
+- INFO logs for `setMessageCallback` redact the webhook id inside the callback URL
+- A total status-poll failure (every physical device group) is reported as a failed refresh instead of leaving stale values marked current
+- Accepted webhook pushes run at most eight dispatches at once; a second alarm picture decrypt for the same camera channel is skipped while one is already in flight
 - Simplified Chinese alarm titles drop feature-style 「检测」 wording (e.g. 区域入侵, 烟感报警, 有人或车出现)
 - The **Configure** menu is reorganised so each entry is one job: **Alarm push and notifications** keeps the webhook, message types, and notify targets; **Alarm pictures** gains the switch and the default password that used to sit under notifications; **Record on alarm** is its own entry instead of a section; and **Choose devices to poll** / **Bind a new device** are reachable directly instead of through a devices submenu
 - Companion alarm text gains a labels line when the Home Assistant device has labels, in the same optional style as the area line
@@ -275,8 +277,8 @@
 
 #### 破坏性变更
 
-- `select.*_mode` 已替换为 `alarm_control_panel`。自动化需从 `select.select_option`（`home`/`away`/`disarm`）改为 `alarm_control_panel.alarm_arm_home`、`alarm_control_panel.alarm_arm_away`、`alarm_control_panel.alarm_disarm`。升级后实体注册表可能留下旧 select，可手动删除
-- `button.siren_start` / `button.siren_stop` 已替换为 `siren` 实体。请改用 `siren.turn_on` / `siren.turn_off`；升级后可手动删除遗留的 button 注册行
+- `select.*_mode` 已替换为 `alarm_control_panel`。自动化需从 `select.select_option`（`home`/`away`/`disarm`）改为 `alarm_control_panel.alarm_arm_home`、`alarm_control_panel.alarm_arm_away`、`alarm_control_panel.alarm_disarm`。升级后遗留的 `select` 注册行会在加载时删除
+- `button.siren_start` / `button.siren_stop` 已替换为 `siren` 实体。请改用 `siren.turn_on` / `siren.turn_off`；遗留的 button 注册行会在加载时删除
 
 #### 新增
 
@@ -304,8 +306,10 @@
 - 告警图片下载改为短时重试。推送经常比图片先到：设备还没把图上传完，CDN 会返回 `404` 或者只给出半个对象，之前这两种都被当成永久失败。重试次数与耗时记在 debug 日志里。
 - 改为由集成自己下载加密图片，再调 SDK 的 `CDecrypter` 解密，不再用 `DecryptPicture` / `DecryptPictureEx`。那两个封装会先调 `/openapi/strongDidCheck` 再自己下载，而其下载在部分告警 CDN 上会截断，表现为明明能解的图返回 `code=1`。本地解密因此**不需要 strongDidCheck、不需要每条告警取开放平台 `accessToken`、也不需要 `cacert.pem`**，只需两个 `.so`。下载会与 `Content-Length` 比对，长度不符即丢弃。
 - IoT 的 `picUrlArr` 与 `picUrlArray` / `picUrl` / `thumbUrl` 一样可用
-- debug 日志 `Received Imou push` 不再把推送 `token` 打码
 - debug 日志 `Received Imou push` 会带上原始推送 `raw` 消息体（`token` / `accessToken` 仍打码）
+- `setMessageCallback` 的 INFO 日志会打码回调地址里的 webhook id
+- 整账号状态轮询全部失败时标为刷新失败，而不再把过期值当成当前状态
+- 已接受的 webhook 推送最多同时跑 8 条后台任务；同一镜头的告警图若已在解密，后到的会跳过下载
 - 简体中文告警标题去掉「检测」这类功能名写法（改为区域入侵、烟感报警、有人或车出现）
 - **配置** 菜单重新整理，每一项只做一件事：**告警推送与通知** 保留 Webhook、消息类型和通知目标；原先放在通知区的解密开关和默认设备密码移到 **告警图片**；**告警时录像** 从折叠区改成独立菜单项；**选择要轮询的设备** 与 **绑定新设备** 直接进入，不再经过「选择与绑定设备」子菜单
 - Home Assistant 设备带标签（label）时，Companion 告警正文会多一行标签，样式与区域那一行一致

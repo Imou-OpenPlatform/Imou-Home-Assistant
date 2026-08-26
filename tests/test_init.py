@@ -8,6 +8,7 @@ import pytest
 from custom_components.imou_life import (
     async_migrate_entry,
     async_remove_config_entry_device,
+    async_remove_replaced_legacy_entities,
     async_unload_entry,
 )
 from custom_components.imou_life.const import (
@@ -18,6 +19,7 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -33,6 +35,63 @@ async def test_migrate_entry_adds_missing_webhook_id(hass) -> None:
     assert entry.version == 2
     assert PARAM_WEBHOOK_ID in entry.data
     assert entry.data[PARAM_WEBHOOK_ID]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> None:
+    """Upgrade leftover select.mode and siren buttons must not stay as ghosts."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
+    entry.add_to_hass(hass)
+    device_registry = dr.async_get(hass)
+    device_entry = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "cam_0")},
+        name="Cam",
+    )
+    registry = er.async_get(hass)
+    mode_select = registry.async_get_or_create(
+        "select",
+        DOMAIN,
+        "cam_0$mode",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    night = registry.async_get_or_create(
+        "select",
+        DOMAIN,
+        "cam_0$night_vision_mode",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    siren_start = registry.async_get_or_create(
+        "button",
+        DOMAIN,
+        "cam_0$siren_start",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    siren_stop = registry.async_get_or_create(
+        "button",
+        DOMAIN,
+        "cam_0$siren_stop",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    panel = registry.async_get_or_create(
+        "alarm_control_panel",
+        DOMAIN,
+        "cam_0$mode",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+
+    async_remove_replaced_legacy_entities(hass, entry)
+
+    assert registry.async_get(mode_select.entity_id) is None
+    assert registry.async_get(siren_start.entity_id) is None
+    assert registry.async_get(siren_stop.entity_id) is None
+    assert registry.async_get(night.entity_id) is not None
+    assert registry.async_get(panel.entity_id) is not None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

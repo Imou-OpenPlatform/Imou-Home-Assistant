@@ -1936,3 +1936,39 @@ async def test_webhook_drawer_target_still_fires_without_thumb(
 
     assert len(calls) == 1
     assert "imou_life_alarm_SN1_0" not in async_get_persistent_notifications(hass)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_bounds_concurrent_dispatch(hass: HomeAssistant) -> None:
+    """Accepted pushes must not pile unbounded background work."""
+    from custom_components.imou_life.const import PUSH_DISPATCH_LIMIT
+
+    setup_imou_runtime(hass, selected_devices=["SN1"])
+    started = 0
+    max_seen = 0
+    release = asyncio.Event()
+
+    async def _slow_dispatch(*_args: object, **_kwargs: object) -> None:
+        nonlocal started, max_seen
+        started += 1
+        max_seen = max(max_seen, started)
+        await release.wait()
+        started -= 1
+
+    with patch(
+        "custom_components.imou_life.webhook._async_dispatch_imou_push",
+        side_effect=_slow_dispatch,
+    ):
+        for _ in range(PUSH_DISPATCH_LIMIT + 4):
+            await async_handle_imou_webhook(
+                hass,
+                "webhook-id",
+                MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+            )
+            for _ in range(20):
+                await asyncio.sleep(0)
+                if max_seen >= PUSH_DISPATCH_LIMIT:
+                    break
+        assert max_seen == PUSH_DISPATCH_LIMIT
+        release.set()
+        await hass.async_block_till_done(wait_background_tasks=True)

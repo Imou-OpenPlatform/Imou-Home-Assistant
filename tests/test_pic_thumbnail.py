@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
 import logging
 from collections.abc import AsyncIterator, Iterable
@@ -297,6 +299,128 @@ async def test_maybe_decrypt_downloads_then_decrypts_without_token(
     assert mock_download.await_args.args[1] == "https://example.com/only.jpg"
     assert mock_decrypt.call_args.args[5] == CIPHERTEXT
     runtime.client.async_get_token.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_skips_overlapping_download_for_same_device(
+    hass: HomeAssistant,
+) -> None:
+    """A second alarm for the same serial must not start another 20 MB download."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    blocked = asyncio.Event()
+    first_started = asyncio.Event()
+
+    async def _slow_download(*_args: object, **_kwargs: object) -> bytes:
+        first_started.set()
+        await blocked.wait()
+        return CIPHERTEXT
+
+    first: asyncio.Task[str | None] | None = None
+    second: asyncio.Task[str | None] | None = None
+    try:
+        with (
+            _patched_decoder(),
+            patch(
+                "custom_components.imou_life.pic_thumbnail._async_download_picture",
+                side_effect=_slow_download,
+            ) as mock_download,
+            patch(
+                "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+                return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+            ),
+        ):
+            first = asyncio.create_task(
+                async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+            )
+            await first_started.wait()
+            second = asyncio.create_task(
+                async_maybe_decrypt_thumbnail(
+                    hass, entry, runtime, {**event_data, "alarm_id": "a2"}
+                )
+            )
+            await asyncio.sleep(0)
+            assert second.done()
+            assert await second is None
+            blocked.set()
+            assert await first == "/local/imou_life/thumbs/a1.jpg"
+            assert mock_download.await_count == 1
+    finally:
+        blocked.set()
+        for task in (second, first):
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_maybe_decrypt_allows_sibling_channels_of_one_device(
+    hass: HomeAssistant,
+) -> None:
+    """Two lenses of one camera alarm separately; neither may lose its picture."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    event_data = {
+        "device_id": "SN1",
+        "channel_id": "0",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/ch0.jpg"},
+    }
+    blocked = asyncio.Event()
+    first_started = asyncio.Event()
+
+    async def _slow_download(*_args: object, **_kwargs: object) -> bytes:
+        first_started.set()
+        await blocked.wait()
+        return CIPHERTEXT
+
+    first: asyncio.Task[str | None] | None = None
+    second: asyncio.Task[str | None] | None = None
+    try:
+        with (
+            _patched_decoder(),
+            patch(
+                "custom_components.imou_life.pic_thumbnail._async_download_picture",
+                side_effect=_slow_download,
+            ) as mock_download,
+            patch(
+                "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+                return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+            ),
+        ):
+            first = asyncio.create_task(
+                async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+            )
+            await first_started.wait()
+            second = asyncio.create_task(
+                async_maybe_decrypt_thumbnail(
+                    hass,
+                    entry,
+                    runtime,
+                    {**event_data, "channel_id": "1", "alarm_id": "a2"},
+                )
+            )
+            for _ in range(20):
+                await asyncio.sleep(0)
+                if mock_download.await_count > 1:
+                    break
+            blocked.set()
+            assert await first == "/local/imou_life/thumbs/a1.jpg"
+            assert await second == "/local/imou_life/thumbs/a1.jpg"
+            assert mock_download.await_count == 2
+    finally:
+        blocked.set()
+        for task in (second, first):
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

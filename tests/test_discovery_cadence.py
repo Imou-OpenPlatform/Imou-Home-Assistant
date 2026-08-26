@@ -147,6 +147,24 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_total_status_poll_failure_marks_update_failed(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A cloud outage on every device group must not look like a successful poll."""
+    coordinator = _make_coordinator(hass, device_manager)
+    await coordinator._async_update_data()
+    assert coordinator.last_update_success
+
+    device_manager.async_update_devices_status.side_effect = RequestFailedException(
+        "cloud down"
+    )
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert not coordinator.last_update_success
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_bad_credentials_stop_the_polling_instead_of_retrying(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

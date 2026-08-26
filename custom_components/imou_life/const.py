@@ -6,6 +6,7 @@ from pyimouapi.ha_device import ImouHaDevice
 # Internal constants
 DOMAIN = "imou_life"
 UPDATE_TIMEOUT = 300
+PUSH_DISPATCH_LIMIT = 8
 
 # Listing the account costs a paged request plus one detail round trip per iot
 # device, and every object it builds is dropped for devices we already know. It

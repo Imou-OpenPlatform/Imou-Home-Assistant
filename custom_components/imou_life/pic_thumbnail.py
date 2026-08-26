@@ -496,6 +496,41 @@ async def async_maybe_decrypt_thumbnail(
         )
         return None
 
+    # Keyed per channel, not per serial: the lenses of one camera alarm
+    # independently, and each alarm carries its own picture.
+    channel_id = event_data.get("channel_id")
+    inflight_key = f"{device_id}_{'x' if channel_id is None else channel_id}"
+    if inflight_key in runtime.thumb_decrypt_in_flight:
+        _LOGGER.debug("Skip decrypt: already in flight for %s", inflight_key)
+        return None
+    runtime.thumb_decrypt_in_flight.add(inflight_key)
+
+    try:
+        return await _async_decrypt_thumbnail_locked(
+            hass,
+            runtime,
+            event_data,
+            pic_url,
+            str(device_id),
+            is_tcm,
+            encrypt_key,
+            bool(device_password),
+        )
+    finally:
+        runtime.thumb_decrypt_in_flight.discard(inflight_key)
+
+
+async def _async_decrypt_thumbnail_locked(
+    hass: HomeAssistant,
+    runtime: ImouRuntimeData,
+    event_data: dict[str, Any],
+    pic_url: str,
+    device_id: str,
+    is_tcm: bool,
+    encrypt_key: str,
+    used_password: bool,
+) -> str | None:
+    """Download and decrypt after the per-device in-flight lock is held."""
     # Load before downloading: a host without the libraries can never use the
     # picture, and the load is cached after the first alarm.
     decoder = await hass.async_add_executor_job(_load_decoder, runtime, hass)
@@ -506,7 +541,7 @@ async def async_maybe_decrypt_thumbnail(
         "Decrypting alarm thumb for %s tcm=%s key=%s url=%s",
         device_id,
         is_tcm,
-        "password" if device_password else "serial",
+        "password" if used_password else "serial",
         pic_url,
     )
 
@@ -525,7 +560,7 @@ async def async_maybe_decrypt_thumbnail(
                 pic_url,
                 data,
                 encrypt_key,
-                str(device_id),
+                device_id,
                 is_tcm,
             ),
             timeout=_DECRYPT_TIMEOUT_SECONDS,
@@ -542,6 +577,6 @@ async def async_maybe_decrypt_thumbnail(
             "Alarm picture decrypt for %s rejected the %s; check Configure → "
             "Alarm pictures",
             device_id,
-            "configured device password" if device_password else "serial key",
+            "configured device password" if used_password else "serial key",
         )
     return result

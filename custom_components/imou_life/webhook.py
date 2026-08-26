@@ -545,6 +545,17 @@ def _apply_iot_property_push(
         coordinator.async_update_listeners()
 
 
+async def _async_dispatch_imou_push_bound(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    runtime: ImouRuntimeData,
+    event_data: dict[str, Any],
+) -> None:
+    """Run one push dispatch under the per-entry concurrency cap."""
+    async with runtime.push_dispatch_sema:
+        await _async_dispatch_imou_push(hass, entry, runtime, event_data)
+
+
 async def _async_dispatch_imou_push(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -672,7 +683,7 @@ async def async_handle_imou_webhook(
     # tied to the entry so it cannot outlive the runtime data it holds.
     entry.async_create_background_task(
         hass,
-        _async_dispatch_imou_push(hass, entry, runtime, event_data),
+        _async_dispatch_imou_push_bound(hass, entry, runtime, event_data),
         name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
     )
     return web.Response(status=200, text="ok")
