@@ -183,6 +183,31 @@ async def test_alarm_records_only_the_armed_camera(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_first_record_is_not_skipped_while_loop_time_is_low(
+    hass: HomeAssistant,
+) -> None:
+    """A missing start time must not be treated as loop time 0."""
+    setup_imou_runtime(hass, selected_devices=["SN1"])
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            PARAM_LOCAL_RECORD_PATH: "/media/imou",
+            PARAM_LOCAL_RECORD_DURATION: 45,
+        },
+    )
+    _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
+
+    with (
+        patch.object(hass.config, "is_allowed_path", return_value=True),
+        patch.object(hass.loop, "time", return_value=5.0),
+    ):
+        calls = await _alarm(hass, entry)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_alarm_uses_local_record_helper(hass: HomeAssistant) -> None:
     """A security alarm from the webhook records when the camera switch is on."""
     setup_imou_runtime(

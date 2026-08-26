@@ -101,9 +101,9 @@ async def async_maybe_record_from_alarm(
 
     runtime = get_runtime_data(entry)
     if runtime is not None:
-        started = runtime.local_record_started_at.get(device_key, 0.0)
+        started = runtime.local_record_started_at.get(device_key)
         now = hass.loop.time()
-        if now - started < duration:
+        if started is not None and now - started < duration:
             _LOGGER.debug("Skip overlapping local record for %s", device_key)
             return
         runtime.local_record_started_at[device_key] = now
