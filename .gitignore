@@ -180,3 +180,8 @@ docs/
 
 # Local release notes drafts (publish via GitHub Releases; use skill imou-ha-release-notes)
 releases/
+
+# Local Home Assistant runtime next to this checkout (never ship)
+log/
+www/
+custom_components/imou_life/config/

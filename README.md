@@ -2,6 +2,8 @@
 
 **[English](#english)** | **[简体中文](#zh-hans)**
 
+**Guides / 文档:** [Configure reference / 配置项参考](guides/configuration.md) · [Record on alarm / 告警时录像](guides/local-event-recording.md)
+
 [![HACS Default][hacs-badge]][hacs-url]
 [![GitHub Release][release-badge]][release-url]
 [![HACS Downloads][downloads-badge]][release-url]
@@ -14,6 +16,15 @@
 This integration connects Home Assistant to Imou cameras and smart devices through the Imou Open Platform API: live video, device control, and status. You can extend it with automations and additional features.
 
 > **Open Platform portal:** [open.imoulife.com](https://open.imoulife.com/) — China users, see [简体中文](#zh-hans).
+
+## Documentation
+
+README covers install and a feature list. Options live in the guides:
+
+| Guide | What it covers |
+| --- | --- |
+| [Configure reference](guides/configuration.md#english) | Every **Configure** page, Home Assistant URL, decrypt libraries, and what depends on what |
+| [Record on alarm](guides/local-event-recording.md#english) | Built-in short clip after an alarm (no automation); save folder must be allowlisted |
 
 ## Installation
 
@@ -39,9 +50,7 @@ Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App*
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
-Then select which devices to add. Unselected devices are not polled (saves API quota).
-
-<img src="assets/images/configure_devices.png" width="70%" alt="Select devices during setup">
+Then select which devices to add. Unselected devices stay in Home Assistant but are not polled (saves API quota).
 
 ### 4. Done
 
@@ -49,23 +58,9 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry to open a menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, or **Bind a new device**. The menu leads with a one-line status of what is on. Each section saves when you submit that form and returns to the menu, so you can edit several in one visit; **Done** closes the dialog.
+Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it.
 
-- **Polling and cameras** — polling on/off and interval. Snapshot wait, live stream, and PTZ defaults are under **Camera defaults**.
-
-<img src="assets/images/configure_general.png" width="70%" alt="Configure — General settings">
-
-- **Alarm push and notifications** — enable the webhook callback, pick message types, and choose notification targets.
-- **Alarm pictures** — turn the decrypted thumbnail on and hold the device passwords it needs. For now you must [download the official decrypt libraries yourself](#obtain-the-official-decrypt-libraries).
-- **Record on alarm** — shared save folder and clip duration for cameras whose **Record on alarm** switch is on. See [guides/local-event-recording.md](guides/local-event-recording.md#english).
-
-Turn on **Enable event push**, then fill **Callback URL** (must be public; change hostname and port if the suggested address is not reachable) and **Subscribe to**.
-
-<img src="assets/images/configure_event_push.png" width="70%" alt="Configure — Event push settings">
-
-- **Choose devices to poll** / **Bind a new device** — pick which devices to poll, or bind a new one by serial; each action saves when you submit
-
-<img src="assets/images/configure_devices.png" width="70%" alt="Configure — Devices">
+Page-by-page options, including the **Settings → System → Network** steps that alarm push and alarm pictures need: [Configure reference](guides/configuration.md#english). Alarm clips: [Record on alarm](guides/local-event-recording.md#english).
 
 >Note: <br>
 >The integration uses the Imou Open Platform for cloud-based remote device access. <br>
@@ -95,10 +90,9 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications**. Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
-  - Optional **Show the picture in alarm notifications** (default off): Home Assistant downloads the encrypted push picture itself (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`), then decrypts it locally with the official Demo libraries — no Open API quota is spent and no access token is involved. **linux x86-64 only**; [download the official Demo package](#obtain-the-official-decrypt-libraries) and copy `libLCOpenApiClient.so` and `libLCOpenSDK.so` into `/config/imou_life/native/` (the SDK does the decrypting, the client library supplies the OpenSSL symbols it links against). Some devices additionally need their Imou Life device password; **Configure → Alarm pictures** lists exactly those, and takes a **Default device password** for the rest of them. Companion notifications use Home Assistant's **external URL** (Settings → System → Network) so phones outside the LAN can load the JPEG. Add `notify.persistent_notification` to the notify targets to get the same picture in the Home Assistant web notification drawer as well (one entry per device, and it replaces that target's plain text so one alarm never shows up twice). Files live under `/local/imou_life/thumbs/` with no authentication (anyone with the URL can view them for about 24 hours). If `/config/www` did not exist, restart Home Assistant after the first thumbnail. Many motion pushes have no picture URL; then notifications stay text-only
+  - Optional **Show the picture in alarm notifications** (default off, **linux x86-64 only**): Home Assistant downloads the encrypted push still and decrypts it locally. [Download the official libraries](#obtain-the-official-decrypt-libraries), then **Configure → Alarm pictures**. Many motion pushes have no picture URL; those stay text-only. Full setup: [Configure reference](guides/configuration.md#english)
   - Choose push message types—including IoT device messages so thing-model switches, sensors, and arming update from property push instead of interval polling; messages are also synced to the Imou Life app
-  - Push payload alarm images are encrypted. Without the optional thumbnail, no snapshot is attached (Open API quota); use automations with `camera.snapshot` / `camera_proxy` if you need other notification images
-  - **Record on alarm** — per-camera switch (default off, stored in Home Assistant only). When an alarm is pushed, the integration records a short cloud-HLS clip with `camera.record`. Shared folder and duration: **Configure → Record on alarm**. See [guides/local-event-recording.md](guides/local-event-recording.md#english)
+  - **Record on alarm** — built-in: per-camera switch (default off), shared folder and duration under **Configure → Record on alarm**. No YAML automation. Walkthrough: [Record on alarm](guides/local-event-recording.md#english)
 * **Camera**
   - Status (name, online, storage, battery, …)
   - Live video
@@ -140,7 +134,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`. Leftover `select.*_mode` and siren button registry rows are removed on setup.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
-- **Local recording / `camera.record`** — Stream not set up, path access errors, or unavailable camera entities: see [Local event recording](guides/local-event-recording.md#english).
+- **Record on alarm — no file** — confirm event push, the per-camera switch, and an allowlisted save folder: [Record on alarm](guides/local-event-recording.md#english).
 
 ## Contributing
 
@@ -167,6 +161,15 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 > **开放平台入口：** [open.imou.com](https://open.imou.com/) — 海外用户请参阅 [English](#english)。
 
+## 文档
+
+README 只写安装和功能列表。选项说明在 guides 里：
+
+| 文档 | 内容 |
+| --- | --- |
+| [配置项参考](guides/configuration.md#zh-hans) | 每一个 **配置** 页、Home Assistant 地址、解密库，以及依赖关系 |
+| [告警时录像](guides/local-event-recording.md#zh-hans) | 告警后内置短视频（不用写自动化）；保存目录须加入白名单 |
+
 ## 安装
 
 在 **Imou 国内开放平台** 注册并创建应用，再通过 HACS 安装。
@@ -191,9 +194,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
-然后选择要添加的设备。未勾选的设备不会被轮询（可节省 API 配额）。
-
-<img src="assets/images/configure_devices.png" width="70%" alt="安装时选择设备">
+然后选择要添加的设备。未勾选的设备仍留在 Home Assistant，但不会被轮询（可节省 API 配额）。
 
 ### 4. 完成
 
@@ -201,23 +202,9 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点击 **配置** 会打开菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**。菜单开头会给出一行当前状态。每一项提交即保存并回到菜单，一次可以连着改好几项；点 **完成** 关闭对话框。
+在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。
 
-- **轮询与摄像头** — 轮询开关与间隔。抓图等待、直播与云台默认参数在 **摄像头默认**。
-
-<img src="assets/images/configure_general.png" width="70%" alt="配置 — 常规设置">
-
-- **告警推送与通知** — 启用 Webhook 回调、选择消息类型、指定通知目标。
-- **告警图片** — 打开解密缩略图开关，并集中管理它需要的设备密码。现阶段需要[自行下载官方解密库](#获取官方解密库)。
-- **告警时录像** — 账号共用的保存目录和片段时长，只对打开了 **告警时录像** 开关的摄像头生效。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)。
-
-先打开 **启用事件推送**，再确认 **回调地址**（已预填生成的地址，须公网可达；不可达时只改主机名和端口）和 **订阅类型**。
-
-<img src="assets/images/configure_event_push.png" width="70%" alt="配置 — 事件推送设置">
-
-- **选择要轮询的设备** / **绑定新设备** — 勾选要轮询的设备，或按序列号绑定新设备；每一步提交即保存
-
-<img src="assets/images/configure_devices.png" width="70%" alt="配置 — 设备">
+逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**：见 [配置项参考](guides/configuration.md#zh-hans)。告警录像：见 [告警时录像](guides/local-event-recording.md#zh-hans)。
 
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
@@ -248,10 +235,9 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
   - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
-  - 可选 **在告警通知中显示图片**（默认关）：推送带图片 URL 时（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`），由 Home Assistant 自己下载密文图片，再用官方 Demo 库在本机解密——不消耗开放平台配额，也不需要 access token。**仅 linux x86-64**；[自行下载官方 Demo 包](#获取官方解密库)，把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 放到 `/config/imou_life/native/`（`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，两个都要放）。部分设备还需要填写乐橙 App 里的设备密码；**配置 → 告警图片** 会把需要密码的设备列出来，其余留空的可以用 **默认设备密码** 统一填。Companion 通知使用 Home Assistant **外网 URL**（设置 → 系统 → 网络），手机不在局域网也能加载。想在 Home Assistant 网页通知栏也看到这张图，把 `notify.persistent_notification` 加进通知目标（每台设备一条，并顶替该目标的纯文本，同一告警不会出现两条）。文件在 `/local/imou_life/thumbs/`，无身份验证（持有 URL 者约 24 小时内可查看）。若原先没有 `/config/www`，首次生成后需重启 Home Assistant。许多移动侦测推送没有图片 URL，此时通知仍为纯文本
+  - 可选 **在告警通知中显示图片**（默认关，**仅 linux x86-64**）：由 Home Assistant 下载密文并在本机解密。[自行下载官方库](#获取官方解密库)，再打开 **配置 → 告警图片**。许多移动侦测推送没有图片 URL，此时仍为纯文本。完整步骤：[配置项参考](guides/configuration.md#zh-hans)
   - 可选择推送消息类型——含物模型设备消息时，物模型开关 / 传感器 / 布防靠属性推送即时更新，不再跟间隔轮询走；消息也会同步到乐橙 App
-  - 推送载荷中的告警图片为加密格式。未开启可选缩略图时不附带抓图（避免占用开放平台额度）；若需其他通知图片，请在自动化中使用 `camera.snapshot` / `camera_proxy`
-  - **告警时录像** — 每路镜头一个开关（默认关，只存在 Home Assistant）。收到告警推送后，用 `camera.record` 从云端 HLS 录一段短视频。保存目录和时长在 **配置 → 告警时录像**。见 [guides/local-event-recording.md](guides/local-event-recording.md#zh-hans)
+  - **告警时录像** — 内置：每路镜头一个开关（默认关），保存目录和时长在 **配置 → 告警时录像**。不用写 YAML 自动化。完整步骤：[告警时录像](guides/local-event-recording.md#zh-hans)
 * **摄像头**
   - 状态（名称、在线、存储、电量等）
   - 直播
@@ -293,7 +279,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。遗留的 `select.*_mode` 和警号 button 注册行会在加载时删除。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
-- **本地录像 / `camera.record`** — Stream 未启用、路径无权访问、相机实体 unavailable 等：见 [本地事件录像](guides/local-event-recording.md#zh-hans)。
+- **告警时录像没有文件** — 确认已开事件推送、该路镜头开关，以及保存目录已加入白名单：见 [告警时录像](guides/local-event-recording.md#zh-hans)。
 
 ## 贡献
 

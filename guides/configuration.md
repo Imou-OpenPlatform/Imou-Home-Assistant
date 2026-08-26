@@ -86,7 +86,7 @@ On iOS an unexpanded notification shows a small thumbnail — long-press or pull
 | Save folder | Where clips are written, for example `/media/imou`. Must be listed in `allowlist_external_dirs`. Empty means no recording. | empty |
 | Clip duration | Seconds recorded after an alarm, 15–180. Uses live-stream quota. | 60 |
 
-Each camera has its own **Record on alarm** switch on the device page. See [Record on alarm](local-event-recording.md) for the full walkthrough.
+Each camera has its own **Record on alarm** switch on the device page. The integration records on the alarm push itself — no automation. See [Record on alarm](local-event-recording.md#english) for the full walkthrough.
 
 ### Devices
 
@@ -99,7 +99,7 @@ Each camera has its own **Record on alarm** switch on the device page. See [Reco
 
 | To get this | You need |
 | --- | --- |
-| Any alarm automation, notification, picture, or recording | **Enable event push** on, with a Callback URL the Imou cloud can reach |
+| Any alarm notification, picture, recording, or your own automation | **Enable event push** on, with a Callback URL the Imou cloud can reach |
 | A picture in a phone notification | Event push, **Show the picture in alarm notifications**, both `.so` files, a password for the devices the page lists, and an internet-reachable Home Assistant URL |
 | A picture in the web notification drawer | The same, plus `notify.persistent_notification` among the notification targets |
 | A clip after an alarm | Event push, an allowlisted save folder, and the per-camera switch on |
@@ -193,7 +193,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 | 保存目录 | 片段写到哪里，例如 `/media/imou`。必须在 `allowlist_external_dirs` 中。留空表示不录。 | 空 |
 | 片段时长 | 告警后录制的秒数，15–180。会占用直播配额。 | 60 |
 
-每个摄像头在设备页上都有自己的 **告警时录像** 开关。完整步骤见 [告警时录像](local-event-recording.md#zh-hans)。
+每个摄像头在设备页上都有自己的 **告警时录像** 开关。集成在告警推送时自己录，不用写自动化。完整步骤见 [告警时录像](local-event-recording.md#zh-hans)。
 
 ### 设备
 
@@ -206,7 +206,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 | 想要 | 需要 |
 | --- | --- |
-| 任何告警自动化、通知、图片或录像 | 开启 **启用事件推送**，且回调地址 Imou 云能访问到 |
+| 告警通知、图片、录像，或你自己写的自动化 | 开启 **启用事件推送**，且回调地址 Imou 云能访问到 |
 | 手机通知里带图 | 事件推送、**在告警通知中显示图片**、两个 `.so` 文件、页面上列出的那些设备的密码，以及一个公网可达的 Home Assistant 地址 |
 | 网页通知栏里带图 | 同上，另外把 `notify.persistent_notification` 加进通知目标 |
 | 告警后有录像片段 | 事件推送、一个已加入白名单的保存目录，以及该摄像头的开关已打开 |
