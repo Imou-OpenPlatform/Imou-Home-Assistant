@@ -151,7 +151,7 @@ async def test_options_flow_init_shows_menu(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_menu_hides_device_count_when_polling_is_off(hass) -> None:
-    """A selected-device count next to polling-off reads as if those cameras were still polled."""
+    """Polling-off must not still show a selected-device count."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
