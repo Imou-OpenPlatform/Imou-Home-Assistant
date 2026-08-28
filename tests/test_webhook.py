@@ -613,9 +613,8 @@ async def test_webhook_unknown_msg_type_uses_unknown_alarm(
     hass: HomeAssistant,
 ) -> None:
     """Unmapped ids do not crash; the title uses the unknown-alarm label."""
-    from homeassistant.helpers import translation
-
     from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
 
     await translation.async_get_translations(
         hass, "en", "selector", integrations={DOMAIN}
@@ -1949,9 +1948,8 @@ async def test_webhook_zh_cn_uses_simplified_chinese_copy(
     hass: HomeAssistant,
 ) -> None:
     """zh-CN must resolve to zh-Hans notify templates."""
-    from homeassistant.helpers import translation
-
     from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
 
     hass.config.language = "zh-CN"
     await translation.async_get_translations(
@@ -1961,15 +1959,14 @@ async def test_webhook_zh_cn_uses_simplified_chinese_copy(
         hass, {"msg_type": "videoMotion", "device_name": "Cam"}
     )
     assert title.startswith("Imou Life ·")
-    assert "设备：Cam" in message
+    assert "设备\uff1aCam" in message
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_german_device_line(hass: HomeAssistant) -> None:
     """de.json must drive the notify body, not the English fallback."""
-    from homeassistant.helpers import translation
-
     from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
 
     hass.config.language = "de"
     await translation.async_get_translations(

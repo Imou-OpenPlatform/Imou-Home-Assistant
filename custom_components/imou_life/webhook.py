@@ -109,9 +109,7 @@ def _alarm_type_label(
     if label:
         return label
     if msg_type.startswith("e_"):
-        label = selector_option_label(
-            hass, language, "alarm_type", msg_type[2:], ""
-        )
+        label = selector_option_label(hass, language, "alarm_type", msg_type[2:], "")
         if label:
             return label
     return None

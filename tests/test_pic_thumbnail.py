@@ -207,10 +207,9 @@ async def test_native_support_status_uses_translated_templates(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Status sentences come from selector.native_hint, not a zh/en branch."""
-    from homeassistant.helpers import translation
-
     from custom_components.imou_life import pic_thumbnail
     from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
 
     await translation.async_get_translations(
         hass, "en", "selector", integrations={DOMAIN}
@@ -242,10 +241,9 @@ async def test_native_libraries_hint_missing_fills_placeholders(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Missing-lib copy names both .so files and the folder."""
-    from homeassistant.helpers import translation
-
     from custom_components.imou_life import pic_thumbnail
     from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
 
     await translation.async_get_translations(
         hass, "en", "selector", integrations={DOMAIN}

@@ -297,7 +297,5 @@ def test_resolve_ui_language_maps_zh_and_defaults() -> None:
 
 def test_fill_template_falls_back_when_placeholders_break() -> None:
     assert fill_template("Hi {name}", "Hi {name}", name="Ada") == "Hi Ada"
-    assert (
-        fill_template("Hi {missing}", "Hi {name}", name="Ada") == "Hi Ada"
-    )
+    assert fill_template("Hi {missing}", "Hi {name}", name="Ada") == "Hi Ada"
     assert fill_template("Hi {broken", "plain", name="Ada") == "plain"

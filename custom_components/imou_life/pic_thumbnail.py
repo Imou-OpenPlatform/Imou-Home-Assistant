@@ -136,9 +136,7 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
         "decrypt libraries missing ({found}/2 found). Copy {client_so} "
         "and {sdk_so} into {native_dir}"
     )
-    template = selector_option_label(
-        hass, language, "native_hint", "missing", fallback
-    )
+    template = selector_option_label(hass, language, "native_hint", "missing", fallback)
     return fill_template(
         template,
         fallback,
