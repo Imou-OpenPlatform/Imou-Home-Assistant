@@ -22,6 +22,7 @@
 - **Configure → Alarm pictures** holds the switch, an optional default password, and a password field for each device that needs one (labelled with the device name). Devices that do not need a password are not listed. Saved passwords are filled back in (masked). To delete one, use **Remove stored passwords** / **Clear default device password**. Passwords stay on this Home Assistant and are used only to decrypt
 - Diagnostics include whether the native libraries are present and which devices have a stored password (serials only; password values are never included)
 - New [Configure reference](guides/configuration.md) documents every option page by page, with the **Settings → System → Network** steps that alarm push and alarm pictures both depend on, and a table of what depends on what
+- The UI and alarm notifications follow your Home Assistant language. German, French, and Italian are available in addition to English and Simplified Chinese
 
 #### Changed
 
@@ -288,6 +289,7 @@
 - **配置 → 告警图片** 一页管理开关、可选默认密码，以及每台需要密码的设备（用设备名标注）。不需要密码的设备不会列出。已存密码会回填（掩码显示）；删除用 **删除已存密码** / **清除默认设备密码**。密码保存在本机，仅用于解密
 - 诊断信息包含原生库是否可用，以及哪些设备存了密码（仅序列号，不含密码值）
 - 新增 [配置项参考](guides/configuration.md) 文档，逐页说明每个选项，给出告警推送与告警图片共同依赖的 **设置 → 系统 → 网络** 配置步骤，并附依赖关系一览表
+- 界面和告警通知跟随 Home Assistant 语言。除英语、简体中文外，现支持德语、法语、意大利语
 
 #### 变更
 

@@ -78,7 +78,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Device selection at setup and in **Configure → Choose devices to poll** (poll only chosen devices)
   - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
-  - UI available in English and Simplified Chinese (follows Home Assistant language)
+  - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
@@ -218,7 +218,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 安装时及 **配置 → 选择要轮询的设备** 中可选择设备（仅轮询已选设备）
   - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
-  - 界面支持英文与简体中文（跟随 Home Assistant 语言设置）
+  - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.0 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）

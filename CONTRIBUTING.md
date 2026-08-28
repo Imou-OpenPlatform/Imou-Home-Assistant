@@ -64,6 +64,18 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 
 External contributors may use a short-lived branch **on their fork** (`fix/…`, `feat/…`, `chore/…`). That branch is deleted after the PR merges into `dev`. Do not push topic branches to the canonical repository.
 
+## Translations
+
+User-visible strings live in `custom_components/imou_life/strings.json` (English source) and `custom_components/imou_life/translations/<code>.json`. Home Assistant loads the file that matches **Settings → System → General → language** (`de`, not `de-DE`). Config flow, entity names, exceptions, alarm notifications, and decrypt-library status are all in that one file.
+
+To add a language:
+
+1. Copy `translations/en.json` to `translations/<code>.json` using the [Home Assistant language code](https://developers.home-assistant.io/docs/internationalization/core/).
+2. Translate every string value. Do not change keys or `{placeholder}` names. Do not use `[%key:common::…]` (custom integrations display that markup literally).
+3. Translate the whole file in one PR. CI fails if any key or placeholder is missing.
+
+When you change English copy, update `strings.json`, `translations/en.json`, and every other file in `translations/` in the same PR.
+
 ## Code standards
 
 - Python code is formatted and linted with [Ruff](https://docs.astral.sh/ruff/).
