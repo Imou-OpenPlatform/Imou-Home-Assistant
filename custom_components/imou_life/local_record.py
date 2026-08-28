@@ -1,4 +1,4 @@
-"""Post-alarm local clips via camera.record (cloud HLS)."""
+"""Post-alarm local clips via camera.record (cloud live stream)."""
 
 from __future__ import annotations
 

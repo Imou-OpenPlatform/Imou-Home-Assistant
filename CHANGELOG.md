@@ -7,6 +7,11 @@
 #### Added
 
 - The UI and alarm notifications follow your Home Assistant language. German, French, and Italian are available in addition to English and Simplified Chinese
+- Live view uses a cloud stream that works for the account owner and for people the device is shared with. If nobody is watching for about 10 seconds, the next open fetches a new address
+
+#### Changed
+
+- Requires pyimouapi 1.4.1, installed automatically with this integration
 
 ### [1.4.0]
 
@@ -279,6 +284,11 @@
 #### 新增
 
 - 界面和告警通知跟随 Home Assistant 语言。除英语、简体中文外，现支持德语、法语、意大利语
+- 直播画面使用云端拉流，设备分享给他人后也能看。约 10 秒没人看之后，下次打开会重新获取地址
+
+#### 变更
+
+- 需要 pyimouapi 1.4.1，随本集成自动安装
 
 ### [1.4.0]
 
