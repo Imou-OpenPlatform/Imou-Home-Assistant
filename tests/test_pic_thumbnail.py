@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import sys
 from collections.abc import AsyncIterator, Iterable
 from pathlib import Path
 from typing import Any
@@ -199,14 +200,64 @@ def test_native_platform_supported_linux_x86_64(
 
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(pic_thumbnail.platform, "machine", lambda: "x86_64")
-    assert pic_thumbnail.native_support_status("en") == "supported (linux x86-64)"
-    assert pic_thumbnail.native_support_status("zh-Hans") == "支持 (linux x86-64)"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_native_support_status_uses_translated_templates(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Status sentences come from selector.native_hint, not a zh/en branch."""
+    from homeassistant.helpers import translation
+
+    from custom_components.imou_life import pic_thumbnail
+    from custom_components.imou_life.const import DOMAIN
+
+    await translation.async_get_translations(
+        hass, "en", "selector", integrations={DOMAIN}
+    )
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(pic_thumbnail.platform, "machine", lambda: "x86_64")
+    assert pic_thumbnail.native_support_status(hass, "en") == (
+        "supported (linux x86-64)"
+    )
+
+    await translation.async_get_translations(
+        hass, "zh-Hans", "selector", integrations={DOMAIN}
+    )
+    assert pic_thumbnail.native_support_status(hass, "zh-Hans") == (
+        "支持 (linux x86-64)"
+    )
 
     monkeypatch.setattr(pic_thumbnail.platform, "machine", lambda: "aarch64")
-    assert "not supported" in pic_thumbnail.native_support_status("en")
-    zh_status = pic_thumbnail.native_support_status("zh-Hans")
+    en_status = pic_thumbnail.native_support_status(hass, "en")
+    assert "not supported" in en_status
+    assert "aarch64" in en_status
+    zh_status = pic_thumbnail.native_support_status(hass, "zh-Hans")
     assert zh_status.startswith("不支持")
     assert "linux aarch64" in zh_status
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_native_libraries_hint_missing_fills_placeholders(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Missing-lib copy names both .so files and the folder."""
+    from homeassistant.helpers import translation
+
+    from custom_components.imou_life import pic_thumbnail
+    from custom_components.imou_life.const import DOMAIN
+
+    await translation.async_get_translations(
+        hass, "en", "selector", integrations={DOMAIN}
+    )
+    monkeypatch.setattr(pic_thumbnail, "native_platform_supported", lambda: True)
+    monkeypatch.setattr(pic_thumbnail, "native_lib_dir", lambda _hass: tmp_path)
+    monkeypatch.setattr(pic_thumbnail, "native_libs_found", lambda _hass: 0)
+    hint = pic_thumbnail.native_libraries_hint(hass, "en")
+    assert "0/2" in hint
+    assert pic_thumbnail.NATIVE_CLIENT_SO in hint
+    assert pic_thumbnail.NATIVE_SDK_SO in hint
+    assert str(tmp_path) in hint
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

@@ -17,7 +17,6 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import translation
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -76,6 +75,8 @@ from .helpers import (
     async_build_device_map,
     notify_service_selector_options,
     parse_notify_services,
+    resolve_ui_language,
+    selector_option_label,
 )
 from .runtime_data import get_runtime_data
 
@@ -174,17 +175,6 @@ def _looks_publicly_reachable(url: str) -> bool:
         return False
     # A bare hostname resolves on the LAN only; public names carry a domain.
     return "." in host
-
-
-def _selector_option_label(
-    hass: HomeAssistant, language: str, selector: str, key: str, fallback: str
-) -> str:
-    """Load a selector option label for config flow placeholders."""
-    translations = translation.async_get_cached_translations(
-        hass, language, "selector", DOMAIN
-    )
-    translation_key = f"component.{DOMAIN}.selector.{selector}.options.{key}"
-    return translations.get(translation_key, fallback)
 
 
 class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -566,7 +556,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Warn that a LAN callback address can never receive cloud alarms."""
         if not callback_url or _looks_publicly_reachable(callback_url):
             return ""
-        text = _selector_option_label(
+        text = selector_option_label(
             self.hass,
             self._ui_language(),
             "prerequisite",
@@ -585,7 +575,7 @@ class ImouOptionsFlow(OptionsFlow):
         language = self.hass.config.language
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
         suggested_webhook_url = self._generated_webhook_url()
-        not_generated = _selector_option_label(
+        not_generated = selector_option_label(
             self.hass, language, "webhook_placeholder", "not_generated", "Not generated"
         )
         return {
@@ -729,14 +719,11 @@ class ImouOptionsFlow(OptionsFlow):
         )
 
     def _ui_language(self) -> str:
-        language = getattr(self.hass.config, "language", None)
-        if isinstance(language, str) and language:
-            return language
-        return "en"
+        return resolve_ui_language(getattr(self.hass.config, "language", None))
 
     def _status_label(self, key: str, fallback: str) -> str:
         """Return a translated status word for the menu summary."""
-        return _selector_option_label(
+        return selector_option_label(
             self.hass, self._ui_language(), "status", key, fallback
         )
 
@@ -752,7 +739,7 @@ class ImouOptionsFlow(OptionsFlow):
         """
         if self._push_enabled():
             return ""
-        text = _selector_option_label(
+        text = selector_option_label(
             self.hass,
             self._ui_language(),
             "prerequisite",

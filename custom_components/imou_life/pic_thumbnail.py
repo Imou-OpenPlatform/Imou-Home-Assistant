@@ -35,6 +35,7 @@ from .const import (
     PARAM_DEVICE_PASSWORDS,
     imou_life_device_keys_from_ids,
 )
+from .helpers import fill_template, selector_option_label
 
 if TYPE_CHECKING:
     from .runtime_data import ImouRuntimeData
@@ -83,15 +84,21 @@ def native_platform_supported() -> bool:
     )
 
 
-def native_support_status(language: str) -> str:
+def native_support_status(hass: HomeAssistant, language: str) -> str:
     """Return a localized sentence: supported, or explicitly not supported."""
-    zh = language.lower().startswith("zh")
     if native_platform_supported():
-        return "支持 (linux x86-64)" if zh else "supported (linux x86-64)"
-    label = native_platform_label()
-    if zh:
-        return f"不支持 (需要 linux x86-64, 本机是 {label})"
-    return f"not supported (needs linux x86-64; this host is {label})"
+        return selector_option_label(
+            hass,
+            language,
+            "native_hint",
+            "supported",
+            "supported (linux x86-64)",
+        )
+    fallback = "not supported (needs linux x86-64; this host is {arch})"
+    template = selector_option_label(
+        hass, language, "native_hint", "unsupported", fallback
+    )
+    return fill_template(template, fallback, arch=native_platform_label())
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -113,23 +120,32 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
     Spell out the filenames and the folder only while something is missing;
     a host that is already set up does not need the install instructions.
     """
-    zh = language.lower().startswith("zh")
     if not native_platform_supported():
-        return native_support_status(language)
+        return native_support_status(hass, language)
     found = native_libs_found(hass)
     if found == 2:
-        if zh:
-            return "解密库已就绪 (linux x86-64)"
-        return "decrypt libraries ready (linux x86-64)"
-    native_dir = native_lib_dir(hass)
-    if zh:
-        return (
-            f"缺少解密库 (已找到 {found}/2)。请将 {NATIVE_CLIENT_SO} 与 "
-            f"{NATIVE_SDK_SO} 复制到 {native_dir}"
+        return selector_option_label(
+            hass,
+            language,
+            "native_hint",
+            "ready",
+            "decrypt libraries ready (linux x86-64)",
         )
-    return (
-        f"decrypt libraries missing ({found}/2 found). Copy {NATIVE_CLIENT_SO} "
-        f"and {NATIVE_SDK_SO} into {native_dir}"
+    native_dir = native_lib_dir(hass)
+    fallback = (
+        "decrypt libraries missing ({found}/2 found). Copy {client_so} "
+        "and {sdk_so} into {native_dir}"
+    )
+    template = selector_option_label(
+        hass, language, "native_hint", "missing", fallback
+    )
+    return fill_template(
+        template,
+        fallback,
+        found=str(found),
+        client_so=NATIVE_CLIENT_SO,
+        sdk_so=NATIVE_SDK_SO,
+        native_dir=str(native_dir),
     )
 
 
