@@ -85,10 +85,46 @@ def resolve_ha_device_name(
     return device.name_by_user or device.name
 
 
+def resolve_ui_language(language: str | None) -> str:
+    """Map HA language tags onto translation filenames."""
+    if not isinstance(language, str) or not language.strip():
+        return "en"
+    if language.lower().startswith("zh"):
+        return "zh-Hans"
+    return language
+
+
+def fill_template(template: str, fallback: str, **values: str) -> str:
+    """Format a translation template; never raise for bad placeholders."""
+    try:
+        return template.format(**values)
+    except (KeyError, IndexError, ValueError):
+        try:
+            return fallback.format(**values)
+        except (KeyError, IndexError, ValueError):
+            return fallback
+
+
+def selector_option_label(
+    hass: HomeAssistant,
+    language: str | None,
+    selector: str,
+    key: str,
+    fallback: str,
+) -> str:
+    """Return a selector option label, or fallback if the cache has no key."""
+    resolved = resolve_ui_language(language)
+    translations = translation.async_get_cached_translations(
+        hass, resolved, "selector", DOMAIN
+    )
+    translation_key = f"component.{DOMAIN}.selector.{selector}.options.{key}"
+    return translations.get(translation_key, fallback)
+
+
 def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:
     """Build a human-readable device label for config/options selectors."""
     translations = translation.async_get_cached_translations(
-        hass, hass.config.language, "selector", DOMAIN
+        hass, resolve_ui_language(hass.config.language), "selector", DOMAIN
     )
     name = summary.name
     label = (

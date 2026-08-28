@@ -11,11 +11,14 @@ from custom_components.imou_life.const import (
     imou_life_device_keys_from_ids,
 )
 from custom_components.imou_life.helpers import (
+    fill_template,
     iot_property_push_active,
     notify_service_selector_options,
     parse_notify_services,
     resolve_ha_device_entry,
     resolve_ha_device_name,
+    resolve_ui_language,
+    selector_option_label,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
@@ -280,3 +283,22 @@ def test_iot_property_push_active_needs_push_and_iot_type() -> None:
         },
     )
     assert iot_property_push_active(no_iot) is False
+
+
+def test_resolve_ui_language_maps_zh_and_defaults() -> None:
+    assert resolve_ui_language("en") == "en"
+    assert resolve_ui_language("de") == "de"
+    assert resolve_ui_language("zh-Hans") == "zh-Hans"
+    assert resolve_ui_language("zh-CN") == "zh-Hans"
+    assert resolve_ui_language("ZH") == "zh-Hans"
+    assert resolve_ui_language(None) == "en"
+    assert resolve_ui_language("") == "en"
+    assert resolve_ui_language("   ") == "en"
+
+
+def test_fill_template_falls_back_when_placeholders_break() -> None:
+    assert fill_template("Hi {name}", "Hi {name}", name="Ada") == "Hi Ada"
+    assert (
+        fill_template("Hi {missing}", "Hi {name}", name="Ada") == "Hi Ada"
+    )
+    assert fill_template("Hi {broken", "plain", name="Ada") == "plain"
