@@ -1,0 +1,673 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Konto ist bereits konfiguriert",
+      "cannot_connect": "Verbindung zu Imou fehlgeschlagen: {error}",
+      "reauth_successful": "Erneute Authentifizierung war erfolgreich",
+      "request_failed": "Geräteliste konnte nicht von Imou geladen werden: {error}"
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen: {error}",
+      "invalid_auth": "Ungültige Authentifizierung",
+      "request_failed": "Anfrage fehlgeschlagen: {error}",
+      "bind_failed": "Gerät konnte nicht gekoppelt werden: {error}",
+      "bind_device_not_listed": "Das Gerät wurde gekoppelt, erscheint aber noch nicht in der Geräteliste des Kontos. Versuche es in einem Moment erneut.",
+      "unknown": "Unerwarteter Fehler: {error}"
+    },
+    "step": {
+      "user": {
+        "title": "Bei Imou Cloud anmelden",
+        "data": {
+          "api_url": "Serverregion",
+          "app_id": "App ID",
+          "app_secret": "App secret"
+        },
+        "data_description": {
+          "api_url": "Wähle die Serverregion, die deinem Standort am nächsten liegt",
+          "app_id": "Die App ID von der Imou-Cloud-Plattform",
+          "app_secret": "Das App secret von der Imou-Cloud-Plattform"
+        }
+      },
+      "no_devices_menu": {
+        "title": "Keine Geräte gefunden",
+        "description": "Dieses Konto hat noch keine Imou-Geräte. Koppeln jetzt eines, oder schließe die Einrichtung ab.",
+        "menu_options": {
+          "bind_device": "Gerät koppeln",
+          "finish_without_devices": "Ohne Geräte fortfahren"
+        }
+      },
+      "bind_device": {
+        "title": "Neues Gerät koppeln",
+        "description": "Gib die Geräteseriennummer und den Kopplungscode aus der Imou Life App oder vom Geräteetikett ein.",
+        "data": {
+          "device_id": "Geräteseriennummer",
+          "code": "Kopplungscode"
+        },
+        "data_description": {
+          "device_id": "Seriennummer (SN) auf dem Gerät oder in der Imou Life App",
+          "code": "Optional. Leer lassen, wenn das Gerät keinen Kopplungscode benötigt"
+        }
+      },
+      "select_devices": {
+        "title": "Geräte auswählen",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte werden nicht abgefragt.",
+        "data": {
+          "selected_devices": "Geräte"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Imou Life erneut authentifizieren",
+        "description": "Dein App secret ist nicht mehr gültig. Gib ein neues App secret für die App ID {app_id} ein.",
+        "data": {
+          "app_secret": "App secret"
+        }
+      }
+    }
+  },
+  "issues": {
+    "event_push_no_external_url": {
+      "title": "Imou-Ereignis-Push hat keine Callback-URL",
+      "description": "Ereignis-Push ist aktiviert, aber Home Assistant konnte keine externe Webhook-URL erzeugen. Setze **Einstellungen → System → Netzwerk → Home Assistant-URL**, oder trage eine Callback-URL unter **Konfigurieren → Alarm-Push und Benachrichtigungen** ein."
+    },
+    "event_push_callback_failed": {
+      "title": "Registrierung des Imou-Ereignis-Push fehlgeschlagen",
+      "description": "Home Assistant konnte den Nachrichten-Callback nicht bei der Imou Open Platform registrieren. Prüfe die Callback-URL und das Ressourcenkontingent deiner App ID und lade die Integration anschließend neu."
+    }
+  },
+  "options": {
+    "error": {
+      "request_failed": "Geräteliste konnte nicht geladen werden: {error}",
+      "bind_failed": "Gerät konnte nicht gekoppelt werden: {error}",
+      "bind_device_not_listed": "Das Gerät wurde gekoppelt, erscheint aber noch nicht in der Geräteliste des Kontos. Versuche es in einem Moment erneut.",
+      "callback_failed": "Callback-URL konnte nicht bei Imou registriert werden: {error}",
+      "callback_url_missing": "Bei aktiviertem Ereignis-Push ist eine Callback-URL erforderlich.",
+      "decrypt_libs_missing": "Die Entschlüsselungsbibliotheken sind auf diesem Host nicht installiert, daher würde dieser Schalter nichts bewirken. Lege sie zuerst ab, oder lass ihn aus.",
+      "record_path_not_allowed": "Dieser Ordner ist nicht in allowlist_external_dirs. Füge ihn unter Home Assistant → Allowlist external directories hinzu und versuche es erneut."
+    },
+    "step": {
+      "init": {
+        "title": "Imou Life konfigurieren",
+        "description": "Alarm-Push: **{push_state}** · Alarmbilder: **{decrypt_state}** · Bei Alarm aufzeichnen: **{record_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder und Bei Alarm aufzeichnen wirken nur, während Alarm-Push eingeschaltet ist.",
+        "menu_options": {
+          "general_settings": "Abfrage und Kameras",
+          "event_push": "Alarm-Push und Benachrichtigungen",
+          "alarm_image_decrypt": "Alarmbilder",
+          "local_recording": "Bei Alarm aufzeichnen",
+          "select_poll_devices": "Zu abfragende Geräte wählen",
+          "bind_device": "Neues Gerät koppeln",
+          "finish": "Fertig"
+        }
+      },
+      "general_settings": {
+        "title": "Statusabfrage und Kamera-Standardwerte",
+        "description": "Wie oft Home Assistant den Gerätestatus aktualisiert, plus die Live-Stream- und PTZ-Standardwerte, mit denen jede Kamera dieses Kontos startet.",
+        "data": {
+          "enable_polling": "Statusabfrage aktivieren",
+          "update_interval": "Abfrageintervall (Sekunden)"
+        },
+        "data_description": {
+          "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
+          "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist."
+        },
+        "sections": {
+          "camera_defaults": {
+            "name": "Kamera-Standardwerte",
+            "description": "Live-Stream- und PTZ-Standardwerte für dieses Konto.",
+            "data": {
+              "download_snap_wait_time": "Wartezeit für Schnappschuss (Sekunden)",
+              "live_resolution": "Videoauflösung",
+              "rotation_duration": "PTZ-Drehdauer (ms)"
+            },
+            "data_description": {
+              "download_snap_wait_time": "Die Kamera muss den Schnappschuss aufnehmen und hochladen, bevor Imou ihn bereitstellen kann. So lange wartet Home Assistant vor dem Abruf. Erhöhe den Wert, wenn Schnappschüsse veraltet oder leer ankommen. Standard 3 s.",
+              "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet.",
+              "rotation_duration": "Wie weit ein Druck auf eine PTZ-Richtungstaste bewegt, als Bewegungszeit. Standard 500 ms."
+            }
+          }
+        }
+      },
+      "event_push": {
+        "title": "Alarm-Push und Benachrichtigungen",
+        "description": "{lan_hint}Cloud-Alarme per Webhook empfangen. Vorgeschlagene Callback-Adresse: {suggested_url}",
+        "data": {
+          "enable_event_push": "Ereignis-Push aktivieren",
+          "webhook_url": "Callback-URL",
+          "event_push_types": "Abonnieren"
+        },
+        "data_description": {
+          "enable_event_push": "Die Imou-Cloud sendet Alarme per POST an diesen Home-Assistant-Webhook. Alarme werden auch mit der Imou Life App synchronisiert.",
+          "webhook_url": "Erforderlich, wenn Ereignis-Push an ist. Muss aus dem Internet erreichbar sein; wenn die vorgeschlagene Adresse das nicht ist, ändere nur Hostname und Port.",
+          "event_push_types": "Welche Cloud-Nachrichten Home Assistant empfangen soll."
+        },
+        "sections": {
+          "notifications": {
+            "name": "Bei Alarm benachrichtigen",
+            "description": "Optional. Leer lassen, um nur Automationen zu nutzen.",
+            "data": {
+              "notify_services": "Benachrichtigungsziele"
+            },
+            "data_description": {
+              "notify_services": "Registrierte Notify-Dienste auf diesem Home Assistant. Eine Nachricht pro Alarm. Schalte **Bei Alarm benachrichtigen** auf einer Geräteseite aus, um dieses Gerät zu überspringen. Um das Alarmbild in diese Nachrichten zu legen, siehe **Alarmbilder**."
+            }
+          }
+        }
+      },
+      "alarm_image_decrypt": {
+        "title": "Alarmbilder",
+        "description": "{push_hint}Alarmbilder kommen verschlüsselt an, daher muss Home Assistant eines lokal entschlüsseln, bevor es in eine Benachrichtigung kann.\n\nStatus: {native_hint}\n\nDie unten aufgeführten Geräte benötigen ihr Imou-Life-Gerätepasswort; nicht aufgeführte Geräte brauchen nichts. Gespeicherte Passwörter werden wieder eingetragen (maskiert). Zum Löschen **Gespeicherte Passwörter entfernen** verwenden. Gespeichert: {password_count} ({configured_serials}).",
+        "data": {
+          "attach_decrypted_thumbnail": "Bild in Alarmbenachrichtigungen anzeigen",
+          "default_device_password": "Standard-Gerätepasswort",
+          "clear_default_device_password": "Standard-Gerätepasswort löschen",
+          "remove_device_passwords": "Gespeicherte Passwörter entfernen"
+        },
+        "data_description": {
+          "attach_decrypted_thumbnail": "Benötigt die externe URL von Home Assistant (Einstellungen → System → Netzwerk) für Telefone außerhalb des LAN. Bilder werden unauthentifiziert unter /local/imou_life/thumbs/ etwa 24 Stunden gespeichert. Passwörter bleiben auf diesem Home Assistant und dienen nur der Entschlüsselung.",
+          "default_device_password": "Fallback für Geräte, die unten kein eigenes Passwort haben.",
+          "clear_default_device_password": "Löscht den gespeicherten Standard. Gerätebezogene Passwörter bleiben unverändert.",
+          "remove_device_passwords": "Markierte Seriennummern werden gelöscht."
+        }
+      },
+      "local_recording": {
+        "title": "Bei Alarm aufzeichnen",
+        "description": "{push_hint}Zeichnet nach einem Alarm einen kurzen Clip aus dem Cloud-Stream auf. Pro-Kamera **Bei Alarm aufzeichnen** steht auf jeder Geräteseite.",
+        "data": {
+          "local_record_path": "Speicherordner",
+          "local_record_duration": "Cliplänge (Sekunden)"
+        },
+        "data_description": {
+          "local_record_path": "Beispiel: /media/imou. Leer lassen zum Überspringen. Der Ordner muss in allowlist_external_dirs stehen.",
+          "local_record_duration": "Cliplänge nach dem Alarm. Standard 60 s, Bereich 15–180 s. Verbraucht Live-Stream-Kontingent."
+        }
+      },
+      "select_poll_devices": {
+        "title": "Zu abfragende Geräte wählen",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte bleiben in Home Assistant, werden aber nicht abgefragt.",
+        "data": {
+          "selected_devices": "Geräte"
+        }
+      },
+      "no_devices_menu": {
+        "title": "Keine Geräte gefunden",
+        "description": "Dieses Konto hat noch keine Imou-Geräte. Koppeln jetzt eines, oder speichere ohne Kopplung.",
+        "menu_options": {
+          "bind_device": "Gerät koppeln",
+          "finish_without_bind": "Ohne Kopplung fortfahren"
+        }
+      },
+      "devices_unavailable": {
+        "title": "Imou-Cloud nicht erreichbar",
+        "description": "Die Geräteliste konnte nicht abgerufen werden: {error}\n\nDu kannst es erneut versuchen oder deine anderen Änderungen speichern und die Geräteauswahl unverändert lassen.",
+        "menu_options": {
+          "select_poll_devices": "Erneut versuchen",
+          "save_without_devices": "Speichern, ohne die Geräteauswahl zu ändern"
+        }
+      },
+      "bind_device": {
+        "title": "Neues Gerät koppeln",
+        "description": "Gib die Geräteseriennummer und den Kopplungscode aus der Imou Life App oder vom Geräteetikett ein.",
+        "data": {
+          "device_id": "Geräteseriennummer",
+          "code": "Kopplungscode"
+        },
+        "data_description": {
+          "device_id": "Seriennummer (SN) auf dem Gerät oder in der Imou Life App",
+          "code": "Optional. Leer lassen, wenn das Gerät keinen Kopplungscode benötigt"
+        }
+      }
+    }
+  },
+  "selector": {
+    "api_url": {
+      "options": {
+        "cn": "China",
+        "eu": "Europa",
+        "na": "Nordamerika",
+        "sg": "Singapur (Asien-Pazifik)"
+      }
+    },
+    "webhook_placeholder": {
+      "options": {
+        "not_generated": "Nicht erzeugt"
+      }
+    },
+    "status": {
+      "options": {
+        "on": "ein",
+        "off": "aus",
+        "missing_libs": "ein, aber Bibliotheken fehlen",
+        "all_devices": "alle"
+      }
+    },
+    "prerequisite": {
+      "options": {
+        "push_off": "Alarm-Push ist aus, daher greift auf dieser Seite noch nichts. Schalte ihn unter Konfigurieren → Alarm-Push und Benachrichtigungen ein.",
+        "callback_not_public": "Diese Adresse ist nur im lokalen Netzwerk erreichbar, daher kann die Imou-Cloud keine Alarme per POST senden und Telefone außerhalb des LAN können Alarmbilder nicht laden. Setze eine aus dem Internet erreichbare Adresse unter Einstellungen → System → Netzwerk → Home Assistant-URL, oder gib die Adresse ein, die dein Reverse-Proxy nach außen bereitstellt."
+      }
+    },
+    "event_push_type": {
+      "options": {
+        "alarm": "Gerätealarme (Rauch, Gas, Person, Bildänderung usw.)",
+        "device_status": "Gerät online/offline",
+        "iot": "IoT-Gerätenachrichten. Wenn dies ausgewählt und Ereignis-Push an ist, aktualisieren Thing-Modell-Geräte Schalter/Sensoren/Scharfschaltung sofort aus iotProperty und überspringen die Intervall-Eigenschaftsabfrage. Schalte Ereignis-Push aus oder entferne die Markierung, um diese Eigenschaften wieder abzufragen.",
+        "numberstat": "Personenzählung",
+        "face_analysis": "Gesichtsanalyse"
+      }
+    },
+    "device_status": {
+      "options": {
+        "1": "Online",
+        "0": "Offline"
+      }
+    },
+    "webhook_notification": {
+      "options": {
+        "title": "Imou Life · {alarm_type}",
+        "device": "Gerät: {device_name}",
+        "area": "Bereich: {area_name}",
+        "labels": "Bezeichnungen: {labels}",
+        "time": "Zeit: {time_str}",
+        "details": "Details: {desc_type}",
+        "unknown_device": "Unbekanntes Gerät",
+        "unknown_alarm": "Alarm"
+      }
+    },
+    "alarm_type": {
+      "options": {
+        "abAlarmSound": "Ungewöhnliches Geräusch erkannt",
+        "e_abAlarmSound": "Ungewöhnliches Geräusch erkannt",
+        "e_alarmPIR": "PIR-Bewegung erkannt",
+        "aiPerArea": "Person hat den Bereich betreten",
+        "aiVehArea": "Fahrzeug hat den Bereich betreten",
+        "alarmEnd": "Alarm beendet",
+        "alarmLocal": "Lokaler Alarm",
+        "alarmOccurs": "Alarm ausgelöst",
+        "alarmPIR": "PIR-Bewegung erkannt",
+        "alkElec": "Alkalibatterie schwach",
+        "apOpenDoor": "Tür entriegelt",
+        "apSanpKeyUpdate": "Temporärer Schlüssel aktualisiert",
+        "apUpgradeFail": "Zubehör-Upgrade fehlgeschlagen",
+        "apUpgradeSuccess": "Zubehör aktualisiert",
+        "attachmentInfo": "Zubehör hat sich gemeldet",
+        "batteryAbnormal": "Batterieproblem",
+        "beOpenedDoor": "Tür geöffnet",
+        "bindDevice": "Gerät gekoppelt",
+        "callBellEvent": "Eingehender Anruf",
+        "callEvent": "Gerät ruft an",
+        "callNoAnswered": "Anruf unbeantwortet",
+        "checkAlarm": "Bestätigt",
+        "checkAlarmFail": "Gerätefehler",
+        "closeCamera": "Privatsphäreabdeckung an",
+        "crossLineDetection": "Linienüberschreitung erkannt",
+        "deviceAuthorizationChanged": "Autorisierung geändert",
+        "deviceAuthorize": "Gerät autorisiert",
+        "deviceDeletedSharedCancel": "Freigabe abgebrochen",
+        "deviceShare": "Gerät geteilt",
+        "deviceShareCancel": "Freigabe entfernt",
+        "Doorbell": "Türklingel betätigt",
+        "e_aiPerArea": "Person hat den Bereich betreten",
+        "e_aiPerAreaAlarm": "Person hat den Bereich betreten",
+        "e_aiVehArea": "Fahrzeug hat den Bereich betreten",
+        "e_aiVehAreaAlarm": "Fahrzeug hat den Bereich betreten",
+        "e_areaDetect": "Eindringen erkannt",
+        "e_areaDetectAlarm": "Eindringen erkannt",
+        "e_btnOnceAction": "Notknopf gedrückt",
+        "e_clearAlarmPIR": "PIR-Alarm aufgehoben",
+        "e_clearGasAlarm": "Gasalarm aufgehoben",
+        "e_clearSmokeAlarm": "Rauchalarm aufgehoben",
+        "e_clearSirenAlarm": "Sirene aufgehoben",
+        "e_clearSirenAlarmFail": "Aufheben der Sirene fehlgeschlagen",
+        "e_faultAlarm": "Gerätefehler",
+        "e_gasAlarm": "Gasleck erkannt",
+        "e_hxSmokeAlarm": "Rauch erkannt",
+        "e_lockAlarm": "Tür geschlossen",
+        "e_matchApSucc": "Zubehör gekoppelt",
+        "e_multiOrdinaryEvent": "Gewöhnliches Aufnahmeereignis",
+        "e_multiVideoAiPerArea": "Person hat den Bereich betreten",
+        "e_multiVideoAiPerAreaAlarm": "Person hat den Bereich betreten",
+        "e_multiVideoAiPetAlarm": "Haustier hat den Bereich betreten",
+        "e_multiVideoAiPetArea": "Haustier hat den Bereich betreten",
+        "e_multiVideoAiVehArea": "Fahrzeug hat den Bereich betreten",
+        "e_multiVideoAiVehAreaAlarm": "Fahrzeug hat den Bereich betreten",
+        "e_multiVideoAreaDetect": "Eindringen erkannt",
+        "e_multiVideoDetectAlarm": "Eindringen erkannt",
+        "e_sensorAbnormal": "Sabotage erkannt",
+        "e_sirenAlarm": "Sirenenalarm",
+        "e_sirenAlarmFail": "Sirenenalarm fehlgeschlagen",
+        "e_smartMixDetect": "Person oder Fahrzeug erkannt",
+        "e_std_aorAlarm": "AOR-Aufnahmeereignis",
+        "e_storageAbnormal": "SD-Kartenfehler",
+        "e_storageEmpty": "SD-Karte entfernt",
+        "e_unlockAlarm": "Tür geöffnet",
+        "e_upgradeFail": "Upgrade fehlgeschlagen",
+        "e_upgradeSuccess": "Upgrade erfolgreich",
+        "e_videoMotion": "Bewegung erkannt",
+        "home": "Zuhause scharf",
+        "leave": "Abwesend scharf",
+        "no_defend": "Unscharf",
+        "earlyWarning": "Frühwarnung",
+        "earlyWarningEnd": "Frühwarnung beendet",
+        "electricAbnormal": "Spannungsproblem",
+        "electricity": "Batterie schwach",
+        "engineOpenedDoor": "Mechanisches Schloss geöffnet",
+        "faultAlarm": "Gerätefehler",
+        "fault_remind": "Fehlerwarnung",
+        "fireAlarm": "Feuer erkannt",
+        "gasAlarm": "Gasleck erkannt",
+        "goodsMove": "Objekt entfernt",
+        "heatmap": "Heatmap bereit",
+        "heatImagingTemper": "Temperaturalarm",
+        "highHumAbnormal": "Luftfeuchtigkeit zu hoch",
+        "highTemAbnormal": "Temperatur zu hoch",
+        "highTemAlarm": "Hohe Temperatur",
+        "highWaterPressure": "Wasserdruck zu hoch",
+        "hijackAlarm": "Nötigungsalarm",
+        "high_humidity_alarm": "Luftfeuchtigkeit zu hoch",
+        "high_temperature_alarm": "Temperatur zu hoch",
+        "hoveringAlarm": "Herumlungern erkannt",
+        "human": "Person erkannt",
+        "keyEntrySuc": "Schlüssel eingelernt",
+        "leakElectric": "Leckstrom erkannt",
+        "leftDetection": "Objekt zurückgelassen",
+        "litElec": "Lithiumbatterie schwach",
+        "lock_alarm": "Tür geschlossen",
+        "low_battery_alarm": "Batterie schwach",
+        "low_humidity_alarm": "Luftfeuchtigkeit zu niedrig",
+        "low_temperature_alarm": "Temperatur zu niedrig",
+        "lowHumAbnormal": "Luftfeuchtigkeit zu niedrig",
+        "lowTemAbnormal": "Temperatur zu niedrig",
+        "lowWaterPressure": "Wasserdruck zu niedrig",
+        "magnetomerAlarm": "Tür/Fenster geöffnet",
+        "message": "Videonachricht empfangen",
+        "mobileDetect": "PIR-Bewegung erkannt",
+        "nbDeviceAbnormal": "Sabotage erkannt",
+        "nbElecOver": "Überstrom",
+        "nbElecRes": "Reststromalarm",
+        "nbTempOver": "Temperatur zu hoch",
+        "notOpenedDoor": "Tür ließ sich nicht öffnen",
+        "noZigbeeAir": "Keine Anwesenheit",
+        "objectMoved": "Objekt bewegt",
+        "offline": "Gerät offline",
+        "online": "Gerät online",
+        "openCamera": "Privatsphäreabdeckung aus",
+        "openDoorAbnormal": "Gewaltsames Eindringen",
+        "parkingDetection": "Fahrzeug geparkt",
+        "pir_alarm": "PIR-Bewegung erkannt",
+        "pir_cleared": "PIR-Alarm aufgehoben",
+        "pm2.5Abnormal": "PM2.5 hoch",
+        "pressTheDoor": "Neuer Besucher am Schloss",
+        "remoteControl": "Fernalarm ausgelöst",
+        "sensorAbnormal": "Sabotage erkannt",
+        "siren_alarm_clear_fail": "Aufheben der Sirene fehlgeschlagen",
+        "siren_alarm_cleared": "Sirene aufgehoben",
+        "siren_alarm_failed": "Sirenenalarm fehlgeschlagen",
+        "siren_warning": "Sirenenalarm",
+        "sirenOff": "Sirene aus",
+        "sirenOn": "Sirene an",
+        "sleep": "Gerät im Ruhezustand",
+        "smoke_alarm": "Rauch erkannt",
+        "smoke_alarm_restore": "Alarm wiederhergestellt",
+        "smokeAlarm": "Rauch erkannt",
+        "sos_alarm": "Notruf",
+        "soundLightAlarm": "Sirene und Blitz an",
+        "storageAbnormal": "SD-Kartenfehler",
+        "storageEmpty": "Keine SD-Karte",
+        "storageFailure": "Festplatte ausgefallen",
+        "storageLowSpace": "Festplatte voll",
+        "storageRecoverFail": "Formatieren der SD-Karte fehlgeschlagen",
+        "storageRecoverOk": "SD-Karte formatiert",
+        "temper_alarm": "Sabotage erkannt",
+        "transferDeviceFrom": "Gerät übertragen (Ausgang)",
+        "transferDeviceTo": "Geräteübertragung empfangen",
+        "unbindDevice": "Gerät entkoppelt",
+        "unknownAlarm": "Unbekannter Alarm",
+        "unlock_alarm": "Tür geöffnet",
+        "upgrade_failed": "Upgrade fehlgeschlagen",
+        "upgrade_result": "Upgrade abgeschlossen",
+        "upgrade_success": "Upgrade erfolgreich",
+        "upgradeFail": "Upgrade fehlgeschlagen",
+        "UpgradeSuccess": "Upgrade erfolgreich",
+        "upgrading": "Upgrade läuft",
+        "urgencyAlarm": "Notknopf gedrückt",
+        "videoBlind": "Video blockiert",
+        "videoLoss": "Video verloren",
+        "videoMotion": "Bewegung erkannt",
+        "vocAbnormal": "VOC hoch",
+        "waterAlarm": "Wasserleck erkannt",
+        "watersensor_alarm": "Wasserleck erkannt",
+        "whiteLightOff": "Weißlicht aus",
+        "whiteLightOn": "Weißlicht an",
+        "wireLessDevLowPower": "Batterie schwach",
+        "wirelessSignal": "Schwaches Funksignal"
+      }
+    },
+    "native_hint": {
+      "options": {
+        "supported": "unterstützt (linux x86-64)",
+        "unsupported": "nicht unterstützt (benötigt linux x86-64; dieser Host ist {arch})",
+        "ready": "Entschlüsselungsbibliotheken bereit (linux x86-64)",
+        "missing": "Entschlüsselungsbibliotheken fehlen ({found}/2 gefunden). {client_so} und {sdk_so} nach {native_dir} kopieren"
+      }
+    }
+  },
+  "entity": {
+    "alarm_control_panel": {
+      "arming": {
+        "name": "Scharfschaltung",
+        "state": {
+          "armed_home": "Zuhause scharf",
+          "armed_away": "Abwesend scharf",
+          "disarmed": "Unscharf"
+        }
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "offline": "Offline",
+          "online": "Online",
+          "sleep": "Ruhezustand",
+          "upgrading": "Upgrade läuft"
+        }
+      },
+      "storage_used": {
+        "name": "Speicher belegt"
+      },
+      "switch_cnt": {
+        "name": "Schaltzyklen heute"
+      },
+      "use_electricity": {
+        "name": "Energieverbrauch"
+      },
+      "use_time": {
+        "name": "Nutzungsdauer"
+      }
+    },
+    "select": {
+      "device_volume": {
+        "name": "Lautstärke",
+        "state": {
+          "high": "Hoch",
+          "low": "Niedrig",
+          "medium": "Mittel",
+          "mute": "Stumm"
+        }
+      },
+      "night_vision_mode": {
+        "name": "Nachtsichtmodus",
+        "state": {
+          "custom": "Benutzerdefinierte Nachtsicht",
+          "fullcolor": "Vollfarb-Nachtsicht",
+          "infrared": "Infrarot-Nachtsicht",
+          "intelligent": "Intelligente Nachtsicht",
+          "lowlight": "Schwachlicht-Nachtsicht",
+          "off": "Aus",
+          "smartlowlight": "Intelligente Schwachlicht-Nachtsicht"
+        }
+      },
+      "collection_point": {
+        "name": "Zur Sammelposition",
+        "state": {
+          "select_collection_point": "Sammelposition wählen…"
+        }
+      }
+    },
+    "switch": {
+      "ab_alarm_sound": {
+        "name": "Alarm bei ungewöhnlichem Geräusch"
+      },
+      "audio_encode_control": {
+        "name": "Audioaufnahme"
+      },
+      "close_camera": {
+        "name": "Privatsphärenmodus"
+      },
+      "frame_reverse": {
+        "name": "Bild spiegeln"
+      },
+      "header_detect": {
+        "name": "Personenerkennung"
+      },
+      "light": {
+        "name": "Kontrollleuchte"
+      },
+      "local_event_record": {
+        "name": "Bei Alarm aufzeichnen"
+      },
+      "notify_on_alarm": {
+        "name": "Bei Alarm benachrichtigen"
+      },
+      "linkage_siren": {
+        "name": "Alarmgekoppelte Sirene"
+      },
+      "linkage_white_light": {
+        "name": "Alarmgekoppeltes Weißlicht"
+      },
+      "motion_detect": {
+        "name": "Bildänderung"
+      },
+      "pet_detect": {
+        "name": "Haustiererkennung"
+      },
+      "play_sound": {
+        "name": "Hinweiston"
+      },
+      "smart_track": {
+        "name": "Intelligente Verfolgung"
+      },
+      "switch": {
+        "name": "Steckdosenschalter"
+      },
+      "white_light": {
+        "name": "Weißlicht"
+      },
+      "wide_dynamic": {
+        "name": "Weiter Dynamikbereich"
+      }
+    },
+    "button": {
+      "ptz_up": {
+        "name": "PTZ hoch"
+      },
+      "ptz_down": {
+        "name": "PTZ runter"
+      },
+      "ptz_left": {
+        "name": "PTZ links"
+      },
+      "ptz_right": {
+        "name": "PTZ rechts"
+      },
+      "restart_device": {
+        "name": "Gerät neu starten"
+      },
+      "mute": {
+        "name": "Stumm"
+      },
+      "siren_start": {
+        "name": "Sirene starten"
+      },
+      "siren_stop": {
+        "name": "Sirene stoppen"
+      }
+    },
+    "camera": {
+      "camera": {
+        "name": "Live"
+      }
+    },
+    "binary_sensor": {
+      "door_contact_status": {
+        "name": "Status",
+        "state": {
+          "on": "Offen",
+          "off": "Geschlossen"
+        }
+      },
+      "motion": {
+        "name": "Bewegung"
+      }
+    },
+    "siren": {
+      "siren": {
+        "name": "Sirene"
+      }
+    },
+    "text": {
+      "count_down_switch": {
+        "name": "Countdown-Timer (min)"
+      },
+      "overcharge_switch": {
+        "name": "Maximale Leistung (W)"
+      }
+    }
+  },
+  "services": {
+    "control_move_ptz": {
+      "name": "PTZ steuern",
+      "description": "PTZ-Drehung steuern",
+      "fields": {
+        "duration": {
+          "name": "Dauer",
+          "description": "PTZ-Drehdauer"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "switch_operation_failed": {
+      "message": "Imou hat die Schalteränderung abgelehnt: {error}"
+    },
+    "select_option_failed": {
+      "message": "Imou hat die neue Option abgelehnt: {error}"
+    },
+    "set_text_value_failed": {
+      "message": "Imou hat den neuen Wert abgelehnt: {error}"
+    },
+    "button_press_failed": {
+      "message": "Imou hat den Tastendruck abgelehnt: {error}"
+    },
+    "alarm_arm_disarm_failed": {
+      "message": "Imou hat die Scharfschaltungsänderung abgelehnt: {error}"
+    },
+    "stream_source_failed": {
+      "message": "Live-Stream-URL konnte nicht von Imou geholt werden: {error}"
+    },
+    "camera_image_failed": {
+      "message": "Schnappschuss konnte nicht von Imou geholt werden: {error}"
+    },
+    "not_a_ptz_button": {
+      "message": "{entity_id} ist keine PTZ-Taste und kann daher nicht bewegt werden. Wähle stattdessen eine PTZ-Richtungstaste."
+    },
+    "remove_device_missing_id": {
+      "message": "Gerät {name} kann nicht entfernt werden: Imou-Geräte-ID fehlt."
+    },
+    "remove_device_has_siblings": {
+      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts in den Integrationsoptionen auf, um die Abfrage zu beenden, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
+    },
+    "remove_device_no_runtime": {
+      "message": "Gerät {name} kann nicht entfernt werden: die Integration ist nicht geladen."
+    }
+  }
+}

@@ -1962,3 +1962,21 @@ async def test_webhook_zh_cn_uses_simplified_chinese_copy(
     )
     assert title.startswith("Imou Life ·")
     assert "设备：Cam" in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_german_device_line(hass: HomeAssistant) -> None:
+    """de.json must drive the notify body, not the English fallback."""
+    from homeassistant.helpers import translation
+
+    from custom_components.imou_life.const import DOMAIN
+
+    hass.config.language = "de"
+    await translation.async_get_translations(
+        hass, "de", "selector", integrations={DOMAIN}
+    )
+    _title, message = await _async_build_notification_message(
+        hass, {"msg_type": "videoMotion", "device_name": "Cam"}
+    )
+    assert "Gerät: Cam" in message
+    assert "Device: Cam" not in message
