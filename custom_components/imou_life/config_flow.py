@@ -16,7 +16,7 @@ from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, translation
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -572,7 +572,7 @@ class ImouOptionsFlow(OptionsFlow):
         self, options: Mapping[str, Any]
     ) -> dict[str, str]:
         """Return webhook reference values for the step description."""
-        language = self.hass.config.language
+        language = self._ui_language()
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
         suggested_webhook_url = self._generated_webhook_url()
         not_generated = selector_option_label(
@@ -687,6 +687,7 @@ class ImouOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Choose which options section to edit."""
+        await self._async_load_selector_translations()
         return self.async_show_menu(
             step_id="init",
             menu_options=[
@@ -720,6 +721,12 @@ class ImouOptionsFlow(OptionsFlow):
 
     def _ui_language(self) -> str:
         return resolve_ui_language(getattr(self.hass.config, "language", None))
+
+    async def _async_load_selector_translations(self) -> None:
+        """Load selector strings before reading cached labels."""
+        await translation.async_get_translations(
+            self.hass, self._ui_language(), "selector", integrations={DOMAIN}
+        )
 
     def _status_label(self, key: str, fallback: str) -> str:
         """Return a translated status word for the menu summary."""
@@ -915,6 +922,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
 
         stored = self._device_passwords()
+        await self._async_load_selector_translations()
         return self.async_show_form(
             step_id="alarm_image_decrypt",
             data_schema=self._alarm_image_decrypt_schema(user_input),
@@ -971,6 +979,7 @@ class ImouOptionsFlow(OptionsFlow):
                 ),
             }
 
+        await self._async_load_selector_translations()
         return self.async_show_form(
             step_id="local_recording",
             data_schema=self.add_suggested_values_to_schema(
@@ -1034,6 +1043,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
             suggested_source = {**stored, **flat}
 
+        await self._async_load_selector_translations()
         placeholders = self._event_push_webhook_placeholders(suggested_source)
         if error_detail:
             placeholders["error"] = error_detail
