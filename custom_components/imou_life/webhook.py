@@ -36,6 +36,7 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .helpers import (
+    alarm_type_option_key,
     fill_template,
     get_selected_device_ids,
     resolve_ha_device_entry,
@@ -105,11 +106,15 @@ def _alarm_type_label(
     """Map msg_type / IoT identifier to a localized label."""
     if not msg_type:
         return None
-    label = selector_option_label(hass, language, "alarm_type", msg_type, "")
+    label = selector_option_label(
+        hass, language, "alarm_type", alarm_type_option_key(msg_type), ""
+    )
     if label:
         return label
     if msg_type.startswith("e_"):
-        label = selector_option_label(hass, language, "alarm_type", msg_type[2:], "")
+        label = selector_option_label(
+            hass, language, "alarm_type", alarm_type_option_key(msg_type[2:]), ""
+        )
         if label:
             return label
     return None

@@ -16,7 +16,8 @@ from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
-from homeassistant.helpers import config_validation as cv, translation
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import translation
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,

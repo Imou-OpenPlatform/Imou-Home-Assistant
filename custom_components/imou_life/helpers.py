@@ -105,6 +105,11 @@ def fill_template(template: str, fallback: str, **values: str) -> str:
             return fallback
 
 
+def alarm_type_option_key(msg_type: str) -> str:
+    """Map a protocol id onto a hassfest-safe selector option key."""
+    return msg_type.lower().replace(".", "-")
+
+
 def selector_option_label(
     hass: HomeAssistant,
     language: str | None,

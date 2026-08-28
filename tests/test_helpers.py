@@ -11,6 +11,7 @@ from custom_components.imou_life.const import (
     imou_life_device_keys_from_ids,
 )
 from custom_components.imou_life.helpers import (
+    alarm_type_option_key,
     fill_template,
     iot_property_push_active,
     notify_service_selector_options,
@@ -299,3 +300,11 @@ def test_fill_template_falls_back_when_placeholders_break() -> None:
     assert fill_template("Hi {name}", "Hi {name}", name="Ada") == "Hi Ada"
     assert fill_template("Hi {missing}", "Hi {name}", name="Ada") == "Hi Ada"
     assert fill_template("Hi {broken", "plain", name="Ada") == "plain"
+
+
+def test_alarm_type_option_key_is_hassfest_safe() -> None:
+    """Selector option keys must be [a-z0-9-_]+ for hassfest."""
+    assert alarm_type_option_key("videoMotion") == "videomotion"
+    assert alarm_type_option_key("e_abAlarmSound") == "e_abalarmsound"
+    assert alarm_type_option_key("pm2.5Abnormal") == "pm2-5abnormal"
+    assert alarm_type_option_key("UpgradeSuccess") == "upgradesuccess"
