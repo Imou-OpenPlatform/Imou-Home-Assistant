@@ -28,7 +28,6 @@ from .repairs import (
 )
 from .runtime_data import ImouRuntimeData
 from .webhook import (
-    async_preload_webhook_strings,
     async_register_imou_webhook,
     async_unregister_imou_webhook,
 )
@@ -74,7 +73,6 @@ async def async_setup_event_push(
 
     generated_url = async_register_imou_webhook(hass, webhook_id)
     entry.async_on_unload(partial(async_unregister_imou_webhook, hass, webhook_id))
-    await async_preload_webhook_strings(hass)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         await _async_set_message_callback(hass, entry, imou_client, "on", generated_url)

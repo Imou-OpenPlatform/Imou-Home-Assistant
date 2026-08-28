@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from datetime import UTC, datetime, tzinfo
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -19,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
+from homeassistant.helpers import translation
 from pyimouapi.push import (
     event_ref_lookup_key,
     iot_property_values,
@@ -38,10 +36,13 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .helpers import (
+    fill_template,
     get_selected_device_ids,
     resolve_ha_device_entry,
     resolve_ha_device_key,
     resolve_ha_device_name,
+    resolve_ui_language,
+    selector_option_label,
 )
 from .local_record import async_maybe_record_from_alarm
 from .pic_thumbnail import async_maybe_decrypt_thumbnail, public_media_url
@@ -49,7 +50,6 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
-_WEBHOOK_STRINGS_DIR = Path(__file__).parent / "webhook_strings"
 _PUSH_SECRET_KEYS = frozenset({"token", "accessToken", "access_token"})
 
 
@@ -99,48 +99,21 @@ def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) ->
     return state.state != STATE_OFF
 
 
-def _webhook_strings_filename(language: str) -> str:
-    if language.startswith("zh"):
-        return "zh-Hans.json"
-    return "en.json"
-
-
-@lru_cache(maxsize=4)
-def _load_webhook_strings_file(filename: str) -> dict[str, Any]:
-    """Load a webhook strings JSON file (blocking; call via executor)."""
-    path = _WEBHOOK_STRINGS_DIR / filename
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-_WEBHOOK_STRING_FILES = ("en.json", "zh-Hans.json")
-
-
-async def async_preload_webhook_strings(hass: HomeAssistant) -> None:
-    """Warm webhook string cache off the event loop."""
-    for filename in _WEBHOOK_STRING_FILES:
-        await hass.async_add_executor_job(_load_webhook_strings_file, filename)
-
-
-async def _async_get_webhook_strings(
-    hass: HomeAssistant,
-    language: str,
-) -> tuple[dict[str, str], dict[str, str]]:
-    """Load webhook notification templates and alarm type labels."""
-    filename = _webhook_strings_filename(language)
-    data = await hass.async_add_executor_job(_load_webhook_strings_file, filename)
-    notification = data.get("notification", {})
-    alarm_types = data.get("alarm_types", {})
-    return notification, alarm_types
-
-
-def _alarm_type_label(alarm_types: dict[str, str], msg_type: str | None) -> str | None:
+def _alarm_type_label(
+    hass: HomeAssistant, language: str, msg_type: str | None
+) -> str | None:
     """Map msg_type / IoT identifier to a localized label."""
     if not msg_type:
         return None
-    if msg_type in alarm_types:
-        return alarm_types[msg_type]
-    if msg_type.startswith("e_") and msg_type[2:] in alarm_types:
-        return alarm_types[msg_type[2:]]
+    label = selector_option_label(hass, language, "alarm_type", msg_type, "")
+    if label:
+        return label
+    if msg_type.startswith("e_"):
+        label = selector_option_label(
+            hass, language, "alarm_type", msg_type[2:], ""
+        )
+        if label:
+            return label
     return None
 
 
@@ -298,28 +271,30 @@ async def _async_build_notification_message(
     hass: HomeAssistant, event_data: dict[str, Any]
 ) -> tuple[str, str]:
     """Build a notification title and message from an event payload."""
-    notif, alarm_types = await _async_get_webhook_strings(hass, hass.config.language)
+    language = resolve_ui_language(hass.config.language)
+    await translation.async_get_translations(
+        hass, language, "selector", integrations={DOMAIN}
+    )
+
+    def notif(key: str, fallback: str, **values: str) -> str:
+        template = selector_option_label(
+            hass, language, "webhook_notification", key, fallback
+        )
+        return fill_template(template, fallback, **values)
 
     msg_type = event_data.get("msg_type")
-    unknown_device = notif.get("unknown_device", "Unknown device")
-    unknown_alarm = notif.get("unknown_alarm", "Alarm")
-    # Prefer the Home Assistant registry name; never use the cloud dname/cname.
+    unknown_device = notif("unknown_device", "Unknown device")
+    unknown_alarm = notif("unknown_alarm", "Alarm")
     device_name = (
         event_data.get("device_name") or event_data.get("device_id") or unknown_device
     )
-    alarm_type = _alarm_type_label(alarm_types, msg_type) or (
-        msg_type if msg_type else unknown_alarm
-    )
+    alarm_type = _alarm_type_label(hass, language, msg_type) or unknown_alarm
     time_str = _format_notification_time(
         event_data.get("time"), _zoneinfo(hass.config.time_zone)
     )
 
-    # Title is the alarm type only; body carries device (and time) without
-    # repeating the same type line.
-    title = notif.get("title", "Imou Life · {alarm_type}").format(alarm_type=alarm_type)
-    message = notif.get("device", "Device: {device_name}").format(
-        device_name=device_name
-    )
+    title = notif("title", "Imou Life · {alarm_type}", alarm_type=alarm_type)
+    message = notif("device", "Device: {device_name}", device_name=device_name)
     ha_device = resolve_ha_device_entry(
         hass,
         event_data.get("device_id"),
@@ -329,10 +304,9 @@ async def _async_build_notification_message(
     if ha_device is not None and ha_device.area_id:
         area = ar.async_get(hass).async_get_area(ha_device.area_id)
         if area is not None and area.name:
-            area_line = notif.get("area", "Location: {area_name}").format(
-                area_name=area.name
+            message += "\n" + notif(
+                "area", "Location: {area_name}", area_name=area.name
             )
-            message += f"\n{area_line}"
     if ha_device is not None and ha_device.labels:
         label_reg = lr.async_get(hass)
         label_names = sorted(
@@ -342,23 +316,21 @@ async def _async_build_notification_message(
             and (name := label.name)
         )
         if label_names:
-            labels_line = notif.get("labels", "Labels: {labels}").format(
-                labels=" / ".join(label_names)
+            message += "\n" + notif(
+                "labels",
+                "Labels: {labels}",
+                labels=" / ".join(label_names),
             )
-            message += f"\n{labels_line}"
     if time_str:
-        time_line = notif.get("time", "Time: {time_str}").format(time_str=time_str)
-        message += f"\n{time_line}"
+        message += "\n" + notif("time", "Time: {time_str}", time_str=time_str)
 
     desc = event_data.get("desc")
     if desc and isinstance(desc, dict):
         desc_type = desc.get("type")
         if desc_type:
-            details_line = notif.get("details", "Details: {desc_type}").format(
-                desc_type=desc_type
+            message += "\n" + notif(
+                "details", "Details: {desc_type}", desc_type=desc_type
             )
-            message += f"\n{details_line}"
-
     return title, message
 
 
