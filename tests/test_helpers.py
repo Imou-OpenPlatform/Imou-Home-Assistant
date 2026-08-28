@@ -18,7 +18,6 @@ from custom_components.imou_life.helpers import (
     resolve_ha_device_entry,
     resolve_ha_device_name,
     resolve_ui_language,
-    selector_option_label,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
