@@ -11,7 +11,8 @@ from custom_components.imou_life.const import (
     PARAM_RESTART_DEVICE,
     imou_life_device_key,
 )
-from custom_components.imou_life.text import ImouText
+from custom_components.imou_life.number import ImouCountdownNumber
+from custom_components.imou_life.runtime_data import ImouRuntimeData
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -40,6 +41,8 @@ def _mock_coordinator(device: MagicMock) -> MagicMock:
     coordinator.device_manager.async_press_button = AsyncMock()
     coordinator.device_manager.async_set_text_value = AsyncMock()
     coordinator.async_request_refresh = AsyncMock()
+    coordinator.async_update_listeners = MagicMock()
+    coordinator.get_device = MagicMock(return_value=device)
     return coordinator
 
 
@@ -59,17 +62,22 @@ async def test_button_press_does_not_refresh(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_text_set_value_does_not_refresh(hass) -> None:
-    """Text write updates HA state without a coordinator refresh."""
+async def test_countdown_set_value_does_not_refresh(hass) -> None:
+    """Countdown write updates HA state without a coordinator refresh."""
     device = _mock_device()
     coordinator = _mock_coordinator(device)
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator)
 
-    text = ImouText(coordinator, entry, "count_down_switch", device)
-    text.async_write_ha_state = MagicMock()
-    await text.async_set_value("10")
+    number = ImouCountdownNumber(coordinator, entry, "count_down_switch", device)
+    number.hass = hass
+    number.async_write_ha_state = MagicMock()
+    try:
+        await number.async_set_native_value(10)
 
-    coordinator.device_manager.async_set_text_value.assert_awaited_once()
-    coordinator.async_request_refresh.assert_not_awaited()
-    text.async_write_ha_state.assert_called_once()
+        coordinator.device_manager.async_set_text_value.assert_awaited_once()
+        coordinator.async_request_refresh.assert_not_awaited()
+        number.async_write_ha_state.assert_called_once()
+    finally:
+        number._tracker.async_unload()

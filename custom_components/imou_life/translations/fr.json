@@ -631,7 +631,7 @@
         "name": "Sirène"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "Minuteur (min)"
       },

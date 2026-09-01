@@ -631,7 +631,7 @@
         "name": "警笛"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "开关倒计时（分钟）"
       },

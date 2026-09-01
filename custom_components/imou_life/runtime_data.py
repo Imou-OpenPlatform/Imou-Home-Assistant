@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 
 from .const import PUSH_DISPATCH_LIMIT
+from .countdown import CountdownTracker
 
 if TYPE_CHECKING:
     from pyimouapi.openapi import ImouOpenApiClient
@@ -44,6 +45,7 @@ class ImouRuntimeData:
         default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
     )
     thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    countdown: CountdownTracker = field(default_factory=CountdownTracker)
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

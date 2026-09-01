@@ -53,7 +53,7 @@ _REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
 def async_remove_replaced_legacy_entities(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Drop leftover select.mode and siren button rows from 1.3.x upgrades."""
+    """Drop leftover select.mode, siren button, and text rows replaced by numbers."""
     registry = er.async_get(hass)
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = entity_entry.unique_id
@@ -61,7 +61,8 @@ def async_remove_replaced_legacy_entities(
         drop_button = entity_entry.domain == "button" and unique_id.endswith(
             _REPLACED_BUTTON_SUFFIXES
         )
-        if drop_select or drop_button:
+        drop_text = entity_entry.domain == "text"
+        if drop_select or drop_button or drop_text:
             registry.async_remove(entity_entry.entity_id)
 
 
@@ -177,6 +178,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+    entry.async_on_unload(runtime.countdown.async_unload)
     return True
 
 

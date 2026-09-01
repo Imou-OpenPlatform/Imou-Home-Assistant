@@ -10,10 +10,10 @@ from custom_components.imou_life.const import (
     PARAM_RESTART_DEVICE,
     PARAM_STATUS,
 )
+from custom_components.imou_life.number import ImouCountdownNumber, ImouOverchargeNumber
 from custom_components.imou_life.select import SELECT_TYPES
 from custom_components.imou_life.sensor import SENSOR_DESCRIPTIONS
 from custom_components.imou_life.switch import SWITCH_TYPES
-from custom_components.imou_life.text import ImouText
 from homeassistant.const import EntityCategory
 
 # Moving a key in or out of these sets moves the entity between a device page's
@@ -67,12 +67,16 @@ def test_sensors_are_measurements_or_diagnostics() -> None:
     assert not _categorised(SENSOR_DESCRIPTIONS.values(), EntityCategory.CONFIG)
 
 
-def test_text_entities_are_configuration() -> None:
-    """Text entities hold thresholds and timers, never live readings."""
-    # Home Assistant's metaclass turns _attr_* into properties, so the effective
-    # value only shows up on an instance.
-    text = object.__new__(ImouText)
-    assert text.entity_category is EntityCategory.CONFIG
+def test_countdown_number_is_configuration() -> None:
+    """The plug delay is a setting, not a primary control."""
+    number = object.__new__(ImouCountdownNumber)
+    assert number.entity_category is EntityCategory.CONFIG
+
+
+def test_overcharge_number_is_configuration() -> None:
+    """Max power is a setting, not a primary control."""
+    number = object.__new__(ImouOverchargeNumber)
+    assert number.entity_category is EntityCategory.CONFIG
 
 
 @pytest.mark.parametrize(

@@ -631,7 +631,7 @@
         "name": "Sirena"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "Timer conto alla rovescia (min)"
       },

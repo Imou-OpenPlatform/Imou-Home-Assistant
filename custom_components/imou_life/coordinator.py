@@ -247,6 +247,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             if isinstance(fetched, set) and fetched:
                 self._iot_detail_fetched.update(fetched)
             async_delete_quota_issue(self.hass, self.config_entry)
+            runtime = getattr(self.config_entry, "runtime_data", None)
+            if runtime is not None:
+                runtime.countdown.sync_all(self.hass, self)
 
     def _async_add_remove_devices(
         self,

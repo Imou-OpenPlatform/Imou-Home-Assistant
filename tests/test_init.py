@@ -40,7 +40,7 @@ async def test_migrate_entry_adds_missing_webhook_id(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> None:
-    """Upgrade leftover select.mode and siren buttons must not stay as ghosts."""
+    """Upgrade leftover select.mode, siren buttons, and countdown text must not stay."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
     entry.add_to_hass(hass)
     device_registry = dr.async_get(hass)
@@ -85,12 +85,28 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
         config_entry=entry,
         device_id=device_entry.id,
     )
+    countdown_text = registry.async_get_or_create(
+        "text",
+        DOMAIN,
+        "cam_0$count_down_switch",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    overcharge_text = registry.async_get_or_create(
+        "text",
+        DOMAIN,
+        "cam_0$overcharge_switch",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
 
     async_remove_replaced_legacy_entities(hass, entry)
 
     assert registry.async_get(mode_select.entity_id) is None
     assert registry.async_get(siren_start.entity_id) is None
     assert registry.async_get(siren_stop.entity_id) is None
+    assert registry.async_get(countdown_text.entity_id) is None
+    assert registry.async_get(overcharge_text.entity_id) is None
     assert registry.async_get(night.entity_id) is not None
     assert registry.async_get(panel.entity_id) is not None
 

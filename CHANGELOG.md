@@ -4,6 +4,10 @@
 
 ### [1.4.1]
 
+#### Breaking
+
+- Plug **Countdown timer** and **Max power** are `number` entities. Automations must use `number.set_value` instead of `text.set_value`. Countdown remaining minutes count down on this Home Assistant, including when status polling is off. Leftover `text.*` entities for these are removed on setup
+
 #### Added
 
 - The UI and alarm notifications follow your Home Assistant language. German, French, and Italian are available in addition to English and Simplified Chinese
@@ -288,6 +292,10 @@
 ## 中文
 
 ### [1.4.1]
+
+#### 破坏性变更
+
+- 插座 **开关倒计时** 和 **最大功率** 改为 `number`。自动化请用 `number.set_value`，不要再用 `text.set_value`。倒计时剩余分钟在本机倒数，关掉状态轮询也会走。遗留的 `text.*` 会在加载时删除
 
 #### 新增
 

@@ -631,7 +631,7 @@
         "name": "Sirene"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "Countdown-Timer (min)"
       },

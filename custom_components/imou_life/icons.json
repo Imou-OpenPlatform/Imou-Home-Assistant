@@ -119,7 +119,7 @@
 				"default": "mdi:bullhorn"
 			}
 		},
-		"text": {
+		"number": {
 			"count_down_switch": {
 				"default": "mdi:timer"
 			},
