@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Échec de l'enregistrement du push d'événements Imou",
       "description": "Home Assistant n'a pas pu enregistrer le rappel de messages auprès de la plateforme ouverte Imou. Vérifiez l'URL de rappel et le quota de ressources de votre App ID, puis rechargez l'intégration."
+    },
+    "open_api_quota_exceeded": {
+      "title": "Appels mensuels de la plateforme ouverte Imou épuisés",
+      "description": "Cet App ID n'a plus d'appels Open Platform pour ce mois. La liste des appareils, la vue en direct et les interrupteurs ne peuvent pas joindre le cloud tant que vous n'ajoutez pas de quota ou que le mois n'est pas réinitialisé. Ouvrez **Mes ressources** dans la console Open Platform, puis rechargez l'intégration."
     }
   },
   "options": {

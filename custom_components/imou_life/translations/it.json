@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Registrazione del push eventi Imou non riuscita",
       "description": "Home Assistant non ha potuto registrare il callback dei messaggi sulla piattaforma aperta Imou. Controlla l'URL di callback e la quota risorse del tuo App ID, poi ricarica l'integrazione."
+    },
+    "open_api_quota_exceeded": {
+      "title": "Chiamate mensili della piattaforma aperta Imou esaurite",
+      "description": "Questo App ID non ha più chiamate Open Platform per questo mese. Elenco dispositivi, vista live e interruttori non raggiungono il cloud finché non aggiungi quota o il mese non si azzera. Apri **Le mie risorse** nella console Open Platform, poi ricarica l'integrazione."
     }
   },
   "options": {

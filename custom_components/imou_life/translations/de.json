@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Registrierung des Imou-Ereignis-Push fehlgeschlagen",
       "description": "Home Assistant konnte den Nachrichten-Callback nicht bei der Imou Open Platform registrieren. Prüfe die Callback-URL und das Ressourcenkontingent deiner App ID und lade die Integration anschließend neu."
+    },
+    "open_api_quota_exceeded": {
+      "title": "Monatliches Kontingent der Imou Open Platform aufgebraucht",
+      "description": "Diese App-ID hat in diesem Monat keine Open-Platform-Aufrufe mehr. Geräteliste, Live-Ansicht und Schalter erreichen die Cloud erst wieder, wenn du Kontingent nachlegst oder der Monat zurückgesetzt wird. Öffne **Meine Ressourcen** in der Open-Platform-Konsole und lade die Integration anschließend neu."
     }
   },
   "options": {

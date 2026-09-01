@@ -10,6 +10,7 @@
 - Live view uses a cloud stream that works for the account owner and for people the device is shared with. If nobody is watching for about 10 seconds, the next open fetches a new address
 - Camera **Doorbell** event (`device_class: doorbell`) on cameras that support calling. A press or incoming call from event push fires `ring` so automations can use the device. Needs event push with type **alarm**; if push is off the entity stays but is unavailable. Unanswered calls and other alarms stay on notify + `imou_life_alarm`
 - Camera **Alarm picture** (`image`) — the last decrypted alarm still for that lens. Pin it on a dashboard. Needs event push with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture that this Home Assistant can decrypt. Does not take a live snapshot
+- When the Open Platform monthly call limit is used up, a repair appears under **Settings → System → Repairs**. Add quota or wait for the monthly reset, then reload the integration
 
 #### Changed
 
@@ -290,6 +291,7 @@
 - 直播画面使用云端拉流，设备分享给他人后也能看。约 10 秒没人看之后，下次打开会重新获取地址
 - 摄像头 **门铃** 事件（`device_class: doorbell`），仅在支持呼叫的摄像头上出现。事件推送里的按铃或来电会触发 `ring`，可在设备页写自动化。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，但是不可用。未接听和其他告警仍走通知和 `imou_life_alarm`
 - 摄像头 **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需开启事件推送且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体还在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
+- 开放平台本月调用次数用完时，会在 **设置 → 系统 → 修复** 出现一条说明。补充配额或等到下月重置后，再重新加载集成
 
 #### 变更
 

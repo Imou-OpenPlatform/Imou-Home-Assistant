@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Imou 事件推送注册失败",
       "description": "无法向 Imou 开放平台注册消息回调。请检查回调 URL 与 App ID 资源配额，然后重新加载集成。"
+    },
+    "open_api_quota_exceeded": {
+      "title": "Imou 开放平台本月调用次数已用完",
+      "description": "这个 App ID 本月的开放平台调用次数已经用完。设备列表、直播和开关暂时都无法访问云端，需要补充配额或等到下月重置。请到开放平台控制台打开 **我的资源**，然后重新加载集成。"
     }
   },
   "options": {

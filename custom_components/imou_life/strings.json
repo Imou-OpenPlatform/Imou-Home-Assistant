@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
       "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your App ID resource quota, then reload the integration."
+    },
+    "open_api_quota_exceeded": {
+      "title": "Imou Open Platform monthly calls used up",
+      "description": "This App ID has no Open Platform calls left this month. Device list, live view, and switches cannot reach the cloud until you add quota or the month resets. Open **My Resources** in the Open Platform console, then reload the integration."
     }
   },
   "options": {

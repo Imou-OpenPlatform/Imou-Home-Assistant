@@ -13,6 +13,7 @@ REFERENCE = COMPONENT_DIR / "strings.json"
 LANGUAGE_FILES = sorted((COMPONENT_DIR / "translations").glob("*.json"))
 RAISED_KEY_RE = re.compile(
     r"translation_domain=DOMAIN,\s*\n\s*translation_key=\"([^\"]+)\""
+    r"|_raise_imou_ha_error\(\w+,\s*\"([^\"]+)\""
 )
 PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
@@ -37,7 +38,8 @@ def raised_exception_keys() -> set[str]:
     """Return every exception translation key raised by the integration."""
     keys: set[str] = set()
     for path in COMPONENT_DIR.glob("*.py"):
-        keys.update(RAISED_KEY_RE.findall(path.read_text(encoding="utf-8")))
+        for match in RAISED_KEY_RE.finditer(path.read_text(encoding="utf-8")):
+            keys.add(next(group for group in match.groups() if group))
     return keys
 
 

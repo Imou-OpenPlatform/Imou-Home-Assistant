@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
@@ -19,7 +18,6 @@ from pyimouapi.ha_device import ImouHaDevice
 from .const import (
     CONF_HD,
     CONF_HTTPS,
-    DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
     PARAM_LIVE_RESOLUTION,
@@ -89,11 +87,7 @@ class ImouCamera(ImouEntity, Camera):
                 CONF_HTTPS,
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="stream_source_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "stream_source_failed")
 
     def _schedule_idle_check(self) -> None:
         """Check later whether anyone is still pulling this stream."""
@@ -132,11 +126,7 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="camera_image_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "camera_image_failed")
 
     @property
     def motion_detection_enabled(self) -> bool:

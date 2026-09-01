@@ -27,6 +27,7 @@ from .const import (
     imou_life_device_key,
 )
 from .helpers import get_selected_device_ids, iot_property_push_active
+from .repairs import async_delete_quota_issue, async_notify_imou_api_error
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -124,6 +125,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         except InvalidAppIdOrSecretException as err:
             raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
+            async_notify_imou_api_error(self.hass, self.config_entry, err)
             if first_discovery:
                 raise UpdateFailed(
                     f"Error fetching Imou devices: {err.message or err}"
@@ -158,6 +160,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             except InvalidAppIdOrSecretException as err:
                 raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
             except ImouException as err:
+                async_notify_imou_api_error(self.hass, self.config_entry, err)
                 # Keep removals from the shallow list. Leave brand-new keys out
                 # until detail succeeds (shallow IoT shells have no configured
                 # refs yet) and rewind the discovery clock to retry soon.
@@ -213,6 +216,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 len(self.devices_by_key) - len(devices_to_update),
             )
         if not devices_to_update:
+            async_delete_quota_issue(self.hass, self.config_entry)
             return
 
         skip_ids = (
@@ -233,12 +237,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             # calls are what notice it first now that listing is on a slow clock.
             raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
         except ImouException as err:
+            async_notify_imou_api_error(self.hass, self.config_entry, err)
             raise UpdateFailed(
                 f"Error updating Imou devices: {err.message or err}"
             ) from err
         else:
             if isinstance(fetched, set) and fetched:
                 self._iot_detail_fetched.update(fetched)
+            async_delete_quota_issue(self.hass, self.config_entry)
 
     def _async_add_remove_devices(
         self,

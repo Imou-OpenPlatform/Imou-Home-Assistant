@@ -40,6 +40,7 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import get_selected_device_ids, parse_notify_services
+from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -182,6 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
+    async_delete_quota_issue(hass, entry)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 

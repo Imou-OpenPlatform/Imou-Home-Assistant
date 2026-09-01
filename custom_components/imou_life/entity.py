@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from datetime import datetime
-from typing import Any, override
+from typing import Any, NoReturn, override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
+from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
 from .const import (
@@ -23,6 +25,7 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
+from .repairs import async_notify_imou_api_error
 
 
 class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
@@ -93,6 +96,17 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
             event_data.get("product_id"),
         )
         return self._device_key in keys
+
+    def _raise_imou_ha_error(
+        self, err: ImouException, translation_key: str
+    ) -> NoReturn:
+        """Surface quota as a repair, then raise the translated HA error."""
+        async_notify_imou_api_error(self.hass, self._config_entry, err)
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key=translation_key,
+            translation_placeholders={"error": err.message},
+        ) from err
 
 
 class ImouAlarmPushEntity(ImouEntity):

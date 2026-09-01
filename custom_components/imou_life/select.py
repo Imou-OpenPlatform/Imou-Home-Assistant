@@ -7,14 +7,12 @@ from typing import override
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    DOMAIN,
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
     PARAM_NIGHT_VISION_MODE,
@@ -103,9 +101,5 @@ class ImouSelect(ImouEntity, SelectEntity):
                 option,
             )
         except ImouException as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="select_option_failed",
-                translation_placeholders={"error": err.message},
-            ) from err
+            self._raise_imou_ha_error(err, "select_option_failed")
         self.async_write_ha_state()

@@ -5,14 +5,12 @@ from __future__ import annotations
 from homeassistant.components.text import TextEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_REF, PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    DOMAIN,
     PARAM_COUNT_DOWN_SWITCH,
     PARAM_OVERCHARGE_SWITCH,
 )
@@ -62,11 +60,7 @@ class ImouText(ImouEntity, TextEntity):
                 value,
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="set_text_value_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "set_text_value_failed")
         self.async_write_ha_state()
 
     @property
