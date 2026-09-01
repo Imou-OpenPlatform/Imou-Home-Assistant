@@ -14,18 +14,23 @@ from custom_components.imou_life.binary_sensor import (
     motion_binary_state,
 )
 from custom_components.imou_life.const import (
+    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
+    EVENT_PUSH_TYPE_IOT,
     MOTION_OFF_DELAY,
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_MOTION,
+    PARAM_STATUS,
 )
 from custom_components.imou_life.webhook import async_handle_imou_webhook
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pyimouapi.const import BINARY_SENSOR_TYPE_REF
-from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.const import BINARY_SENSOR_TYPE_REF, PARAM_STATE
+from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -66,6 +71,30 @@ def _coordinator(
         return_value=event_map or {}
     )
     return coordinator
+
+
+def _online_motion(
+    device: MagicMock,
+    *,
+    push: bool,
+    types: list[str] | None = None,
+) -> ImouMotionBinarySensor:
+    """Motion entity for an online camera with the given push options."""
+    coordinator = _coordinator([device])
+    coordinator.last_update_success = True
+    coordinator.devices_by_key = {f"{device.device_id}_{device.channel_id}": device}
+    device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
+    options: dict[str, object] = {PARAM_ENABLE_EVENT_PUSH: push}
+    if types is not None:
+        options[PARAM_EVENT_PUSH_TYPES] = types
+    elif push:
+        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
+    return ImouMotionBinarySensor(
+        coordinator,
+        MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),
+        PARAM_MOTION,
+        device,
+    )
 
 
 @asynccontextmanager
@@ -211,6 +240,25 @@ def test_motion_entity_is_a_motion_class() -> None:
     )
     assert entity.device_class is BinarySensorDeviceClass.MOTION
     assert entity.is_on is False
+
+
+def test_motion_unavailable_when_alarm_push_is_off() -> None:
+    """Off forever would lie; unavailable means we are not listening."""
+    device = _device(channel_id="0")
+    assert _online_motion(device, push=False).available is False
+
+
+def test_motion_unavailable_when_alarm_type_not_subscribed() -> None:
+    """iotProperty push does not carry motion / doorbell alarms."""
+    device = _device(channel_id="0")
+    entity = _online_motion(device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    assert entity.available is False
+
+
+def test_motion_available_when_alarm_push_is_on() -> None:
+    """An online camera with alarm push can report motion."""
+    device = _device(channel_id="0")
+    assert _online_motion(device, push=True).available is True
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

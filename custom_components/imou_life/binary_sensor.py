@@ -16,6 +16,7 @@ from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouAlarmPushEntity, ImouEntity, async_add_imou_entities
 from .helpers import (
     PAAS_MOTION_ABILITIES,
+    alarm_push_active,
     device_has_paas_ability,
     device_iot_events_match,
 )
@@ -139,6 +140,11 @@ class ImouMotionBinarySensor(ImouAlarmPushEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.MOTION
     _attr_is_on = False
     _hold_seconds = MOTION_OFF_DELAY
+
+    @property
+    def available(self) -> bool:
+        """Unavailable when alarm push is off: off would mean 'no motion'."""
+        return super().available and alarm_push_active(self._config_entry)
 
     def _alarm_state(self, msg_type: str | None) -> bool | None:
         """Map picture / human / PIR pushes onto held motion state."""

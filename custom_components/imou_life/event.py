@@ -17,7 +17,12 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
-from .helpers import PAAS_CALL_ABILITY, device_has_paas_ability, device_iot_events_match
+from .helpers import (
+    PAAS_CALL_ABILITY,
+    alarm_push_active,
+    device_has_paas_ability,
+    device_iot_events_match,
+)
 
 PARALLEL_UPDATES = 0
 
@@ -93,6 +98,11 @@ class ImouDoorbellEvent(ImouEntity, EventEntity):
         """Initialize the doorbell event entity."""
         super().__init__(coordinator, config_entry, entity_type, device)
         self._attr_event_types = ["ring"]
+
+    @property
+    def available(self) -> bool:
+        """Unavailable when alarm push is off: we cannot hear a press."""
+        return super().available and alarm_push_active(self._config_entry)
 
     async def async_added_to_hass(self) -> None:
         """Listen for alarm pushes that belong to this device."""

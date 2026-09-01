@@ -17,6 +17,7 @@ from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from .const import (
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
+    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -46,13 +47,23 @@ def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
     return None
 
 
-def iot_property_push_active(entry: ConfigEntry) -> bool:
-    """Return True when IoT devices should take state from iotProperty pushes."""
+def event_push_type_active(entry: ConfigEntry, push_type: str) -> bool:
+    """Return True when event push is on and this subscribe type is selected."""
     if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         return False
     raw = entry.options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
     types = callback_flags_to_event_push_types(list(raw) if raw else [])
-    return EVENT_PUSH_TYPE_IOT in types
+    return push_type in types
+
+
+def iot_property_push_active(entry: ConfigEntry) -> bool:
+    """Return True when IoT devices should take state from iotProperty pushes."""
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_IOT)
+
+
+def alarm_push_active(entry: ConfigEntry) -> bool:
+    """Return True when motion / doorbell can listen to alarm pushes."""
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
 
 
 def resolve_ha_device_key(

@@ -5,12 +5,14 @@ from custom_components.imou_life.const import (
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
 )
 from custom_components.imou_life.helpers import (
+    alarm_push_active,
     alarm_type_option_key,
     fill_template,
     iot_property_push_active,
@@ -283,6 +285,36 @@ def test_iot_property_push_active_needs_push_and_iot_type() -> None:
         },
     )
     assert iot_property_push_active(no_iot) is False
+
+
+def test_alarm_push_active_needs_push_and_alarm_type() -> None:
+    """Motion / doorbell listen only when event push includes alarm."""
+    on = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+        },
+    )
+    assert alarm_push_active(on) is True
+
+    push_off = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={PARAM_ENABLE_EVENT_PUSH: False},
+    )
+    assert alarm_push_active(push_off) is False
+
+    no_alarm = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_IOT],
+        },
+    )
+    assert alarm_push_active(no_alarm) is False
 
 
 def test_resolve_ui_language_maps_zh_and_defaults() -> None:
