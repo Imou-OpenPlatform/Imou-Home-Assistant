@@ -230,17 +230,19 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                     devices_to_update,
                     skip_iot_property_ids=skip_ids,
                 )
-        except TimeoutError as err:
-            raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
             # Credentials can be revoked between two listings, and the status
             # calls are what notice it first now that listing is on a slow clock.
             raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
-        except ImouException as err:
+        except (TimeoutError, ImouException) as err:
             async_notify_imou_api_error(self.hass, self.config_entry, err)
-            raise UpdateFailed(
-                f"Error updating Imou devices: {err.message or err}"
-            ) from err
+            # last_update_success stays true, so entities keep the last state
+            # instead of all going unavailable until the next interval.
+            _LOGGER.warning(
+                "Could not update Imou device status: %s",
+                getattr(err, "message", None) or err,
+            )
+            return
         else:
             if isinstance(fetched, set) and fetched:
                 self._iot_detail_fetched.update(fetched)

@@ -149,21 +149,29 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_total_status_poll_failure_marks_update_failed(
-    hass: HomeAssistant, device_manager: MagicMock
+@pytest.mark.parametrize(
+    "error",
+    [
+        RequestFailedException("cloud down"),
+        TimeoutError("status poll timed out"),
+    ],
+    ids=["request_failed", "timeout"],
+)
+async def test_status_poll_failure_keeps_last_state(
+    hass: HomeAssistant, device_manager: MagicMock, error: BaseException
 ) -> None:
-    """A cloud outage on every device group must not look like a successful poll."""
+    """A status refresh blip must not grey every entity until the next interval."""
     coordinator = _make_coordinator(hass, device_manager)
     await coordinator._async_update_data()
+    known = dict(coordinator.devices_by_key)
     assert coordinator.last_update_success
 
-    device_manager.async_update_devices_status.side_effect = RequestFailedException(
-        "cloud down"
-    )
+    device_manager.async_update_devices_status.side_effect = error
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert not coordinator.last_update_success
+    assert coordinator.last_update_success
+    assert coordinator.devices_by_key == known
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -184,7 +192,7 @@ async def test_quota_poll_failure_creates_repair_and_clears_on_success(
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert not coordinator.last_update_success
+    assert coordinator.last_update_success
     assert (DOMAIN, issue_id) in ir.async_get(hass).issues
 
     device_manager.async_update_devices_status.side_effect = None
@@ -259,3 +267,19 @@ async def test_a_first_listing_failure_still_defers_setup(
 
     with pytest.raises(ConfigEntryNotReady):
         await coordinator.async_config_entry_first_refresh()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_a_first_status_poll_failure_still_finishes_setup(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Devices are already listed; a status blip must not leave setup retrying."""
+    coordinator = _make_coordinator(hass, device_manager, setting_up=True)
+    device_manager.async_update_devices_status.side_effect = RequestFailedException(
+        "cloud down"
+    )
+
+    await coordinator.async_config_entry_first_refresh()
+
+    assert coordinator.last_update_success
+    assert coordinator.devices_by_key
