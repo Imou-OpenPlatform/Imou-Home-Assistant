@@ -12,8 +12,6 @@ from pyimouapi.ha_device import ImouHaDevice
 from .const import (
     EVENT_IMOU_ALARM,
     PARAM_DOORBELL,
-    imou_life_device_key,
-    imou_life_device_keys_from_ids,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
@@ -110,15 +108,6 @@ class ImouDoorbellEvent(ImouEntity, EventEntity):
         self.async_on_remove(
             self.hass.bus.async_listen(EVENT_IMOU_ALARM, self._async_handle_alarm)
         )
-
-    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
-        """Return True when the push is for this entity's device key."""
-        keys = imou_life_device_keys_from_ids(
-            event_data.get("device_id"),
-            event_data.get("channel_id"),
-            event_data.get("product_id"),
-        )
-        return imou_life_device_key(self.device) in keys
 
     @callback
     def _async_handle_alarm(self, event: Event[dict[str, Any]]) -> None:

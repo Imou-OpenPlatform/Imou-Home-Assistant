@@ -1,11 +1,14 @@
 """Tests for Imou Life shared helpers and device key helpers."""
 
+from types import SimpleNamespace
+
 import pytest
 from custom_components.imou_life.const import (
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     imou_life_device_key_from_ids,
@@ -14,6 +17,8 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.helpers import (
     alarm_push_active,
     alarm_type_option_key,
+    camera_channel_devices,
+    decrypt_pictures_active,
     fill_template,
     iot_property_push_active,
     notify_service_selector_options,
@@ -315,6 +320,48 @@ def test_alarm_push_active_needs_push_and_alarm_type() -> None:
         },
     )
     assert alarm_push_active(no_alarm) is False
+
+
+def test_decrypt_pictures_active_needs_push_and_switch() -> None:
+    """Alarm stills need alarm push and the decrypt option."""
+    on = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+        },
+    )
+    assert decrypt_pictures_active(on) is True
+
+    decrypt_off = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: False,
+        },
+    )
+    assert decrypt_pictures_active(decrypt_off) is False
+
+    push_off = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: False,
+            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
+        },
+    )
+    assert decrypt_pictures_active(push_off) is False
+
+
+def test_camera_channel_devices_skips_plugs() -> None:
+    """Live view, alarm pictures, and record-on-alarm are camera channels."""
+    camera = SimpleNamespace(channel_id="0")
+    plug = SimpleNamespace(channel_id=None)
+    assert camera_channel_devices([camera, plug]) == [camera]
 
 
 def test_resolve_ui_language_maps_zh_and_defaults() -> None:

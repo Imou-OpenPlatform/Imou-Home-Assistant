@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from pathlib import Path
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.image import ImageEntity
@@ -12,21 +11,11 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import (
-    EVENT_IMOU_ALARM,
-    PARAM_ALARM_PICTURE,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    imou_life_device_key,
-    imou_life_device_keys_from_ids,
-)
+from .const import EVENT_IMOU_ALARM, PARAM_ALARM_PICTURE
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
-from .helpers import alarm_push_active
-from .pic_thumbnail import (
-    jpeg_from_local_url,
-    last_alarm_image_path,
-    persist_last_alarm_image,
-)
+from .helpers import camera_channel_devices, decrypt_pictures_active
+from .pic_thumbnail import adopt_local_thumb, read_last_alarm_image
 
 PARALLEL_UPDATES = 0
 
@@ -37,8 +26,7 @@ def _iter_alarm_images(
     """One last-still image per camera channel, not plugs."""
     return [
         (PARAM_ALARM_PICTURE, device)
-        for device in coordinator.devices
-        if device.channel_id is not None
+        for device in camera_channel_devices(coordinator.devices)
     ]
 
 
@@ -73,11 +61,7 @@ class ImouAlarmImage(ImouEntity, ImageEntity):
     @property
     def available(self) -> bool:
         """Unavailable when alarm push or local decrypt is off."""
-        return (
-            super().available
-            and alarm_push_active(self._config_entry)
-            and bool(self._config_entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL))
-        )
+        return super().available and decrypt_pictures_active(self._config_entry)
 
     def image(self) -> bytes | None:
         """Return the last decrypted jpeg, if any."""
@@ -86,10 +70,12 @@ class ImouAlarmImage(ImouEntity, ImageEntity):
     async def async_added_to_hass(self) -> None:
         """Load a persisted still and listen for new decrypted alarm pictures."""
         await super().async_added_to_hass()
-        stored = last_alarm_image_path(self.hass, self._device_key)
-        jpeg = await self.hass.async_add_executor_job(_read_jpeg_file, stored)
-        if jpeg:
-            self._apply_image(jpeg, last_updated=_file_mtime(stored))
+        stored = await self.hass.async_add_executor_job(
+            read_last_alarm_image, self.hass, self._device_key
+        )
+        if stored:
+            jpeg, last_updated = stored
+            self._apply_image(jpeg, last_updated=last_updated)
         self.async_on_remove(
             self.hass.bus.async_listen(EVENT_IMOU_ALARM, self._async_handle_alarm)
         )
@@ -102,15 +88,6 @@ class ImouAlarmImage(ImouEntity, ImageEntity):
         self._cached_image = None
         self._attr_image_last_updated = last_updated or dt_util.utcnow()
 
-    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
-        """Return True when the push is for this entity's device key."""
-        keys = imou_life_device_keys_from_ids(
-            event_data.get("device_id"),
-            event_data.get("channel_id"),
-            event_data.get("product_id"),
-        )
-        return imou_life_device_key(self.device) in keys
-
     async def _async_handle_alarm(self, event: Event[dict[str, Any]]) -> None:
         """Load a newly decrypted still for this camera."""
         event_data = event.data
@@ -120,34 +97,10 @@ class ImouAlarmImage(ImouEntity, ImageEntity):
         if not isinstance(thumbnail_path, str):
             return
         jpeg = await self.hass.async_add_executor_job(
-            jpeg_from_local_url, self.hass, thumbnail_path
+            adopt_local_thumb, self.hass, self._device_key, thumbnail_path
         )
         if not jpeg:
             return
-        await self.hass.async_add_executor_job(
-            persist_last_alarm_image, self.hass, self._device_key, jpeg
-        )
         self._apply_image(jpeg)
         if self.platform is not None:
             self.async_write_ha_state()
-
-
-def _read_jpeg_file(path: Path | None) -> bytes | None:
-    """Return file bytes, or None when the last still is missing."""
-    if path is None or not path.is_file():
-        return None
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return None
-    return data or None
-
-
-def _file_mtime(path: Path | None) -> datetime | None:
-    """Return the file mtime in UTC, if the path exists."""
-    if path is None:
-        return None
-    try:
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-    except OSError:
-        return None

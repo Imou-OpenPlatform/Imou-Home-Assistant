@@ -27,6 +27,7 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
 
 PARALLEL_UPDATES = 0
 
@@ -40,9 +41,7 @@ def _iter_cameras(
 ) -> list[tuple[str, ImouHaDevice]]:
     """Return (entity_type, device) pairs for camera entities."""
     return [
-        ("camera", device)
-        for device in coordinator.devices
-        if device.channel_id is not None
+        ("camera", device) for device in camera_channel_devices(coordinator.devices)
     ]
 
 

@@ -40,6 +40,7 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
 
 PARALLEL_UPDATES = 0
 
@@ -161,8 +162,7 @@ def _iter_local_record_switches(
     """One local-only record switch per camera channel."""
     return [
         (PARAM_LOCAL_EVENT_RECORD, device)
-        for device in coordinator.devices
-        if device.channel_id is not None
+        for device in camera_channel_devices(coordinator.devices)
     ]
 
 

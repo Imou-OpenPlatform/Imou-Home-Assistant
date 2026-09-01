@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -33,6 +34,7 @@ from .const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_DEVICE_PASSWORDS,
+    imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
 )
 from .helpers import fill_template, selector_option_label
@@ -99,6 +101,23 @@ def persist_last_alarm_image(hass: HomeAssistant, device_key: str, jpeg: bytes) 
         _LOGGER.debug("Could not persist last alarm image for %s", device_key)
 
 
+def read_last_alarm_image(
+    hass: HomeAssistant, device_key: str
+) -> tuple[bytes, datetime] | None:
+    """Return the persisted last still and its mtime, if present."""
+    path = last_alarm_image_path(hass, device_key)
+    if path is None or not path.is_file():
+        return None
+    try:
+        data = path.read_bytes()
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+    except OSError:
+        return None
+    if not data:
+        return None
+    return data, mtime
+
+
 def jpeg_from_local_url(hass: HomeAssistant, local_url: str) -> bytes | None:
     """Read a jpeg previously written under /local/, or None if it is gone."""
     if not local_url.startswith(_LOCAL_PREFIX):
@@ -115,6 +134,17 @@ def jpeg_from_local_url(hass: HomeAssistant, local_url: str) -> bytes | None:
     except OSError:
         return None
     return data or None
+
+
+def adopt_local_thumb(
+    hass: HomeAssistant, device_key: str, local_url: str
+) -> bytes | None:
+    """Copy a /local/ still onto the last-alarm file; return jpeg bytes."""
+    jpeg = jpeg_from_local_url(hass, local_url)
+    if not jpeg:
+        return None
+    persist_last_alarm_image(hass, device_key, jpeg)
+    return jpeg
 
 
 def native_platform_label() -> str:
@@ -333,6 +363,13 @@ def _write_thumb(
         return None
 
     local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
+    device_key = imou_life_device_key_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    if device_key:
+        persist_last_alarm_image(hass, device_key, jpeg)
     _LOGGER.debug("Wrote decrypted alarm thumb %s (%s bytes)", local_url, len(jpeg))
     return local_url
 

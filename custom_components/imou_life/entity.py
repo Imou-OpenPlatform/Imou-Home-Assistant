@@ -85,6 +85,15 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
             self.device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
         )
 
+    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
+        """Return True when the push is for this entity's device key."""
+        keys = imou_life_device_keys_from_ids(
+            event_data.get("device_id"),
+            event_data.get("channel_id"),
+            event_data.get("product_id"),
+        )
+        return self._device_key in keys
+
 
 class ImouAlarmPushEntity(ImouEntity):
     """Hold on/off from ``EVENT_IMOU_ALARM`` until an off push or a timer.
@@ -125,15 +134,6 @@ class ImouAlarmPushEntity(ImouEntity):
         if self._unsub_off is not None:
             self._unsub_off()
             self._unsub_off = None
-
-    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
-        """Return True when the push is for this entity's device key."""
-        keys = imou_life_device_keys_from_ids(
-            event_data.get("device_id"),
-            event_data.get("channel_id"),
-            event_data.get("product_id"),
-        )
-        return imou_life_device_key(self.device) in keys
 
     @callback
     def _set_push_state(self, is_on: bool, *, auto_off: bool) -> None:

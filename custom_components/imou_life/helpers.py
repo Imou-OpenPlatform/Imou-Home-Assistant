@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -19,6 +19,7 @@ from .const import (
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
@@ -62,8 +63,20 @@ def iot_property_push_active(entry: ConfigEntry) -> bool:
 
 
 def alarm_push_active(entry: ConfigEntry) -> bool:
-    """Return True when motion / doorbell can listen to alarm pushes."""
+    """Return True when alarm-driven entities can listen to alarm pushes."""
     return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
+
+
+def decrypt_pictures_active(entry: ConfigEntry) -> bool:
+    """Return True when this entry can decrypt alarm stills onto the host."""
+    return alarm_push_active(entry) and bool(
+        entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
+    )
+
+
+def camera_channel_devices(devices: Iterable[ImouHaDevice]) -> list[ImouHaDevice]:
+    """Return camera channels, not plugs or other accessories."""
+    return [device for device in devices if device.channel_id is not None]
 
 
 def resolve_ha_device_key(

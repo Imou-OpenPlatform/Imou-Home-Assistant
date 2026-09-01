@@ -107,6 +107,8 @@ def test_sync_decrypt_and_write_success(hass: HomeAssistant) -> None:
     assert result == ("/local/imou_life/thumbs/alarm123.jpg", 0)
     dest = Path(hass.config.path("www", "imou_life", "thumbs", "alarm123.jpg"))
     assert dest.read_bytes() == JPEG
+    last = Path(hass.config.path("imou_life", "last_alarm", "SN1_0.jpg"))
+    assert last.read_bytes() == JPEG
     decoder.decrypt_bytes.assert_called_once_with(
         CIPHERTEXT,
         device_id="SN1",
