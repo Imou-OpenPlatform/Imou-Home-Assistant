@@ -617,6 +617,11 @@
         "name": "Doorbell"
       }
     },
+    "image": {
+      "alarm_picture": {
+        "name": "Alarm picture"
+      }
+    },
     "siren": {
       "siren": {
         "name": "Siren"

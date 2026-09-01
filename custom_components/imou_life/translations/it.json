@@ -617,6 +617,11 @@
         "name": "Campanello"
       }
     },
+    "image": {
+      "alarm_picture": {
+        "name": "Immagine allarme"
+      }
+    },
     "siren": {
       "siren": {
         "name": "Sirena"

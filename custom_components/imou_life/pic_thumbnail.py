@@ -44,6 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
+_LOCAL_PREFIX = "/local/"
 # Push alarm ids become www filenames; reject path separators and traversal.
 _SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
@@ -70,6 +71,50 @@ _SUPPORTED_MACHINES = frozenset({"x86_64", "amd64"})
 def native_lib_dir(hass: HomeAssistant) -> Path:
     """Return the folder where official Image Decryption Demo libraries go."""
     return Path(hass.config.path("imou_life", "native"))
+
+
+def last_alarm_image_path(hass: HomeAssistant, device_key: str) -> Path | None:
+    """Return the on-disk last still for a camera, outside /local/."""
+    stem = (
+        device_key
+        if _SAFE_THUMB_STEM.fullmatch(device_key)
+        else hashlib.sha256(device_key.encode()).hexdigest()[:16]
+    )
+    dest_dir = Path(hass.config.path("imou_life", "last_alarm"))
+    dest = (dest_dir / f"{stem}.jpg").resolve()
+    if not dest.is_relative_to(dest_dir.resolve()):
+        return None
+    return dest
+
+
+def persist_last_alarm_image(hass: HomeAssistant, device_key: str, jpeg: bytes) -> None:
+    """Keep the last decrypted still for the dashboard image entity."""
+    dest = last_alarm_image_path(hass, device_key)
+    if dest is None:
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.write_bytes(jpeg)
+    except OSError:
+        _LOGGER.debug("Could not persist last alarm image for %s", device_key)
+
+
+def jpeg_from_local_url(hass: HomeAssistant, local_url: str) -> bytes | None:
+    """Read a jpeg previously written under /local/, or None if it is gone."""
+    if not local_url.startswith(_LOCAL_PREFIX):
+        return None
+    rel = Path(local_url[len(_LOCAL_PREFIX) :])
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    www = Path(hass.config.path("www")).resolve()
+    path = (www / rel).resolve()
+    if not path.is_relative_to(www) or not path.is_file():
+        return None
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    return data or None
 
 
 def native_platform_label() -> str:

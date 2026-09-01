@@ -77,6 +77,8 @@ Prerequisites:
 
 Pictures are written to `/local/imou_life/thumbs/` and served **without authentication** for roughly 24 hours, so anyone holding the URL can view them. If `/config/www` did not exist before, restart Home Assistant once after the first picture is written. Many motion pushes carry no picture URL at all; those notifications stay text-only.
 
+Each camera also gets an **Alarm picture** entity with the last still this Home Assistant decrypted. Pin it on a dashboard. It uses the same decrypt path as notifications (not a live snapshot). The entity is unavailable while event push (type **alarm**) or **Show the picture in alarm notifications** is off, and empty until a push includes a picture that decrypts.
+
 On iOS an unexpanded notification shows a small thumbnail — long-press or pull it down to see the full-size picture. Alarm stills come from the cloud at the resolution it chose, commonly 640×480.
 
 <a id="record-on-alarm"></a>
@@ -205,6 +207,8 @@ Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch b
 - **一个公网可达的 Home Assistant 地址**（第 0 步），否则不在局域网的手机加载不出图片。
 
 图片写在 `/local/imou_life/thumbs/`，**不做身份验证**，保留约 24 小时，也就是说拿到 URL 的人都能查看。如果 `/config/www` 原先不存在，首次生成图片后需要重启一次 Home Assistant。很多移动侦测推送根本不带图片 URL，这类通知仍是纯文本。
+
+每路镜头还有一个 **告警图片** 实体，显示本机最近解密成功的那一张，可以钉在仪表盘。和通知用同一套解密，不会去拍直播快照。未开事件推送（类型 **alarm**）或未开 **在告警通知中显示图片** 时实体不可用；要等一次带图且解密成功的推送才会有画面。
 
 iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是原图**。告警图由云端按它选定的清晰度下发，常见是 640×480。
 

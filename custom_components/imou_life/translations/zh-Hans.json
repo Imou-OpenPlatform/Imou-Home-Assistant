@@ -617,6 +617,11 @@
         "name": "门铃"
       }
     },
+    "image": {
+      "alarm_picture": {
+        "name": "告警图片"
+      }
+    },
     "siren": {
       "siren": {
         "name": "警笛"

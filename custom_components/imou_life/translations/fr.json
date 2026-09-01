@@ -617,6 +617,11 @@
         "name": "Sonnette"
       }
     },
+    "image": {
+      "alarm_picture": {
+        "name": "Image d'alarme"
+      }
+    },
     "siren": {
       "siren": {
         "name": "Sirène"

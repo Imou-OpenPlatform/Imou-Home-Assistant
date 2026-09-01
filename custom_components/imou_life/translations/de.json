@@ -617,6 +617,11 @@
         "name": "Türklingel"
       }
     },
+    "image": {
+      "alarm_picture": {
+        "name": "Alarmbild"
+      }
+    },
     "siren": {
       "siren": {
         "name": "Sirene"
