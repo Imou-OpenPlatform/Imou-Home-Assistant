@@ -9,7 +9,6 @@ from typing import Any, NoReturn, override
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -25,6 +24,7 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
+from .devices import imou_device_info, parent_device_key
 from .repairs import async_notify_imou_api_error
 
 
@@ -48,13 +48,8 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         self._device_key = imou_life_device_key(device)
         self._attr_unique_id = f"{self._device_key}${entity_type}"
         self._attr_translation_key = entity_type
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_key)},
-            name=device.channel_name or device.device_name,
-            manufacturer=device.manufacturer,
-            model=device.model,
-            sw_version=device.swversion,
-            serial_number=device.device_id,
+        self._attr_device_info = imou_device_info(
+            device, parent_device_key(coordinator.devices, device)
         )
 
     @property

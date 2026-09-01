@@ -296,6 +296,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         """Detach config-entry devices whose Imou keys are not on the account."""
         device_registry = dr.async_get(self.hass)
+        # A multi-channel device also has a row of its own, keyed by the bare
+        # account device id rather than by one of its channels.
+        account_device_ids = {device.device_id for device in account_by_key.values()}
         for device in dr.async_entries_for_config_entry(
             device_registry, self.config_entry.entry_id
         ):
@@ -304,7 +307,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             if not imou_keys:
                 continue
-            if any(key in account_by_key for key in imou_keys):
+            if any(
+                key in account_by_key or key in account_device_ids for key in imou_keys
+            ):
                 continue
             device_registry.async_update_device(
                 device_id=device.id,

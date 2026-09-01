@@ -19,6 +19,7 @@
 #### Changed
 
 - Requires pyimouapi 1.4.1, installed automatically with this integration
+- A camera with more than one lens, and an NVR, now show their channels under the device they belong to, and an accessory shows under the gateway it is paired to. A multi-lens device or NVR also gets a page of its own, listing its channels; deleting that page stops polling the whole device
 - **Motion** is created only on cameras that support picture-change or human detection, not on every camera channel. Leftover **Motion** entities from 1.4.0 on cameras that do not support those are removed on setup. If event push is off (or types omit **alarm**), **Motion** is unavailable rather than stuck off
 
 #### Fixed
@@ -308,6 +309,7 @@
 #### 变更
 
 - 需要 pyimouapi 1.4.1，随本集成自动安装
+- 双目及多目摄像头、NVR 的各路通道，现在挂在所属设备下；配件挂在它配对的网关下。多目设备和 NVR 会多出一个自己的设备页，列出旗下通道；删除该页即停止轮询整台设备
 - **动态侦测** 仅在支持画面变化或人形检测的摄像头上出现，不是每路镜头都有。1.4.0 留在不支持这些能力的摄像头上的 **动态侦测** 会在加载时删除。未开事件推送（或类型不含 **alarm**）时，**动态侦测** 为不可用，而不是一直显示关
 
 #### 修复

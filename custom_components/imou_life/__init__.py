@@ -14,7 +14,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
-from pyimouapi.ha_device import ImouHaDeviceManager
+from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
@@ -38,6 +38,7 @@ from .const import (
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
+from .devices import async_register_imou_devices, is_account_device_row
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import get_selected_device_ids, parse_notify_services
 from .repairs import async_delete_quota_issue
@@ -170,6 +171,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
     async_remove_ungated_push_entities(hass, entry)
+
+    @callback
+    def _async_register_devices(devices: list[ImouHaDevice]) -> None:
+        async_register_imou_devices(hass, entry, coordinator.devices)
+
+    @callback
+    def _async_drop_register_callback() -> None:
+        if _async_register_devices in coordinator.new_device_callbacks:
+            coordinator.new_device_callbacks.remove(_async_register_devices)
+
+    # Discovery callbacks run in the order they were added, so registering here
+    # keeps a device discovered later ahead of the platforms adding entities.
+    coordinator.new_device_callbacks.append(_async_register_devices)
+    entry.async_on_unload(_async_drop_register_callback)
+    async_register_imou_devices(hass, entry, coordinator.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
@@ -280,7 +296,9 @@ def _sibling_channel_names(
         for entry in dr.async_entries_for_config_entry(
             device_registry, config_entry.entry_id
         )
-        if entry.id != device_entry.id and _device_id_from_entry(entry) == device_id
+        if entry.id != device_entry.id
+        and _device_id_from_entry(entry) == device_id
+        and not is_account_device_row(entry)
     )
 
 
@@ -302,8 +320,14 @@ async def async_remove_config_entry_device(
     # cloud and the push messages use. One channel of a multi-channel device
     # cannot be expressed in it, and removing the whole device id here would
     # take its sibling channels out of Home Assistant along with whatever the
-    # user had named or automated on them.
-    if siblings := _sibling_channel_names(hass, config_entry, device_entry, device_id):
+    # user had named or automated on them. Removing the row that stands for the
+    # whole account device is that exclusion, so it is allowed to proceed.
+    siblings = (
+        []
+        if is_account_device_row(device_entry)
+        else _sibling_channel_names(hass, config_entry, device_entry, device_id)
+    )
+    if siblings:
         siblings_text = ", ".join(siblings)
         raise HomeAssistantError(
             f"Cannot remove {device_name}: it is one channel of Imou device "
