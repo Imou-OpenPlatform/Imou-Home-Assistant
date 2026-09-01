@@ -312,6 +312,9 @@
         "e_areadetect": "Intrusione rilevata",
         "e_areadetectalarm": "Intrusione rilevata",
         "e_btnonceaction": "Pulsante di emergenza premuto",
+        "e_calleventcall": "Chiamata in arrivo",
+        "e_callquickevent": "Chiamata in arrivo (rapida)",
+        "e_callsupplyevent": "Chiamata in arrivo (supplemento)",
         "e_clearalarmpir": "Allarme PIR azzerato",
         "e_cleargasalarm": "Allarme gas azzerato",
         "e_clearsmokealarm": "Allarme fumo azzerato",
@@ -607,6 +610,11 @@
       },
       "motion": {
         "name": "Movimento"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Campanello"
       }
     },
     "siren": {

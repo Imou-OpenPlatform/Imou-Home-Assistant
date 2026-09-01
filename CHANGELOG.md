@@ -8,10 +8,12 @@
 
 - The UI and alarm notifications follow your Home Assistant language. German, French, and Italian are available in addition to English and Simplified Chinese
 - Live view uses a cloud stream that works for the account owner and for people the device is shared with. If nobody is watching for about 10 seconds, the next open fetches a new address
+- Camera **Doorbell** event (`device_class: doorbell`) on cameras that support calling. A press or incoming call from event push fires `ring` so automations can use the device. Needs event push with type **alarm**; the entity remains if push is off. Unanswered calls and other alarms stay on notify + `imou_life_alarm`
 
 #### Changed
 
 - Requires pyimouapi 1.4.1, installed automatically with this integration
+- **Motion** is created only on cameras that support picture-change or human detection, not on every camera channel. Leftover **Motion** entities from 1.4.0 on cameras that do not support those are removed on setup
 
 ### [1.4.0]
 
@@ -285,10 +287,12 @@
 
 - 界面和告警通知跟随 Home Assistant 语言。除英语、简体中文外，现支持德语、法语、意大利语
 - 直播画面使用云端拉流，设备分享给他人后也能看。约 10 秒没人看之后，下次打开会重新获取地址
+- 摄像头 **门铃** 事件（`device_class: doorbell`），仅在支持呼叫的摄像头上出现。事件推送里的按铃或来电会触发 `ring`，可在设备页写自动化。需开启事件推送且类型含 **alarm**；关掉推送时实体还在。未接听和其他告警仍走通知和 `imou_life_alarm`
 
 #### 变更
 
 - 需要 pyimouapi 1.4.1，随本集成自动安装
+- **动态侦测** 仅在支持画面变化或人形检测的摄像头上出现，不是每路镜头都有。1.4.0 留在不支持这些能力的摄像头上的 **动态侦测** 会在加载时删除
 
 ### [1.4.0]
 

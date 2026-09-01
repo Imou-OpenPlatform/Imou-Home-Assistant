@@ -312,6 +312,9 @@
         "e_areadetect": "Intrusion detected",
         "e_areadetectalarm": "Intrusion detected",
         "e_btnonceaction": "Emergency button pressed",
+        "e_calleventcall": "Incoming call",
+        "e_callquickevent": "Incoming call (quick)",
+        "e_callsupplyevent": "Incoming call (follow-up)",
         "e_clearalarmpir": "PIR alarm cleared",
         "e_cleargasalarm": "Gas alarm cleared",
         "e_clearsmokealarm": "Smoke alarm cleared",
@@ -607,6 +610,11 @@
       },
       "motion": {
         "name": "Motion"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Doorbell"
       }
     },
     "siren": {

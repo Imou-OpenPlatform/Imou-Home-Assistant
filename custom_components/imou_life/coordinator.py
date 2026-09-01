@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import timedelta
 from time import monotonic
 
@@ -141,6 +141,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
 
         if first_discovery:
+            await self._async_prefetch_event_maps(filtered_list)
             self._async_add_remove_devices(fresh_by_key, account_by_key)
             return
 
@@ -179,7 +180,21 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 if key in detailed_by_key:
                     fresh_by_key[key] = detailed_by_key[key]
 
+        if new_keys:
+            await self._async_prefetch_event_maps(
+                [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
+            )
         self._async_add_remove_devices(fresh_by_key, account_by_key)
+
+    async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Fetch product-model events so doorbell / motion can be gated at setup."""
+        seen: set[str] = set()
+        for device in devices:
+            product_id = device.product_id
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            await self._device_manager.delegate.async_ensure_event_map(product_id)
 
     async def _async_update_data(self) -> None:
         """Fetch latest device status from Imou cloud."""

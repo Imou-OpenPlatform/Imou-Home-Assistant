@@ -312,6 +312,9 @@
         "e_areadetect": "Eindringen erkannt",
         "e_areadetectalarm": "Eindringen erkannt",
         "e_btnonceaction": "Notknopf gedrückt",
+        "e_calleventcall": "Eingehender Anruf",
+        "e_callquickevent": "Eingehender Anruf (schnell)",
+        "e_callsupplyevent": "Eingehender Anruf (Ergänzung)",
         "e_clearalarmpir": "PIR-Alarm aufgehoben",
         "e_cleargasalarm": "Gasalarm aufgehoben",
         "e_clearsmokealarm": "Rauchalarm aufgehoben",
@@ -607,6 +610,11 @@
       },
       "motion": {
         "name": "Bewegung"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Türklingel"
       }
     },
     "siren": {

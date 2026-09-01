@@ -312,6 +312,9 @@
         "e_areadetect": "Intrusion détectée",
         "e_areadetectalarm": "Intrusion détectée",
         "e_btnonceaction": "Bouton d'urgence pressé",
+        "e_calleventcall": "Appel entrant",
+        "e_callquickevent": "Appel entrant (rapide)",
+        "e_callsupplyevent": "Appel entrant (complément)",
         "e_clearalarmpir": "Alarme PIR levée",
         "e_cleargasalarm": "Alarme gaz levée",
         "e_clearsmokealarm": "Alarme fumée levée",
@@ -607,6 +610,11 @@
       },
       "motion": {
         "name": "Mouvement"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Sonnette"
       }
     },
     "siren": {

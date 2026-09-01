@@ -9,6 +9,7 @@ from custom_components.imou_life import (
     async_migrate_entry,
     async_remove_config_entry_device,
     async_remove_replaced_legacy_entities,
+    async_remove_ungated_push_entities,
     async_unload_entry,
 )
 from custom_components.imou_life.const import (
@@ -92,6 +93,84 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
     assert registry.async_get(siren_stop.entity_id) is None
     assert registry.async_get(night.entity_id) is not None
     assert registry.async_get(panel.entity_id) is not None
+
+
+def _paas_camera(device_id: str, *, channel_ability: str) -> MagicMock:
+    device = MagicMock()
+    device.device_id = device_id
+    device.channel_id = "0"
+    device.product_id = None
+    device.is_ipc = True
+    device.device_ability = "WLAN"
+    device.channel_ability = channel_ability
+    return device
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
+    """1.4.0 created Motion on every camera; ungated leftovers must be removed."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
+    entry.add_to_hass(hass)
+    keep = _paas_camera("keep", channel_ability="WLAN,MobileDetect")
+    drop = _paas_camera("drop", channel_ability="WLAN")
+    coordinator = MagicMock()
+    coordinator.devices = [keep, drop]
+    coordinator.devices_by_key = {"keep_0": keep, "drop_0": drop}
+    coordinator.device_manager.delegate.cached_event_map = MagicMock(return_value={})
+    entry.runtime_data = ImouRuntimeData(coordinator=coordinator)
+
+    device_registry = dr.async_get(hass)
+    keep_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "keep_0")},
+        name="Keep",
+    )
+    drop_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "drop_0")},
+        name="Drop",
+    )
+    gone_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "gone_0")},
+        name="Gone",
+    )
+    registry = er.async_get(hass)
+    keep_motion = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        "keep_0$motion",
+        config_entry=entry,
+        device_id=keep_device.id,
+    )
+    drop_motion = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        "drop_0$motion",
+        config_entry=entry,
+        device_id=drop_device.id,
+    )
+    drop_doorbell = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "drop_0$doorbell",
+        config_entry=entry,
+        device_id=drop_device.id,
+    )
+    gone_motion = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        "gone_0$motion",
+        config_entry=entry,
+        device_id=gone_device.id,
+    )
+
+    async_remove_ungated_push_entities(hass, entry)
+
+    assert registry.async_get(keep_motion.entity_id) is not None
+    assert registry.async_get(drop_motion.entity_id) is None
+    assert registry.async_get(drop_doorbell.entity_id) is None
+    assert registry.async_get(gone_motion.entity_id) is not None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

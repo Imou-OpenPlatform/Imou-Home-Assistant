@@ -138,6 +138,7 @@ BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_MOTION = "motion"
 MOTION_OFF_DELAY = 15
+PARAM_DOORBELL = "doorbell"
 PARAM_SIREN = "siren"
 SIREN_OFF_DELAY = 15
 PARAM_STATUS = "status"
@@ -250,6 +251,7 @@ PLATFORMS: list[Platform] = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BUTTON,
     Platform.CAMERA,
+    Platform.EVENT,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SIREN,

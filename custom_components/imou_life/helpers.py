@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -9,7 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import SelectOptionDict
+from pyimouapi.const import SWITCH_TYPE_ABILITY
 from pyimouapi.device import ImouDeviceSummary
+from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
     DEFAULT_EVENT_PUSH_TYPES,
@@ -20,6 +23,13 @@ from .const import (
     PARAM_SELECTED_DEVICES,
     callback_flags_to_event_push_types,
     imou_life_device_keys_from_ids,
+)
+
+PAAS_CALL_ABILITY = "CallAbility"
+PAAS_MOTION_ABILITIES = frozenset(
+    item["ability"]
+    for switch_type in ("motion_detect", "header_detect")
+    for item in SWITCH_TYPE_ABILITY[switch_type]
 )
 
 
@@ -183,3 +193,40 @@ async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, s
     manager = ImouDeviceManager(api_client)
     summaries = await manager.async_get_device_summaries()
     return {s.device_id: format_device_label(hass, s) for s in summaries}
+
+
+def device_has_paas_ability(device: ImouHaDevice, ability: str) -> bool:
+    """Return True when a PaaS channel (or IPC device) reports this ability."""
+    return ImouHaDeviceManager.entity_need_add_to_device(
+        ability,
+        (device.channel_ability or "").split(","),
+        (device.device_ability or "").split(","),
+        bool(device.is_ipc),
+        device.channel_id,
+        "_probe",
+        {},
+    )
+
+
+def device_iot_event_map(coordinator: Any, device: ImouHaDevice) -> dict[str, str]:
+    """Return cached product-model events for an IoT device, or {}."""
+    product_id = device.product_id
+    if not product_id:
+        return {}
+    delegate = getattr(getattr(coordinator, "device_manager", None), "delegate", None)
+    cached = getattr(delegate, "cached_event_map", None)
+    if cached is None:
+        return {}
+    return cached(product_id) or {}
+
+
+def device_iot_events_match(
+    coordinator: Any,
+    device: ImouHaDevice,
+    pred: Callable[[str | None], bool],
+) -> bool:
+    """Return True when any cached event ref or identifier matches pred."""
+    for ref, identifier in device_iot_event_map(coordinator, device).items():
+        if pred(identifier) or pred(ref):
+            return True
+    return False

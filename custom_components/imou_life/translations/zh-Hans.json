@@ -312,6 +312,9 @@
         "e_areadetect": "区域入侵",
         "e_areadetectalarm": "区域入侵",
         "e_btnonceaction": "紧急按钮被按下",
+        "e_calleventcall": "有人呼叫",
+        "e_callquickevent": "有人呼叫（快速）",
+        "e_callsupplyevent": "有人呼叫（补充）",
         "e_clearalarmpir": "PIR 告警已消除",
         "e_cleargasalarm": "燃气报警已恢复",
         "e_clearsmokealarm": "烟雾报警已恢复",
@@ -607,6 +610,11 @@
       },
       "motion": {
         "name": "动态侦测"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "门铃"
       }
     },
     "siren": {

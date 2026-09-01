@@ -37,6 +37,7 @@ def device_manager() -> MagicMock:
     manager = MagicMock()
     manager.async_get_devices = AsyncMock(return_value=[_mock_device("d1")])
     manager.async_update_devices_status = AsyncMock(return_value=None)
+    manager.delegate.async_ensure_event_map = AsyncMock()
     return manager
 
 

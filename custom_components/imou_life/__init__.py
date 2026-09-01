@@ -24,15 +24,18 @@ from .const import (
     PARAM_APP_ID,
     PARAM_APP_SECRET,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DOORBELL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_MOTION,
     PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
     PLATFORMS,
+    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .event_push import async_setup_event_push, async_teardown_event_push
@@ -58,6 +61,42 @@ def async_remove_replaced_legacy_entities(
             _REPLACED_BUTTON_SUFFIXES
         )
         if drop_select or drop_button:
+            registry.async_remove(entity_entry.entity_id)
+
+
+def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop 1.4.0 Motion (and ungated Doorbell) rows this camera no longer offers.
+
+    Only currently loaded devices are considered, so a deselected camera keeps
+    its registry row until it is selected again.
+    """
+    coordinator = entry.runtime_data.coordinator
+    from .binary_sensor import _iter_motion_sensors
+    from .event import _iter_doorbell_events
+
+    allowed_motion = {
+        imou_life_device_key(device) for _, device in _iter_motion_sensors(coordinator)
+    }
+    allowed_doorbell = {
+        imou_life_device_key(device) for _, device in _iter_doorbell_events(coordinator)
+    }
+    known = set(coordinator.devices_by_key)
+    registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        device_key, sep, entity_type = unique_id.rpartition("$")
+        if not sep or device_key not in known:
+            continue
+        drop = (
+            entity_entry.domain == "binary_sensor"
+            and entity_type == PARAM_MOTION
+            and device_key not in allowed_motion
+        ) or (
+            entity_entry.domain == "event"
+            and entity_type == PARAM_DOORBELL
+            and device_key not in allowed_doorbell
+        )
+        if drop:
             registry.async_remove(entity_entry.entity_id)
 
 
@@ -128,6 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
+    async_remove_ungated_push_entities(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
