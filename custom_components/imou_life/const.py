@@ -259,6 +259,7 @@ PLATFORMS: list[Platform] = [
     Platform.CAMERA,
     Platform.EVENT,
     Platform.IMAGE,
+    Platform.LIGHT,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SIREN,

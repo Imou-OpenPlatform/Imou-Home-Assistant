@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
@@ -18,6 +19,7 @@ from pyimouapi.ha_device import ImouHaDevice
 from .const import (
     CONF_HD,
     CONF_HTTPS,
+    DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
     PARAM_LIVE_RESOLUTION,
@@ -136,6 +138,41 @@ class ImouCamera(ImouEntity, Camera):
         header_on = bool(header[PARAM_STATE]) if header else False
         motion_on = bool(motion[PARAM_STATE]) if motion else False
         return header_on or motion_on
+
+    async def async_enable_motion_detection(self) -> None:
+        """Turn on the detection this camera reports as motion detection."""
+        await self._async_set_motion_detection(True)
+
+    async def async_disable_motion_detection(self) -> None:
+        """Turn off every detection this camera reports as motion detection."""
+        await self._async_set_motion_detection(False)
+
+    async def _async_set_motion_detection(self, enable: bool) -> None:
+        """Write the detect switches the `motion_detection` attribute reads.
+
+        The attribute is on when either picture-change or human detection is,
+        so turning one on is enough to enable it, while turning it off has to
+        clear both. Picture change is the broader of the two, so it goes first.
+        """
+        supported = [
+            switch_type
+            for switch_type in (PARAM_MOTION_DETECT, PARAM_HEADER_DETECT)
+            if switch_type in self.device.switches
+        ]
+        if not supported:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="motion_detection_unsupported",
+                translation_placeholders={"name": self.entity_id},
+            )
+        for switch_type in supported[:1] if enable else supported:
+            try:
+                await self.coordinator.device_manager.async_switch_operation(
+                    self.device, switch_type, enable
+                )
+            except ImouException as e:
+                self._raise_imou_ha_error(e, "switch_operation_failed")
+        self.async_write_ha_state()
 
     @property
     def supported_features(self) -> CameraEntityFeature:

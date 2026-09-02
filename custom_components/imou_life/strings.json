@@ -520,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "White light"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "Abnormal sound alarm"
@@ -565,9 +570,6 @@
       },
       "switch": {
         "name": "Plug switch"
-      },
-      "white_light": {
-        "name": "White light"
       },
       "wide_dynamic": {
         "name": "Wide dynamic range"
@@ -673,6 +675,9 @@
     },
     "camera_image_failed": {
       "message": "Could not get a snapshot from Imou: {error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} does not support picture-change or human detection, so motion detection cannot be turned on or off."
     },
     "not_a_ptz_button": {
       "message": "{entity_id} is not a PTZ button, so it cannot be moved. Target a PTZ direction button instead."

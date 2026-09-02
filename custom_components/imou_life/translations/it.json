@@ -520,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "Luce bianca"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "Allarme suono anomalo"
@@ -565,9 +570,6 @@
       },
       "switch": {
         "name": "Interruttore presa"
-      },
-      "white_light": {
-        "name": "Luce bianca"
       },
       "wide_dynamic": {
         "name": "Ampia gamma dinamica"
@@ -673,6 +675,9 @@
     },
     "camera_image_failed": {
       "message": "Impossibile ottenere un'istantanea da Imou: {error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} non supporta il rilevamento del cambio immagine né quello umano, quindi il rilevamento del movimento non può essere attivato o disattivato."
     },
     "not_a_ptz_button": {
       "message": "{entity_id} non è un pulsante PTZ, quindi non può essere mosso. Punta invece a un pulsante di direzione PTZ."

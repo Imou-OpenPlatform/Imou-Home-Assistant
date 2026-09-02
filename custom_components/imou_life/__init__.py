@@ -54,7 +54,7 @@ _REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
 def async_remove_replaced_legacy_entities(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Drop leftover select.mode, siren button, and text rows replaced by numbers."""
+    """Drop leftover select.mode, siren button, text, and white-light switch rows."""
     registry = er.async_get(hass)
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = entity_entry.unique_id
@@ -63,7 +63,10 @@ def async_remove_replaced_legacy_entities(
             _REPLACED_BUTTON_SUFFIXES
         )
         drop_text = entity_entry.domain == "text"
-        if drop_select or drop_button or drop_text:
+        drop_white_light = entity_entry.domain == "switch" and unique_id.endswith(
+            "$white_light"
+        )
+        if drop_select or drop_button or drop_text or drop_white_light:
             registry.async_remove(entity_entry.entity_id)
 
 

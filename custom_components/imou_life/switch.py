@@ -33,7 +33,6 @@ from .const import (
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
-    PARAM_WHITE_LIGHT,
     PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -44,8 +43,8 @@ PARALLEL_UPDATES = 0
 
 # Detection, recording and indicator toggles are device settings rather than
 # controls, so they belong under the device's configuration section. Privacy
-# mode, the white light and the plug relay stay primary: those are operated,
-# not configured.
+# mode and the plug relay stay primary: those are operated, not configured.
+# The camera white light is a light entity.
 SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_AB_ALARM_SOUND,
@@ -111,10 +110,6 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         key=PARAM_PLUG_SWITCH,
         translation_key=PARAM_PLUG_SWITCH,
         device_class=SwitchDeviceClass.SWITCH,
-    ),
-    SwitchEntityDescription(
-        key=PARAM_WHITE_LIGHT,
-        translation_key=PARAM_WHITE_LIGHT,
     ),
     SwitchEntityDescription(
         key=PARAM_WIDE_DYNAMIC,

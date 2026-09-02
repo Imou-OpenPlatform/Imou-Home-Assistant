@@ -40,7 +40,7 @@ async def test_migrate_entry_adds_missing_webhook_id(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> None:
-    """Upgrade leftover select.mode, siren buttons, and countdown text must not stay."""
+    """Leftover mode, siren, text, and white-light switch rows must not stay."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
     entry.add_to_hass(hass)
     device_registry = dr.async_get(hass)
@@ -99,6 +99,20 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
         config_entry=entry,
         device_id=device_entry.id,
     )
+    white_light_switch = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        "cam_0$white_light",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    plug_switch = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        "cam_0$switch",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
 
     async_remove_replaced_legacy_entities(hass, entry)
 
@@ -107,8 +121,10 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
     assert registry.async_get(siren_stop.entity_id) is None
     assert registry.async_get(countdown_text.entity_id) is None
     assert registry.async_get(overcharge_text.entity_id) is None
+    assert registry.async_get(white_light_switch.entity_id) is None
     assert registry.async_get(night.entity_id) is not None
     assert registry.async_get(panel.entity_id) is not None
+    assert registry.async_get(plug_switch.entity_id) is not None
 
 
 def _paas_camera(device_id: str, *, channel_ability: str) -> MagicMock:

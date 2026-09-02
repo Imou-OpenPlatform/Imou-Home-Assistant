@@ -520,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "Lumière blanche"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "Alarme son inhabituel"
@@ -565,9 +570,6 @@
       },
       "switch": {
         "name": "Interrupteur de prise"
-      },
-      "white_light": {
-        "name": "Lumière blanche"
       },
       "wide_dynamic": {
         "name": "Large plage dynamique"
@@ -673,6 +675,9 @@
     },
     "camera_image_failed": {
       "message": "Impossible d'obtenir un instantané depuis Imou : {error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} ne prend pas en charge la détection de changement d'image ni la détection humaine ; la détection de mouvement ne peut donc pas être activée ou désactivée."
     },
     "not_a_ptz_button": {
       "message": "{entity_id} n'est pas un bouton PTZ, il ne peut donc pas être déplacé. Ciblez plutôt un bouton de direction PTZ."

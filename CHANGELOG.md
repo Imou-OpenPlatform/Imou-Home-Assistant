@@ -7,6 +7,7 @@
 #### Breaking
 
 - Plug **Countdown timer** and **Max power** are `number` entities. Automations must use `number.set_value` instead of `text.set_value`. Countdown remaining minutes count down on this Home Assistant, including when status polling is off. Leftover `text.*` entities for these are removed on setup
+- Camera **White light** is a `light` entity. Automations must use `light.turn_on` / `light.turn_off` instead of `switch.turn_on` / `switch.turn_off`. Leftover `switch.*` rows for this are removed on setup
 
 #### Added
 
@@ -25,6 +26,7 @@
 #### Fixed
 
 - A failed status refresh keeps the last known state instead of marking every entity unavailable. Switches stay usable; a tap the cloud refuses still reports the error (#68)
+- `camera.enable_motion_detection` / `camera.disable_motion_detection` now turn picture-change or human detection on this camera on or off. Turning off clears both when the camera has both
 
 ### [1.4.0]
 
@@ -297,6 +299,7 @@
 #### 破坏性变更
 
 - 插座 **开关倒计时** 和 **最大功率** 改为 `number`。自动化请用 `number.set_value`，不要再用 `text.set_value`。倒计时剩余分钟在本机倒数，关掉状态轮询也会走。遗留的 `text.*` 会在加载时删除
+- 摄像头 **白光灯** 改为 `light`。自动化请用 `light.turn_on` / `light.turn_off`，不要再用 `switch.turn_on` / `switch.turn_off`。遗留的 `switch.*` 会在加载时删除
 
 #### 新增
 
@@ -315,6 +318,7 @@
 #### 修复
 
 - 状态刷新失败时保留上次状态，不会把所有实体打成不可用。开关仍可操作；若云端拒绝那一次操作，仍会报错（#68）
+- `camera.enable_motion_detection` / `camera.disable_motion_detection` 现在会开关该镜头的画面变化或人形检测。关掉时若两者都有，会一并关掉
 
 ### [1.4.0]
 

@@ -36,6 +36,11 @@
 				}
 			}
 		},
+		"light": {
+			"white_light": {
+				"default": "mdi:light-flood-down"
+			}
+		},
 		"switch": {
 			"motion_detect": {
 				"default": "mdi:motion-sensor"
@@ -57,9 +62,6 @@
 			},
 			"frame_reverse": {
 				"default": "mdi:flip-vertical"
-			},
-			"white_light": {
-				"default": "mdi:light-flood-down"
 			},
 			"audio_encode_control": {
 				"default": "mdi:audio-input-rca"

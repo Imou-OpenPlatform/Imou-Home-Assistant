@@ -520,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "白光灯"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "异常音告警"
@@ -565,9 +570,6 @@
       },
       "switch": {
         "name": "插座开关"
-      },
-      "white_light": {
-        "name": "白光灯"
       },
       "wide_dynamic": {
         "name": "宽动态"
@@ -673,6 +675,9 @@
     },
     "camera_image_failed": {
       "message": "无法从 Imou 获取抓图：{error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} 不支持画面变化或人形检测，无法开关动态侦测。"
     },
     "not_a_ptz_button": {
       "message": "{entity_id} 不是云台按钮，无法转动。请改为选择云台方向按钮。"

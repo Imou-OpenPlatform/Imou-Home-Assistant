@@ -520,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "Weißlicht"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "Alarm bei ungewöhnlichem Geräusch"
@@ -565,9 +570,6 @@
       },
       "switch": {
         "name": "Steckdosenschalter"
-      },
-      "white_light": {
-        "name": "Weißlicht"
       },
       "wide_dynamic": {
         "name": "Weiter Dynamikbereich"
@@ -673,6 +675,9 @@
     },
     "camera_image_failed": {
       "message": "Schnappschuss konnte nicht von Imou geholt werden: {error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} unterstützt keine Bildänderungs- oder Personenerkennung, daher lässt sich die Bewegungserkennung nicht ein- oder ausschalten."
     },
     "not_a_ptz_button": {
       "message": "{entity_id} ist keine PTZ-Taste und kann daher nicht bewegt werden. Wähle stattdessen eine PTZ-Richtungstaste."
