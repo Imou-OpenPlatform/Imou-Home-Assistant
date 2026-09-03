@@ -16,11 +16,11 @@
 - Camera **Doorbell** event (`device_class: doorbell`) on cameras that support calling. A press or incoming call from event push fires `ring` so automations can use the device. Needs event push with type **alarm**; if push is off the entity stays but is unavailable. Unanswered calls and other alarms stay on notify + `imou_life_alarm`
 - Camera **Alarm picture** (`image`) — the last decrypted alarm still for that lens. Pin it on a dashboard. Needs event push with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture that this Home Assistant can decrypt. Does not take a live snapshot
 - When the Open Platform monthly call limit is used up, a repair appears under **Settings → System → Repairs**. Add quota or wait for the monthly reset, then reload the integration
+- A camera with more than one lens, an NVR, and a gateway with accessories now nest on the device pages: each channel sits under the device it belongs to, and each accessory under the gateway it is paired to. The whole device also has a page of its own (that page has no entities). Deleting that page stops polling the whole device; deleting one channel is still refused
 
 #### Changed
 
 - Requires pyimouapi 1.4.1, installed automatically with this integration
-- A camera with more than one lens, and an NVR, now show their channels under the device they belong to, and an accessory shows under the gateway it is paired to. A multi-lens device or NVR also gets a page of its own, listing its channels; deleting that page stops polling the whole device
 - **Motion** is created only on cameras that support picture-change or human detection, not on every camera channel. Leftover **Motion** entities from 1.4.0 on cameras that do not support those are removed on setup. If event push is off (or types omit **alarm**), **Motion** is unavailable rather than stuck off
 
 #### Fixed
@@ -308,11 +308,11 @@
 - 摄像头 **门铃** 事件（`device_class: doorbell`），仅在支持呼叫的摄像头上出现。事件推送里的按铃或来电会触发 `ring`，可在设备页写自动化。需开启事件推送且类型含 **alarm**；关掉推送时实体还在，但是不可用。未接听和其他告警仍走通知和 `imou_life_alarm`
 - 摄像头 **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需开启事件推送且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体还在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
 - 开放平台本月调用次数用完时，会在 **设置 → 系统 → 修复** 出现一条说明。补充配额或等到下月重置后，再重新加载集成
+- 双目及多目摄像头、NVR、以及带配件的网关，现在按层级显示：各路通道挂在所属设备下，配件挂在它配对的网关下。整台设备会多出一个自己的设备页（该页不带实体）。删除该页即停止轮询整台设备；单独删除一路通道仍会被拒绝
 
 #### 变更
 
 - 需要 pyimouapi 1.4.1，随本集成自动安装
-- 双目及多目摄像头、NVR 的各路通道，现在挂在所属设备下；配件挂在它配对的网关下。多目设备和 NVR 会多出一个自己的设备页，列出旗下通道；删除该页即停止轮询整台设备
 - **动态侦测** 仅在支持画面变化或人形检测的摄像头上出现，不是每路镜头都有。1.4.0 留在不支持这些能力的摄像头上的 **动态侦测** 会在加载时删除。未开事件推送（或类型不含 **alarm**）时，**动态侦测** 为不可用，而不是一直显示关
 
 #### 修复
