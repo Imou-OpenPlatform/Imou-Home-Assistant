@@ -655,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "乐橙开放平台拒绝了 App ID 和 App secret"
+    },
     "switch_operation_failed": {
       "message": "Imou 拒绝了此开关操作：{error}"
     },

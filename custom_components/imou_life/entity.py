@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
-from pyimouapi.exceptions import ImouException
+from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
 from .const import (
@@ -96,6 +96,12 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         self, err: ImouException, translation_key: str
     ) -> NoReturn:
         """Surface quota as a repair, then raise the translated HA error."""
+        if isinstance(err, InvalidAppIdOrSecretException):
+            self._config_entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
         async_notify_imou_api_error(self.hass, self._config_entry, err)
         raise HomeAssistantError(
             translation_domain=DOMAIN,

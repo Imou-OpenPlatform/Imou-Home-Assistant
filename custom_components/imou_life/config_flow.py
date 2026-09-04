@@ -139,6 +139,17 @@ _BIND_DEVICE_SCHEMA = vol.Schema(
     }
 )
 
+REAUTH_SCHEMA = vol.Schema(
+    {
+        vol.Required(PARAM_APP_SECRET): TextSelector(
+            TextSelectorConfig(
+                type=TextSelectorType.PASSWORD,
+                autocomplete="current-password",
+            )
+        ),
+    }
+)
+
 
 async def _async_run_bind(
     hass: HomeAssistant,
@@ -187,6 +198,27 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize config flow."""
         self._devices_map: dict[str, str] = {}
         self._login_data: dict[str, Any] = {}
+
+    async def _async_validate_credentials(
+        self, app_id: str, app_secret: str, api_hostname: str
+    ) -> dict[str, str]:
+        """Validate App credentials and close the temporary client."""
+        errors: dict[str, str] = {}
+        api_client = ImouOpenApiClient(app_id, app_secret, api_hostname)
+        try:
+            await api_client.async_get_token()
+        except InvalidAppIdOrSecretException:
+            errors["base"] = "invalid_auth"
+        except ConnectFailedException:
+            errors["base"] = "cannot_connect"
+        except RequestFailedException:
+            errors["base"] = "request_failed"
+        except ImouException as exception:
+            _LOGGER.debug("Imou error during config flow: %s", exception)
+            errors["base"] = "unknown"
+        finally:
+            await api_client.async_close()
+        return errors
 
     @staticmethod
     def _user_schema(default_region: str = DEFAULT_API_URL_REGION) -> vol.Schema:
@@ -395,50 +427,23 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm reauthentication with a new App Secret."""
         reauth_entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
-        error_detail = ""
-
-        if user_input is None:
-            return self.async_show_form(
-                step_id="reauth_confirm",
-                data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
-                description_placeholders={
-                    "app_id": reauth_entry.data[PARAM_APP_ID],
-                    "error": "",
-                },
-            )
-
-        api_client = ImouOpenApiClient(
-            reauth_entry.data[PARAM_APP_ID],
-            user_input[PARAM_APP_SECRET],
-            reauth_entry.data[PARAM_API_URL],
-        )
-        try:
-            await api_client.async_get_token()
-        except InvalidAppIdOrSecretException as exception:
-            errors["base"] = "invalid_auth"
-            error_detail = _api_error_placeholder(exception)
-        except ImouException as exception:
-            errors["base"] = _config_flow_error_key(exception)
-            error_detail = _api_error_placeholder(exception)
-        else:
-            return self.async_update_reload_and_abort(
-                reauth_entry,
-                data={
-                    **reauth_entry.data,
-                    PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-                },
-            )
-        finally:
-            await api_client.async_close()
-
+        if user_input is not None:
+            if not (
+                errors := await self._async_validate_credentials(
+                    reauth_entry.data[PARAM_APP_ID],
+                    user_input[PARAM_APP_SECRET],
+                    reauth_entry.data[PARAM_API_URL],
+                )
+            ):
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data_updates={PARAM_APP_SECRET: user_input[PARAM_APP_SECRET]},
+                )
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+            data_schema=REAUTH_SCHEMA,
+            description_placeholders={"app_id": reauth_entry.data[PARAM_APP_ID]},
             errors=errors,
-            description_placeholders={
-                "app_id": reauth_entry.data[PARAM_APP_ID],
-                "error": error_detail,
-            },
         )
 
     @staticmethod

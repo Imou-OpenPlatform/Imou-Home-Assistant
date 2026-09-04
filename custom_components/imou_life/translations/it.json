@@ -655,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "Imou ha rifiutato l'App ID e l'App secret"
+    },
     "switch_operation_failed": {
       "message": "Imou ha rifiutato il cambio interruttore: {error}"
     },

@@ -655,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "Imou rejected the App ID and App secret"
+    },
     "switch_operation_failed": {
       "message": "Imou rejected the switch change: {error}"
     },

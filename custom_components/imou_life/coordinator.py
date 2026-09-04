@@ -123,7 +123,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
-            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
         except ImouException as err:
             async_notify_imou_api_error(self.hass, self.config_entry, err)
             if first_discovery:
@@ -158,7 +161,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             except TimeoutError as err:
                 raise UpdateFailed(f"Timeout while fetching data: {err}") from err
             except InvalidAppIdOrSecretException as err:
-                raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_auth",
+                ) from err
             except ImouException as err:
                 async_notify_imou_api_error(self.hass, self.config_entry, err)
                 # Keep removals from the shallow list. Leave brand-new keys out
@@ -233,7 +239,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         except InvalidAppIdOrSecretException as err:
             # Credentials can be revoked between two listings, and the status
             # calls are what notice it first now that listing is on a slow clock.
-            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
         except (TimeoutError, ImouException) as err:
             async_notify_imou_api_error(self.hass, self.config_entry, err)
             # last_update_success stays true, so entities keep the last state

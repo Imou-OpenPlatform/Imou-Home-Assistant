@@ -19,7 +19,7 @@
   "loggers": [
     "pyimouapi"
   ],
-  "quality_scale": "bronze",
+  "quality_scale": "silver",
   "requirements": [
     "pyimouapi==1.4.1"
   ],

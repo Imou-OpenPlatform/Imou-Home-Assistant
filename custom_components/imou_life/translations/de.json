@@ -655,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "Imou hat die App-ID und das App-Secret abgelehnt"
+    },
     "switch_operation_failed": {
       "message": "Imou hat die Schalteränderung abgelehnt: {error}"
     },

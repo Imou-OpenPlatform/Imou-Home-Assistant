@@ -655,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "Imou a rejeté l'identifiant et le secret de l'application"
+    },
     "switch_operation_failed": {
       "message": "Imou a rejeté le changement d'interrupteur : {error}"
     },
