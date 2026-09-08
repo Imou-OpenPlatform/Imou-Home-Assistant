@@ -59,6 +59,39 @@ def test_redacted_push_log_keeps_raw_body_without_token() -> None:
     assert event_data["raw"]["token"] == "secret-token"
 
 
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_logs_raw_body_then_parsed_push(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Webhook debug logs show the raw body first, then the parsed push."""
+    caplog.set_level("DEBUG", logger="custom_components.imou_life.webhook")
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["SN1"])
+    payload = {
+        "msgType": "alarmLocal",
+        "deviceId": "SN1",
+        "channelId": "0",
+        "token": "secret-token",
+    }
+
+    response = await async_handle_imou_webhook(
+        hass, "webhook-id", MockRequest(payload)
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    messages = [record.message for record in caplog.records]
+    raw_index = next(
+        i for i, message in enumerate(messages) if message.startswith("Received Imou webhook body:")
+    )
+    parsed_index = next(
+        i for i, message in enumerate(messages) if message.startswith("Parsed Imou push:")
+    )
+    assert raw_index < parsed_index
+    assert "secret-token" not in caplog.text
+    assert "alarmLocal" in caplog.text
+    assert "SN1" in caplog.text
+
+
 class MockRequest:
     """Minimal aiohttp request mock for webhook tests."""
 

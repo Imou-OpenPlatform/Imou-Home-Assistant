@@ -600,9 +600,11 @@ async def async_handle_imou_webhook(
         _LOGGER.warning("Unexpected Imou webhook payload type: %s", type(payload))
         return web.Response(status=200, text="ok")
 
+    _LOGGER.debug("Received Imou webhook body: %s", _redact_push_secrets(payload))
+
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
-    _LOGGER.debug("Received Imou push: %s", _redacted_push_for_log(event_data))
+    _LOGGER.debug("Parsed Imou push: %s", _redacted_push_for_log(event_data))
 
     # Check: is push enabled? If user disabled it, silently ignore.
     # Prefer entry.options over runtime: options are saved before reload, and
