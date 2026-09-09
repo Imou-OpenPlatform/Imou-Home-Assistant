@@ -101,3 +101,45 @@ async def test_quota_repair_learn_more_uses_china_console(hass) -> None:
     assert issue.learn_more_url == (
         "https://open.imou.com/consoleNew/resourceManage/myResource"
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_quota_repair_not_cleared_when_every_device_is_skipped(
+    hass, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Skipping status polls must not hide an active quota repair."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from custom_components.imou_life.coordinator import ImouDataUpdateCoordinator
+    from pyimouapi.ha_device import ImouHaDevice
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    async_notify_imou_api_error(
+        hass,
+        entry,
+        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+    )
+    await hass.async_block_till_done()
+    issue_id = f"{ISSUE_OPEN_API_QUOTA}_{entry.entry_id}"
+    assert (DOMAIN, issue_id) in ir.async_get(hass).issues
+
+    device = MagicMock(spec=ImouHaDevice)
+    device.device_id = "d1"
+    device.channel_id = None
+    device.product_id = "prod1"
+    manager = MagicMock()
+    manager.async_get_devices = AsyncMock(return_value=[device])
+    manager.async_update_devices_status = AsyncMock(return_value=None)
+    manager.delegate.async_ensure_event_map = AsyncMock()
+    coordinator = ImouDataUpdateCoordinator(hass, manager, entry)
+    coordinator.devices_by_key = {"d1": device}
+    coordinator._devices_initialized = True
+    monkeypatch.setattr(
+        coordinator, "_should_skip_device_update", lambda _device: True
+    )
+
+    await coordinator._async_update_data()
+
+    assert (DOMAIN, issue_id) in ir.async_get(hass).issues
+    manager.async_update_devices_status.assert_not_awaited()

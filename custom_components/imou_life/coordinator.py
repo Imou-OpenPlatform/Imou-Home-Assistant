@@ -222,7 +222,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 len(self.devices_by_key) - len(devices_to_update),
             )
         if not devices_to_update:
-            async_delete_quota_issue(self.hass, self.config_entry)
             return
 
         skip_ids = (

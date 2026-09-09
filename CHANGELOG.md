@@ -21,12 +21,14 @@
 #### Changed
 
 - Requires pyimouapi 1.4.1, installed automatically with this integration
-- **Motion** is created only on cameras that support picture-change or human detection, not on every camera channel. Leftover **Motion** entities from 1.4.0 on cameras that do not support those are removed on setup. If event push is off (or types omit **alarm**), **Motion** is unavailable rather than stuck off
+- **Motion** is created only on cameras that support picture-change or human detection, not on every camera channel. Leftover **Motion** entities from 1.4.0 on cameras that do not support those are removed on setup. Leftover **Doorbell** entities on cameras that do not support calling are removed on setup. If event push is off (or types omit **alarm**), **Motion** and **Doorbell** are unavailable rather than stuck off
+- Invalid App ID or App secret during polling or while operating a device (switch, light, number, button, camera, and so on) opens **Re-authenticate** instead of only showing a generic error
 
 #### Fixed
 
 - A failed status refresh keeps the last known state instead of marking every entity unavailable. Switches stay usable; a tap the cloud refuses still reports the error (#68)
 - `camera.enable_motion_detection` / `camera.disable_motion_detection` now turn picture-change or human detection on this camera on or off. Turning off clears both when the camera has both
+- Open Platform quota exhaustion no longer clears the **Repairs** notice when every selected device has all entities disabled
 
 ### [1.4.0]
 
@@ -313,12 +315,14 @@
 #### 变更
 
 - 需要 pyimouapi 1.4.1，随本集成自动安装
-- **动态侦测** 仅在支持画面变化或人形检测的摄像头上出现，不是每路镜头都有。1.4.0 留在不支持这些能力的摄像头上的 **动态侦测** 会在加载时删除。未开事件推送（或类型不含 **alarm**）时，**动态侦测** 为不可用，而不是一直显示关
+- **动态侦测** 仅在支持画面变化或人形检测的摄像头上出现，不是每路镜头都有。1.4.0 留在不支持这些能力的摄像头上的 **动态侦测** 会在加载时删除。不支持呼叫的摄像头上遗留的 **门铃** 也会在加载时删除。未开事件推送（或类型不含 **alarm**）时，**动态侦测** 和 **门铃** 为不可用，而不是一直显示关
+- 轮询或操作设备（开关、灯光、数值、按钮、摄像头等）时若 App ID 或 App secret 无效，会弹出 **重新认证**，而不只是报一条通用错误
 
 #### 修复
 
 - 状态刷新失败时保留上次状态，不会把所有实体打成不可用。开关仍可操作；若云端拒绝那一次操作，仍会报错（#68）
 - `camera.enable_motion_detection` / `camera.disable_motion_detection` 现在会开关该镜头的画面变化或人形检测。关掉时若两者都有，会一并关掉
+- 所选设备的所有实体都被禁用时，开放平台配额用尽的 **修复** 说明不会再被误清掉
 
 ### [1.4.0]
 
