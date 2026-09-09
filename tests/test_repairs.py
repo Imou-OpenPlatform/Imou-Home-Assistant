@@ -135,9 +135,7 @@ async def test_quota_repair_not_cleared_when_every_device_is_skipped(
     coordinator = ImouDataUpdateCoordinator(hass, manager, entry)
     coordinator.devices_by_key = {"d1": device}
     coordinator._devices_initialized = True
-    monkeypatch.setattr(
-        coordinator, "_should_skip_device_update", lambda _device: True
-    )
+    monkeypatch.setattr(coordinator, "_should_skip_device_update", lambda _device: True)
 
     await coordinator._async_update_data()
 
