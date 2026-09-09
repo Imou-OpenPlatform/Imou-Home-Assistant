@@ -10,7 +10,7 @@ from custom_components.imou_life.const import (
     PARAM_MOTION_DETECT,
     imou_life_device_key,
 )
-from custom_components.imou_life.switch import ImouSwitch, SWITCH_TYPES
+from custom_components.imou_life.switch import SWITCH_TYPES, ImouSwitch
 from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.exceptions import HomeAssistantError
 from pyimouapi.const import PARAM_STATE

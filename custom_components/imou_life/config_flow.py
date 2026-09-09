@@ -427,18 +427,17 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm reauthentication with a new App Secret."""
         reauth_entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
-        if user_input is not None:
-            if not (
-                errors := await self._async_validate_credentials(
-                    reauth_entry.data[PARAM_APP_ID],
-                    user_input[PARAM_APP_SECRET],
-                    reauth_entry.data[PARAM_API_URL],
-                )
-            ):
-                return self.async_update_reload_and_abort(
-                    reauth_entry,
-                    data_updates={PARAM_APP_SECRET: user_input[PARAM_APP_SECRET]},
-                )
+        if user_input is not None and not (
+            errors := await self._async_validate_credentials(
+                reauth_entry.data[PARAM_APP_ID],
+                user_input[PARAM_APP_SECRET],
+                reauth_entry.data[PARAM_API_URL],
+            )
+        ):
+            return self.async_update_reload_and_abort(
+                reauth_entry,
+                data_updates={PARAM_APP_SECRET: user_input[PARAM_APP_SECRET]},
+            )
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=REAUTH_SCHEMA,

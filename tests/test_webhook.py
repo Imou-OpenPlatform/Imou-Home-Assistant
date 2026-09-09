@@ -73,18 +73,20 @@ async def test_webhook_logs_raw_body_then_parsed_push(
         "token": "secret-token",
     }
 
-    response = await async_handle_imou_webhook(
-        hass, "webhook-id", MockRequest(payload)
-    )
+    response = await async_handle_imou_webhook(hass, "webhook-id", MockRequest(payload))
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     messages = [record.message for record in caplog.records]
     raw_index = next(
-        i for i, message in enumerate(messages) if message.startswith("Received Imou webhook body:")
+        i
+        for i, message in enumerate(messages)
+        if message.startswith("Received Imou webhook body:")
     )
     parsed_index = next(
-        i for i, message in enumerate(messages) if message.startswith("Parsed Imou push:")
+        i
+        for i, message in enumerate(messages)
+        if message.startswith("Parsed Imou push:")
     )
     assert raw_index < parsed_index
     assert "secret-token" not in caplog.text
