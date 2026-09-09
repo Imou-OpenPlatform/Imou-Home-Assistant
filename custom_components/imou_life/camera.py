@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime, timedelta
+
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.util import dt as dt_util
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
@@ -22,8 +27,13 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
 
 PARALLEL_UPDATES = 0
+
+# An established pull keeps the cloud ticket valid. About 10s after the last
+# viewer, drop the cached Stream so the next open fetches a new URL.
+STREAM_IDLE_CHECK = timedelta(seconds=10)
 
 
 def _iter_cameras(
@@ -31,9 +41,7 @@ def _iter_cameras(
 ) -> list[tuple[str, ImouHaDevice]]:
     """Return (entity_type, device) pairs for camera entities."""
     return [
-        ("camera", device)
-        for device in coordinator.devices
-        if device.channel_id is not None
+        ("camera", device) for device in camera_channel_devices(coordinator.devices)
     ]
 
 
@@ -59,9 +67,21 @@ class ImouCamera(ImouEntity, Camera):
         """Initialize the camera entity."""
         Camera.__init__(self)
         ImouEntity.__init__(self, coordinator, config_entry, entity_type, device)
+        self._idle_unsub: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Cancel the idle check when the entity is removed."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_idle_check)
 
     async def stream_source(self) -> str | None:
-        """Return the live stream URL from the Imou cloud."""
+        """Return a live stream URL and watch for the last viewer leaving."""
+        url = await self._async_fetch_stream_url()
+        self._schedule_idle_check()
+        return url
+
+    async def _async_fetch_stream_url(self) -> str:
+        """Ask the cloud for a getStreamUrl ticket."""
         try:
             return await self.coordinator.device_manager.async_get_device_stream(
                 self.device,
@@ -69,11 +89,34 @@ class ImouCamera(ImouEntity, Camera):
                 CONF_HTTPS,
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="stream_source_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "stream_source_failed")
+
+    def _schedule_idle_check(self) -> None:
+        """Check later whether anyone is still pulling this stream."""
+        self._cancel_idle_check()
+        self._idle_unsub = async_track_point_in_utc_time(
+            self.hass,
+            self._async_handle_idle_check,
+            dt_util.utcnow() + STREAM_IDLE_CHECK,
+        )
+
+    @callback
+    def _cancel_idle_check(self) -> None:
+        """Drop a pending idle check, if any."""
+        if self._idle_unsub is not None:
+            self._idle_unsub()
+            self._idle_unsub = None
+
+    async def _async_handle_idle_check(self, _now: datetime) -> None:
+        """Keep the URL while someone is watching; drop it when they leave."""
+        self._idle_unsub = None
+        stream = self.stream
+        if stream is not None and stream.outputs():
+            self._schedule_idle_check()
+            return
+        if stream is not None:
+            await stream.stop()
+            self.stream = None
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -85,11 +128,7 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="camera_image_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "camera_image_failed")
 
     @property
     def motion_detection_enabled(self) -> bool:
@@ -99,6 +138,41 @@ class ImouCamera(ImouEntity, Camera):
         header_on = bool(header[PARAM_STATE]) if header else False
         motion_on = bool(motion[PARAM_STATE]) if motion else False
         return header_on or motion_on
+
+    async def async_enable_motion_detection(self) -> None:
+        """Turn on the detection this camera reports as motion detection."""
+        await self._async_set_motion_detection(True)
+
+    async def async_disable_motion_detection(self) -> None:
+        """Turn off every detection this camera reports as motion detection."""
+        await self._async_set_motion_detection(False)
+
+    async def _async_set_motion_detection(self, enable: bool) -> None:
+        """Write the detect switches the `motion_detection` attribute reads.
+
+        The attribute is on when either picture-change or human detection is,
+        so turning one on is enough to enable it, while turning it off has to
+        clear both. Picture change is the broader of the two, so it goes first.
+        """
+        supported = [
+            switch_type
+            for switch_type in (PARAM_MOTION_DETECT, PARAM_HEADER_DETECT)
+            if switch_type in self.device.switches
+        ]
+        if not supported:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="motion_detection_unsupported",
+                translation_placeholders={"name": self.entity_id},
+            )
+        for switch_type in supported[:1] if enable else supported:
+            try:
+                await self.coordinator.device_manager.async_switch_operation(
+                    self.device, switch_type, enable
+                )
+            except ImouException as e:
+                self._raise_imou_ha_error(e, "switch_operation_failed")
+        self.async_write_ha_state()
 
     @property
     def supported_features(self) -> CameraEntityFeature:

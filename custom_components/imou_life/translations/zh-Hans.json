@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Imou 事件推送注册失败",
       "description": "无法向 Imou 开放平台注册消息回调。请检查回调 URL 与 App ID 资源配额，然后重新加载集成。"
+    },
+    "open_api_quota_exceeded": {
+      "title": "Imou 开放平台本月调用次数已用完",
+      "description": "这个 App ID 本月的开放平台调用次数已经用完。设备列表、直播和开关暂时都无法访问云端，需要补充配额或等到下月重置。请到开放平台控制台打开 **我的资源**，然后重新加载集成。"
     }
   },
   "options": {
@@ -259,6 +263,198 @@
         "1": "在线",
         "0": "离线"
       }
+    },
+    "webhook_notification": {
+      "options": {
+        "title": "Imou Life · {alarm_type}",
+        "device": "设备：{device_name}",
+        "area": "位置：{area_name}",
+        "labels": "标签：{labels}",
+        "time": "时间：{time_str}",
+        "details": "详情：{desc_type}",
+        "unknown_device": "未知设备",
+        "unknown_alarm": "告警"
+      }
+    },
+    "alarm_type": {
+      "options": {
+        "abalarmsound": "听到异常声音",
+        "e_abalarmsound": "听到异常声音",
+        "e_alarmpir": "红外感应到人",
+        "aiperarea": "有人出现",
+        "aiveharea": "有车辆出现",
+        "alarmend": "告警已结束",
+        "alarmlocal": "本地告警",
+        "alarmoccurs": "发生告警",
+        "alarmpir": "红外感应到人",
+        "alkelec": "碱性电池电量低",
+        "apopendoor": "门锁已打开",
+        "apsanpkeyupdate": "门锁临时密码已更新",
+        "apupgradefail": "配件升级失败",
+        "apupgradesuccess": "配件升级成功",
+        "attachmentinfo": "配件信息已上报",
+        "batteryabnormal": "电池异常",
+        "beopeneddoor": "开门成功",
+        "binddevice": "设备已绑定",
+        "callbellevent": "有人呼叫",
+        "callevent": "设备呼叫中",
+        "callnoanswered": "呼叫未接听",
+        "checkalarm": "校验通过",
+        "checkalarmfail": "设备故障",
+        "closecamera": "已开启遮罩",
+        "crosslinedetection": "有人越线",
+        "deviceauthorizationchanged": "授权已变更",
+        "deviceauthorize": "设备已授权",
+        "devicedeletedsharedcancel": "分享已取消",
+        "deviceshare": "设备已分享",
+        "devicesharecancel": "分享已删除",
+        "doorbell": "有人按门铃",
+        "e_aiperarea": "有人出现",
+        "e_aiperareaalarm": "有人出现",
+        "e_aiveharea": "有车辆出现",
+        "e_aivehareaalarm": "有车辆出现",
+        "e_areadetect": "区域入侵",
+        "e_areadetectalarm": "区域入侵",
+        "e_btnonceaction": "紧急按钮被按下",
+        "e_calleventcall": "有人呼叫",
+        "e_callquickevent": "有人呼叫（快速）",
+        "e_callsupplyevent": "有人呼叫（补充）",
+        "e_clearalarmpir": "PIR 告警已消除",
+        "e_cleargasalarm": "燃气报警已恢复",
+        "e_clearsmokealarm": "烟雾报警已恢复",
+        "e_clearsirenalarm": "警号已消警",
+        "e_clearsirenalarmfail": "警号消警失败",
+        "e_faultalarm": "设备故障",
+        "e_gasalarm": "燃气泄漏",
+        "e_hxsmokealarm": "烟感报警",
+        "e_lockalarm": "门已关闭",
+        "e_matchapsucc": "配件配对成功",
+        "e_multiordinaryevent": "普通事件录像",
+        "e_multivideoaiperarea": "有人出现",
+        "e_multivideoaiperareaalarm": "有人出现",
+        "e_multivideoaipetalarm": "宠物出现",
+        "e_multivideoaipetarea": "宠物出现",
+        "e_multivideoaiveharea": "有车辆出现",
+        "e_multivideoaivehareaalarm": "有车辆出现",
+        "e_multivideoareadetect": "区域入侵",
+        "e_multivideodetectalarm": "区域入侵",
+        "e_sensorabnormal": "防拆触发",
+        "e_sirenalarm": "警号报警",
+        "e_sirenalarmfail": "警号报警失败",
+        "e_smartmixdetect": "有人或车出现",
+        "e_std_aoralarm": "AOR 录像告警",
+        "e_storageabnormal": "存储卡异常",
+        "e_storageempty": "存储卡已拔出",
+        "e_unlockalarm": "门已打开",
+        "e_upgradefail": "设备升级失败",
+        "e_upgradesuccess": "设备升级成功",
+        "e_videomotion": "画面变化",
+        "home": "已切换到在家",
+        "leave": "已切换到离家",
+        "no_defend": "已撤防",
+        "earlywarning": "设备预警",
+        "earlywarningend": "预警已结束",
+        "electricabnormal": "电压异常",
+        "electricity": "电量过低",
+        "engineopeneddoor": "机械锁已打开",
+        "faultalarm": "设备故障",
+        "fault_remind": "故障告警",
+        "firealarm": "发生火警",
+        "gasalarm": "燃气泄漏",
+        "goodsmove": "物品被搬移",
+        "heatmap": "热度图已生成",
+        "heatimagingtemper": "温度异常",
+        "highhumabnormal": "湿度过高",
+        "hightemabnormal": "温度过高",
+        "hightemalarm": "温度过高",
+        "highwaterpressure": "水压过高",
+        "hijackalarm": "劫持告警",
+        "high_humidity_alarm": "湿度过高",
+        "high_temperature_alarm": "温度过高",
+        "hoveringalarm": "有人徘徊",
+        "human": "有人出现",
+        "keyentrysuc": "密钥已录入",
+        "leakelectric": "发生漏电",
+        "leftdetection": "物品被遗留",
+        "litelec": "锂电池电量低",
+        "lock_alarm": "门已关闭",
+        "low_battery_alarm": "电量过低",
+        "low_humidity_alarm": "湿度过低",
+        "low_temperature_alarm": "温度过低",
+        "lowhumabnormal": "湿度过低",
+        "lowtemabnormal": "温度过低",
+        "lowwaterpressure": "水压过低",
+        "magnetomeralarm": "门磁触发",
+        "message": "收到视频留言",
+        "mobiledetect": "有人移动",
+        "nbdeviceabnormal": "设备被拆",
+        "nbelecover": "电流过高",
+        "nbelecres": "剩余电流异常",
+        "nbtempover": "温度过高",
+        "notopeneddoor": "开门失败",
+        "nozigbeeair": "长时间无人",
+        "objectmoved": "物品被移动",
+        "offline": "设备已离线",
+        "online": "设备已上线",
+        "opencamera": "已关闭遮罩",
+        "opendoorabnormal": "有人强行开门",
+        "parkingdetection": "有车辆停放",
+        "pir_alarm": "红外感应到人",
+        "pir_cleared": "PIR 告警已消除",
+        "pm2-5abnormal": "PM2.5 超标",
+        "pressthedoor": "门锁有新访客",
+        "remotecontrol": "远程联动触发",
+        "sensorabnormal": "防拆触发",
+        "siren_alarm_clear_fail": "警号消警失败",
+        "siren_alarm_cleared": "警号已消警",
+        "siren_alarm_failed": "警号报警失败",
+        "siren_warning": "警号报警",
+        "sirenoff": "警笛已关闭",
+        "sirenon": "警笛已打开",
+        "sleep": "设备已休眠",
+        "smoke_alarm": "烟感报警",
+        "smoke_alarm_restore": "报警已恢复",
+        "smokealarm": "烟感报警",
+        "sos_alarm": "紧急呼叫",
+        "soundlightalarm": "声光报警",
+        "storageabnormal": "存储卡异常",
+        "storageempty": "未插入存储卡",
+        "storagefailure": "硬盘故障",
+        "storagelowspace": "硬盘已满",
+        "storagerecoverfail": "存储卡格式化失败",
+        "storagerecoverok": "存储卡格式化成功",
+        "temper_alarm": "防拆触发",
+        "transferdevicefrom": "设备已转出",
+        "transferdeviceto": "收到设备转移",
+        "unbinddevice": "设备已解绑",
+        "unknownalarm": "未知告警",
+        "unlock_alarm": "门已打开",
+        "upgrade_failed": "设备升级失败",
+        "upgrade_result": "设备升级完成",
+        "upgrade_success": "设备升级成功",
+        "upgradefail": "设备升级失败",
+        "upgradesuccess": "设备升级成功",
+        "upgrading": "设备升级中",
+        "urgencyalarm": "紧急按钮被按下",
+        "videoblind": "画面被遮挡",
+        "videoloss": "视频丢失",
+        "videomotion": "画面变化",
+        "vocabnormal": "VOC 超标",
+        "wateralarm": "水浸报警",
+        "watersensor_alarm": "水浸报警",
+        "whitelightoff": "白光灯已关闭",
+        "whitelighton": "白光灯已打开",
+        "wirelessdevlowpower": "电量过低",
+        "wirelesssignal": "无线信号异常"
+      }
+    },
+    "native_hint": {
+      "options": {
+        "supported": "支持 (linux x86-64)",
+        "unsupported": "不支持 (需要 linux x86-64, 本机是 {arch})",
+        "ready": "解密库已就绪 (linux x86-64)",
+        "missing": "缺少解密库 (已找到 {found}/2)。请将 {client_so} 与 {sdk_so} 复制到 {native_dir}"
+      }
     }
   },
   "entity": {
@@ -324,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "白光灯"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "异常音告警"
@@ -369,9 +570,6 @@
       },
       "switch": {
         "name": "插座开关"
-      },
-      "white_light": {
-        "name": "白光灯"
       },
       "wide_dynamic": {
         "name": "宽动态"
@@ -420,12 +618,22 @@
         "name": "动态侦测"
       }
     },
+    "event": {
+      "doorbell": {
+        "name": "门铃"
+      }
+    },
+    "image": {
+      "alarm_picture": {
+        "name": "告警图片"
+      }
+    },
     "siren": {
       "siren": {
         "name": "警笛"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "开关倒计时（分钟）"
       },
@@ -447,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "乐橙开放平台拒绝了 App ID 和 App secret"
+    },
     "switch_operation_failed": {
       "message": "Imou 拒绝了此开关操作：{error}"
     },
@@ -467,6 +678,9 @@
     },
     "camera_image_failed": {
       "message": "无法从 Imou 获取抓图：{error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} 不支持画面变化或人形检测，无法开关动态侦测。"
     },
     "not_a_ptz_button": {
       "message": "{entity_id} 不是云台按钮，无法转动。请改为选择云台方向按钮。"

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,7 +18,6 @@ from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtim
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
     _format_notification_time,
-    _load_webhook_strings_file,
     _redacted_push_for_log,
     async_handle_imou_webhook,
 )
@@ -60,6 +57,41 @@ def test_redacted_push_log_keeps_raw_body_without_token() -> None:
     assert safe["raw"]["content"]["event"] == "33000"
     assert safe["raw"]["token"] == "***"
     assert event_data["raw"]["token"] == "secret-token"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_logs_raw_body_then_parsed_push(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Webhook debug logs show the raw body first, then the parsed push."""
+    caplog.set_level("DEBUG", logger="custom_components.imou_life.webhook")
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["SN1"])
+    payload = {
+        "msgType": "alarmLocal",
+        "deviceId": "SN1",
+        "channelId": "0",
+        "token": "secret-token",
+    }
+
+    response = await async_handle_imou_webhook(hass, "webhook-id", MockRequest(payload))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    messages = [record.message for record in caplog.records]
+    raw_index = next(
+        i
+        for i, message in enumerate(messages)
+        if message.startswith("Received Imou webhook body:")
+    )
+    parsed_index = next(
+        i
+        for i, message in enumerate(messages)
+        if message.startswith("Parsed Imou push:")
+    )
+    assert raw_index < parsed_index
+    assert "secret-token" not in caplog.text
+    assert "alarmLocal" in caplog.text
+    assert "SN1" in caplog.text
 
 
 class MockRequest:
@@ -484,7 +516,6 @@ async def test_webhook_e_ab_alarm_sound_uses_localized_copy(
 ) -> None:
     """IoT e_abAlarmSound maps to the same copy as PaaS abAlarmSound."""
     await hass.config.async_set_time_zone("UTC")
-    _load_webhook_strings_file.cache_clear()
     title, message = await _async_build_notification_message(
         hass,
         {
@@ -548,7 +579,6 @@ async def test_webhook_product_model_events_localized(
     hass: HomeAssistant, msg_type: str, expected_fragment: str
 ) -> None:
     """Product-model IoT identifiers from sample models have notify copy."""
-    _load_webhook_strings_file.cache_clear()
     title, _ = await _async_build_notification_message(
         hass, {"msg_type": msg_type, "device_name": "Cam"}
     )
@@ -614,30 +644,22 @@ async def test_webhook_alarm_copy_is_an_event_sentence(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_unknown_alarm_type_falls_back_to_msg_type(
+async def test_webhook_unknown_msg_type_uses_unknown_alarm(
     hass: HomeAssistant,
 ) -> None:
-    """Unmapped keys stay as the raw identifier / msgType."""
+    """Unmapped ids do not crash; the title uses the unknown-alarm label."""
+    from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
+
+    await translation.async_get_translations(
+        hass, "en", "selector", integrations={DOMAIN}
+    )
     title, message = await _async_build_notification_message(
         hass, {"msg_type": "totallyUnknownType", "device_name": "Cam"}
     )
-    assert title == "Imou Life · totallyUnknownType"
+    assert title == "Imou Life · Alarm"
     assert "Type:" not in message
     assert "Device: Cam" in message
-
-
-def test_alarm_types_keys_match_between_languages() -> None:
-    """Chinese and English alarm_types tables must cover the same keys."""
-    strings_dir = (
-        Path(__file__).resolve().parents[1]
-        / "custom_components"
-        / "imou_life"
-        / "webhook_strings"
-    )
-    zh = json.loads((strings_dir / "zh-Hans.json").read_text(encoding="utf-8"))
-    en = json.loads((strings_dir / "en.json").read_text(encoding="utf-8"))
-    assert set(zh["alarm_types"]) == set(en["alarm_types"])
-    assert set(zh["notification"]) == set(en["notification"])
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -645,7 +667,6 @@ async def test_webhook_notification_includes_area_when_assigned(
     hass: HomeAssistant,
 ) -> None:
     """HA area becomes a location line; no empty location when unset."""
-    _load_webhook_strings_file.cache_clear()
     await hass.config.async_set_time_zone("UTC")
     config_entry = MockConfigEntry(domain=DOMAIN, data={})
     config_entry.add_to_hass(hass)
@@ -688,7 +709,6 @@ async def test_webhook_notification_includes_labels_when_assigned(
     hass: HomeAssistant,
 ) -> None:
     """HA device labels become a labels line; omit when none."""
-    _load_webhook_strings_file.cache_clear()
     await hass.config.async_set_time_zone("UTC")
     config_entry = MockConfigEntry(domain=DOMAIN, data={})
     config_entry.add_to_hass(hass)
@@ -874,22 +894,6 @@ async def test_webhook_acks_before_identifier_resolve(hass: HomeAssistant) -> No
     assert len(events) == 1
     assert events[0].data["msg_type"] == "human"
     assert runtime.push_last_msg_type == "human"
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_strings_load_via_executor(hass: HomeAssistant) -> None:
-    """Webhook string files must not be read on the event loop (HA blocking I/O)."""
-    _load_webhook_strings_file.cache_clear()
-    with patch.object(
-        hass, "async_add_executor_job", wraps=hass.async_add_executor_job
-    ) as mock_executor:
-        await _async_build_notification_message(
-            hass,
-            {"msg_type": "alarmLocal", "device_name": "Front Door"},
-        )
-
-    assert mock_executor.call_count >= 1
-    assert mock_executor.call_args.args[0] is _load_webhook_strings_file
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -1972,3 +1976,39 @@ async def test_webhook_bounds_concurrent_dispatch(hass: HomeAssistant) -> None:
         assert max_seen == PUSH_DISPATCH_LIMIT
         release.set()
         await hass.async_block_till_done(wait_background_tasks=True)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_zh_cn_uses_simplified_chinese_copy(
+    hass: HomeAssistant,
+) -> None:
+    """zh-CN must resolve to zh-Hans notify templates."""
+    from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
+
+    hass.config.language = "zh-CN"
+    await translation.async_get_translations(
+        hass, "zh-Hans", "selector", integrations={DOMAIN}
+    )
+    title, message = await _async_build_notification_message(
+        hass, {"msg_type": "videoMotion", "device_name": "Cam"}
+    )
+    assert title.startswith("Imou Life ·")
+    assert "设备\uff1aCam" in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_german_device_line(hass: HomeAssistant) -> None:
+    """de.json must drive the notify body, not the English fallback."""
+    from custom_components.imou_life.const import DOMAIN
+    from homeassistant.helpers import translation
+
+    hass.config.language = "de"
+    await translation.async_get_translations(
+        hass, "de", "selector", integrations={DOMAIN}
+    )
+    _title, message = await _async_build_notification_message(
+        hass, {"msg_type": "videoMotion", "device_name": "Cam"}
+    )
+    assert "Gerät: Cam" in message
+    assert "Device: Cam" not in message

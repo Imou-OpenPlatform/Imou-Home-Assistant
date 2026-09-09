@@ -273,6 +273,34 @@ async def test_options_alarm_image_decrypt_hides_install_hint_when_ready(hass) -
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_alarm_image_decrypt_native_hint_german(hass) -> None:
+    """German UI gets localized native_hint instead of English fallbacks."""
+    from custom_components.imou_life import pic_thumbnail
+    from custom_components.imou_life.pic_thumbnail import (
+        NATIVE_CLIENT_SO,
+        NATIVE_SDK_SO,
+        native_lib_dir,
+    )
+
+    native_dir = native_lib_dir(hass)
+    native_dir.mkdir(parents=True, exist_ok=True)
+    (native_dir / NATIVE_CLIENT_SO).write_bytes(b"")
+    (native_dir / NATIVE_SDK_SO).write_bytes(b"")
+
+    hass.config.language = "de"
+    with patch.object(pic_thumbnail, "native_platform_supported", return_value=True):
+        entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+        entry.add_to_hass(hass)
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": "alarm_image_decrypt"}
+        )
+    hint = result["description_placeholders"]["native_hint"]
+    assert hint != "supported (linux x86-64)"
+    assert "unterstützt" in hint or "Entschlüsselungsbibliotheken" in hint
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_alarm_image_decrypt_names_missing_libraries(hass) -> None:
     """A host that is missing a library is told which files go where."""
     from custom_components.imou_life import pic_thumbnail

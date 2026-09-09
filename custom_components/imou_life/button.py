@@ -8,7 +8,7 @@ import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_DURATION, PARAM_SIREN_START, PARAM_SIREN_STOP
@@ -107,8 +107,4 @@ class ImouButton(ImouEntity, ButtonEntity):
                 duration,
             )
         except ImouException as e:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="button_press_failed",
-                translation_placeholders={"error": e.message},
-            ) from e
+            self._raise_imou_ha_error(e, "button_press_failed")

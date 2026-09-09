@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from datetime import datetime
-from typing import Any, override
+from typing import Any, NoReturn, override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, callback
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.const import PARAM_STATE
+from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
 from .const import (
@@ -23,6 +24,8 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
+from .devices import imou_device_info, parent_device_key
+from .repairs import async_notify_imou_api_error
 
 
 class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
@@ -45,13 +48,8 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         self._device_key = imou_life_device_key(device)
         self._attr_unique_id = f"{self._device_key}${entity_type}"
         self._attr_translation_key = entity_type
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_key)},
-            name=device.channel_name or device.device_name,
-            manufacturer=device.manufacturer,
-            model=device.model,
-            sw_version=device.swversion,
-            serial_number=device.device_id,
+        self._attr_device_info = imou_device_info(
+            device, parent_device_key(coordinator.devices, device)
         )
 
     @property
@@ -84,6 +82,32 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         return (
             self.device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
         )
+
+    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
+        """Return True when the push is for this entity's device key."""
+        keys = imou_life_device_keys_from_ids(
+            event_data.get("device_id"),
+            event_data.get("channel_id"),
+            event_data.get("product_id"),
+        )
+        return self._device_key in keys
+
+    def _raise_imou_ha_error(
+        self, err: ImouException, translation_key: str
+    ) -> NoReturn:
+        """Surface quota as a repair, then raise the translated HA error."""
+        if isinstance(err, InvalidAppIdOrSecretException):
+            self._config_entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
+        async_notify_imou_api_error(self.hass, self._config_entry, err)
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key=translation_key,
+            translation_placeholders={"error": err.message},
+        ) from err
 
 
 class ImouAlarmPushEntity(ImouEntity):
@@ -125,15 +149,6 @@ class ImouAlarmPushEntity(ImouEntity):
         if self._unsub_off is not None:
             self._unsub_off()
             self._unsub_off = None
-
-    def _event_matches_this_device(self, event_data: dict[str, Any]) -> bool:
-        """Return True when the push is for this entity's device key."""
-        keys = imou_life_device_keys_from_ids(
-            event_data.get("device_id"),
-            event_data.get("channel_id"),
-            event_data.get("product_id"),
-        )
-        return imou_life_device_key(self.device) in keys
 
     @callback
     def _set_push_state(self, is_on: bool, *, auto_off: bool) -> None:

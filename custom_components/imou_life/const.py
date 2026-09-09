@@ -138,6 +138,8 @@ BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_MOTION = "motion"
 MOTION_OFF_DELAY = 15
+PARAM_DOORBELL = "doorbell"
+PARAM_ALARM_PICTURE = "alarm_picture"
 PARAM_SIREN = "siren"
 SIREN_OFF_DELAY = 15
 PARAM_STATUS = "status"
@@ -171,7 +173,12 @@ PARAM_LIVE_RESOLUTION = "live_resolution"
 PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
+COUNT_DOWN_MAX_MINUTES = 1440
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
+OVERCHARGE_MIN_WATTS = 5
+OVERCHARGE_MAX_WATTS_DEFAULT = 2500
+OVERCHARGE_MAX_WATTS_HIGH = 3680
+OVERCHARGE_HIGH_REF = "128900"
 
 # event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
 EVENT_PUSH_TYPE_ALARM = "alarm"
@@ -250,9 +257,12 @@ PLATFORMS: list[Platform] = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BUTTON,
     Platform.CAMERA,
+    Platform.EVENT,
+    Platform.IMAGE,
+    Platform.LIGHT,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SIREN,
     Platform.SWITCH,
-    Platform.TEXT,
+    Platform.NUMBER,
 ]

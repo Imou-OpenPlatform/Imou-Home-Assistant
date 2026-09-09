@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -9,17 +10,28 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import SelectOptionDict
+from pyimouapi.const import SWITCH_TYPE_ABILITY
 from pyimouapi.device import ImouDeviceSummary
+from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
+    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
+    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
     callback_flags_to_event_push_types,
     imou_life_device_keys_from_ids,
+)
+
+PAAS_CALL_ABILITY = "CallAbility"
+PAAS_MOTION_ABILITIES = frozenset(
+    item["ability"]
+    for switch_type in ("motion_detect", "header_detect")
+    for item in SWITCH_TYPE_ABILITY[switch_type]
 )
 
 
@@ -36,13 +48,35 @@ def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
     return None
 
 
-def iot_property_push_active(entry: ConfigEntry) -> bool:
-    """Return True when IoT devices should take state from iotProperty pushes."""
+def event_push_type_active(entry: ConfigEntry, push_type: str) -> bool:
+    """Return True when event push is on and this subscribe type is selected."""
     if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         return False
     raw = entry.options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
     types = callback_flags_to_event_push_types(list(raw) if raw else [])
-    return EVENT_PUSH_TYPE_IOT in types
+    return push_type in types
+
+
+def iot_property_push_active(entry: ConfigEntry) -> bool:
+    """Return True when IoT devices should take state from iotProperty pushes."""
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_IOT)
+
+
+def alarm_push_active(entry: ConfigEntry) -> bool:
+    """Return True when alarm-driven entities can listen to alarm pushes."""
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
+
+
+def decrypt_pictures_active(entry: ConfigEntry) -> bool:
+    """Return True when this entry can decrypt alarm stills onto the host."""
+    return alarm_push_active(entry) and bool(
+        entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
+    )
+
+
+def camera_channel_devices(devices: Iterable[ImouHaDevice]) -> list[ImouHaDevice]:
+    """Return camera channels, not plugs or other accessories."""
+    return [device for device in devices if device.channel_id is not None]
 
 
 def resolve_ha_device_key(
@@ -85,10 +119,51 @@ def resolve_ha_device_name(
     return device.name_by_user or device.name
 
 
+def resolve_ui_language(language: str | None) -> str:
+    """Map HA language tags onto translation filenames."""
+    if not isinstance(language, str) or not language.strip():
+        return "en"
+    if language.lower().startswith("zh"):
+        return "zh-Hans"
+    return language
+
+
+def fill_template(template: str, fallback: str, **values: str) -> str:
+    """Format a translation template; never raise for bad placeholders."""
+    try:
+        return template.format(**values)
+    except (KeyError, IndexError, ValueError):
+        try:
+            return fallback.format(**values)
+        except (KeyError, IndexError, ValueError):
+            return fallback
+
+
+def alarm_type_option_key(msg_type: str) -> str:
+    """Map a protocol id onto a hassfest-safe selector option key."""
+    return msg_type.lower().replace(".", "-")
+
+
+def selector_option_label(
+    hass: HomeAssistant,
+    language: str | None,
+    selector: str,
+    key: str,
+    fallback: str,
+) -> str:
+    """Return a selector option label, or fallback if the cache has no key."""
+    resolved = resolve_ui_language(language)
+    translations = translation.async_get_cached_translations(
+        hass, resolved, "selector", DOMAIN
+    )
+    translation_key = f"component.{DOMAIN}.selector.{selector}.options.{key}"
+    return translations.get(translation_key, fallback)
+
+
 def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:
     """Build a human-readable device label for config/options selectors."""
     translations = translation.async_get_cached_translations(
-        hass, hass.config.language, "selector", DOMAIN
+        hass, resolve_ui_language(hass.config.language), "selector", DOMAIN
     )
     name = summary.name
     label = (
@@ -142,3 +217,40 @@ async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, s
     manager = ImouDeviceManager(api_client)
     summaries = await manager.async_get_device_summaries()
     return {s.device_id: format_device_label(hass, s) for s in summaries}
+
+
+def device_has_paas_ability(device: ImouHaDevice, ability: str) -> bool:
+    """Return True when a PaaS channel (or IPC device) reports this ability."""
+    return ImouHaDeviceManager.entity_need_add_to_device(
+        ability,
+        (device.channel_ability or "").split(","),
+        (device.device_ability or "").split(","),
+        bool(device.is_ipc),
+        device.channel_id,
+        "_probe",
+        {},
+    )
+
+
+def device_iot_event_map(coordinator: Any, device: ImouHaDevice) -> dict[str, str]:
+    """Return cached product-model events for an IoT device, or {}."""
+    product_id = device.product_id
+    if not product_id:
+        return {}
+    delegate = getattr(getattr(coordinator, "device_manager", None), "delegate", None)
+    cached = getattr(delegate, "cached_event_map", None)
+    if cached is None:
+        return {}
+    return cached(product_id) or {}
+
+
+def device_iot_events_match(
+    coordinator: Any,
+    device: ImouHaDevice,
+    pred: Callable[[str | None], bool],
+) -> bool:
+    """Return True when any cached event ref or identifier matches pred."""
+    for ref, identifier in device_iot_event_map(coordinator, device).items():
+        if pred(identifier) or pred(ref):
+            return True
+    return False

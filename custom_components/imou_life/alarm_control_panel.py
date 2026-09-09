@@ -10,13 +10,12 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelState,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import DOMAIN, PARAM_MODE
+from .const import PARAM_MODE
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
@@ -94,11 +93,7 @@ class ImouAlarmControlPanel(ImouEntity, AlarmControlPanelEntity):
                 self.device, mode
             )
         except ImouException as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="alarm_arm_disarm_failed",
-                translation_placeholders={"error": err.message},
-            ) from err
+            self._raise_imou_ha_error(err, "alarm_arm_disarm_failed")
         self.async_write_ha_state()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:

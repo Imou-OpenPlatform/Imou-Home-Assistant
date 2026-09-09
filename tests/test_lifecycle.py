@@ -20,7 +20,7 @@ from custom_components.imou_life.webhook import (
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pyimouapi.exceptions import ConnectFailedException
+from pyimouapi.exceptions import ConnectFailedException, InvalidAppIdOrSecretException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -72,6 +72,38 @@ async def test_failed_setup_closes_api_session(hass: HomeAssistant) -> None:
     assert entry.state is ConfigEntryState.SETUP_RETRY
     assert mock_client.call_count == 1
     client.async_close.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("exception", "expected_state"),
+    [
+        (
+            InvalidAppIdOrSecretException("bad credentials"),
+            ConfigEntryState.SETUP_ERROR,
+        ),
+        (ConnectFailedException("cloud failure"), ConfigEntryState.SETUP_RETRY),
+    ],
+)
+async def test_setup_entry_auth_and_cloud_errors(
+    hass: HomeAssistant,
+    exception: Exception,
+    expected_state: ConfigEntryState,
+) -> None:
+    """Invalid credentials fail setup; other cloud errors retry."""
+    entry = _entry(hass)
+    manager = MagicMock()
+    manager.async_get_devices = AsyncMock(side_effect=exception)
+
+    with (
+        patch("custom_components.imou_life.ImouOpenApiClient"),
+        patch("custom_components.imou_life.ImouDeviceManager"),
+        patch("custom_components.imou_life.ImouHaDeviceManager", return_value=manager),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is expected_state
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

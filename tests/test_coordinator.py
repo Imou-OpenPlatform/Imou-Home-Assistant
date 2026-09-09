@@ -40,6 +40,7 @@ def device_manager() -> MagicMock:
     manager.async_get_devices = AsyncMock()
     manager.async_update_device_status = AsyncMock(return_value=None)
     manager.async_update_devices_status = AsyncMock(return_value=None)
+    manager.delegate.async_ensure_event_map = AsyncMock()
     return manager
 
 
@@ -318,6 +319,51 @@ async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
         "fetch_ability_refs"
     ] == {"d2"}
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_first_discovery_prefetches_iot_event_maps(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Doorbell / motion gating needs product-model events before entities exist."""
+    d1 = _mock_device("d1")
+    d2 = _mock_device("d2")
+    d2.product_id = "prod_d1"
+    await _run_update(hass, device_manager, [d1, d2])
+    pids = [
+        call.args[0]
+        for call in device_manager.delegate.async_ensure_event_map.await_args_list
+    ]
+    assert set(pids) == {"prod_d1"}
+    assert device_manager.delegate.async_ensure_event_map.await_count == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_paas_discovery_skips_event_map_prefetch(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """PaaS cameras have no product model; abilities are already on the device."""
+    device = _mock_device("d1")
+    device.product_id = None
+    await _run_update(hass, device_manager, [device])
+    device_manager.delegate.async_ensure_event_map.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_new_iot_device_prefetches_event_map(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A camera added later still needs its event map before entities are created."""
+    first = [_mock_device("d1")]
+    coordinator = await _run_update(hass, device_manager, first)
+    device_manager.delegate.async_ensure_event_map.reset_mock()
+
+    second = [_mock_device("d1"), _mock_device("d2")]
+    device_manager.async_get_devices.side_effect = [second, second]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    device_manager.delegate.async_ensure_event_map.assert_awaited_once_with("prod_d2")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

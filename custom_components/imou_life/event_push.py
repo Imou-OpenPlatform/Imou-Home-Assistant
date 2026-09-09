@@ -25,10 +25,10 @@ from .repairs import (
     async_create_event_push_callback_failed_issue,
     async_create_event_push_no_url_issue,
     async_delete_event_push_issues,
+    async_notify_imou_api_error,
 )
 from .runtime_data import ImouRuntimeData
 from .webhook import (
-    async_preload_webhook_strings,
     async_register_imou_webhook,
     async_unregister_imou_webhook,
 )
@@ -74,7 +74,6 @@ async def async_setup_event_push(
 
     generated_url = async_register_imou_webhook(hass, webhook_id)
     entry.async_on_unload(partial(async_unregister_imou_webhook, hass, webhook_id))
-    await async_preload_webhook_strings(hass)
 
     if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         await _async_set_message_callback(hass, entry, imou_client, "on", generated_url)
@@ -140,8 +139,9 @@ async def _async_set_message_callback(
                 _redact_callback_url(callback_url),
             )
             async_delete_event_push_issues(hass, entry)
-        except Exception:
+        except Exception as err:
             _LOGGER.exception("Failed to set Imou message callback")
+            async_notify_imou_api_error(hass, entry, err)
             async_create_event_push_callback_failed_issue(hass, entry)
     else:
         try:

@@ -72,6 +72,10 @@
     "event_push_callback_failed": {
       "title": "Imou event push registration failed",
       "description": "Home Assistant could not register the message callback with Imou Open Platform. Check the callback URL and your App ID resource quota, then reload the integration."
+    },
+    "open_api_quota_exceeded": {
+      "title": "Imou Open Platform monthly calls used up",
+      "description": "This App ID has no Open Platform calls left this month. Device list, live view, and switches cannot reach the cloud until you add quota or the month resets. Open **My Resources** in the Open Platform console, then reload the integration."
     }
   },
   "options": {
@@ -259,6 +263,198 @@
         "1": "Online",
         "0": "Offline"
       }
+    },
+    "webhook_notification": {
+      "options": {
+        "title": "Imou Life · {alarm_type}",
+        "device": "Device: {device_name}",
+        "area": "Location: {area_name}",
+        "labels": "Labels: {labels}",
+        "time": "Time: {time_str}",
+        "details": "Details: {desc_type}",
+        "unknown_device": "Unknown device",
+        "unknown_alarm": "Alarm"
+      }
+    },
+    "alarm_type": {
+      "options": {
+        "abalarmsound": "Unusual sound detected",
+        "e_abalarmsound": "Unusual sound detected",
+        "e_alarmpir": "PIR motion detected",
+        "aiperarea": "Person entered the area",
+        "aiveharea": "Vehicle entered the area",
+        "alarmend": "Alarm ended",
+        "alarmlocal": "Local alarm",
+        "alarmoccurs": "Alarm triggered",
+        "alarmpir": "PIR motion detected",
+        "alkelec": "Alkaline battery low",
+        "apopendoor": "Door unlocked",
+        "apsanpkeyupdate": "Temporary key updated",
+        "apupgradefail": "Accessory upgrade failed",
+        "apupgradesuccess": "Accessory upgraded",
+        "attachmentinfo": "Accessory reported in",
+        "batteryabnormal": "Battery issue",
+        "beopeneddoor": "Door opened",
+        "binddevice": "Device bound",
+        "callbellevent": "Incoming call",
+        "callevent": "Device calling",
+        "callnoanswered": "Call unanswered",
+        "checkalarm": "Verified",
+        "checkalarmfail": "Device fault",
+        "closecamera": "Privacy mask on",
+        "crosslinedetection": "Line crossing detected",
+        "deviceauthorizationchanged": "Authorization changed",
+        "deviceauthorize": "Device authorized",
+        "devicedeletedsharedcancel": "Share cancelled",
+        "deviceshare": "Device shared",
+        "devicesharecancel": "Share removed",
+        "doorbell": "Doorbell pressed",
+        "e_aiperarea": "Person entered the area",
+        "e_aiperareaalarm": "Person entered the area",
+        "e_aiveharea": "Vehicle entered the area",
+        "e_aivehareaalarm": "Vehicle entered the area",
+        "e_areadetect": "Intrusion detected",
+        "e_areadetectalarm": "Intrusion detected",
+        "e_btnonceaction": "Emergency button pressed",
+        "e_calleventcall": "Incoming call",
+        "e_callquickevent": "Incoming call (quick)",
+        "e_callsupplyevent": "Incoming call (follow-up)",
+        "e_clearalarmpir": "PIR alarm cleared",
+        "e_cleargasalarm": "Gas alarm cleared",
+        "e_clearsmokealarm": "Smoke alarm cleared",
+        "e_clearsirenalarm": "Siren cleared",
+        "e_clearsirenalarmfail": "Siren clear failed",
+        "e_faultalarm": "Device fault",
+        "e_gasalarm": "Gas leak detected",
+        "e_hxsmokealarm": "Smoke detected",
+        "e_lockalarm": "Door closed",
+        "e_matchapsucc": "Accessory paired",
+        "e_multiordinaryevent": "Ordinary recording event",
+        "e_multivideoaiperarea": "Person entered the area",
+        "e_multivideoaiperareaalarm": "Person entered the area",
+        "e_multivideoaipetalarm": "Pet entered the area",
+        "e_multivideoaipetarea": "Pet entered the area",
+        "e_multivideoaiveharea": "Vehicle entered the area",
+        "e_multivideoaivehareaalarm": "Vehicle entered the area",
+        "e_multivideoareadetect": "Intrusion detected",
+        "e_multivideodetectalarm": "Intrusion detected",
+        "e_sensorabnormal": "Tamper detected",
+        "e_sirenalarm": "Siren alarm",
+        "e_sirenalarmfail": "Siren alarm failed",
+        "e_smartmixdetect": "Person or vehicle detected",
+        "e_std_aoralarm": "AOR recording event",
+        "e_storageabnormal": "SD card error",
+        "e_storageempty": "SD card removed",
+        "e_unlockalarm": "Door opened",
+        "e_upgradefail": "Upgrade failed",
+        "e_upgradesuccess": "Upgrade succeeded",
+        "e_videomotion": "Motion detected",
+        "home": "Armed home",
+        "leave": "Armed away",
+        "no_defend": "Disarmed",
+        "earlywarning": "Early warning",
+        "earlywarningend": "Early warning ended",
+        "electricabnormal": "Voltage issue",
+        "electricity": "Low battery",
+        "engineopeneddoor": "Mechanical lock opened",
+        "faultalarm": "Device fault",
+        "fault_remind": "Fault warning",
+        "firealarm": "Fire detected",
+        "gasalarm": "Gas leak detected",
+        "goodsmove": "Object removed",
+        "heatmap": "Heatmap ready",
+        "heatimagingtemper": "Temperature alarm",
+        "highhumabnormal": "Humidity too high",
+        "hightemabnormal": "Temperature too high",
+        "hightemalarm": "High temperature",
+        "highwaterpressure": "Water pressure too high",
+        "hijackalarm": "Duress alarm",
+        "high_humidity_alarm": "Humidity too high",
+        "high_temperature_alarm": "Temperature too high",
+        "hoveringalarm": "Loitering detected",
+        "human": "Person detected",
+        "keyentrysuc": "Key enrolled",
+        "leakelectric": "Leakage detected",
+        "leftdetection": "Object left behind",
+        "litelec": "Lithium battery low",
+        "lock_alarm": "Door closed",
+        "low_battery_alarm": "Low battery",
+        "low_humidity_alarm": "Humidity too low",
+        "low_temperature_alarm": "Temperature too low",
+        "lowhumabnormal": "Humidity too low",
+        "lowtemabnormal": "Temperature too low",
+        "lowwaterpressure": "Water pressure too low",
+        "magnetomeralarm": "Door/window opened",
+        "message": "Video message received",
+        "mobiledetect": "PIR motion detected",
+        "nbdeviceabnormal": "Tamper detected",
+        "nbelecover": "Overcurrent",
+        "nbelecres": "Residual current alarm",
+        "nbtempover": "Temperature too high",
+        "notopeneddoor": "Door failed to open",
+        "nozigbeeair": "No occupancy",
+        "objectmoved": "Object moved",
+        "offline": "Device offline",
+        "online": "Device online",
+        "opencamera": "Privacy mask off",
+        "opendoorabnormal": "Forced entry",
+        "parkingdetection": "Vehicle parked",
+        "pir_alarm": "PIR motion detected",
+        "pir_cleared": "PIR alarm cleared",
+        "pm2-5abnormal": "PM2.5 high",
+        "pressthedoor": "New visitor at the lock",
+        "remotecontrol": "Remote alarm triggered",
+        "sensorabnormal": "Tamper detected",
+        "siren_alarm_clear_fail": "Siren clear failed",
+        "siren_alarm_cleared": "Siren cleared",
+        "siren_alarm_failed": "Siren alarm failed",
+        "siren_warning": "Siren alarm",
+        "sirenoff": "Siren off",
+        "sirenon": "Siren on",
+        "sleep": "Device asleep",
+        "smoke_alarm": "Smoke detected",
+        "smoke_alarm_restore": "Alarm restored",
+        "smokealarm": "Smoke detected",
+        "sos_alarm": "Emergency call",
+        "soundlightalarm": "Siren and strobe on",
+        "storageabnormal": "SD card error",
+        "storageempty": "No SD card",
+        "storagefailure": "Hard drive failed",
+        "storagelowspace": "Hard drive full",
+        "storagerecoverfail": "SD card format failed",
+        "storagerecoverok": "SD card formatted",
+        "temper_alarm": "Tamper detected",
+        "transferdevicefrom": "Device transferred out",
+        "transferdeviceto": "Device transfer received",
+        "unbinddevice": "Device unbound",
+        "unknownalarm": "Unknown alarm",
+        "unlock_alarm": "Door opened",
+        "upgrade_failed": "Upgrade failed",
+        "upgrade_result": "Upgrade finished",
+        "upgrade_success": "Upgrade succeeded",
+        "upgradefail": "Upgrade failed",
+        "upgradesuccess": "Upgrade succeeded",
+        "upgrading": "Upgrading",
+        "urgencyalarm": "Emergency button pressed",
+        "videoblind": "Video blocked",
+        "videoloss": "Video lost",
+        "videomotion": "Motion detected",
+        "vocabnormal": "VOC high",
+        "wateralarm": "Water leak detected",
+        "watersensor_alarm": "Water leak detected",
+        "whitelightoff": "White light off",
+        "whitelighton": "White light on",
+        "wirelessdevlowpower": "Low battery",
+        "wirelesssignal": "Weak wireless signal"
+      }
+    },
+    "native_hint": {
+      "options": {
+        "supported": "supported (linux x86-64)",
+        "unsupported": "not supported (needs linux x86-64; this host is {arch})",
+        "ready": "decrypt libraries ready (linux x86-64)",
+        "missing": "decrypt libraries missing ({found}/2 found). Copy {client_so} and {sdk_so} into {native_dir}"
+      }
     }
   },
   "entity": {
@@ -324,6 +520,11 @@
         }
       }
     },
+    "light": {
+      "white_light": {
+        "name": "White light"
+      }
+    },
     "switch": {
       "ab_alarm_sound": {
         "name": "Abnormal sound alarm"
@@ -369,9 +570,6 @@
       },
       "switch": {
         "name": "Plug switch"
-      },
-      "white_light": {
-        "name": "White light"
       },
       "wide_dynamic": {
         "name": "Wide dynamic range"
@@ -420,12 +618,22 @@
         "name": "Motion"
       }
     },
+    "event": {
+      "doorbell": {
+        "name": "Doorbell"
+      }
+    },
+    "image": {
+      "alarm_picture": {
+        "name": "Alarm picture"
+      }
+    },
     "siren": {
       "siren": {
         "name": "Siren"
       }
     },
-    "text": {
+    "number": {
       "count_down_switch": {
         "name": "Countdown timer (min)"
       },
@@ -447,6 +655,9 @@
     }
   },
   "exceptions": {
+    "invalid_auth": {
+      "message": "Imou rejected the App ID and App secret"
+    },
     "switch_operation_failed": {
       "message": "Imou rejected the switch change: {error}"
     },
@@ -467,6 +678,9 @@
     },
     "camera_image_failed": {
       "message": "Could not get a snapshot from Imou: {error}"
+    },
+    "motion_detection_unsupported": {
+      "message": "{name} does not support picture-change or human detection, so motion detection cannot be turned on or off."
     },
     "not_a_ptz_button": {
       "message": "{entity_id} is not a PTZ button, so it cannot be moved. Target a PTZ direction button instead."

@@ -14,7 +14,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
-from pyimouapi.ha_device import ImouHaDeviceManager
+from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
@@ -24,19 +24,24 @@ from .const import (
     PARAM_APP_ID,
     PARAM_APP_SECRET,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DOORBELL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_MOTION,
     PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
     PLATFORMS,
+    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
+from .devices import async_register_imou_devices, is_account_device_row
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import get_selected_device_ids, parse_notify_services
+from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -49,7 +54,7 @@ _REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
 def async_remove_replaced_legacy_entities(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Drop leftover select.mode and siren button rows from 1.3.x upgrades."""
+    """Drop leftover select.mode, siren button, text, and white-light switch rows."""
     registry = er.async_get(hass)
     for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = entity_entry.unique_id
@@ -57,7 +62,47 @@ def async_remove_replaced_legacy_entities(
         drop_button = entity_entry.domain == "button" and unique_id.endswith(
             _REPLACED_BUTTON_SUFFIXES
         )
-        if drop_select or drop_button:
+        drop_text = entity_entry.domain == "text"
+        drop_white_light = entity_entry.domain == "switch" and unique_id.endswith(
+            "$white_light"
+        )
+        if drop_select or drop_button or drop_text or drop_white_light:
+            registry.async_remove(entity_entry.entity_id)
+
+
+def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop 1.4.0 Motion (and ungated Doorbell) rows this camera no longer offers.
+
+    Only currently loaded devices are considered, so a deselected camera keeps
+    its registry row until it is selected again.
+    """
+    coordinator = entry.runtime_data.coordinator
+    from .binary_sensor import _iter_motion_sensors
+    from .event import _iter_doorbell_events
+
+    allowed_motion = {
+        imou_life_device_key(device) for _, device in _iter_motion_sensors(coordinator)
+    }
+    allowed_doorbell = {
+        imou_life_device_key(device) for _, device in _iter_doorbell_events(coordinator)
+    }
+    known = set(coordinator.devices_by_key)
+    registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = entity_entry.unique_id
+        device_key, sep, entity_type = unique_id.rpartition("$")
+        if not sep or device_key not in known:
+            continue
+        drop = (
+            entity_entry.domain == "binary_sensor"
+            and entity_type == PARAM_MOTION
+            and device_key not in allowed_motion
+        ) or (
+            entity_entry.domain == "event"
+            and entity_type == PARAM_DOORBELL
+            and device_key not in allowed_doorbell
+        )
+        if drop:
             registry.async_remove(entity_entry.entity_id)
 
 
@@ -128,6 +173,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
+    async_remove_ungated_push_entities(hass, entry)
+
+    @callback
+    def _async_register_devices(devices: list[ImouHaDevice]) -> None:
+        async_register_imou_devices(hass, entry, coordinator.devices)
+
+    @callback
+    def _async_drop_register_callback() -> None:
+        if _async_register_devices in coordinator.new_device_callbacks:
+            coordinator.new_device_callbacks.remove(_async_register_devices)
+
+    # Discovery callbacks run in the order they were added, so registering here
+    # keeps a device discovered later ahead of the platforms adding entities.
+    coordinator.new_device_callbacks.append(_async_register_devices)
+    entry.async_on_unload(_async_drop_register_callback)
+    async_register_imou_devices(hass, entry, coordinator.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     @callback
@@ -136,12 +197,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
 
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+    entry.async_on_unload(runtime.countdown.async_unload)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
+    async_delete_quota_issue(hass, entry)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 
@@ -236,7 +299,9 @@ def _sibling_channel_names(
         for entry in dr.async_entries_for_config_entry(
             device_registry, config_entry.entry_id
         )
-        if entry.id != device_entry.id and _device_id_from_entry(entry) == device_id
+        if entry.id != device_entry.id
+        and _device_id_from_entry(entry) == device_id
+        and not is_account_device_row(entry)
     )
 
 
@@ -258,8 +323,14 @@ async def async_remove_config_entry_device(
     # cloud and the push messages use. One channel of a multi-channel device
     # cannot be expressed in it, and removing the whole device id here would
     # take its sibling channels out of Home Assistant along with whatever the
-    # user had named or automated on them.
-    if siblings := _sibling_channel_names(hass, config_entry, device_entry, device_id):
+    # user had named or automated on them. Removing the row that stands for the
+    # whole account device is that exclusion, so it is allowed to proceed.
+    siblings = (
+        []
+        if is_account_device_row(device_entry)
+        else _sibling_channel_names(hass, config_entry, device_entry, device_id)
+    )
+    if siblings:
         siblings_text = ", ".join(siblings)
         raise HomeAssistantError(
             f"Cannot remove {device_name}: it is one channel of Imou device "

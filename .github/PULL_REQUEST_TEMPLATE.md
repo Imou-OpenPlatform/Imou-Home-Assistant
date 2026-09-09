@@ -19,7 +19,7 @@ Fixes #
 - [ ] New behavior has tests; bugfixes include regression tests where applicable.
 - [ ] No commented-out dead code.
 - [ ] If `manifest.json` changed: version bumped and `CHANGELOG.md` updated.
-- [ ] If user-facing strings changed: `translations/` updated.
+- [ ] If user-facing strings changed: `strings.json` and every file in `translations/` updated (same keys and placeholders).
 - [ ] If dependencies changed: version pin updated with changelog link in this description.
 - [ ] GitHub Actions checks are green (CI runs automatically on fork PRs; mark **Ready for review** if this was a draft).
 

@@ -11,7 +11,6 @@ from homeassistant.components.switch import (
 )
 from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from pyimouapi.const import PARAM_STATE
@@ -19,7 +18,6 @@ from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
-    DOMAIN,
     PARAM_AB_ALARM_SOUND,
     PARAM_AUDIO_ENCODE_CONTROL,
     PARAM_CLOSE_CAMERA,
@@ -35,18 +33,18 @@ from .const import (
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
-    PARAM_WHITE_LIGHT,
     PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
 
 PARALLEL_UPDATES = 0
 
 # Detection, recording and indicator toggles are device settings rather than
 # controls, so they belong under the device's configuration section. Privacy
-# mode, the white light and the plug relay stay primary: those are operated,
-# not configured.
+# mode and the plug relay stay primary: those are operated, not configured.
+# The camera white light is a light entity.
 SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_AB_ALARM_SOUND,
@@ -114,10 +112,6 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         device_class=SwitchDeviceClass.SWITCH,
     ),
     SwitchEntityDescription(
-        key=PARAM_WHITE_LIGHT,
-        translation_key=PARAM_WHITE_LIGHT,
-    ),
-    SwitchEntityDescription(
         key=PARAM_WIDE_DYNAMIC,
         translation_key=PARAM_WIDE_DYNAMIC,
         entity_category=EntityCategory.CONFIG,
@@ -161,8 +155,7 @@ def _iter_local_record_switches(
     """One local-only record switch per camera channel."""
     return [
         (PARAM_LOCAL_EVENT_RECORD, device)
-        for device in coordinator.devices
-        if device.channel_id is not None
+        for device in camera_channel_devices(coordinator.devices)
     ]
 
 
@@ -214,11 +207,7 @@ class ImouSwitch(ImouEntity, SwitchEntity):
                 enable,
             )
         except ImouException as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="switch_operation_failed",
-                translation_placeholders={"error": err.message},
-            ) from err
+            self._raise_imou_ha_error(err, "switch_operation_failed")
         self.async_write_ha_state()
 
 

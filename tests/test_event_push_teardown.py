@@ -180,15 +180,9 @@ async def test_setup_event_push_loads_notify_services(
     )
     entry.add_to_hass(hass)
     runtime = ImouRuntimeData(coordinator=MagicMock())
-    with (
-        patch(
-            "custom_components.imou_life.event_push.async_register_imou_webhook",
-            return_value="https://example.test/hook",
-        ),
-        patch(
-            "custom_components.imou_life.event_push.async_preload_webhook_strings",
-            AsyncMock(),
-        ),
+    with patch(
+        "custom_components.imou_life.event_push.async_register_imou_webhook",
+        return_value="https://example.test/hook",
     ):
         await async_setup_event_push(hass, entry, MagicMock(), runtime)
 
@@ -216,10 +210,6 @@ async def test_setup_event_push_does_not_log_full_callback_url(
         patch(
             "custom_components.imou_life.event_push.async_register_imou_webhook",
             return_value=callback,
-        ),
-        patch(
-            "custom_components.imou_life.event_push.async_preload_webhook_strings",
-            AsyncMock(),
         ),
         caplog.at_level(logging.INFO, logger="custom_components.imou_life.event_push"),
     ):

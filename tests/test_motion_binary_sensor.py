@@ -14,18 +14,23 @@ from custom_components.imou_life.binary_sensor import (
     motion_binary_state,
 )
 from custom_components.imou_life.const import (
+    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
+    EVENT_PUSH_TYPE_IOT,
     MOTION_OFF_DELAY,
+    PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_MOTION,
+    PARAM_STATUS,
 )
 from custom_components.imou_life.webhook import async_handle_imou_webhook
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pyimouapi.const import BINARY_SENSOR_TYPE_REF
-from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.const import BINARY_SENSOR_TYPE_REF, PARAM_STATE
+from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -41,6 +46,9 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     device.device_id = device_id
     device.channel_id = channel_id
     device.product_id = None
+    device.is_ipc = True
+    device.device_ability = "WLAN"
+    device.channel_ability = "WLAN"
     device.device_name = "Front"
     device.channel_name = "Front"
     device.manufacturer = "Imou"
@@ -50,12 +58,43 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     return device
 
 
-def _coordinator(devices: list[MagicMock]) -> MagicMock:
+def _coordinator(
+    devices: list[MagicMock],
+    *,
+    event_map: dict[str, str] | None = None,
+) -> MagicMock:
     coordinator = MagicMock()
     coordinator.devices = devices
     coordinator.devices_by_key = {}
     coordinator.last_update_success = True
+    coordinator.device_manager.delegate.cached_event_map = MagicMock(
+        return_value=event_map or {}
+    )
     return coordinator
+
+
+def _online_motion(
+    device: MagicMock,
+    *,
+    push: bool,
+    types: list[str] | None = None,
+) -> ImouMotionBinarySensor:
+    """Motion entity for an online camera with the given push options."""
+    coordinator = _coordinator([device])
+    coordinator.last_update_success = True
+    coordinator.devices_by_key = {f"{device.device_id}_{device.channel_id}": device}
+    device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
+    options: dict[str, object] = {PARAM_ENABLE_EVENT_PUSH: push}
+    if types is not None:
+        options[PARAM_EVENT_PUSH_TYPES] = types
+    elif push:
+        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
+    return ImouMotionBinarySensor(
+        coordinator,
+        MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),
+        PARAM_MOTION,
+        device,
+    )
 
 
 @asynccontextmanager
@@ -111,12 +150,78 @@ def test_motion_binary_state(msg_type: str | None, expected: bool | None) -> Non
     assert motion_binary_state(msg_type) is expected
 
 
-def test_iter_motion_sensors_cameras_only() -> None:
-    """Motion is a camera channel entity, not a plug or bare hub."""
+def test_iter_motion_sensors_paas_needs_detect_ability() -> None:
+    """PaaS motion follows picture-change / human abilities, not every camera."""
     camera = _device(channel_id="0")
+    camera.channel_ability = "WLAN,MobileDetect"
     plug = _device(channel_id=None, device_id="PLUG")
-    pairs = _iter_motion_sensors(_coordinator([camera, plug]))
-    assert [(key, device) for key, device in pairs] == [(PARAM_MOTION, camera)]
+    no_detect = _device(channel_id="0", device_id="IPC2")
+    no_detect.channel_ability = "WLAN,CallAbility"
+    pairs = _iter_motion_sensors(_coordinator([camera, plug, no_detect]))
+    assert [(key, device.device_id) for key, device in pairs] == [(PARAM_MOTION, "SN1")]
+
+
+def test_iter_motion_sensors_ipc_uses_device_ability_on_channel_0() -> None:
+    """An IPC often lists picture-change on the device, not the channel."""
+    camera = _device(channel_id="0")
+    camera.device_ability = "WLAN,MobileDetect"
+    camera.channel_ability = "WLAN"
+    assert _iter_motion_sensors(_coordinator([camera])) == [(PARAM_MOTION, camera)]
+
+
+def test_iter_motion_sensors_nvr_channel_ignores_device_ability() -> None:
+    """An NVR channel only gets motion when that channel reports the ability."""
+    camera = _device(channel_id="1")
+    camera.is_ipc = False
+    camera.device_ability = "MobileDetect"
+    camera.channel_ability = "WLAN"
+    assert _iter_motion_sensors(_coordinator([camera])) == []
+
+
+@pytest.mark.parametrize(
+    "ability",
+    ["MobileDetect", "AlarmMD", "CRMD", "HeaderDetect", "AiHuman", "SMDH"],
+)
+def test_iter_motion_sensors_paas_accepts_detect_abilities(ability: str) -> None:
+    """Picture-change and human-detect abilities each create the motion sensor."""
+    camera = _device(channel_id="0")
+    camera.channel_ability = f"WLAN,{ability}"
+    assert _iter_motion_sensors(_coordinator([camera])) == [(PARAM_MOTION, camera)]
+
+
+def test_iter_motion_sensors_iot_uses_product_model_events() -> None:
+    """IoT motion follows thing-model motion events, not detect-switch refs."""
+    camera = _device(channel_id="0")
+    camera.product_id = "pidA"
+    camera.channel_ability = "WLAN"
+    pairs = _iter_motion_sensors(
+        _coordinator([camera], event_map={"33000": "e_videoMotion"})
+    )
+    assert pairs == [(PARAM_MOTION, camera)]
+
+
+def test_iter_motion_sensors_iot_switch_refs_are_not_events() -> None:
+    """Property refs for the detect switch must not create a motion sensor."""
+    camera = _device(channel_id="0")
+    camera.product_id = "pidA"
+    pairs = _iter_motion_sensors(
+        _coordinator(
+            [camera],
+            event_map={"14800": "mdEnable", "108800": "mdEnable2"},
+        )
+    )
+    assert pairs == []
+
+
+def test_iter_motion_sensors_iot_without_motion_events_skipped() -> None:
+    """An IoT camera with only call events must not get a motion sensor."""
+    camera = _device(channel_id="0")
+    camera.product_id = "pidA"
+    camera.channel_ability = "WLAN,MobileDetect"
+    pairs = _iter_motion_sensors(
+        _coordinator([camera], event_map={"311000": "e_callEventCall"})
+    )
+    assert pairs == []
 
 
 def test_motion_unique_id_does_not_collide_with_library_binary_sensors() -> None:
@@ -135,6 +240,25 @@ def test_motion_entity_is_a_motion_class() -> None:
     )
     assert entity.device_class is BinarySensorDeviceClass.MOTION
     assert entity.is_on is False
+
+
+def test_motion_unavailable_when_alarm_push_is_off() -> None:
+    """Off forever would lie; unavailable means we are not listening."""
+    device = _device(channel_id="0")
+    assert _online_motion(device, push=False).available is False
+
+
+def test_motion_unavailable_when_alarm_type_not_subscribed() -> None:
+    """iotProperty push does not carry motion / doorbell alarms."""
+    device = _device(channel_id="0")
+    entity = _online_motion(device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    assert entity.available is False
+
+
+def test_motion_available_when_alarm_push_is_on() -> None:
+    """An online camera with alarm push can report motion."""
+    device = _device(channel_id="0")
+    assert _online_motion(device, push=True).available is True
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

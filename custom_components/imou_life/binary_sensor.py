@@ -14,6 +14,12 @@ from pyimouapi.ha_device import ImouHaDevice
 from .const import MOTION_OFF_DELAY, PARAM_MOTION
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouAlarmPushEntity, ImouEntity, async_add_imou_entities
+from .helpers import (
+    PAAS_MOTION_ABILITIES,
+    alarm_push_active,
+    device_has_paas_ability,
+    device_iot_events_match,
+)
 
 PARALLEL_UPDATES = 0
 
@@ -73,12 +79,27 @@ def _iter_binary_sensors(
 def _iter_motion_sensors(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
-    """One HA-only motion sensor per camera channel."""
+    """One HA-only motion sensor per camera that reports picture/human detect."""
     return [
         (PARAM_MOTION, device)
         for device in coordinator.devices
-        if device.channel_id is not None
+        if _device_offers_motion(coordinator, device)
     ]
+
+
+def _device_offers_motion(
+    coordinator: ImouDataUpdateCoordinator, device: ImouHaDevice
+) -> bool:
+    """PaaS: detect abilities. IoT: product-model motion events, not switch refs."""
+    if device.channel_id is None:
+        return False
+    if device.product_id:
+        return device_iot_events_match(
+            coordinator, device, lambda msg: motion_binary_state(msg) is True
+        )
+    return any(
+        device_has_paas_ability(device, ability) for ability in PAAS_MOTION_ABILITIES
+    )
 
 
 async def async_setup_entry(
@@ -119,6 +140,11 @@ class ImouMotionBinarySensor(ImouAlarmPushEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.MOTION
     _attr_is_on = False
     _hold_seconds = MOTION_OFF_DELAY
+
+    @property
+    def available(self) -> bool:
+        """Unavailable when alarm push is off: off would mean 'no motion'."""
+        return super().available and alarm_push_active(self._config_entry)
 
     def _alarm_state(self, msg_type: str | None) -> bool | None:
         """Map picture / human / PIR pushes onto held motion state."""

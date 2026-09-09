@@ -76,6 +76,8 @@ from .helpers import (
     async_build_device_map,
     notify_service_selector_options,
     parse_notify_services,
+    resolve_ui_language,
+    selector_option_label,
 )
 from .runtime_data import get_runtime_data
 
@@ -137,6 +139,17 @@ _BIND_DEVICE_SCHEMA = vol.Schema(
     }
 )
 
+REAUTH_SCHEMA = vol.Schema(
+    {
+        vol.Required(PARAM_APP_SECRET): TextSelector(
+            TextSelectorConfig(
+                type=TextSelectorType.PASSWORD,
+                autocomplete="current-password",
+            )
+        ),
+    }
+)
+
 
 async def _async_run_bind(
     hass: HomeAssistant,
@@ -176,17 +189,6 @@ def _looks_publicly_reachable(url: str) -> bool:
     return "." in host
 
 
-def _selector_option_label(
-    hass: HomeAssistant, language: str, selector: str, key: str, fallback: str
-) -> str:
-    """Load a selector option label for config flow placeholders."""
-    translations = translation.async_get_cached_translations(
-        hass, language, "selector", DOMAIN
-    )
-    translation_key = f"component.{DOMAIN}.selector.{selector}.options.{key}"
-    return translations.get(translation_key, fallback)
-
-
 class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Imou Life."""
 
@@ -196,6 +198,27 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize config flow."""
         self._devices_map: dict[str, str] = {}
         self._login_data: dict[str, Any] = {}
+
+    async def _async_validate_credentials(
+        self, app_id: str, app_secret: str, api_hostname: str
+    ) -> dict[str, str]:
+        """Validate App credentials and close the temporary client."""
+        errors: dict[str, str] = {}
+        api_client = ImouOpenApiClient(app_id, app_secret, api_hostname)
+        try:
+            await api_client.async_get_token()
+        except InvalidAppIdOrSecretException:
+            errors["base"] = "invalid_auth"
+        except ConnectFailedException:
+            errors["base"] = "cannot_connect"
+        except RequestFailedException:
+            errors["base"] = "request_failed"
+        except ImouException as exception:
+            _LOGGER.debug("Imou error during config flow: %s", exception)
+            errors["base"] = "unknown"
+        finally:
+            await api_client.async_close()
+        return errors
 
     @staticmethod
     def _user_schema(default_region: str = DEFAULT_API_URL_REGION) -> vol.Schema:
@@ -404,50 +427,22 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm reauthentication with a new App Secret."""
         reauth_entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
-        error_detail = ""
-
-        if user_input is None:
-            return self.async_show_form(
-                step_id="reauth_confirm",
-                data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
-                description_placeholders={
-                    "app_id": reauth_entry.data[PARAM_APP_ID],
-                    "error": "",
-                },
+        if user_input is not None and not (
+            errors := await self._async_validate_credentials(
+                reauth_entry.data[PARAM_APP_ID],
+                user_input[PARAM_APP_SECRET],
+                reauth_entry.data[PARAM_API_URL],
             )
-
-        api_client = ImouOpenApiClient(
-            reauth_entry.data[PARAM_APP_ID],
-            user_input[PARAM_APP_SECRET],
-            reauth_entry.data[PARAM_API_URL],
-        )
-        try:
-            await api_client.async_get_token()
-        except InvalidAppIdOrSecretException as exception:
-            errors["base"] = "invalid_auth"
-            error_detail = _api_error_placeholder(exception)
-        except ImouException as exception:
-            errors["base"] = _config_flow_error_key(exception)
-            error_detail = _api_error_placeholder(exception)
-        else:
+        ):
             return self.async_update_reload_and_abort(
                 reauth_entry,
-                data={
-                    **reauth_entry.data,
-                    PARAM_APP_SECRET: user_input[PARAM_APP_SECRET],
-                },
+                data_updates={PARAM_APP_SECRET: user_input[PARAM_APP_SECRET]},
             )
-        finally:
-            await api_client.async_close()
-
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(PARAM_APP_SECRET): str}),
+            data_schema=REAUTH_SCHEMA,
+            description_placeholders={"app_id": reauth_entry.data[PARAM_APP_ID]},
             errors=errors,
-            description_placeholders={
-                "app_id": reauth_entry.data[PARAM_APP_ID],
-                "error": error_detail,
-            },
         )
 
     @staticmethod
@@ -566,7 +561,7 @@ class ImouOptionsFlow(OptionsFlow):
         """Warn that a LAN callback address can never receive cloud alarms."""
         if not callback_url or _looks_publicly_reachable(callback_url):
             return ""
-        text = _selector_option_label(
+        text = selector_option_label(
             self.hass,
             self._ui_language(),
             "prerequisite",
@@ -582,10 +577,10 @@ class ImouOptionsFlow(OptionsFlow):
         self, options: Mapping[str, Any]
     ) -> dict[str, str]:
         """Return webhook reference values for the step description."""
-        language = self.hass.config.language
+        language = self._ui_language()
         webhook_id = self.config_entry.data.get(PARAM_WEBHOOK_ID, "")
         suggested_webhook_url = self._generated_webhook_url()
-        not_generated = _selector_option_label(
+        not_generated = selector_option_label(
             self.hass, language, "webhook_placeholder", "not_generated", "Not generated"
         )
         return {
@@ -697,6 +692,7 @@ class ImouOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Choose which options section to edit."""
+        await self._async_load_selector_translations()
         return self.async_show_menu(
             step_id="init",
             menu_options=[
@@ -729,14 +725,17 @@ class ImouOptionsFlow(OptionsFlow):
         )
 
     def _ui_language(self) -> str:
-        language = getattr(self.hass.config, "language", None)
-        if isinstance(language, str) and language:
-            return language
-        return "en"
+        return resolve_ui_language(getattr(self.hass.config, "language", None))
+
+    async def _async_load_selector_translations(self) -> None:
+        """Load selector strings before reading cached labels."""
+        await translation.async_get_translations(
+            self.hass, self._ui_language(), "selector", integrations={DOMAIN}
+        )
 
     def _status_label(self, key: str, fallback: str) -> str:
         """Return a translated status word for the menu summary."""
-        return _selector_option_label(
+        return selector_option_label(
             self.hass, self._ui_language(), "status", key, fallback
         )
 
@@ -752,7 +751,7 @@ class ImouOptionsFlow(OptionsFlow):
         """
         if self._push_enabled():
             return ""
-        text = _selector_option_label(
+        text = selector_option_label(
             self.hass,
             self._ui_language(),
             "prerequisite",
@@ -928,6 +927,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
 
         stored = self._device_passwords()
+        await self._async_load_selector_translations()
         return self.async_show_form(
             step_id="alarm_image_decrypt",
             data_schema=self._alarm_image_decrypt_schema(user_input),
@@ -984,6 +984,7 @@ class ImouOptionsFlow(OptionsFlow):
                 ),
             }
 
+        await self._async_load_selector_translations()
         return self.async_show_form(
             step_id="local_recording",
             data_schema=self.add_suggested_values_to_schema(
@@ -1047,6 +1048,7 @@ class ImouOptionsFlow(OptionsFlow):
                 return await self.async_step_init()
             suggested_source = {**stored, **flat}
 
+        await self._async_load_selector_translations()
         placeholders = self._event_push_webhook_placeholders(suggested_source)
         if error_detail:
             placeholders["error"] = error_detail

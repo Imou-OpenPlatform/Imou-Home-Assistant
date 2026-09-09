@@ -79,7 +79,7 @@ async def test_a_device_leaving_the_account_does_not_break_the_update(
     coordinator.async_update_listeners()
     await hass.async_block_till_done()
 
-    for entity_id in ("select.cam_night_vision_mode", "text.cam_countdown_timer_min"):
+    for entity_id in ("select.cam_night_vision_mode", "number.cam_countdown_timer_min"):
         state = hass.states.get(entity_id)
         assert state is not None
         assert state.state == STATE_UNAVAILABLE
@@ -119,4 +119,4 @@ async def test_later_entities_still_get_their_update(
     await hass.async_block_till_done()
 
     assert hass.states.get("select.cam_night_vision_mode").state == "on"
-    assert hass.states.get("text.cam_countdown_timer_min").state == "60"
+    assert hass.states.get("number.cam_countdown_timer_min").state == "60.0"

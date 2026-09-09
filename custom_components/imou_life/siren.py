@@ -6,13 +6,12 @@ from typing import Any
 
 from homeassistant.components.siren import SirenEntity, SirenEntityFeature
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_SIREN_START, PARAM_SIREN_STOP
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import DOMAIN, PARAM_SIREN, SIREN_OFF_DELAY
+from .const import PARAM_SIREN, SIREN_OFF_DELAY
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouAlarmPushEntity, async_add_imou_entities
 
@@ -85,9 +84,5 @@ class ImouSiren(ImouAlarmPushEntity, SirenEntity):
                 0,
             )
         except ImouException as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="button_press_failed",
-                translation_placeholders={"error": err.message},
-            ) from err
+            self._raise_imou_ha_error(err, "button_press_failed")
         self._set_push_state(enable, auto_off=enable)

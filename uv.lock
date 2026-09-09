@@ -2002,7 +2002,7 @@ wheels = [
 
 [[package]]
 name = "pyimouapi"
-version = "1.4.0"
+version = "1.4.1"
 source = { editable = "../Py-Imou-Open-Api" }
 dependencies = [
     { name = "aiohttp" },

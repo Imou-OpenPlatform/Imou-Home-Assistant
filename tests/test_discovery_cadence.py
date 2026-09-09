@@ -13,6 +13,7 @@ from custom_components.imou_life.coordinator import ImouDataUpdateCoordinator
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import issue_registry as ir
 from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
@@ -37,6 +38,7 @@ def device_manager() -> MagicMock:
     manager = MagicMock()
     manager.async_get_devices = AsyncMock(return_value=[_mock_device("d1")])
     manager.async_update_devices_status = AsyncMock(return_value=None)
+    manager.delegate.async_ensure_event_map = AsyncMock()
     return manager
 
 
@@ -147,21 +149,58 @@ async def test_credentials_revoked_between_listings_still_ask_for_reauth(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_total_status_poll_failure_marks_update_failed(
-    hass: HomeAssistant, device_manager: MagicMock
+@pytest.mark.parametrize(
+    "error",
+    [
+        RequestFailedException("cloud down"),
+        TimeoutError("status poll timed out"),
+    ],
+    ids=["request_failed", "timeout"],
+)
+async def test_status_poll_failure_keeps_last_state(
+    hass: HomeAssistant, device_manager: MagicMock, error: BaseException
 ) -> None:
-    """A cloud outage on every device group must not look like a successful poll."""
+    """A status refresh blip must not grey every entity until the next interval."""
     coordinator = _make_coordinator(hass, device_manager)
     await coordinator._async_update_data()
+    known = dict(coordinator.devices_by_key)
     assert coordinator.last_update_success
 
+    device_manager.async_update_devices_status.side_effect = error
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.last_update_success
+    assert coordinator.devices_by_key == known
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_quota_poll_failure_creates_repair_and_clears_on_success(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Used-up Open Platform calls must show under Repairs, then go away."""
+    from custom_components.imou_life.repairs import ISSUE_OPEN_API_QUOTA
+
+    coordinator = _make_coordinator(hass, device_manager)
+    await coordinator._async_update_data()
+    issue_id = f"{ISSUE_OPEN_API_QUOTA}_{coordinator.config_entry.entry_id}"
+    assert (DOMAIN, issue_id) not in ir.async_get(hass).issues
+
     device_manager.async_update_devices_status.side_effect = RequestFailedException(
-        "cloud down"
+        "OP1013:Call interface times exceed limit (total)."
     )
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert not coordinator.last_update_success
+    assert coordinator.last_update_success
+    assert (DOMAIN, issue_id) in ir.async_get(hass).issues
+
+    device_manager.async_update_devices_status.side_effect = None
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.last_update_success
+    assert (DOMAIN, issue_id) not in ir.async_get(hass).issues
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -228,3 +267,19 @@ async def test_a_first_listing_failure_still_defers_setup(
 
     with pytest.raises(ConfigEntryNotReady):
         await coordinator.async_config_entry_first_refresh()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_a_first_status_poll_failure_still_finishes_setup(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Devices are already listed; a status blip must not leave setup retrying."""
+    coordinator = _make_coordinator(hass, device_manager, setting_up=True)
+    device_manager.async_update_devices_status.side_effect = RequestFailedException(
+        "cloud down"
+    )
+
+    await coordinator.async_config_entry_first_refresh()
+
+    assert coordinator.last_update_success
+    assert coordinator.devices_by_key

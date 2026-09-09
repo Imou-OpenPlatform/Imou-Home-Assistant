@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -33,8 +34,10 @@ from .const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_DEVICE_PASSWORDS,
+    imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
 )
+from .helpers import fill_template, selector_option_label
 
 if TYPE_CHECKING:
     from .runtime_data import ImouRuntimeData
@@ -43,6 +46,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
+_LOCAL_PREFIX = "/local/"
 # Push alarm ids become www filenames; reject path separators and traversal.
 _SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
@@ -71,6 +75,78 @@ def native_lib_dir(hass: HomeAssistant) -> Path:
     return Path(hass.config.path("imou_life", "native"))
 
 
+def last_alarm_image_path(hass: HomeAssistant, device_key: str) -> Path | None:
+    """Return the on-disk last still for a camera, outside /local/."""
+    stem = (
+        device_key
+        if _SAFE_THUMB_STEM.fullmatch(device_key)
+        else hashlib.sha256(device_key.encode()).hexdigest()[:16]
+    )
+    dest_dir = Path(hass.config.path("imou_life", "last_alarm"))
+    dest = (dest_dir / f"{stem}.jpg").resolve()
+    if not dest.is_relative_to(dest_dir.resolve()):
+        return None
+    return dest
+
+
+def persist_last_alarm_image(hass: HomeAssistant, device_key: str, jpeg: bytes) -> None:
+    """Keep the last decrypted still for the dashboard image entity."""
+    dest = last_alarm_image_path(hass, device_key)
+    if dest is None:
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.write_bytes(jpeg)
+    except OSError:
+        _LOGGER.debug("Could not persist last alarm image for %s", device_key)
+
+
+def read_last_alarm_image(
+    hass: HomeAssistant, device_key: str
+) -> tuple[bytes, datetime] | None:
+    """Return the persisted last still and its mtime, if present."""
+    path = last_alarm_image_path(hass, device_key)
+    if path is None or not path.is_file():
+        return None
+    try:
+        data = path.read_bytes()
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+    except OSError:
+        return None
+    if not data:
+        return None
+    return data, mtime
+
+
+def jpeg_from_local_url(hass: HomeAssistant, local_url: str) -> bytes | None:
+    """Read a jpeg previously written under /local/, or None if it is gone."""
+    if not local_url.startswith(_LOCAL_PREFIX):
+        return None
+    rel = Path(local_url[len(_LOCAL_PREFIX) :])
+    if rel.is_absolute() or ".." in rel.parts:
+        return None
+    www = Path(hass.config.path("www")).resolve()
+    path = (www / rel).resolve()
+    if not path.is_relative_to(www) or not path.is_file():
+        return None
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    return data or None
+
+
+def adopt_local_thumb(
+    hass: HomeAssistant, device_key: str, local_url: str
+) -> bytes | None:
+    """Copy a /local/ still onto the last-alarm file; return jpeg bytes."""
+    jpeg = jpeg_from_local_url(hass, local_url)
+    if not jpeg:
+        return None
+    persist_last_alarm_image(hass, device_key, jpeg)
+    return jpeg
+
+
 def native_platform_label() -> str:
     """Return a short os/arch string for UI and logs."""
     return f"{sys.platform} {platform.machine()}"
@@ -83,15 +159,21 @@ def native_platform_supported() -> bool:
     )
 
 
-def native_support_status(language: str) -> str:
+def native_support_status(hass: HomeAssistant, language: str) -> str:
     """Return a localized sentence: supported, or explicitly not supported."""
-    zh = language.lower().startswith("zh")
     if native_platform_supported():
-        return "支持 (linux x86-64)" if zh else "supported (linux x86-64)"
-    label = native_platform_label()
-    if zh:
-        return f"不支持 (需要 linux x86-64, 本机是 {label})"
-    return f"not supported (needs linux x86-64; this host is {label})"
+        return selector_option_label(
+            hass,
+            language,
+            "native_hint",
+            "supported",
+            "supported (linux x86-64)",
+        )
+    fallback = "not supported (needs linux x86-64; this host is {arch})"
+    template = selector_option_label(
+        hass, language, "native_hint", "unsupported", fallback
+    )
+    return fill_template(template, fallback, arch=native_platform_label())
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -113,23 +195,30 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
     Spell out the filenames and the folder only while something is missing;
     a host that is already set up does not need the install instructions.
     """
-    zh = language.lower().startswith("zh")
     if not native_platform_supported():
-        return native_support_status(language)
+        return native_support_status(hass, language)
     found = native_libs_found(hass)
     if found == 2:
-        if zh:
-            return "解密库已就绪 (linux x86-64)"
-        return "decrypt libraries ready (linux x86-64)"
-    native_dir = native_lib_dir(hass)
-    if zh:
-        return (
-            f"缺少解密库 (已找到 {found}/2)。请将 {NATIVE_CLIENT_SO} 与 "
-            f"{NATIVE_SDK_SO} 复制到 {native_dir}"
+        return selector_option_label(
+            hass,
+            language,
+            "native_hint",
+            "ready",
+            "decrypt libraries ready (linux x86-64)",
         )
-    return (
-        f"decrypt libraries missing ({found}/2 found). Copy {NATIVE_CLIENT_SO} "
-        f"and {NATIVE_SDK_SO} into {native_dir}"
+    native_dir = native_lib_dir(hass)
+    fallback = (
+        "decrypt libraries missing ({found}/2 found). Copy {client_so} "
+        "and {sdk_so} into {native_dir}"
+    )
+    template = selector_option_label(hass, language, "native_hint", "missing", fallback)
+    return fill_template(
+        template,
+        fallback,
+        found=str(found),
+        client_so=NATIVE_CLIENT_SO,
+        sdk_so=NATIVE_SDK_SO,
+        native_dir=str(native_dir),
     )
 
 
@@ -274,6 +363,13 @@ def _write_thumb(
         return None
 
     local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
+    device_key = imou_life_device_key_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    )
+    if device_key:
+        persist_last_alarm_image(hass, device_key, jpeg)
     _LOGGER.debug("Wrote decrypted alarm thumb %s (%s bytes)", local_url, len(jpeg))
     return local_url
 

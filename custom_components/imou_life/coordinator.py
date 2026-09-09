@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import timedelta
 from time import monotonic
 
@@ -27,6 +27,7 @@ from .const import (
     imou_life_device_key,
 )
 from .helpers import get_selected_device_ids, iot_property_push_active
+from .repairs import async_delete_quota_issue, async_notify_imou_api_error
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,8 +123,12 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         except TimeoutError as err:
             raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
-            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
         except ImouException as err:
+            async_notify_imou_api_error(self.hass, self.config_entry, err)
             if first_discovery:
                 raise UpdateFailed(
                     f"Error fetching Imou devices: {err.message or err}"
@@ -141,6 +146,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
 
         if first_discovery:
+            await self._async_prefetch_event_maps(filtered_list)
             self._async_add_remove_devices(fresh_by_key, account_by_key)
             return
 
@@ -155,8 +161,12 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             except TimeoutError as err:
                 raise UpdateFailed(f"Timeout while fetching data: {err}") from err
             except InvalidAppIdOrSecretException as err:
-                raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_auth",
+                ) from err
             except ImouException as err:
+                async_notify_imou_api_error(self.hass, self.config_entry, err)
                 # Keep removals from the shallow list. Leave brand-new keys out
                 # until detail succeeds (shallow IoT shells have no configured
                 # refs yet) and rewind the discovery clock to retry soon.
@@ -179,7 +189,21 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 if key in detailed_by_key:
                     fresh_by_key[key] = detailed_by_key[key]
 
+        if new_keys:
+            await self._async_prefetch_event_maps(
+                [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
+            )
         self._async_add_remove_devices(fresh_by_key, account_by_key)
+
+    async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Fetch product-model events so doorbell / motion can be gated at setup."""
+        seen: set[str] = set()
+        for device in devices:
+            product_id = device.product_id
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            await self._device_manager.delegate.async_ensure_event_map(product_id)
 
     async def _async_update_data(self) -> None:
         """Fetch latest device status from Imou cloud."""
@@ -211,19 +235,29 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                     devices_to_update,
                     skip_iot_property_ids=skip_ids,
                 )
-        except TimeoutError as err:
-            raise UpdateFailed(f"Timeout while fetching data: {err}") from err
         except InvalidAppIdOrSecretException as err:
             # Credentials can be revoked between two listings, and the status
             # calls are what notice it first now that listing is on a slow clock.
-            raise ConfigEntryAuthFailed(f"Invalid Imou credentials: {err}") from err
-        except ImouException as err:
-            raise UpdateFailed(
-                f"Error updating Imou devices: {err.message or err}"
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
             ) from err
+        except (TimeoutError, ImouException) as err:
+            async_notify_imou_api_error(self.hass, self.config_entry, err)
+            # last_update_success stays true, so entities keep the last state
+            # instead of all going unavailable until the next interval.
+            _LOGGER.warning(
+                "Could not update Imou device status: %s",
+                getattr(err, "message", None) or err,
+            )
+            return
         else:
             if isinstance(fetched, set) and fetched:
                 self._iot_detail_fetched.update(fetched)
+            async_delete_quota_issue(self.hass, self.config_entry)
+            runtime = getattr(self.config_entry, "runtime_data", None)
+            if runtime is not None:
+                runtime.countdown.sync_all(self.hass, self)
 
     def _async_add_remove_devices(
         self,
@@ -270,6 +304,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         """Detach config-entry devices whose Imou keys are not on the account."""
         device_registry = dr.async_get(self.hass)
+        # A multi-channel device also has a row of its own, keyed by the bare
+        # account device id rather than by one of its channels.
+        account_device_ids = {device.device_id for device in account_by_key.values()}
         for device in dr.async_entries_for_config_entry(
             device_registry, self.config_entry.entry_id
         ):
@@ -278,7 +315,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             if not imou_keys:
                 continue
-            if any(key in account_by_key for key in imou_keys):
+            if any(
+                key in account_by_key or key in account_device_ids for key in imou_keys
+            ):
                 continue
             device_registry.async_update_device(
                 device_id=device.id,
