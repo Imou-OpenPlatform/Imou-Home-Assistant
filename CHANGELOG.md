@@ -2,6 +2,12 @@
 
 ## English
 
+### [Unreleased]
+
+#### Fixed
+
+- Choosing **Europe** or **North America** during setup now uses the correct regional server (#99)
+
 ### [1.4.1]
 
 #### Breaking
@@ -295,6 +301,12 @@
 ---
 
 ## 中文
+
+### [未发布]
+
+#### 修复
+
+- 添加集成时选择 **欧洲** 或 **北美** 会连到正确的区域服务器（#99）
 
 ### [1.4.1]
 
