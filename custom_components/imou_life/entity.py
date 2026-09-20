@@ -24,7 +24,7 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .devices import imou_device_info, parent_device_key
+from .devices import imou_device_info
 from .repairs import async_notify_imou_api_error
 
 
@@ -48,9 +48,7 @@ class ImouEntity(CoordinatorEntity[ImouDataUpdateCoordinator]):
         self._device_key = imou_life_device_key(device)
         self._attr_unique_id = f"{self._device_key}${entity_type}"
         self._attr_translation_key = entity_type
-        self._attr_device_info = imou_device_info(
-            device, parent_device_key(coordinator.devices, device)
-        )
+        self._attr_device_info = imou_device_info(device)
 
     @property
     def device(self) -> ImouHaDevice:
