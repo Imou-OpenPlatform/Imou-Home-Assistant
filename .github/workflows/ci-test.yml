@@ -52,10 +52,17 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --dev
-      - name: Override Home Assistant for latest lane
+      - name: Sync min-lane dependencies
+        if: matrix.leg == 'min'
+        run: uv sync --dev
+      - name: Sync latest-lane dependencies
         if: matrix.leg == 'latest'
         run: |
+          # pyproject pins HA 2025.4 / PHCCC for the min lane; those wheels do not
+          # build on Python 3.14. Skip them, then install the 2026.9 pair.
+          uv sync --dev \
+            --no-install-package homeassistant \
+            --no-install-package pytest-homeassistant-custom-component
           uv pip install \
             "homeassistant==${{ matrix.ha-version }}" \
             "pytest-homeassistant-custom-component==${{ matrix.phccc-version }}"
