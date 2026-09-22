@@ -69,8 +69,9 @@ jobs:
             "pytest-timeout>=2.3.0"
       - name: Record resolved Home Assistant version
         run: |
-          uv run python - <<'PY'
+          # Latest lane installs outside the lock; --no-sync keeps that env.
+          uv run --no-sync python - <<'PY'
           from homeassistant.const import __version__
           print(f"homeassistant=={__version__}")
           PY
-      - run: uv run pytest tests/ -q --timeout=30
+      - run: uv run --no-sync pytest tests/ -q --timeout=30
