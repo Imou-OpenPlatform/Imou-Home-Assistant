@@ -18,6 +18,7 @@ from custom_components.imou_life.const import (
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
 )
+from custom_components.imou_life.devices import registry_row_for_key
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
@@ -95,7 +96,7 @@ async def _setup(
 
 def _row(hass: HomeAssistant, key: str) -> dr.DeviceEntry | None:
     """Return the device registry row for an Imou registry key."""
-    return dr.async_get(hass).async_get_device(identifiers={(DOMAIN, key)})
+    return registry_row_for_key(hass, key)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

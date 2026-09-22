@@ -21,8 +21,22 @@ env:
 
 jobs:
   test:
-    name: Test
+    name: Test (HA ${{ matrix.ha-label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Matches hacs.json / pyproject.toml floor (Home Assistant 2025.4.x).
+          - leg: min
+            ha-label: "2025.4"
+            python-version: "3.13"
+          # Current stable users hit (e.g. via_device → via_device_id on 2026.9).
+          - leg: latest
+            ha-label: "2026.9"
+            python-version: "3.14"
+            ha-version: "2026.9.2"
+            phccc-version: "0.13.365"
     env:
       TZ: UTC
     steps:
@@ -37,6 +51,18 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
       - run: uv sync --dev
+      - name: Override Home Assistant for latest lane
+        if: matrix.leg == 'latest'
+        run: |
+          uv pip install \
+            "homeassistant==${{ matrix.ha-version }}" \
+            "pytest-homeassistant-custom-component==${{ matrix.phccc-version }}"
+      - name: Record resolved Home Assistant version
+        run: |
+          uv run python - <<'PY'
+          from homeassistant.const import __version__
+          print(f"homeassistant=={__version__}")
+          PY
       - run: uv run pytest tests/ -q --timeout=30

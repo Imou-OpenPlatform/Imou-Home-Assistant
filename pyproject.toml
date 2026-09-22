@@ -12,6 +12,9 @@ prerelease = "allow"
 pyimouapi = { path = "../Py-Imou-Open-Api", editable = true }
 
 [dependency-groups]
+# Local / CI "min" lane: matches hacs.json homeassistant floor (2025.4.x).
+# CI also runs a "latest" lane that overrides these two packages to the current
+# stable Home Assistant (see .github/workflows/ci-test.yml).
 dev = [
   "homeassistant==2025.4.4",
   "pyimouapi==1.4.1",
