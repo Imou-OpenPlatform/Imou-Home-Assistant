@@ -330,9 +330,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
         device_key = imou_life_device_key(device)
-        by_identifier = getattr(
-            device_registry, "async_get_device_by_identifier", None
-        )
+        by_identifier = getattr(device_registry, "async_get_device_by_identifier", None)
         if by_identifier is not None:
             device_entry = by_identifier((DOMAIN, device_key), entry_id)
         else:

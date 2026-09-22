@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -86,6 +88,16 @@ def _registry_device_id(
     return row.id if row is not None else None
 
 
+def _supports_via_device_id(registry: dr.DeviceRegistry) -> bool:
+    """Return True when this Home Assistant accepts via_device_id on create.
+
+    CI and hacs.json still target 2025.4, which only knows ``via_device``.
+    Home Assistant 2026.9+ rejects ``via_device`` as a hard error, so callers
+    must pick the argument the running core still accepts.
+    """
+    return "via_device_id" in inspect.signature(registry.async_get_or_create).parameters
+
+
 def is_account_device_row(entry: DeviceEntry) -> bool:
     """Return True for the row standing for a whole multi-channel device.
 
@@ -127,20 +139,23 @@ def async_register_imou_devices(
             sw_version=device.swversion,
             serial_number=device.device_id,
         )
+    prefer_via_device_id = _supports_via_device_id(registry)
     for device in sorted(devices, key=lambda item: bool(item.parent_device_id)):
         parent = parent_device_key(devices, device)
-        via_device_id = (
-            _registry_device_id(registry, entry.entry_id, parent)
-            if parent is not None
-            else None
-        )
-        registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, imou_life_device_key(device))},
-            name=device.channel_name or device.device_name,
-            manufacturer=device.manufacturer,
-            model=device.model,
-            sw_version=device.swversion,
-            serial_number=device.device_id,
-            via_device_id=via_device_id,
-        )
+        create_kwargs: dict[str, Any] = {
+            "config_entry_id": entry.entry_id,
+            "identifiers": {(DOMAIN, imou_life_device_key(device))},
+            "name": device.channel_name or device.device_name,
+            "manufacturer": device.manufacturer,
+            "model": device.model,
+            "sw_version": device.swversion,
+            "serial_number": device.device_id,
+        }
+        if parent is not None:
+            if prefer_via_device_id:
+                via_device_id = _registry_device_id(registry, entry.entry_id, parent)
+                if via_device_id is not None:
+                    create_kwargs["via_device_id"] = via_device_id
+            else:
+                create_kwargs["via_device"] = (DOMAIN, parent)
+        registry.async_get_or_create(**create_kwargs)
