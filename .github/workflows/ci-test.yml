@@ -60,13 +60,16 @@ jobs:
         run: |
           # Do not use the locked 2025.4 PHCCC tree on Python 3.14 — its
           # pydantic-core cannot build. Install the 2026.9 pair into a fresh venv.
+          sudo apt-get update
+          sudo apt-get install -y libturbojpeg0-dev
           uv venv --python "${{ matrix.python-version }}"
           uv pip install \
             -e "$GITHUB_WORKSPACE/Py-Imou-Open-Api" \
             "homeassistant==${{ matrix.ha-version }}" \
             "pytest-homeassistant-custom-component==${{ matrix.phccc-version }}" \
             "pytest-asyncio>=0.24.0" \
-            "pytest-timeout>=2.3.0"
+            "pytest-timeout>=2.3.0" \
+            PyTurboJPEG
       - name: Record resolved Home Assistant version
         run: |
           # Latest lane installs outside the lock; --no-sync keeps that env.
