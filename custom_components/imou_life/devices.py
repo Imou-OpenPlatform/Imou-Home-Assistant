@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -55,9 +57,13 @@ def parent_device_key(
     return None
 
 
-def imou_device_info(device: ImouHaDevice, parent_key: str | None = None) -> DeviceInfo:
-    """Return the registry row for one channel or accessory."""
-    info = DeviceInfo(
+def imou_device_info(device: ImouHaDevice) -> DeviceInfo:
+    """Return the registry row for one channel or accessory.
+
+    Parent links are applied in ``async_register_imou_devices`` before platforms
+    run; entities must not pass deprecated ``via_device`` in device info.
+    """
+    return DeviceInfo(
         identifiers={(DOMAIN, imou_life_device_key(device))},
         name=device.channel_name or device.device_name,
         manufacturer=device.manufacturer,
@@ -65,9 +71,31 @@ def imou_device_info(device: ImouHaDevice, parent_key: str | None = None) -> Dev
         sw_version=device.swversion,
         serial_number=device.device_id,
     )
-    if parent_key is not None:
-        info["via_device"] = (DOMAIN, parent_key)
-    return info
+
+
+def _registry_device_id(
+    registry: dr.DeviceRegistry,
+    config_entry_id: str,
+    registry_key: str,
+) -> str | None:
+    """Return the device registry id for an Imou registry key, if registered."""
+    identifier = (DOMAIN, registry_key)
+    by_identifier = getattr(registry, "async_get_device_by_identifier", None)
+    if by_identifier is not None:
+        row = by_identifier(identifier, config_entry_id)
+    else:
+        row = registry.async_get_device(identifiers={identifier})
+    return row.id if row is not None else None
+
+
+def _supports_via_device_id(registry: dr.DeviceRegistry) -> bool:
+    """Return True when this Home Assistant accepts via_device_id on create.
+
+    CI and hacs.json still target 2025.4, which only knows ``via_device``.
+    Home Assistant 2026.9+ rejects ``via_device`` as a hard error, so callers
+    must pick the argument the running core still accepts.
+    """
+    return "via_device_id" in inspect.signature(registry.async_get_or_create).parameters
 
 
 def is_account_device_row(entry: DeviceEntry) -> bool:
@@ -111,15 +139,23 @@ def async_register_imou_devices(
             sw_version=device.swversion,
             serial_number=device.device_id,
         )
+    prefer_via_device_id = _supports_via_device_id(registry)
     for device in sorted(devices, key=lambda item: bool(item.parent_device_id)):
         parent = parent_device_key(devices, device)
-        registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, imou_life_device_key(device))},
-            name=device.channel_name or device.device_name,
-            manufacturer=device.manufacturer,
-            model=device.model,
-            sw_version=device.swversion,
-            serial_number=device.device_id,
-            via_device=(DOMAIN, parent) if parent is not None else None,
-        )
+        create_kwargs: dict[str, Any] = {
+            "config_entry_id": entry.entry_id,
+            "identifiers": {(DOMAIN, imou_life_device_key(device))},
+            "name": device.channel_name or device.device_name,
+            "manufacturer": device.manufacturer,
+            "model": device.model,
+            "sw_version": device.swversion,
+            "serial_number": device.device_id,
+        }
+        if parent is not None:
+            if prefer_via_device_id:
+                via_device_id = _registry_device_id(registry, entry.entry_id, parent)
+                if via_device_id is not None:
+                    create_kwargs["via_device_id"] = via_device_id
+            else:
+                create_kwargs["via_device"] = (DOMAIN, parent)
+        registry.async_get_or_create(**create_kwargs)

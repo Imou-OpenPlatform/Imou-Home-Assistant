@@ -85,8 +85,8 @@ CONF_API_URL_HZ = "openapi.lechange.cn"
 
 API_URL_REGIONS: dict[str, str] = {
     "sg": CONF_API_URL_SG,
-    "eu": CONF_API_URL_OR,
-    "na": CONF_API_URL_FK,
+    "eu": CONF_API_URL_FK,
+    "na": CONF_API_URL_OR,
     "cn": CONF_API_URL_HZ,
 }
 

@@ -2,6 +2,13 @@
 
 ## English
 
+### [1.4.2]
+
+#### Fixed
+
+- Dual-lens and other nested devices get **Live** and **Alarm picture** entities again on Home Assistant 2026.9+, which rejects the deprecated device parent link we used when adding entities (#102)
+- Choosing **Europe** or **North America** during setup now uses the correct regional server (#99)
+
 ### [1.4.1]
 
 #### Breaking
@@ -295,6 +302,13 @@
 ---
 
 ## 中文
+
+### [1.4.2]
+
+#### 修复
+
+- Home Assistant 2026.9 及以上会拒绝旧的设备父子链接写法；修复后双目等嵌套设备会重新出现 **直播** 与 **告警图片** 实体（#102）
+- 添加集成时选择 **欧洲** 或 **北美** 会连到正确的区域服务器（#99）
 
 ### [1.4.1]
 
