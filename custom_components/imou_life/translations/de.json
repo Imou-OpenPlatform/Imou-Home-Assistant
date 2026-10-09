@@ -529,6 +529,9 @@
       "ab_alarm_sound": {
         "name": "Alarm bei ungewöhnlichem Geräusch"
       },
+      "alarm_pir": {
+        "name": "PIR-Erkennung"
+      },
       "audio_encode_control": {
         "name": "Audioaufnahme"
       },

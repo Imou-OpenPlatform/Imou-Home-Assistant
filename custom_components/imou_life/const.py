@@ -145,6 +145,7 @@ SIREN_OFF_DELAY = 15
 PARAM_STATUS = "status"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
+PARAM_ALARM_PIR = "alarm_pir"
 PARAM_PET_DETECT = "pet_detect"
 PARAM_FRAME_REVERSE = "frame_reverse"
 PARAM_WIDE_DYNAMIC = "wide_dynamic"

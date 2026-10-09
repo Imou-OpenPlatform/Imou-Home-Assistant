@@ -529,6 +529,9 @@
       "ab_alarm_sound": {
         "name": "异常音告警"
       },
+      "alarm_pir": {
+        "name": "PIR 检测"
+      },
       "audio_encode_control": {
         "name": "音频录制"
       },

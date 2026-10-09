@@ -42,6 +42,9 @@
 			}
 		},
 		"switch": {
+			"alarm_pir": {
+				"default": "mdi:radar"
+			},
 			"motion_detect": {
 				"default": "mdi:motion-sensor"
 			},

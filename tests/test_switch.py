@@ -71,6 +71,16 @@ def test_switch_types_include_feature_switches() -> None:
     assert keys >= FEATURE_SWITCH_KEYS
 
 
+def test_switch_types_include_alarm_pir() -> None:
+    """PIR detection is a configuration switch when the device reports it."""
+    from homeassistant.const import EntityCategory
+
+    alarm = next(
+        description for description in SWITCH_TYPES if description.key == "alarm_pir"
+    )
+    assert alarm.entity_category is EntityCategory.CONFIG
+
+
 def test_iter_notify_on_alarm_covers_every_device() -> None:
     """Notify-on-alarm is HA-only and is created for cameras and non-cameras."""
     camera = _mock_device({})

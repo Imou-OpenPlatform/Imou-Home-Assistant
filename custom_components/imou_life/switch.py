@@ -19,6 +19,7 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     PARAM_AB_ALARM_SOUND,
+    PARAM_ALARM_PIR,
     PARAM_AUDIO_ENCODE_CONTROL,
     PARAM_CLOSE_CAMERA,
     PARAM_FRAME_REVERSE,
@@ -49,6 +50,11 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
         key=PARAM_AB_ALARM_SOUND,
         translation_key=PARAM_AB_ALARM_SOUND,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key=PARAM_ALARM_PIR,
+        translation_key=PARAM_ALARM_PIR,
         entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(

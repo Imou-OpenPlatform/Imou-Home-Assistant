@@ -79,7 +79,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.1 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.2 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
@@ -93,8 +93,8 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Live video
   - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
   - **Collection points** — `select.collection_point` (**Go to collection point**) lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
-  - Detection: picture change, human, pet
-  - **Motion** (`binary_sensor`, `device_class: motion`) — on cameras that support picture-change or human detection. On for about 15 seconds after a picture-change / human / PIR / person-in-area / line-crossing / area-intrusion push, or off immediately on PIR-clear. Pet / vehicle alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** switches (those enable detection; this reports a detection)
+  - Detection: picture change, human, pet, PIR
+  - **Motion** (`binary_sensor`, `device_class: motion`) — on cameras that support picture-change or human detection. On for about 15 seconds after a picture-change / human / PIR / person-in-area / line-crossing / area-intrusion push, or off immediately on PIR-clear. Pet / vehicle alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** / **PIR detection** switches (those enable detection; this reports a detection)
   - **Doorbell** (`event`, `device_class: doorbell`) — on cameras that support calling. A press or incoming call from event push fires `ring`. Unanswered calls do not. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable
   - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
@@ -226,7 +226,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.1 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.2 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
@@ -240,8 +240,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 直播
   - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
   - **收藏点** — `select.collection_point`（**转到收藏点**）列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
-  - 检测：画面变化、人形、宠物
-  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 仅在支持画面变化或人形检测的摄像头上出现。画面变化 / 人形 / PIR / 区域人形 AI / 越线 / 区域入侵推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用。与 **画面变化** / **人形检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
+  - 检测：画面变化、人形、宠物、PIR
+  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 仅在支持画面变化或人形检测的摄像头上出现。画面变化 / 人形 / PIR / 区域人形 AI / 越线 / 区域入侵推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用。与 **画面变化** / **人形检测** / **PIR 检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
   - **门铃**（`event`，`device_class: doorbell`）— 仅在支持呼叫的摄像头上出现。事件推送里的按铃或来电会触发 `ring`。未接听不会。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用
   - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪

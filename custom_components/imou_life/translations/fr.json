@@ -529,6 +529,9 @@
       "ab_alarm_sound": {
         "name": "Alarme son inhabituel"
       },
+      "alarm_pir": {
+        "name": "Détection PIR"
+      },
       "audio_encode_control": {
         "name": "Enregistrement audio"
       },

@@ -2,6 +2,16 @@
 
 ## English
 
+### [1.4.3]
+
+#### Added
+
+- Cameras that support PIR detection get a **PIR detection** switch under device configuration. It follows the PIR Detection toggle in the Imou Life app.
+
+#### Changed
+
+- Requires pyimouapi 1.4.2, installed automatically with this integration
+
 ### [1.4.2]
 
 #### Fixed
@@ -302,6 +312,16 @@
 ---
 
 ## 中文
+
+### [1.4.3]
+
+#### 新增
+
+- 支持 PIR 检测的摄像头会在设备配置里出现 **PIR 检测** 开关，对应乐橙 App 里的 PIR Detection。
+
+#### 变更
+
+- 需要 pyimouapi 1.4.2，随本集成自动安装
 
 ### [1.4.2]
 
