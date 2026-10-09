@@ -10,7 +10,7 @@
 
 #### Changed
 
-- Requires pyimouapi 1.4.2, installed automatically with this integration
+- Requires pyimouapi 1.4.3, installed automatically with this integration
 
 ### [1.4.2]
 
@@ -321,7 +321,7 @@
 
 #### 变更
 
-- 需要 pyimouapi 1.4.2，随本集成自动安装
+- 需要 pyimouapi 1.4.3，随本集成自动安装
 
 ### [1.4.2]
 
