@@ -107,11 +107,13 @@
         "description": "Wie oft Home Assistant den Gerätestatus aktualisiert, plus die Live-Stream- und PTZ-Standardwerte, mit denen jede Kamera dieses Kontos startet.",
         "data": {
           "enable_polling": "Statusabfrage aktivieren",
-          "update_interval": "Abfrageintervall (Sekunden)"
+          "update_interval": "Abfrageintervall (Sekunden)",
+          "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)"
         },
         "data_description": {
           "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
-          "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist."
+          "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
+          "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 10 s, Bereich 5–60 s."
         },
         "sections": {
           "camera_defaults": {
@@ -528,6 +530,9 @@
     "switch": {
       "ab_alarm_sound": {
         "name": "Alarm bei ungewöhnlichem Geräusch"
+      },
+      "alarm_pir": {
+        "name": "PIR-Erkennung"
       },
       "audio_encode_control": {
         "name": "Audioaufnahme"

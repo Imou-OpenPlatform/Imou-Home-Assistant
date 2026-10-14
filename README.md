@@ -15,6 +15,8 @@
 
 This integration connects Home Assistant to Imou cameras and smart devices through the Imou Open Platform API: live video, device control, and status. You can extend it with automations and additional features.
 
+Requires Home Assistant **2025.4** or later.
+
 > **Open Platform portal:** [open.imoulife.com](https://open.imoulife.com/) — China users, see [简体中文](#zh-hans).
 
 ## Documentation
@@ -79,7 +81,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.1 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.3 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
@@ -93,8 +95,9 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Live video
   - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
   - **Collection points** — `select.collection_point` (**Go to collection point**) lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
-  - Detection: picture change, human, pet
-  - **Motion** (`binary_sensor`, `device_class: motion`) — on cameras that support picture-change or human detection. On for about 15 seconds after a picture-change / human / PIR / person-in-area / line-crossing / area-intrusion push, or off immediately on PIR-clear. Pet / vehicle alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** switches (those enable detection; this reports a detection)
+  - Detection: picture change, human, pet, PIR
+  - **PIR detection** — configuration switch on cameras that support PIR; matches the PIR Detection toggle in the Imou Life app
+  - **Motion** (`binary_sensor`, `device_class: motion`) — on cameras that support picture-change or human detection. On for about 15 seconds after a picture-change / human / PIR / person-in-area / line-crossing / area-intrusion push, or off immediately on PIR-clear. Pet / vehicle alarms do not drive it. Home Assistant restart resets it to off. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** / **PIR detection** switches (those enable detection; this reports a detection)
   - **Doorbell** (`event`, `device_class: doorbell`) — on cameras that support calling. A press or incoming call from event push fires `ring`. Unanswered calls do not. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable
   - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
@@ -133,7 +136,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - If you do not see **Motion**: that camera does not support picture-change or human detection. If the entity is **unavailable**: turn on event push and include type **alarm**. If it is available but never turns on: download **Diagnostics** and check `event_push.recent_msg_type_counts`. Newer IoT PTZ cameras often push `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection` rather than `human` / `videoMotion` — those now drive this entity. Vehicle / pet still do not. The sensor does not poll the cloud.
   - If thing-model switches or sensors freeze after a reload: event push must be on and types must include **IoT device messages**. Download **Diagnostics** and check `event_push.recent_msg_type_counts` for `iotProperty`. Uncheck that type to resume property polling.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`. v1.4.1 replaces `text.set_value` on plug countdown and max power with `number.set_value`, and `switch.turn_on` / `turn_off` on camera white light with `light.turn_on` / `light.turn_off`. Leftover `select.*_mode`, siren button, `text`, and white-light `switch` registry rows are removed on setup.
-- **Multi-lens cameras, NVRs, and gateway accessories** — each lens or NVR channel is its own device, shown under a page for the whole device; that page carries no entities of its own. An accessory is shown under the gateway it is paired to. Deleting the whole device's page stops polling it; deleting a single channel is refused, since exclusion only works per device.
+- **Multi-lens cameras, NVRs, and gateway accessories** — each lens or NVR channel is its own device, shown under a page for the whole device; that page carries no entities of its own. An accessory is shown under the gateway it is paired to. Deleting the whole device's page stops polling it; deleting a single channel is refused, since exclusion only works per device. On Home Assistant **2026.9** or later, after you update this integration to **1.4.2** or newer, reload the integration if a lens is missing **Live** or **Alarm picture**.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
 - **Record on alarm — no file** — confirm event push, the per-camera switch, and an allowlisted save folder: [Configure reference](guides/configuration.md#record-on-alarm).
@@ -160,6 +163,8 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 ## 简介
 
 本集成通过 Imou 开放平台 API，把乐橙摄像头和智能设备接入 Home Assistant：直播、控制与状态查看，也可在此基础上做自动化和扩展。
+
+需要 Home Assistant **2025.4** 或更高版本。
 
 > **开放平台入口：** [open.imou.com](https://open.imou.com/) — 海外用户请参阅 [English](#english)。
 
@@ -226,7 +231,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.1 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.3 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
@@ -240,8 +245,9 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 直播
   - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
   - **收藏点** — `select.collection_point`（**转到收藏点**）列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
-  - 检测：画面变化、人形、宠物
-  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 仅在支持画面变化或人形检测的摄像头上出现。画面变化 / 人形 / PIR / 区域人形 AI / 越线 / 区域入侵推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用。与 **画面变化** / **人形检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
+  - 检测：画面变化、人形、宠物、PIR
+  - **PIR 检测** — 支持 PIR 的摄像头在配置区提供开关，与乐橙 App 中的 PIR 检测一致
+  - **动态侦测**（`binary_sensor`，`device_class: motion`）— 仅在支持画面变化或人形检测的摄像头上出现。画面变化 / 人形 / PIR / 区域人形 AI / 越线 / 区域入侵推送后约亮 15 秒，PIR 清除立即关。宠物 / 车辆告警不驱动它。重启 Home Assistant 后复位为关。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用。与 **画面变化** / **人形检测** / **PIR 检测** 开关不同（开关是开不开检测，这个是刚才有没有检测到）
   - **门铃**（`event`，`device_class: doorbell`）— 仅在支持呼叫的摄像头上出现。事件推送里的按铃或来电会触发 `ring`。未接听不会。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用
   - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
@@ -280,7 +286,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **动态侦测** 没有实体：这台摄像头不支持画面变化或人形检测。实体在但是不可用：打开事件推送且类型含 **alarm**。实体可用但不亮：下载**诊断**查看 `event_push.recent_msg_type_counts`。较新的物模型云台常推 `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection`，而不是 `human` / `videoMotion`——这些现在会驱动该实体。车辆 / 宠物仍不会。该实体不轮询云端。
   - 物模型开关 / 传感器重载后停住：确认已开事件推送且类型含 **物模型设备消息**；下载**诊断**看 `event_push.recent_msg_type_counts` 有没有 `iotProperty`。取消勾选该类型即恢复属性轮询。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。v1.4.1 起插座倒计时和最大功率的 `text.set_value` 改为 `number.set_value`，摄像头白光灯的 `switch.turn_on` / `turn_off` 改为 `light.turn_on` / `light.turn_off`。遗留的 `select.*_mode`、警号 button、`text` 和白光灯 `switch` 注册行会在加载时删除。
-- **多目摄像头、NVR 与网关配件** — 每路镜头或 NVR 通道都是独立设备，挂在整台设备的页面下；那个页面本身不带实体。配件挂在它配对的网关下。删除整台设备的页面即停止轮询这台设备；单独删除一路通道会被拒绝，因为排除只能按设备来。
+- **多目摄像头、NVR 与网关配件** — 每路镜头或 NVR 通道都是独立设备，挂在整台设备的页面下；那个页面本身不带实体。配件挂在它配对的网关下。删除整台设备的页面即停止轮询这台设备；单独删除一路通道会被拒绝，因为排除只能按设备来。Home Assistant **2026.9** 及以上、集成已更新到 **1.4.2** 或更新版本后，若某路镜头缺少 **直播** 或 **告警图片**，请重新加载集成。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
 - **告警时录像没有文件** — 确认已开事件推送、该路镜头开关，以及保存目录已加入白名单：见 [配置项参考](guides/configuration.md#record-on-alarm-zh)。

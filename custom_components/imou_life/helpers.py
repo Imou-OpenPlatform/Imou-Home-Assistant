@@ -15,17 +15,20 @@ from pyimouapi.device import ImouDeviceSummary
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
+    DEFAULT_DORMANT_WRITE_RETRY_WAIT,
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
     callback_flags_to_event_push_types,
     imou_life_device_keys_from_ids,
 )
+from .devices import registry_row_for_key
 
 PAAS_CALL_ABILITY = "CallAbility"
 PAAS_MOTION_ABILITIES = frozenset(
@@ -33,6 +36,15 @@ PAAS_MOTION_ABILITIES = frozenset(
     for switch_type in ("motion_detect", "header_detect")
     for item in SWITCH_TYPE_ABILITY[switch_type]
 )
+
+
+def dormant_write_retry_wait_seconds(entry: ConfigEntry) -> int:
+    """Seconds to wait before retrying a control on a sleeping device."""
+    return int(
+        entry.options.get(
+            PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
+        )
+    )
 
 
 def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
@@ -86,9 +98,8 @@ def resolve_ha_device_key(
     product_id: str | None = None,
 ) -> str | None:
     """Return the first registry key that matches a registered HA device."""
-    registry = dr.async_get(hass)
     for key in imou_life_device_keys_from_ids(device_id, channel_id, product_id):
-        if registry.async_get_device(identifiers={(DOMAIN, key)}) is not None:
+        if registry_row_for_key(hass, key) is not None:
             return key
     return None
 
@@ -103,7 +114,7 @@ def resolve_ha_device_entry(
     key = resolve_ha_device_key(hass, device_id, channel_id, product_id)
     if key is None:
         return None
-    return dr.async_get(hass).async_get_device(identifiers={(DOMAIN, key)})
+    return registry_row_for_key(hass, key)
 
 
 def resolve_ha_device_name(

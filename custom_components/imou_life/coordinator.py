@@ -26,6 +26,7 @@ from .const import (
     UPDATE_TIMEOUT,
     imou_life_device_key,
 )
+from .devices import registry_row_for_key_on_entry
 from .helpers import get_selected_device_ids, iot_property_push_active
 from .repairs import async_delete_quota_issue, async_notify_imou_api_error
 from .runtime_data import ImouRuntimeData
@@ -330,13 +331,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         device_registry = dr.async_get(self.hass)
         entity_registry = er.async_get(self.hass)
         device_key = imou_life_device_key(device)
-        by_identifier = getattr(device_registry, "async_get_device_by_identifier", None)
-        if by_identifier is not None:
-            device_entry = by_identifier((DOMAIN, device_key), entry_id)
-        else:
-            device_entry = device_registry.async_get_device(
-                identifiers={(DOMAIN, device_key)}
-            )
+        device_entry = registry_row_for_key_on_entry(
+            device_registry, entry_id, device_key
+        )
         if device_entry is None:
             return False
         entries = [

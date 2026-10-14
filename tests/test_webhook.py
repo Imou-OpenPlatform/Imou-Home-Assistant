@@ -14,6 +14,7 @@ from custom_components.imou_life.const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_NOTIFY_ON_ALARM,
 )
+from custom_components.imou_life.devices import registry_row_for_key
 from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtime_data
 from custom_components.imou_life.webhook import (
     _async_build_notification_message,
@@ -1533,8 +1534,7 @@ async def test_webhook_companion_notify_opens_device_page(
         selected_devices=["SN1"],
         notify_services=["notify.mobile_app_phone"],
     )
-    registry = dr.async_get(hass)
-    device = registry.async_get_device(identifiers={(DOMAIN, "SN1_0")})
+    device = registry_row_for_key(hass, "SN1_0")
     assert device is not None
     calls = async_mock_service(hass, "notify", "mobile_app_phone")
 
@@ -1605,8 +1605,7 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
         attach=True,
         notify_services=["notify.mobile_app_phone"],
     )
-    registry = dr.async_get(hass)
-    device = registry.async_get_device(identifiers={(DOMAIN, "SN1_0")})
+    device = registry_row_for_key(hass, "SN1_0")
     assert device is not None
     hass.config.external_url = "https://ha.example.com"
     calls = async_mock_service(hass, "notify", "mobile_app_phone")

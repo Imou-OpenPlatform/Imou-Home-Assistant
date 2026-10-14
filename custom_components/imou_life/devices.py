@@ -79,13 +79,39 @@ def _registry_device_id(
     registry_key: str,
 ) -> str | None:
     """Return the device registry id for an Imou registry key, if registered."""
+    row = registry_row_for_key_on_entry(registry, config_entry_id, registry_key)
+    return row.id if row is not None else None
+
+
+def registry_row_for_key_on_entry(
+    registry: dr.DeviceRegistry,
+    config_entry_id: str,
+    registry_key: str,
+) -> DeviceEntry | None:
+    """Return the registry row for a key owned by one config entry."""
     identifier = (DOMAIN, registry_key)
     by_identifier = getattr(registry, "async_get_device_by_identifier", None)
     if by_identifier is not None:
-        row = by_identifier(identifier, config_entry_id)
-    else:
-        row = registry.async_get_device(identifiers={identifier})
-    return row.id if row is not None else None
+        return by_identifier(identifier, config_entry_id)
+    return registry.async_get_device(identifiers={identifier})
+
+
+def registry_row_for_key(hass: HomeAssistant, registry_key: str) -> DeviceEntry | None:
+    """Return the registry row for an Imou key on any loaded Imou entry.
+
+    Home Assistant 2026.9+ rejects ``async_get_device`` for custom integrations;
+    prefer ``async_get_device_by_identifier`` scoped to each Imou config entry.
+    """
+    registry = dr.async_get(hass)
+    by_identifier = getattr(registry, "async_get_device_by_identifier", None)
+    if by_identifier is not None:
+        identifier = (DOMAIN, registry_key)
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            row = by_identifier(identifier, entry.entry_id)
+            if row is not None:
+                return row
+        return None
+    return registry.async_get_device(identifiers={(DOMAIN, registry_key)})
 
 
 def _supports_via_device_id(registry: dr.DeviceRegistry) -> bool:

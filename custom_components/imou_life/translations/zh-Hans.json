@@ -107,11 +107,13 @@
         "description": "Home Assistant 多久刷新一次设备状态，以及本账号下每台摄像头的直播与云台默认值。",
         "data": {
           "enable_polling": "启用状态轮询",
-          "update_interval": "轮询间隔（秒）"
+          "update_interval": "轮询间隔（秒）",
+          "dormant_write_retry_wait_seconds": "休眠控制重试等待（秒）"
         },
         "data_description": {
           "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了物模型设备消息时，那些设备的**属性**不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态、PaaS 能力和靠 Service 读的实体仍按间隔刷新。",
-          "update_interval": "默认 300 秒，范围 30–900 秒。关闭轮询时不生效。"
+          "update_interval": "默认 300 秒，范围 30–900 秒。关闭轮询时不生效。",
+          "dormant_write_retry_wait_seconds": "设备状态为休眠且控制失败时，Home Assistant 会先等待这段时间，再发送同一命令一次。默认 10 秒，范围 5–60 秒。"
         },
         "sections": {
           "camera_defaults": {
@@ -528,6 +530,9 @@
     "switch": {
       "ab_alarm_sound": {
         "name": "异常音告警"
+      },
+      "alarm_pir": {
+        "name": "PIR 检测"
       },
       "audio_encode_control": {
         "name": "音频录制"

@@ -21,6 +21,7 @@ from homeassistant.const import EntityCategory
 # assistants expose it. Update deliberately, not to make a test pass.
 CONFIG_SWITCHES = {
     "ab_alarm_sound",
+    "alarm_pir",
     "audio_encode_control",
     "frame_reverse",
     "header_detect",

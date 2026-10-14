@@ -182,6 +182,26 @@ docs/
 releases/
 
 # Local Home Assistant runtime next to this checkout (never ship)
+config/
 log/
 www/
 custom_components/imou_life/config/
+
+# User-installed decrypt libraries (download per README; never commit)
+custom_components/imou_life/native/
+
+# Abandoned package name from old experiments
+pyimouapi_core/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+
+# Extra secret patterns (PAT files, local env)
+.env.*
+!.env.example
+*.local
+
+# Local HACS / release zips built beside the repo
+*.zip

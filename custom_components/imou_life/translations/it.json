@@ -107,11 +107,13 @@
         "description": "Quanto spesso Home Assistant aggiorna lo stato dei dispositivi, più i predefiniti di streaming live e PTZ da cui parte ogni telecamera di questo account.",
         "data": {
           "enable_polling": "Abilita interrogazione stato",
-          "update_interval": "Intervallo di interrogazione (secondi)"
+          "update_interval": "Intervallo di interrogazione (secondi)",
+          "dormant_write_retry_wait_seconds": "Attesa prima del nuovo tentativo in sospensione (secondi)"
         },
         "data_description": {
           "enable_polling": "Disattiva per saltare gli aggiornamenti periodici dal cloud. Gli stati delle entità possono diventare obsoleti. Installazione e ricaricamento recuperano comunque l'elenco dispositivi una volta. Quando il push eventi è attivo e i tipi di sottoscrizione includono i messaggi dei dispositivi IoT, le *proprietà* dei dispositivi thing-model non vengono aggiornate a questo intervallo (installazione e ricaricamento fanno comunque uno snapshot). Stato online, capacità PaaS ed entità basate su servizi continuano a essere interrogati.",
-          "update_interval": "Predefinito 300 s (5 minuti), intervallo 30–900 s. Ignorato quando l'interrogazione è disattivata."
+          "update_interval": "Predefinito 300 s (5 minuti), intervallo 30–900 s. Ignorato quando l'interrogazione è disattivata.",
+          "dormant_write_retry_wait_seconds": "Quando lo stato del dispositivo è Sospensione e un comando fallisce, Home Assistant attende questo tempo prima di inviare di nuovo lo stesso comando una volta. Predefinito 10 s, intervallo 5–60 s."
         },
         "sections": {
           "camera_defaults": {
@@ -528,6 +530,9 @@
     "switch": {
       "ab_alarm_sound": {
         "name": "Allarme suono anomalo"
+      },
+      "alarm_pir": {
+        "name": "Rilevamento PIR"
       },
       "audio_encode_control": {
         "name": "Registrazione audio"
