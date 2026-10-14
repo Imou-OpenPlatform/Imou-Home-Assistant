@@ -62,15 +62,10 @@ def test_required_keys_present(key: str) -> None:
 
 
 def test_requirement_matches_the_pinned_library() -> None:
-    """The shipped requirement has to accept the version the tests ran against."""
+    """The shipped requirement has to be the version the tests ran against."""
     from importlib.metadata import version
 
-    from packaging.requirements import Requirement
-    from packaging.version import Version
-
     (requirement,) = MANIFEST["requirements"]
-    req = Requirement(requirement)
-    assert req.name == "pyimouapi"
-    installed = Version(version("pyimouapi"))
-    assert installed in req.specifier
-    assert installed >= Version("1.4.3")
+    name, _, pinned = requirement.partition("==")
+    assert name == "pyimouapi"
+    assert pinned == version("pyimouapi")
