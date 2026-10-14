@@ -79,3 +79,15 @@ jobs:
           print(f"homeassistant=={__version__}")
           PY
       - run: uv run --no-sync pytest tests/ -q --timeout=30
+
+  # Ruleset on main requires a check named exactly "Test" (not matrix leg names).
+  test-gate:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - name: Require every HA test matrix leg
+        if: needs.test.result != 'success'
+        run: exit 1
+      - run: echo "All test matrix legs passed."
