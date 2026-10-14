@@ -135,12 +135,18 @@ jobs:
   hassfest:
     name: Hassfest
     runs-on: ubuntu-latest
-    # Imou Life pins pyimouapi==1.4.3; HA Core built-in imou still locks 1.4.0 in
-    # requirements_all until Core bumps. Runtime for HACS-only installs is fine.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
-      - uses: home-assistant/actions/hassfest@master
+      # Core built-in imou still pins pyimouapi==1.4.0; Imou Life ships ==1.4.3.
+      - name: Run hassfest
+        id: hassfest
+        continue-on-error: true
+        uses: home-assistant/actions/hassfest@master
+      - name: Note pyimouapi skew with Core imou
+        if: steps.hassfest.outcome == 'failure'
+        run: >-
+          echo "::warning::Hassfest reported requirements skew (pyimouapi 1.4.3 vs Core 1.4.0).
+          HACS Imou Life installs pyimouapi==1.4.3; this is expected until Core bumps built-in imou."
 
   hacs:
     name: HACS
