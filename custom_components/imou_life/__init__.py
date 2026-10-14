@@ -40,7 +40,11 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .devices import async_register_imou_devices, is_account_device_row
 from .event_push import async_setup_event_push, async_teardown_event_push
-from .helpers import get_selected_device_ids, parse_notify_services
+from .helpers import (
+    dormant_write_retry_wait_seconds,
+    get_selected_device_ids,
+    parse_notify_services,
+)
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -158,7 +162,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     # Registered before anything can fail so a retried setup never leaks a session.
     entry.async_on_unload(imou_client.async_close)
     device_manager = ImouDeviceManager(imou_client)
-    imou_device_manager = ImouHaDeviceManager(device_manager)
+    imou_device_manager = ImouHaDeviceManager(
+        device_manager,
+        dormant_write_retry_wait_seconds=dormant_write_retry_wait_seconds(entry),
+    )
     coordinator = ImouDataUpdateCoordinator(hass, imou_device_manager, entry)
     runtime = ImouRuntimeData(coordinator=coordinator, client=imou_client)
     runtime.reload_signature = options_reload_signature(entry.options)
@@ -251,6 +258,9 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
             entry.options.get(PARAM_NOTIFY_SERVICES)
         )
         runtime.selected_devices = get_selected_device_ids(entry)
+        runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(
+            dormant_write_retry_wait_seconds(entry)
+        )
         # Soft path never rebuilds the decoder. Clearing the sticky failure
         # flag lets a later alarm retry after the user drops the .so files in.
         if entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):

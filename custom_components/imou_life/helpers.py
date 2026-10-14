@@ -15,11 +15,13 @@ from pyimouapi.device import ImouDeviceSummary
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 from .const import (
+    DEFAULT_DORMANT_WRITE_RETRY_WAIT,
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
+    PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_SELECTED_DEVICES,
@@ -34,6 +36,15 @@ PAAS_MOTION_ABILITIES = frozenset(
     for switch_type in ("motion_detect", "header_detect")
     for item in SWITCH_TYPE_ABILITY[switch_type]
 )
+
+
+def dormant_write_retry_wait_seconds(entry: ConfigEntry) -> int:
+    """Seconds to wait before retrying a control on a sleeping device."""
+    return int(
+        entry.options.get(
+            PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
+        )
+    )
 
 
 def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:

@@ -41,6 +41,7 @@ Two things worth knowing:
 | --- | --- | --- |
 | Enable status polling | Periodically refresh device state from the cloud. Off means entity states can go stale; setup and reload still fetch the device list once. | On |
 | Polling interval | Seconds between refreshes, 30–900. Ignored while polling is off. | 300 |
+| Sleep control retry wait | When status is **Sleep** and a control fails, how long to wait before sending the same command once more. Range 5–60. | 10 |
 | Snapshot wait time | How long to wait after asking a camera for a snapshot, since the camera has to take and upload it first. Raise it if snapshots come back stale or empty. Range 1–9. | 3 |
 | Video resolution | `HD` or `SD`, used by the Live camera entity. | HD |
 | PTZ rotation duration | How far one press of a direction button moves, expressed as movement time in milliseconds. Range 100–10000. | 500 |
@@ -172,6 +173,7 @@ Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch b
 | --- | --- | --- |
 | 启用状态轮询 | 定期从云端刷新设备状态。关闭后实体状态可能过期；但初始化和重新加载仍会拉取一次设备列表。 | 开 |
 | 轮询间隔 | 两次刷新之间的秒数，30–900。轮询关闭时此项无效。 | 300 |
+| 休眠控制重试等待 | 状态为 **休眠** 且控制失败时，再次发送同一命令前的等待秒数，5–60。 | 10 |
 | 抓图等待时间 | 向摄像头请求抓图后等待多久再去取——因为摄像头要先拍好并上传。取回的图偏旧或为空时调大。范围 1–9。 | 3 |
 | 视频分辨率 | `HD` 或 `SD`，用于「直播」摄像头实体。 | HD |
 | 云台转动时长 | 方向键按一次转多远，以移动时间（毫秒）表示。范围 100–10000。 | 500 |

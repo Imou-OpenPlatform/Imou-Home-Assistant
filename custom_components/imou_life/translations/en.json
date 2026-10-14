@@ -107,11 +107,13 @@
         "description": "How often Home Assistant refreshes device status, plus the live stream and PTZ defaults every camera on this account starts from.",
         "data": {
           "enable_polling": "Enable status polling",
-          "update_interval": "Polling interval (seconds)"
+          "update_interval": "Polling interval (seconds)",
+          "dormant_write_retry_wait_seconds": "Sleep control retry wait (seconds)"
         },
         "data_description": {
           "enable_polling": "Turn off to skip periodic cloud refreshes. Entity states may become outdated. Setup and reload still fetch the device list once. When event push is on and subscribe types include IoT device messages, thing-model device *properties* are not refreshed on this interval (setup and reload still take one snapshot). Online status, PaaS abilities, and service-backed entities still poll.",
-          "update_interval": "Default 300s (5 minutes), range 30–900s. Ignored when polling is off."
+          "update_interval": "Default 300s (5 minutes), range 30–900s. Ignored when polling is off.",
+          "dormant_write_retry_wait_seconds": "When device status is Sleep and a control fails, Home Assistant waits this long before sending the same command once more. Default 10s, range 5–60s."
         },
         "sections": {
           "camera_defaults": {

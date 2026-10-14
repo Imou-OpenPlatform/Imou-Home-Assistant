@@ -44,8 +44,11 @@ from .const import (
     CONF_SD,
     DEFAULT_API_URL_REGION,
     DEFAULT_EVENT_PUSH_TYPES,
+    DEFAULT_DORMANT_WRITE_RETRY_WAIT,
     DEFAULT_LOCAL_RECORD_DURATION,
     DEFAULT_UPDATE_INTERVAL,
+    DORMANT_WRITE_RETRY_WAIT_MAX,
+    DORMANT_WRITE_RETRY_WAIT_MIN,
     DOMAIN,
     EVENT_PUSH_TYPE_OPTIONS,
     PARAM_API_URL,
@@ -55,6 +58,7 @@ from .const import (
     PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_DEVICE_PASSWORDS,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
+    PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -91,6 +95,7 @@ _ENTRY_NAME = "Imou Life Official"
 _GENERAL_OPTION_KEYS = (
     PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
+    PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_LIVE_RESOLUTION,
     PARAM_ROTATION_DURATION,
@@ -482,6 +487,16 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Required(
                     PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
+                vol.Required(
+                    PARAM_DORMANT_WRITE_RETRY_WAIT,
+                    default=DEFAULT_DORMANT_WRITE_RETRY_WAIT,
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(
+                        min=DORMANT_WRITE_RETRY_WAIT_MIN,
+                        max=DORMANT_WRITE_RETRY_WAIT_MAX,
+                    ),
+                ),
                 vol.Optional(SECTION_CAMERA_DEFAULTS): section(
                     vol.Schema(
                         {
@@ -509,6 +524,9 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_UPDATE_INTERVAL: flat.get(
                 PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
             ),
+            PARAM_DORMANT_WRITE_RETRY_WAIT: flat.get(
+                PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
+            ),
             SECTION_CAMERA_DEFAULTS: {
                 PARAM_DOWNLOAD_SNAP_WAIT_TIME: flat.get(
                     PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3
@@ -527,6 +545,9 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_ENABLE_POLLING: bool(user_input.get(PARAM_ENABLE_POLLING, True)),
             PARAM_UPDATE_INTERVAL: user_input.get(
                 PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+            ),
+            PARAM_DORMANT_WRITE_RETRY_WAIT: user_input.get(
+                PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
             ),
         }
         if SECTION_CAMERA_DEFAULTS in user_input:
