@@ -9,6 +9,10 @@
 - Cameras that support PIR detection get a **PIR detection** switch under device configuration. It follows the PIR Detection toggle in the Imou Life app.
 - When the device status is **Sleep**, a failed control is **waited on and retried once** automatically (no separate wake step in Home Assistant). Wait time is under **Configure → Polling and cameras** (default 10s, range 5–60s). Helps automations such as privacy mode on battery cameras (#101).
 
+#### Fixed
+
+- On Home Assistant **2026.9+**, alarm push and notifications match the correct camera again when resolving devices from the registry (follow-up to #102).
+
 #### Changed
 
 - Requires pyimouapi 1.4.3, installed automatically with this integration
@@ -320,6 +324,10 @@
 
 - 支持 PIR 检测的摄像头会在设备配置里出现 **PIR 检测** 开关，对应乐橙 App 里的 PIR Detection。
 - 设备状态为 **休眠** 时若控制下发失败，集成会 **等待片刻后自动重试一次**（不会在 Home Assistant 里先单独唤醒）。等待时间在 **配置 → 轮询与摄像头** 中设置（默认 10 秒，范围 5–60 秒）。便于电池摄像头配合自动化切换隐私模式等场景（#101）。
+
+#### 修复
+
+- Home Assistant **2026.9** 及以上：告警推送与通知在按设备匹配注册表时再次能正确对应到摄像头（#102 后续）。
 
 #### 变更
 
