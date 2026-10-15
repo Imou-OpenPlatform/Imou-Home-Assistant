@@ -31,7 +31,7 @@ from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import PARAM_BULB, PARAM_WHITE_LIGHT
+from .const import DOMAIN, PARAM_BULB, PARAM_WHITE_LIGHT
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
@@ -149,11 +149,17 @@ class ImouBulbLight(ImouEntity, LightEntity):
         """Return True when the bulb relay is on."""
         return bool(self._state["on"])
 
+    def _active_effect(self) -> str | None:
+        """Scene name when this bulb is on in a known scene."""
+        if not self.is_on or self._state["mode"] != MODE_SCENE:
+            return None
+        return scene_effect_name(int(self._state["scene"]))
+
     @property
     @override
     def brightness(self) -> int | None:
         """White brightness, or color brightness while in color mode."""
-        if not self.is_on:
+        if not self.is_on or self._active_effect() is not None:
             return None
         level = (
             self._state["value"]
@@ -165,9 +171,15 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @property
     @override
     def color_mode(self) -> ColorMode | None:
-        """White is color temperature. Color is hue and saturation."""
+        """White is color temperature. Color is hue and saturation.
+
+        A known scene is an effect. Home Assistant allows on/off for the color
+        mode while that effect is active, so the card does not show white.
+        """
         if not self.is_on:
             return None
+        if self._active_effect() is not None:
+            return ColorMode.ONOFF
         if self._state["mode"] == MODE_COLOR:
             return ColorMode.HS
         return ColorMode.COLOR_TEMP
@@ -192,9 +204,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @override
     def effect(self) -> str | None:
         """The active scene, when the bulb is in scene mode."""
-        if not self.is_on or self._state["mode"] != MODE_SCENE:
-            return None
-        return scene_effect_name(int(self._state["scene"]))
+        return self._active_effect()
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -209,7 +219,10 @@ class ImouBulbLight(ImouEntity, LightEntity):
                 effect=kwargs.get(ATTR_EFFECT),
             )
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_bulb_effect",
+            ) from err
         await self._async_write(payload)
 
     @override

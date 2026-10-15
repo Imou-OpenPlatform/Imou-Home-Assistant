@@ -22,10 +22,18 @@ from custom_components.imou_life.light import (
     _iter_bulbs,
     _iter_white_lights,
 )
-from homeassistant.components.light import ATTR_EFFECT, ColorMode, LightEntityFeature
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_EFFECT,
+    ColorMode,
+    LightEntityFeature,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from pyimouapi.bulb_light import (
     MODE_SCENE,
+    MODE_WHITE,
+    REF_BRIGHTNESS,
     REF_MODE,
     REF_SCENE,
     REF_SWITCH,
@@ -181,3 +189,62 @@ async def test_bulb_scene_is_one_property_write(hass: HomeAssistant) -> None:
         device,
         {REF_SWITCH: 1, REF_MODE: MODE_SCENE, REF_SCENE: 2},
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_an_active_scene_is_not_reported_as_white(hass: HomeAssistant) -> None:
+    """A scene is on/off plus an effect, so the card does not show white."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_SCENE
+    device.bulb_light["scene"] = 2
+    device.bulb_light["brightness"] = 80
+    device.bulb_light["color_temp"] = 3000
+    light = _bulb(hass, device)
+
+    assert light.color_mode is ColorMode.ONOFF
+    assert light.brightness is None
+    assert light.color_temp_kelvin is None
+    assert light.hs_color is None
+    assert light.effect == "Movie"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_an_off_bulb_hides_brightness_and_color(hass: HomeAssistant) -> None:
+    """Off means no color mode and no leftover brightness or scene."""
+    device = _bulb_device()
+    light = _bulb(hass, device)
+
+    assert light.brightness is None
+    assert light.hs_color is None
+    assert light.effect is None
+    assert light.color_temp_kelvin is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_brightness_during_a_scene_selects_white(hass: HomeAssistant) -> None:
+    """A brightness-only service call leaves the scene and writes white brightness."""
+    device = _bulb_device()
+    device.bulb_light["mode"] = MODE_SCENE
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload[REF_MODE] == MODE_WHITE
+    assert REF_BRIGHTNESS in payload
+    assert REF_SCENE not in payload
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_unknown_scene_is_not_sent(hass: HomeAssistant) -> None:
+    """An unknown scene raises a translated error and does not call the cloud."""
+    device = _bulb_device()
+    light = _bulb(hass, device)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await light.async_turn_on(**{ATTR_EFFECT: "Music"})
+
+    assert err.value.translation_key == "unknown_bulb_effect"
+    light.coordinator.device_manager.async_set_bulb_light.assert_not_called()

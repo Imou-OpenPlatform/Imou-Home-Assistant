@@ -29,6 +29,7 @@ from .const import (
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_MOTION,
+    PARAM_NOTIFY_ON_ALARM,
     PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
@@ -75,17 +76,23 @@ def async_remove_replaced_legacy_entities(
 
 
 def async_remove_bulb_relay_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop the old relay switch once the same device is a color bulb light."""
+    """Drop the old relay switch and alarm notify on a color bulb."""
     registry = er.async_get(hass)
     for device in entry.runtime_data.coordinator.devices:
         if device.bulb_light is None:
             continue
-        entity_id = registry.async_get_entity_id(
-            "switch",
-            DOMAIN,
-            f"{imou_life_device_key(device)}$switch",
-        )
-        if entity_id is not None:
+        device_key = imou_life_device_key(device)
+        for suffix in ("switch", PARAM_NOTIFY_ON_ALARM):
+            entity_id = registry.async_get_entity_id(
+                "switch",
+                DOMAIN,
+                f"{device_key}${suffix}",
+            )
+            if entity_id is None:
+                continue
+            entity_entry = registry.async_get(entity_id)
+            if entity_entry is None or entity_entry.config_entry_id != entry.entry_id:
+                continue
             registry.async_remove(entity_id)
 
 

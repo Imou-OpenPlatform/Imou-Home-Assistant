@@ -4,12 +4,17 @@
 
 ### [1.4.4]
 
+#### Breaking
+
+- A color bulb that used to be a switch is now a **Light**. That switch is removed on setup. Automations that turned the switch on or off need to use the light. Countdown on the bulb stays.
+
 #### Added
 
 - Color bulbs appear as one **Light**. You can turn it on or off, set brightness, choose a color temperature or a color, and pick a scene (daylight, night light, movie, and the other scenes from the Imou Life app). Countdown on the bulb is unchanged.
 
 #### Changed
 
+- Color bulbs do not show **Notify on alarm**. That switch is removed on setup
 - Requires pyimouapi 1.4.4, installed automatically with this integration
 
 ### [1.4.3]
@@ -330,12 +335,17 @@
 
 ### [1.4.4]
 
+#### 破坏性变更
+
+- 彩色灯泡如果以前是一个开关，加载后那个开关会去掉，请改用这盏 **灯**。还在操作那个开关的自动化需要改到这盏灯。灯泡上的倒计时仍在。
+
 #### 新增
 
 - 彩色灯泡会显示为一盏 **灯**。可以开关、调节亮度、选择色温或颜色，并选择场景（日光、夜灯、观影等，与乐橙 App 里的灯光场景一致）。灯泡上的倒计时保持不变。
 
 #### 变更
 
+- 彩色灯泡不再显示 **告警时通知**。已有的这个开关会在加载时去掉
 - 需要 pyimouapi 1.4.4，随本集成自动安装
 
 ### [1.4.3]

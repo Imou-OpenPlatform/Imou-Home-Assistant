@@ -669,6 +669,9 @@
     "switch_operation_failed": {
       "message": "Imou hat die Schalteränderung abgelehnt: {error}"
     },
+    "unknown_bulb_effect": {
+      "message": "Diese Leuchte hat diese Szene nicht."
+    },
     "select_option_failed": {
       "message": "Imou hat die neue Option abgelehnt: {error}"
     },

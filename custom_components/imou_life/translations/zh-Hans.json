@@ -669,6 +669,9 @@
     "switch_operation_failed": {
       "message": "Imou 拒绝了此开关操作：{error}"
     },
+    "unknown_bulb_effect": {
+      "message": "这盏灯没有这个场景。"
+    },
     "select_option_failed": {
       "message": "Imou 拒绝了此选项：{error}"
     },

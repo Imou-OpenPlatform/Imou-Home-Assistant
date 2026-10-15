@@ -666,6 +666,9 @@
     "invalid_auth": {
       "message": "Imou a rejeté l'identifiant et le secret de l'application"
     },
+    "unknown_bulb_effect": {
+      "message": "Cette lampe n'a pas cette scène."
+    },
     "switch_operation_failed": {
       "message": "Imou a rejeté le changement d'interrupteur : {error}"
     },

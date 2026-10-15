@@ -168,8 +168,12 @@ def _iter_local_record_switches(
 def _iter_notify_on_alarm_switches(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
-    """One HA-only notify switch per Imou device."""
-    return [(PARAM_NOTIFY_ON_ALARM, device) for device in coordinator.devices]
+    """One HA-only notify switch per device that can raise an alarm."""
+    return [
+        (PARAM_NOTIFY_ON_ALARM, device)
+        for device in coordinator.devices
+        if device.bulb_light is None
+    ]
 
 
 class ImouSwitch(ImouEntity, SwitchEntity):

@@ -9,7 +9,6 @@ from custom_components.imou_life.const import (
     PARAM_LINKAGE_SIREN,
     PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_MOTION_DETECT,
-    PARAM_NOTIFY_ON_ALARM,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
@@ -44,6 +43,7 @@ def _mock_coordinator(devices: list[ImouHaDevice]) -> MagicMock:
 def _mock_device(switches: dict[str, dict]) -> ImouHaDevice:
     device = MagicMock(spec=ImouHaDevice)
     device.switches = switches
+    device.bulb_light = None
     return device
 
 
@@ -81,15 +81,14 @@ def test_switch_types_include_alarm_pir() -> None:
     assert alarm.entity_category is EntityCategory.CONFIG
 
 
-def test_iter_notify_on_alarm_covers_every_device() -> None:
-    """Notify-on-alarm is HA-only and is created for cameras and non-cameras."""
+def test_iter_notify_on_alarm_skips_color_bulbs() -> None:
+    """Cameras and plugs keep alarm notify. A color bulb has no alarm."""
     camera = _mock_device({})
     camera.channel_id = "0"
     plug = _mock_device({})
     plug.channel_id = None
-    pairs = _iter_notify_on_alarm_switches(_mock_coordinator([camera, plug]))
-    assert [key for key, _device in pairs] == [
-        PARAM_NOTIFY_ON_ALARM,
-        PARAM_NOTIFY_ON_ALARM,
-    ]
+    bulb = _mock_device({})
+    bulb.channel_id = None
+    bulb.bulb_light = {"on": False}
+    pairs = _iter_notify_on_alarm_switches(_mock_coordinator([camera, plug, bulb]))
     assert [device for _key, device in pairs] == [camera, plug]
