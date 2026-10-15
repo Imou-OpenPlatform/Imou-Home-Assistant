@@ -525,6 +525,9 @@
     "light": {
       "white_light": {
         "name": "White light"
+      },
+      "bulb": {
+        "name": "Light"
       }
     },
     "switch": {

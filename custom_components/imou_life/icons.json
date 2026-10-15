@@ -39,6 +39,9 @@
 		"light": {
 			"white_light": {
 				"default": "mdi:light-flood-down"
+			},
+			"bulb": {
+				"default": "mdi:lightbulb"
 			}
 		},
 		"switch": {

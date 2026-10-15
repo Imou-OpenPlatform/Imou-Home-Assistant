@@ -74,6 +74,21 @@ def async_remove_replaced_legacy_entities(
             registry.async_remove(entity_entry.entity_id)
 
 
+def async_remove_bulb_relay_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop the old relay switch once the same device is a color bulb light."""
+    registry = er.async_get(hass)
+    for device in entry.runtime_data.coordinator.devices:
+        if device.bulb_light is None:
+            continue
+        entity_id = registry.async_get_entity_id(
+            "switch",
+            DOMAIN,
+            f"{imou_life_device_key(device)}$switch",
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
+
 def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Drop 1.4.0 Motion (and ungated Doorbell) rows this camera no longer offers.
 
@@ -181,6 +196,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
     async_remove_ungated_push_entities(hass, entry)
+    async_remove_bulb_relay_switches(hass, entry)
 
     @callback
     def _async_register_devices(devices: list[ImouHaDevice]) -> None:

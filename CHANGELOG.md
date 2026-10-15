@@ -2,6 +2,16 @@
 
 ## English
 
+### [1.4.4]
+
+#### Added
+
+- Color bulbs appear as one **Light**. You can turn it on or off, set brightness, choose a color temperature or a color, and pick a scene (daylight, night light, movie, and the other scenes from the Imou Life app). Countdown on the bulb is unchanged.
+
+#### Changed
+
+- Requires pyimouapi 1.4.4, installed automatically with this integration
+
 ### [1.4.3]
 
 #### Added
@@ -317,6 +327,16 @@
 ---
 
 ## 中文
+
+### [1.4.4]
+
+#### 新增
+
+- 彩色灯泡会显示为一盏 **灯**。可以开关、调节亮度、选择色温或颜色，并选择场景（日光、夜灯、观影等，与乐橙 App 里的灯光场景一致）。灯泡上的倒计时保持不变。
+
+#### 变更
+
+- 需要 pyimouapi 1.4.4，随本集成自动安装
 
 ### [1.4.3]
 
