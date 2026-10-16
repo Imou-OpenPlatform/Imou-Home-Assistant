@@ -207,19 +207,44 @@ def async_add_imou_entities(
     """
     coordinator = entry.runtime_data.coordinator
 
+    def _live_unique_ids() -> set[str]:
+        """Unique ids whose entities are loaded, not just left in the registry.
+
+        A restart restores registry rows before platforms add them. Those rows
+        still exist, but their state is marked restored, so they must be added
+        again. A later discovery only skips entities that are actually live.
+        """
+        hass = getattr(coordinator, "hass", None)
+        states = getattr(hass, "states", None)
+        if hass is None or not hasattr(states, "get"):
+            return set()
+        try:
+            registry = er.async_get(hass)
+            entries = er.async_entries_for_config_entry(registry, entry.entry_id)
+        except (KeyError, TypeError, AttributeError, RuntimeError):
+            return set()
+        live: set[str] = set()
+        for entity in entries:
+            unique_id = getattr(entity, "unique_id", None)
+            entity_id = getattr(entity, "entity_id", None)
+            if not isinstance(unique_id, str) or not isinstance(entity_id, str):
+                continue
+            state = states.get(entity_id)
+            attributes = getattr(state, "attributes", None)
+            if not isinstance(attributes, dict) or attributes.get("restored"):
+                continue
+            live.add(unique_id)
+        return live
+
     def _async_add(new_devices: list[ImouHaDevice]) -> None:
         device_keys = {imou_life_device_key(device) for device in new_devices}
-        registry = er.async_get(coordinator.hass)
-        existing = {
-            entity.unique_id
-            for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
-        }
+        live = _live_unique_ids()
         async_add_entities(
             entity_class(coordinator, entry, entity_key, device)
             for entity_key, device in iter_pairs(coordinator)
             if imou_life_device_key(device) in device_keys
             and f"{imou_life_device_key(device)}${_entity_suffix(entity_key)}"
-            not in existing
+            not in live
         )
 
     coordinator.new_device_callbacks.append(_async_add)

@@ -16,11 +16,14 @@ from homeassistant.components.light import (
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
     MAX_KELVIN,
     MIN_KELVIN,
     MODE_COLOR,
     MODE_SCENE,
+    REF_MODE,
+    REF_SWITCH,
     percent_to_brightness,
     properties_for_turn_off,
     properties_for_turn_on,
@@ -206,18 +209,42 @@ class ImouBulbLight(ImouEntity, LightEntity):
         """The active scene, when the bulb is in scene mode."""
         return self._active_effect()
 
+    def _hs_is_white_preview(self, hs: tuple[float, float]) -> bool:
+        """True when the color wheel is still showing the white color temperature.
+
+        In white mode Home Assistant draws the wheel from the color temperature.
+        The first touch repeats that color. Applying it would replace the saved
+        color hue and saturation.
+        """
+        if int(self._state["mode"]) == MODE_COLOR:
+            return False
+        derived = color_temperature_to_hs(int(self._state["color_temp"]))
+        hue_delta = abs(hs[0] - derived[0]) % 360
+        hue_delta = min(hue_delta, 360 - hue_delta)
+        return hue_delta <= 1.5 and abs(hs[1] - derived[1]) <= 1.5
+
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the bulb on and apply color, temperature, brightness, or a scene."""
-        hs = kwargs.get(ATTR_HS_COLOR)
+        raw_hs = kwargs.get(ATTR_HS_COLOR)
+        hs = (float(raw_hs[0]), float(raw_hs[1])) if raw_hs is not None else None
+        preview = (
+            hs is not None
+            and kwargs.get(ATTR_COLOR_TEMP_KELVIN) is None
+            and kwargs.get(ATTR_EFFECT) is None
+            and self._hs_is_white_preview(hs)
+        )
         try:
-            payload = properties_for_turn_on(
-                self._state,
-                brightness=kwargs.get(ATTR_BRIGHTNESS),
-                color_temp_kelvin=kwargs.get(ATTR_COLOR_TEMP_KELVIN),
-                hs_color=(float(hs[0]), float(hs[1])) if hs is not None else None,
-                effect=kwargs.get(ATTR_EFFECT),
-            )
+            if preview:
+                payload = {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+            else:
+                payload = properties_for_turn_on(
+                    self._state,
+                    brightness=kwargs.get(ATTR_BRIGHTNESS),
+                    color_temp_kelvin=kwargs.get(ATTR_COLOR_TEMP_KELVIN),
+                    hs_color=hs,
+                    effect=kwargs.get(ATTR_EFFECT),
+                )
         except ValueError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

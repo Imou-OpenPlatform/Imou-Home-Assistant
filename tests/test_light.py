@@ -24,16 +24,21 @@ from custom_components.imou_life.light import (
 )
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
+    ATTR_HS_COLOR,
     ColorMode,
     LightEntityFeature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
+    MODE_COLOR,
     MODE_SCENE,
     MODE_WHITE,
     REF_BRIGHTNESS,
+    REF_COLOR_TEMP,
     REF_MODE,
     REF_SCENE,
     REF_SWITCH,
@@ -235,6 +240,47 @@ async def test_brightness_during_a_scene_selects_white(hass: HomeAssistant) -> N
     assert payload[REF_MODE] == MODE_WHITE
     assert REF_BRIGHTNESS in payload
     assert REF_SCENE not in payload
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_color_temperature_does_not_change_brightness(
+    hass: HomeAssistant,
+) -> None:
+    """A color-temperature change stays in white mode and leaves brightness."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_WHITE
+    device.bulb_light["brightness"] = 21
+    device.bulb_light["value"] = 3
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_COLOR_TEMP_KELVIN: 4000})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_WHITE, REF_COLOR_TEMP: 4000}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_white_preview_opens_the_saved_color(hass: HomeAssistant) -> None:
+    """The color wheel's first color is the color temperature, not the saved color."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_WHITE
+    device.bulb_light["color_temp"] = 4000
+    device.bulb_light["hue"] = 200
+    device.bulb_light["saturation"] = 80
+    device.bulb_light["value"] = 40
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_HS_COLOR: color_temperature_to_hs(4000)})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+    assert "132100" not in payload
+    assert "132300" not in payload
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

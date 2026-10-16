@@ -72,6 +72,56 @@ def test_entities_are_added_for_the_known_devices() -> None:
     assert added_devices(async_add_entities) == [["dev1", "dev2"]]
 
 
+def test_restored_registry_rows_are_added_again(monkeypatch) -> None:
+    """A previous run's registry row is restored, not loaded, so setup adds it."""
+    entry = make_entry([make_device("dev1")])
+    async_add_entities = MagicMock()
+    restored = MagicMock()
+    restored.unique_id = "dev1_0$power"
+    restored.entity_id = "sensor.dev1_power"
+    state = MagicMock()
+    state.attributes = {"restored": True}
+    entry.runtime_data.coordinator.hass.states.get.return_value = state
+    monkeypatch.setattr(
+        "custom_components.imou_life.entity.er.async_get", lambda hass: MagicMock()
+    )
+    monkeypatch.setattr(
+        "custom_components.imou_life.entity.er.async_entries_for_config_entry",
+        lambda registry, entry_id: [restored],
+    )
+
+    async_add_imou_entities(
+        entry, async_add_entities, FakeEntity, iter_one_entity_per_device
+    )
+
+    assert added_devices(async_add_entities) == [["dev1"]]
+
+
+def test_live_registry_rows_are_not_added_again(monkeypatch) -> None:
+    """An entity that is already reporting state must not be added twice."""
+    entry = make_entry([make_device("dev1")])
+    async_add_entities = MagicMock()
+    live = MagicMock()
+    live.unique_id = "dev1_0$power"
+    live.entity_id = "sensor.dev1_power"
+    state = MagicMock()
+    state.attributes = {}
+    entry.runtime_data.coordinator.hass.states.get.return_value = state
+    monkeypatch.setattr(
+        "custom_components.imou_life.entity.er.async_get", lambda hass: MagicMock()
+    )
+    monkeypatch.setattr(
+        "custom_components.imou_life.entity.er.async_entries_for_config_entry",
+        lambda registry, entry_id: [live],
+    )
+
+    async_add_imou_entities(
+        entry, async_add_entities, FakeEntity, iter_one_entity_per_device
+    )
+
+    assert added_devices(async_add_entities) == [[]]
+
+
 def test_later_discovery_adds_only_the_new_device() -> None:
     """A device discovered on a later poll must not re-add existing entities."""
     entry = make_entry([make_device("dev1")])
