@@ -11,6 +11,7 @@
 #### Changed
 
 - Color bulbs do not show **Notify on alarm**
+- Sleep control retry wait defaults to 5 seconds. Change it under **Configure → Polling and cameras** (range 5–60s)
 - Requires pyimouapi 1.4.4, installed automatically with this integration
 
 #### Fixed
@@ -346,6 +347,7 @@
 #### 变更
 
 - 彩色灯泡不显示 **告警时通知**
+- 休眠时控制失败后的重试等待默认为 5 秒。可在 **配置 → 轮询与摄像头** 里修改（范围 5–60 秒）
 - 需要 pyimouapi 1.4.4，随本集成自动安装
 
 #### 修复
