@@ -17,6 +17,14 @@
 - Color bulbs do not show **Notify on alarm**. That switch is removed on setup
 - Requires pyimouapi 1.4.4, installed automatically with this integration
 
+#### Fixed
+
+- A cloud read that fails no longer turns a switch off, shows the battery as empty, or clears night vision
+- Deleting one device while every device is included no longer freezes the rest of the account. Devices you bind later still show up
+- The siren only offers the actions that device has, and its state is shown as assumed
+- The countdown no longer jumps back up on each status refresh
+- An alarm that arrives while the integration is still starting is delivered once the devices are ready
+
 ### [1.4.3]
 
 #### Added
@@ -347,6 +355,14 @@
 
 - 彩色灯泡不再显示 **告警时通知**。已有的这个开关会在加载时去掉
 - 需要 pyimouapi 1.4.4，随本集成自动安装
+
+#### 修复
+
+- 云端暂时读失败时，开关不会被关掉，电量不会变成空，夜视模式也不会被清空
+- 在包含全部设备时删掉一台，不会把当时的设备冻成固定名单。之后新绑定的设备仍会出现
+- 警笛只提供这台设备实际有的开或关，状态显示为假定
+- 倒计时不再在每次刷新时往回跳
+- 集成还在启动时收到的告警，会在设备准备好之后补上
 
 ### [1.4.3]
 

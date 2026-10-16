@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntry
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
@@ -28,6 +29,7 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_EXCLUDED_DEVICES,
     PARAM_MOTION,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_NOTIFY_SERVICES,
@@ -43,6 +45,7 @@ from .devices import async_register_imou_devices, is_account_device_row
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import (
     dormant_write_retry_wait_seconds,
+    get_excluded_device_ids,
     get_selected_device_ids,
     parse_notify_services,
 )
@@ -149,6 +152,12 @@ def options_reload_signature(options: Mapping[str, Any]) -> tuple[object, ...]:
     else:
         selected_sig = selected
     event_types = options.get(PARAM_EVENT_PUSH_TYPES) or []
+    excluded = options.get(PARAM_EXCLUDED_DEVICES) or []
+    excluded_sig = (
+        tuple(sorted(str(item) for item in excluded))
+        if isinstance(excluded, list)
+        else ()
+    )
     return (
         bool(options.get(PARAM_ENABLE_POLLING, True)),
         int(options.get(PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)),
@@ -156,6 +165,7 @@ def options_reload_signature(options: Mapping[str, Any]) -> tuple[object, ...]:
         bool(options.get(PARAM_ENABLE_EVENT_PUSH)),
         str(options.get(PARAM_WEBHOOK_URL) or ""),
         tuple(event_types),
+        excluded_sig,
     )
 
 
@@ -180,6 +190,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
         entry.data[PARAM_APP_ID],
         entry.data[PARAM_APP_SECRET],
         entry.data[PARAM_API_URL],
+        session=async_get_clientsession(hass),
     )
     # Registered before anything can fail so a retried setup never leaks a session.
     entry.async_on_unload(imou_client.async_close)
@@ -192,6 +203,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     runtime = ImouRuntimeData(coordinator=coordinator, client=imou_client)
     runtime.reload_signature = options_reload_signature(entry.options)
     entry.runtime_data = runtime
+    runtime.push_ready = False
 
     try:
         await async_setup_event_push(hass, entry, imou_client, runtime)
@@ -220,6 +232,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(_async_drop_register_callback)
     async_register_imou_devices(hass, entry, coordinator.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    runtime.push_ready = True
+    from .webhook import async_flush_pending_alarms
+
+    async_flush_pending_alarms(hass, runtime)
 
     @callback
     def _async_keep_polling() -> None:
@@ -276,6 +292,16 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Apply option changes, reloading only when setup-time settings change."""
     runtime = get_runtime_data(entry)
     new_signature = options_reload_signature(entry.options)
+    if runtime is not None and runtime.defer_reload:
+        runtime.reload_pending = new_signature != runtime.reload_signature
+        runtime.notify_services = parse_notify_services(
+            entry.options.get(PARAM_NOTIFY_SERVICES)
+        )
+        runtime.selected_devices = get_selected_device_ids(entry)
+        runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(
+            dormant_write_retry_wait_seconds(entry)
+        )
+        return
     if runtime is not None and runtime.reload_signature == new_signature:
         runtime.notify_services = parse_notify_services(
             entry.options.get(PARAM_NOTIFY_SERVICES)
@@ -394,10 +420,17 @@ async def async_remove_config_entry_device(
         # discovered this session): nothing to exclude — allow the registry drop.
         if device_id not in all_ids:
             return True
-        selected = [i for i in sorted(all_ids) if i != device_id]
-    else:
-        selected = [i for i in selected if i != device_id]
+        # Remember the exclusion. Writing the rest of the account as an
+        # allow-list would hide devices bound later.
+        excluded = sorted(get_excluded_device_ids(config_entry) | {device_id})
+        hass.config_entries.async_update_entry(
+            config_entry,
+            options={**config_entry.options, PARAM_EXCLUDED_DEVICES: excluded},
+        )
+        _LOGGER.debug("Excluded device %s while polling all devices", device_id)
+        return True
 
+    selected = [i for i in selected if i != device_id]
     hass.config_entries.async_update_entry(
         config_entry,
         options={**config_entry.options, PARAM_SELECTED_DEVICES: selected},

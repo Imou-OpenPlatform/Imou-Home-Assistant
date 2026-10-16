@@ -21,7 +21,7 @@ from .entity import ImouEntity, async_add_imou_entities
 
 _LOGGER = logging.getLogger(__package__)
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 _MODE_TO_STATE = {
     "home": AlarmControlPanelState.ARMED_HOME,

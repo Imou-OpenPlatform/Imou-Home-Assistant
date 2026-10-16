@@ -14,6 +14,7 @@ from custom_components.imou_life import (
 )
 from custom_components.imou_life.const import (
     DOMAIN,
+    PARAM_EXCLUDED_DEVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
 )
@@ -258,7 +259,10 @@ async def test_remove_device_updates_selected_devices(hass) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_remove_device_materializes_allow_list_when_all_selected(hass) -> None:
-    """When selection means all devices, remove persists remaining ids as allow-list."""
+    """When selection means all devices, remove records an exclusion.
+
+    Writing every other id as an allow-list would hide devices bound later.
+    """
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
 
@@ -279,8 +283,9 @@ async def test_remove_device_materializes_allow_list_when_all_selected(hass) -> 
     )
 
     assert await async_remove_config_entry_device(hass, entry, device_entry) is True
-    assert entry.options[PARAM_SELECTED_DEVICES] == ["d2"]
-    assert entry.runtime_data.selected_devices == ["d2"]
+    assert PARAM_SELECTED_DEVICES not in entry.options
+    assert entry.options[PARAM_EXCLUDED_DEVICES] == ["d1"]
+    assert entry.runtime_data.selected_devices is None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

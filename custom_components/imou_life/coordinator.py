@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from collections.abc import Callable, Iterable
 from datetime import timedelta
@@ -26,12 +27,51 @@ from .const import (
     UPDATE_TIMEOUT,
     imou_life_device_key,
 )
-from .devices import registry_row_for_key_on_entry
-from .helpers import get_selected_device_ids, iot_property_push_active
+from .devices import (
+    async_register_imou_devices,
+    registry_row_for_key_on_entry,
+)
+from .helpers import (
+    get_excluded_device_ids,
+    get_selected_device_ids,
+    iot_property_push_active,
+)
 from .repairs import async_delete_quota_issue, async_notify_imou_api_error
 from .runtime_data import ImouRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _device_identity(
+    device: ImouHaDevice,
+) -> tuple[str, str | None, str, str] | None:
+    """Return name, model, and firmware when they are real strings."""
+    values = (
+        device.device_name,
+        device.channel_name,
+        device.model,
+        device.swversion,
+    )
+    if not all(value is None or isinstance(value, str) for value in values):
+        return None
+    name, channel_name, model, swversion = values
+    if (
+        not isinstance(name, str)
+        or not isinstance(model, str)
+        or not isinstance(swversion, str)
+    ):
+        return None
+    channel = channel_name if isinstance(channel_name, str) else None
+    return (name, channel, model, swversion)
+
+
+def _device_ability(device: ImouHaDevice) -> tuple[str, str] | None:
+    """Return ability strings, or None when the device object is not populated."""
+    device_ability = device.device_ability
+    channel_ability = device.channel_ability
+    if not isinstance(device_ability, str) or not isinstance(channel_ability, str):
+        return None
+    return (device_ability, channel_ability)
 
 
 class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
@@ -87,18 +127,23 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     def _filter_devices(self, devices_list: list[ImouHaDevice]) -> list[ImouHaDevice]:
         """Apply selected-devices filter from config entry options or data."""
         selected_ids = get_selected_device_ids(self.config_entry)
-        if selected_ids is None:
-            return devices_list
-        if selected_ids:
-            selected_set = set(selected_ids)
-            filtered = [d for d in devices_list if d.device_id in selected_set]
+        excluded = get_excluded_device_ids(self.config_entry)
+        devices = devices_list
+        if selected_ids is not None:
+            if not selected_ids:
+                devices = []
+            else:
+                selected_set = set(selected_ids)
+                devices = [d for d in devices if d.device_id in selected_set]
+        if excluded:
+            devices = [d for d in devices if d.device_id not in excluded]
+        if len(devices) != len(devices_list):
             _LOGGER.debug(
                 "Device filter active: %d/%d devices selected for polling",
-                len(filtered),
+                len(devices),
                 len(devices_list),
             )
-            return filtered
-        return []
+        return devices
 
     def _discovery_is_due(self) -> bool:
         """Whether it is time to look for devices added to or gone from the account."""
@@ -122,7 +167,11 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                     fetch_ability_refs=first_discovery
                 )
         except TimeoutError as err:
-            raise UpdateFailed(f"Timeout while fetching data: {err}") from err
+            if first_discovery:
+                raise UpdateFailed(f"Timeout while fetching data: {err}") from err
+            # Same as a later listing error: keep the entities we already have.
+            _LOGGER.warning("Timeout while listing Imou devices: %s", err)
+            return
         except InvalidAppIdOrSecretException as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=DOMAIN,
@@ -160,7 +209,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                         fetch_ability_refs=new_ids
                     )
             except TimeoutError as err:
-                raise UpdateFailed(f"Timeout while fetching data: {err}") from err
+                _LOGGER.warning(
+                    "Timeout while loading new Imou device details: %s", err
+                )
+                for key in new_keys:
+                    fresh_by_key.pop(key, None)
+                self._last_discovery = None
+                self._async_add_remove_devices(fresh_by_key, account_by_key)
+                return
             except InvalidAppIdOrSecretException as err:
                 raise ConfigEntryAuthFailed(
                     translation_domain=DOMAIN,
@@ -195,6 +251,8 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
             )
         self._async_add_remove_devices(fresh_by_key, account_by_key)
+        await self._async_refresh_known_devices(fresh_by_key)
+        await self._async_retry_event_maps()
 
     async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
         """Fetch product-model events so doorbell / motion can be gated at setup."""
@@ -281,15 +339,21 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         current_keys = set(fresh_by_key)
         known_keys = set(self.devices_by_key)
+        # A device that is not being polled can still leave the account. The
+        # polling set does not change, so this has to run even when the keys match.
+        self._async_detach_registry_devices_missing_from(account_by_key)
 
         if current_keys == known_keys:
             return
 
         if removed_keys := known_keys - current_keys:
             _LOGGER.debug("Removed Imou device(s): %s", ", ".join(removed_keys))
+            removed_devices = [
+                self.devices_by_key[device_key] for device_key in removed_keys
+            ]
             for device_key in removed_keys:
                 del self.devices_by_key[device_key]
-            self._async_detach_registry_devices_missing_from(account_by_key)
+            self._forget_iot_details(removed_devices)
 
         if new_keys := current_keys - known_keys:
             _LOGGER.debug("New Imou device(s) found: %s", ", ".join(new_keys))
@@ -324,6 +388,114 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 device_id=device.id,
                 remove_config_entry_id=self.config_entry.entry_id,
             )
+
+    async def _async_refresh_known_devices(
+        self, fresh_by_key: dict[str, ImouHaDevice]
+    ) -> None:
+        """Update name and firmware, and reload abilities when they change."""
+        identity_changed: list[ImouHaDevice] = []
+        ability_ids: set[str] = set()
+        for key, fresh in fresh_by_key.items():
+            current = self.devices_by_key.get(key)
+            if current is None:
+                continue
+            current_identity = _device_identity(current)
+            fresh_identity = _device_identity(fresh)
+            if (
+                current_identity is not None
+                and fresh_identity is not None
+                and current_identity != fresh_identity
+            ):
+                current.apply_identity(fresh)
+                identity_changed.append(current)
+            current_ability = _device_ability(current)
+            fresh_ability = _device_ability(fresh)
+            if (
+                current_ability is not None
+                and fresh_ability is not None
+                and current_ability != fresh_ability
+            ):
+                ability_ids.add(fresh.device_id)
+        if identity_changed:
+            async_register_imou_devices(self.hass, self.config_entry, identity_changed)
+        if not ability_ids:
+            return
+        try:
+            async with asyncio.timeout(UPDATE_TIMEOUT):
+                detailed = await self._device_manager.async_get_devices(
+                    fetch_ability_refs=ability_ids
+                )
+        except InvalidAppIdOrSecretException as err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from err
+        except (TimeoutError, ImouException) as err:
+            _LOGGER.warning("Could not refresh changed Imou device abilities: %s", err)
+            return
+        refreshed: list[ImouHaDevice] = []
+        for device in self._filter_devices(detailed):
+            key = imou_life_device_key(device)
+            current = self.devices_by_key.get(key)
+            if current is None:
+                continue
+            removed = current.replace_capabilities(device)
+            self._async_remove_entity_suffixes(key, removed)
+            refreshed.append(current)
+        for callback in self.new_device_callbacks:
+            callback(refreshed)
+
+    async def _async_retry_event_maps(self) -> None:
+        """Retry product-model events that failed earlier, then add entities."""
+        delegate = self._device_manager.delegate
+        ensure = getattr(delegate, "async_ensure_event_map", None)
+        cached = getattr(delegate, "cached_event_map", None)
+        if not inspect.iscoroutinefunction(ensure) or not callable(cached):
+            return
+        gained: set[str] = set()
+        seen: set[str] = set()
+        for device in self.devices_by_key.values():
+            product_id = device.product_id
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            if cached(product_id):
+                continue
+            await ensure(product_id)
+            if cached(product_id):
+                gained.add(product_id)
+        if not gained:
+            return
+        ready = [
+            device
+            for device in self.devices_by_key.values()
+            if device.product_id in gained
+        ]
+        for callback in self.new_device_callbacks:
+            callback(ready)
+
+    def _forget_iot_details(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Allow a device that left to fetch detail again when it returns."""
+        resolve = self._device_manager._resolve_device_id
+        remaining = {resolve(device) for device in self.devices_by_key.values()}
+        for device in devices:
+            physical_id = resolve(device)
+            if physical_id not in remaining:
+                self._iot_detail_fetched.discard(physical_id)
+
+    def _async_remove_entity_suffixes(
+        self, device_key: str, suffixes: list[str]
+    ) -> None:
+        """Drop registry rows for entity types this device no longer exposes."""
+        if not suffixes:
+            return
+        wanted = {f"{device_key}${suffix}" for suffix in suffixes}
+        registry = er.async_get(self.hass)
+        for entity in list(
+            er.async_entries_for_config_entry(registry, self.config_entry.entry_id)
+        ):
+            if entity.unique_id in wanted:
+                registry.async_remove(entity.entity_id)
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""

@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import UTC, datetime, tzinfo
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiohttp import web
@@ -38,6 +39,7 @@ from .const import (
 from .helpers import (
     alarm_type_option_key,
     fill_template,
+    get_excluded_device_ids,
     get_selected_device_ids,
     resolve_ha_device_entry,
     resolve_ha_device_key,
@@ -52,10 +54,19 @@ from .runtime_data import ImouRuntimeData, get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 _PUSH_SECRET_KEYS = frozenset({"token", "accessToken", "access_token"})
+_PENDING_ALARM_LIMIT = 32
+
+
+def _redact_url(value: str) -> str:
+    """Drop the query string. Alarm picture URLs carry their authorization there."""
+    parsed = urlsplit(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return value
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def _redact_push_secrets(value: Any) -> Any:
-    """Copy a push payload, replacing token-like fields with ``***``."""
+    """Copy a push payload, replacing tokens and picture-url queries."""
     if isinstance(value, dict):
         return {
             key: (
@@ -65,6 +76,8 @@ def _redact_push_secrets(value: Any) -> Any:
         }
     if isinstance(value, list):
         return [_redact_push_secrets(item) for item in value]
+    if isinstance(value, str) and value.startswith(("http://", "https://")):
+        return _redact_url(value)
     return value
 
 
@@ -520,6 +533,26 @@ def _apply_iot_property_push(
         coordinator.async_update_listeners()
 
 
+def _async_publish_alarm(
+    hass: HomeAssistant, runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> None:
+    """Fire the alarm, or keep it until entities have subscribed."""
+    if runtime.push_ready:
+        hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
+        return
+    if len(runtime.pending_alarms) >= _PENDING_ALARM_LIMIT:
+        runtime.pending_alarms.pop(0)
+    runtime.pending_alarms.append(dict(event_data))
+
+
+def async_flush_pending_alarms(hass: HomeAssistant, runtime: ImouRuntimeData) -> None:
+    """Deliver alarms that arrived while platforms were still starting."""
+    pending = runtime.pending_alarms
+    runtime.pending_alarms = []
+    for event_data in pending:
+        hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
+
+
 async def _async_dispatch_imou_push_bound(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -558,7 +591,7 @@ async def _async_dispatch_imou_push(
             _apply_iot_property_push(runtime, event_data)
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
         if is_alarm:
-            hass.bus.async_fire(EVENT_IMOU_ALARM, event_data)
+            _async_publish_alarm(hass, runtime, event_data)
             if _notify_on_alarm_enabled(hass, event_data):
                 web_notified = False
                 if thumbnail_local and _has_web_drawer_target(runtime.notify_services):
@@ -629,6 +662,10 @@ async def async_handle_imou_webhook(
     # Filter: None = all devices; [] = none; otherwise allow-list.
     # Prefer entry.options over runtime so a just-saved selection applies
     # before the full reload finishes (same race as enable_event_push).
+    if device_id and device_id in get_excluded_device_ids(entry):
+        _LOGGER.debug("Ignoring push from excluded device %s", device_id)
+        return web.Response(status=200, text="ok")
+
     selected_devices = get_selected_device_ids(entry)
     if selected_devices is not None and (
         not device_id or device_id not in selected_devices

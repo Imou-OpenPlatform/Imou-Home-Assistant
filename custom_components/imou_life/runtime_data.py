@@ -41,6 +41,13 @@ class ImouRuntimeData:
     # decrypt switch, notify targets, camera defaults, local record path) are
     # read from entry.options on use or refreshed in place.
     reload_signature: tuple[object, ...] = ()
+    # Options flow saves each page immediately. Defer the reload until the
+    # dialog closes so the next page does not use a client that is unloading.
+    defer_reload: bool = False
+    reload_pending: bool = False
+    # Alarm bus events that arrived before entities subscribed.
+    push_ready: bool = True
+    pending_alarms: list[dict] = field(default_factory=list)
     push_dispatch_sema: asyncio.Semaphore = field(
         default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
     )

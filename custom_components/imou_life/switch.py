@@ -40,7 +40,7 @@ from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 from .helpers import camera_channel_devices
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 # Detection, recording and indicator toggles are device settings rather than
 # controls, so they belong under the device's configuration section. Privacy

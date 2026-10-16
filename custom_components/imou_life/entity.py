@@ -9,6 +9,7 @@ from typing import Any, NoReturn, override
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -180,6 +181,14 @@ class ImouAlarmPushEntity(ImouEntity):
         self._set_push_state(state, auto_off=state)
 
 
+def _entity_suffix(entity_key: Any) -> str:
+    """Return the unique-id suffix for a platform iterator key."""
+    key = getattr(entity_key, "key", None)
+    if isinstance(key, str):
+        return key
+    return str(entity_key)
+
+
 @callback
 def async_add_imou_entities(
     entry: ImouConfigEntry,
@@ -200,10 +209,17 @@ def async_add_imou_entities(
 
     def _async_add(new_devices: list[ImouHaDevice]) -> None:
         device_keys = {imou_life_device_key(device) for device in new_devices}
+        registry = er.async_get(coordinator.hass)
+        existing = {
+            entity.unique_id
+            for entity in er.async_entries_for_config_entry(registry, entry.entry_id)
+        }
         async_add_entities(
             entity_class(coordinator, entry, entity_key, device)
             for entity_key, device in iter_pairs(coordinator)
             if imou_life_device_key(device) in device_keys
+            and f"{imou_life_device_key(device)}${_entity_suffix(entity_key)}"
+            not in existing
         )
 
     coordinator.new_device_callbacks.append(_async_add)

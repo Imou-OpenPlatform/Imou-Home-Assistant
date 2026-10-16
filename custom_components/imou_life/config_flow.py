@@ -62,6 +62,7 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_EXCLUDED_DEVICES,
     PARAM_LIVE_RESOLUTION,
     PARAM_LOCAL_RECORD_DURATION,
     PARAM_LOCAL_RECORD_PATH,
@@ -467,6 +468,7 @@ class ImouOptionsFlow(OptionsFlow):
         self._devices_map: dict[str, str] = {}
         self._devices_error: str = ""
         self._callback_error: str = ""
+        self._native_libs_present: bool | None = None
 
     @staticmethod
     def _suggested_option_subset(
@@ -709,10 +711,49 @@ class ImouOptionsFlow(OptionsFlow):
             }
         )
 
+    def _begin_deferred_reload(self) -> None:
+        """Hold setup-time option changes until the dialog closes."""
+        runtime = get_runtime_data(self.config_entry)
+        if runtime is not None:
+            runtime.defer_reload = True
+
+    def _finish_deferred_reload(self) -> None:
+        """Reload once, after the dialog closes, if setup-time options changed."""
+        from . import options_reload_signature
+
+        runtime = get_runtime_data(self.config_entry)
+        if runtime is None:
+            return
+        pending = runtime.reload_pending
+        runtime.defer_reload = False
+        runtime.reload_pending = False
+        if not pending:
+            return
+        runtime.reload_signature = options_reload_signature(self.config_entry.options)
+        self.hass.async_create_task(
+            self.hass.config_entries.async_reload(self.config_entry.entry_id)
+        )
+
+    @callback
+    def async_abort(self, *, reason: str, **kwargs: Any) -> ConfigFlowResult:
+        """Apply a deferred reload when the dialog is closed."""
+        self._finish_deferred_reload()
+        return super().async_abort(reason=reason, **kwargs)
+
+    async def _async_native_libs_present(self, *, refresh: bool = False) -> bool:
+        """Stat the decrypt libraries off the event loop."""
+        if refresh or self._native_libs_present is None:
+            self._native_libs_present = await self.hass.async_add_executor_job(
+                pic_thumbnail.native_libs_present, self.hass
+            )
+        return self._native_libs_present
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Choose which options section to edit."""
+        self._begin_deferred_reload()
+        await self._async_native_libs_present()
         await self._async_load_selector_translations()
         return self.async_show_menu(
             step_id="init",
@@ -732,6 +773,7 @@ class ImouOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Close the options dialog. Every page has already saved itself."""
+        self._finish_deferred_reload()
         return self.async_create_entry(data=self._merge_options())
 
     def _save_options(self, **updates: Any) -> None:
@@ -790,7 +832,7 @@ class ImouOptionsFlow(OptionsFlow):
         if options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
             decrypt = (
                 on
-                if pic_thumbnail.native_libs_present(self.hass)
+                if self._native_libs_present
                 else self._status_label("missing_libs", "on, but libraries are missing")
             )
         else:
@@ -928,7 +970,7 @@ class ImouOptionsFlow(OptionsFlow):
             turning_on = attach and not self.config_entry.options.get(
                 PARAM_ATTACH_DECRYPTED_THUMBNAIL
             )
-            if turning_on and not pic_thumbnail.native_libs_present(self.hass):
+            if turning_on and not await self._async_native_libs_present(refresh=True):
                 # Switching it on here would silently do nothing. Something
                 # already on is left alone: the libraries can go missing later,
                 # and passwords still need to be editable. The menu reports
@@ -1151,7 +1193,9 @@ class ImouOptionsFlow(OptionsFlow):
     def _save_selected_devices(self, selected: list[str]) -> None:
         """Write the poll list, dropping any setup-time fallback."""
         self._clear_selected_from_entry_data()
-        self._save_options(**{PARAM_SELECTED_DEVICES: selected})
+        self._save_options(
+            **{PARAM_SELECTED_DEVICES: selected, PARAM_EXCLUDED_DEVICES: []}
+        )
 
     def _devices_schema(self) -> vol.Schema:
         """Build the poll-list form."""
