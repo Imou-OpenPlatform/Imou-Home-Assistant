@@ -81,7 +81,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
   - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
-  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.3 for Open Platform API access
+  - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.4 for Open Platform API access
 * **Event push & automations**
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
@@ -102,6 +102,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
   - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
   - **White light** (`light`) on cameras that have a floodlight; on or off only
+  - Color bulbs appear as one **Light**: on/off, brightness, color temperature or color, and scenes, plus a countdown. Adjusting color temperature switches the bulb to white light. White brightness and color brightness stay independent. Color bulbs do not show **Notify on alarm**
   - Alarm-linked white light, alarm-linked siren (configuration switches)
   - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; does not require event push for manual control. Entity state auto-clears after about 15 seconds (typical firmware hold), or immediately on a `sirenOff` push when event push is enabled
   - Audio recording, prompt sound, abnormal sound alarm
@@ -231,7 +232,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
   - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
-  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.3 访问开放平台 API
+  - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 1.4.4 访问开放平台 API
 * **事件推送与自动化**
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
@@ -252,6 +253,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
   - 隐私模式、夜视、画面翻转、宽动态、智能追踪
   - **白光灯**（`light`），仅在有补光灯的摄像头上出现，只能开关
+  - 彩色灯泡显示为一盏 **灯**：可开关、调节亮度、选择色温或颜色、选择场景，灯泡上还有倒计时。调节色温会切到白光。白光亮度和彩光亮度互不影响。彩色灯泡不显示 **告警时通知**
   - 告警联动白光灯、告警联动警笛（配置区开关）
   - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
   - 音频录制、设备提示音、异常音告警
