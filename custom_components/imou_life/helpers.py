@@ -24,6 +24,7 @@ from .const import (
     PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
+    PARAM_EXCLUDED_DEVICES,
     PARAM_SELECTED_DEVICES,
     callback_flags_to_event_push_types,
     imou_life_device_keys_from_ids,
@@ -58,6 +59,14 @@ def get_selected_device_ids(entry: ConfigEntry) -> list[str] | None:
     if PARAM_SELECTED_DEVICES in entry.data:
         return list(entry.data[PARAM_SELECTED_DEVICES])
     return None
+
+
+def get_excluded_device_ids(entry: ConfigEntry) -> set[str]:
+    """Return device ids removed while the account was set to all devices."""
+    raw = entry.options.get(PARAM_EXCLUDED_DEVICES) or []
+    if not isinstance(raw, list):
+        return set()
+    return {str(item) for item in raw}
 
 
 def event_push_type_active(entry: ConfigEntry, push_type: str) -> bool:

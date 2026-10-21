@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
+from urllib.parse import urlsplit, urlunsplit
 
 from aiohttp import ClientError, ClientTimeout
 from homeassistant.config_entries import ConfigEntry
@@ -174,6 +175,14 @@ def native_support_status(hass: HomeAssistant, language: str) -> str:
         hass, language, "native_hint", "unsupported", fallback
     )
     return fill_template(template, fallback, arch=native_platform_label())
+
+
+def _redact_picture_url(url: str) -> str:
+    """Drop the query string before a picture URL is written to the log."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return url
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -634,7 +643,7 @@ async def _async_decrypt_thumbnail_locked(
         device_id,
         is_tcm,
         "password" if used_password else "serial",
-        pic_url,
+        _redact_picture_url(pic_url),
     )
 
     data = await _async_download_picture(hass, pic_url)

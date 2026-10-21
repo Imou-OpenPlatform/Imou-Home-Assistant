@@ -121,13 +121,14 @@ async def test_countdown_expires_to_zero_locally(
     """When the local clock runs out, remaining is 0 without waiting for a poll."""
     number, device = plug_number
     await number.async_set_native_value(2)
+    device.texts[PARAM_COUNT_DOWN_SWITCH][PARAM_STATE] = "2"
 
     freezer.tick(timedelta(minutes=2))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
     assert number.native_value == 0
-    assert device.texts[PARAM_COUNT_DOWN_SWITCH][PARAM_STATE] == "0"
+    assert device.texts[PARAM_COUNT_DOWN_SWITCH][PARAM_STATE] == "2"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

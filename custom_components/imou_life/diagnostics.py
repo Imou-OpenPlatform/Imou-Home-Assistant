@@ -163,7 +163,9 @@ async def async_get_config_entry_diagnostics(
         "attach_decrypted_thumbnail": bool(
             entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
         ),
-        "native_libs_present": native_libs_present(hass),
+        "native_libs_present": await hass.async_add_executor_job(
+            native_libs_present, hass
+        ),
         "native_platform": native_platform_label(),
         "native_platform_supported": native_platform_supported(),
         "device_password_serials": _device_password_serials(entry.options),

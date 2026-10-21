@@ -23,7 +23,7 @@ from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .countdown import CountdownTracker, parse_countdown_minutes
 from .entity import ImouEntity, async_add_imou_entities
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 
 def _iter_countdowns(
@@ -80,7 +80,7 @@ class ImouCountdownNumber(ImouEntity, NumberEntity):
     @property
     def native_value(self) -> float:
         """Return remaining minutes from the local clock, else the device value."""
-        if self._tracker.ends_at(self._device_key) is not None:
+        if self._tracker.tracks(self._device_key):
             return float(self._tracker.remaining_minutes(self._device_key))
         return float(parse_countdown_minutes(self.device))
 

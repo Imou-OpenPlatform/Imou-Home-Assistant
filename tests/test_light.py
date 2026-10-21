@@ -11,13 +11,39 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
+    PARAM_BULB,
     PARAM_STATUS,
     PARAM_WHITE_LIGHT,
     imou_life_device_key,
 )
-from custom_components.imou_life.light import ImouWhiteLight, _iter_white_lights
-from homeassistant.components.light import ColorMode
+from custom_components.imou_life.light import (
+    ImouBulbLight,
+    ImouWhiteLight,
+    _iter_bulbs,
+    _iter_white_lights,
+)
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_COLOR_TEMP_KELVIN,
+    ATTR_EFFECT,
+    ATTR_HS_COLOR,
+    ColorMode,
+    LightEntityFeature,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util.color import color_temperature_to_hs
+from pyimouapi.bulb_light import (
+    MODE_COLOR,
+    MODE_SCENE,
+    MODE_WHITE,
+    REF_BRIGHTNESS,
+    REF_COLOR_TEMP,
+    REF_MODE,
+    REF_SCENE,
+    REF_SWITCH,
+    empty_bulb_state,
+)
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -107,3 +133,164 @@ async def test_turn_off_clears_the_lamp(hass: HomeAssistant) -> None:
     light.coordinator.device_manager.async_switch_operation.assert_awaited_once_with(
         device, PARAM_WHITE_LIGHT, False
     )
+
+
+def _bulb_device() -> MagicMock:
+    device = MagicMock(spec=ImouHaDevice)
+    device.device_id = "bulb1"
+    device.channel_id = None
+    device.product_id = "3C1DUNTJ"
+    device.device_name = "Bulb"
+    device.channel_name = None
+    device.manufacturer = "Imou"
+    device.model = "L1"
+    device.swversion = "1.0"
+    device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
+    device.switches = {}
+    device.bulb_light = empty_bulb_state()
+    return device
+
+
+def _bulb(hass: HomeAssistant, device: MagicMock) -> ImouBulbLight:
+    coordinator = _coordinator(device)
+    coordinator.device_manager.async_set_bulb_light = AsyncMock()
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    return ImouBulbLight(coordinator, entry, PARAM_BULB, device)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_bulb_supports_color_temperature_color_and_scenes(
+    hass: HomeAssistant,
+) -> None:
+    """One light covers white, color, and the scene list."""
+    light = _bulb(hass, _bulb_device())
+    assert light.supported_color_modes == {ColorMode.COLOR_TEMP, ColorMode.HS}
+    assert light.supported_features & LightEntityFeature.EFFECT
+    assert "Movie" in (light.effect_list or [])
+    assert light.is_on is False
+    assert light.color_mode is None
+
+
+def test_iter_bulbs_skips_cameras() -> None:
+    """A camera floodlight is not a color bulb."""
+    camera = _device()
+    camera.bulb_light = None
+    coordinator = MagicMock()
+    coordinator.devices = [camera, _bulb_device()]
+    assert [key for key, _device in _iter_bulbs(coordinator)] == [PARAM_BULB]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_bulb_scene_is_one_property_write(hass: HomeAssistant) -> None:
+    """Picking a scene turns the bulb on in scene mode with that scene."""
+    device = _bulb_device()
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_EFFECT: "Movie"})
+
+    light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
+        device,
+        {REF_SWITCH: 1, REF_MODE: MODE_SCENE, REF_SCENE: 2},
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_an_active_scene_is_not_reported_as_white(hass: HomeAssistant) -> None:
+    """A scene is on/off plus an effect, so the card does not show white."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_SCENE
+    device.bulb_light["scene"] = 2
+    device.bulb_light["brightness"] = 80
+    device.bulb_light["color_temp"] = 3000
+    light = _bulb(hass, device)
+
+    assert light.color_mode is ColorMode.ONOFF
+    assert light.brightness is None
+    assert light.color_temp_kelvin is None
+    assert light.hs_color is None
+    assert light.effect == "Movie"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_an_off_bulb_hides_brightness_and_color(hass: HomeAssistant) -> None:
+    """Off means no color mode and no leftover brightness or scene."""
+    device = _bulb_device()
+    light = _bulb(hass, device)
+
+    assert light.brightness is None
+    assert light.hs_color is None
+    assert light.effect is None
+    assert light.color_temp_kelvin is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_brightness_during_a_scene_selects_white(hass: HomeAssistant) -> None:
+    """A brightness-only service call leaves the scene and writes white brightness."""
+    device = _bulb_device()
+    device.bulb_light["mode"] = MODE_SCENE
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload[REF_MODE] == MODE_WHITE
+    assert REF_BRIGHTNESS in payload
+    assert REF_SCENE not in payload
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_color_temperature_does_not_change_brightness(
+    hass: HomeAssistant,
+) -> None:
+    """A color-temperature change stays in white mode and leaves brightness."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_WHITE
+    device.bulb_light["brightness"] = 21
+    device.bulb_light["value"] = 3
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_COLOR_TEMP_KELVIN: 4000})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_WHITE, REF_COLOR_TEMP: 4000}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_white_preview_opens_the_saved_color(hass: HomeAssistant) -> None:
+    """The color wheel's first color is the color temperature, not the saved color."""
+    device = _bulb_device()
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_WHITE
+    device.bulb_light["color_temp"] = 4000
+    device.bulb_light["hue"] = 200
+    device.bulb_light["saturation"] = 80
+    device.bulb_light["value"] = 40
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_HS_COLOR: color_temperature_to_hs(4000)})
+
+    payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
+    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+    assert "132100" not in payload
+    assert "132300" not in payload
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_unknown_scene_is_not_sent(hass: HomeAssistant) -> None:
+    """An unknown scene raises a translated error and does not call the cloud."""
+    device = _bulb_device()
+    light = _bulb(hass, device)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await light.async_turn_on(**{ATTR_EFFECT: "Music"})
+
+    assert err.value.translation_key == "unknown_bulb_effect"
+    light.coordinator.device_manager.async_set_bulb_light.assert_not_called()

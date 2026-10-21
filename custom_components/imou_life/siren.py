@@ -15,7 +15,7 @@ from .const import PARAM_SIREN, SIREN_OFF_DELAY
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouAlarmPushEntity, async_add_imou_entities
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 _SIREN_ON = frozenset({"sirenon"})
 _SIREN_OFF = frozenset({"sirenoff", "siren_alarm_cleared"})
@@ -58,9 +58,25 @@ async def async_setup_entry(
 class ImouSiren(ImouAlarmPushEntity, SirenEntity):
     """Manual siren control; assumed on ~15s or until a sirenOff push."""
 
-    _attr_supported_features = SirenEntityFeature.TURN_ON | SirenEntityFeature.TURN_OFF
     _attr_is_on = False
+    _attr_assumed_state = True
     _hold_seconds = SIREN_OFF_DELAY
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+        entity_type: str,
+        device: ImouHaDevice,
+    ) -> None:
+        """Offer only the siren actions this device actually has."""
+        super().__init__(coordinator, config_entry, entity_type, device)
+        features = SirenEntityFeature(0)
+        if PARAM_SIREN_START in device.buttons:
+            features |= SirenEntityFeature.TURN_ON
+        if PARAM_SIREN_STOP in device.buttons:
+            features |= SirenEntityFeature.TURN_OFF
+        self._attr_supported_features = features
 
     def _alarm_state(self, msg_type: str | None) -> bool | None:
         """Map sirenOn / sirenOff pushes onto held state."""
@@ -77,6 +93,8 @@ class ImouSiren(ImouAlarmPushEntity, SirenEntity):
     async def _async_siren_operation(self, enable: bool) -> None:
         """Call the existing siren start/stop API path."""
         button_type = PARAM_SIREN_START if enable else PARAM_SIREN_STOP
+        if button_type not in self.device.buttons:
+            return
         try:
             await self.coordinator.device_manager.async_press_button(
                 self.device,

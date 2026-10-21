@@ -20,7 +20,7 @@ from .const import (
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 # The collection point recalls a PTZ preset, which is an action on the camera;
 # the rest set how the device behaves and belong under configuration.

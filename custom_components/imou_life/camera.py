@@ -29,7 +29,7 @@ from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 from .helpers import camera_channel_devices
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 # An established pull keeps the cloud ticket valid. About 10s after the last
 # viewer, drop the cached Stream so the next open fetches a new URL.

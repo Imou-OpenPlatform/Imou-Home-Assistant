@@ -27,7 +27,7 @@ from .entity import ImouEntity, async_add_imou_entities
 
 _LOGGER = logging.getLogger(__package__)
 
-PARALLEL_UPDATES = 0
+PARALLEL_UPDATES = 1
 
 _SIREN_BUTTONS = frozenset({PARAM_SIREN_START, PARAM_SIREN_STOP})
 

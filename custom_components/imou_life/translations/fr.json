@@ -113,7 +113,7 @@
         "data_description": {
           "enable_polling": "Désactivez pour ignorer les actualisations périodiques du cloud. Les états des entités peuvent devenir obsolètes. L'installation et le rechargement récupèrent toujours la liste des appareils une fois. Lorsque le push d'événements est activé et que les types d'abonnement incluent les messages d'appareils IoT, les *propriétés* des appareils à modèle d'objet ne sont pas actualisées à cet intervalle (l'installation et le rechargement prennent toujours un instantané). L'état en ligne, les capacités PaaS et les entités s'appuyant sur des services continuent d'être interrogés.",
           "update_interval": "Par défaut 300 s (5 minutes), plage 30–900 s. Ignoré lorsque l'interrogation est désactivée.",
-          "dormant_write_retry_wait_seconds": "Lorsque l'état de l'appareil est Veille et qu'une commande échoue, Home Assistant attend ce délai avant de renvoyer la même commande une fois. Par défaut 10 s, plage 5–60 s."
+          "dormant_write_retry_wait_seconds": "Lorsque l'état de l'appareil est Veille et qu'une commande échoue, Home Assistant attend ce délai avant de renvoyer la même commande une fois. Par défaut 5 s, plage 5–60 s."
         },
         "sections": {
           "camera_defaults": {
@@ -525,6 +525,9 @@
     "light": {
       "white_light": {
         "name": "Lumière blanche"
+      },
+      "bulb": {
+        "name": "Lumière"
       }
     },
     "switch": {
@@ -662,6 +665,9 @@
   "exceptions": {
     "invalid_auth": {
       "message": "Imou a rejeté l'identifiant et le secret de l'application"
+    },
+    "unknown_bulb_effect": {
+      "message": "Cette lampe n'a pas cette scène."
     },
     "switch_operation_failed": {
       "message": "Imou a rejeté le changement d'interrupteur : {error}"

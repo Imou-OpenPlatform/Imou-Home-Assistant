@@ -9,6 +9,7 @@ from typing import Any, NoReturn, override
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -180,6 +181,14 @@ class ImouAlarmPushEntity(ImouEntity):
         self._set_push_state(state, auto_off=state)
 
 
+def _entity_suffix(entity_key: Any) -> str:
+    """Return the unique-id suffix for a platform iterator key."""
+    key = getattr(entity_key, "key", None)
+    if isinstance(key, str):
+        return key
+    return str(entity_key)
+
+
 @callback
 def async_add_imou_entities(
     entry: ImouConfigEntry,
@@ -198,12 +207,44 @@ def async_add_imou_entities(
     """
     coordinator = entry.runtime_data.coordinator
 
+    def _live_unique_ids() -> set[str]:
+        """Unique ids whose entities are loaded, not just left in the registry.
+
+        A restart restores registry rows before platforms add them. Those rows
+        still exist, but their state is marked restored, so they must be added
+        again. A later discovery only skips entities that are actually live.
+        """
+        hass = getattr(coordinator, "hass", None)
+        states = getattr(hass, "states", None)
+        get_state = getattr(states, "get", None)
+        if hass is None or not callable(get_state):
+            return set()
+        try:
+            registry = er.async_get(hass)
+            entries = er.async_entries_for_config_entry(registry, entry.entry_id)
+        except (KeyError, TypeError, AttributeError, RuntimeError):
+            return set()
+        live: set[str] = set()
+        for entity in entries:
+            unique_id = getattr(entity, "unique_id", None)
+            entity_id = getattr(entity, "entity_id", None)
+            if not isinstance(unique_id, str) or not isinstance(entity_id, str):
+                continue
+            state = get_state(entity_id)
+            attributes = getattr(state, "attributes", None)
+            if isinstance(attributes, dict) and not attributes.get("restored"):
+                live.add(unique_id)
+        return live
+
     def _async_add(new_devices: list[ImouHaDevice]) -> None:
         device_keys = {imou_life_device_key(device) for device in new_devices}
+        live = _live_unique_ids()
         async_add_entities(
             entity_class(coordinator, entry, entity_key, device)
             for entity_key, device in iter_pairs(coordinator)
             if imou_life_device_key(device) in device_keys
+            and f"{imou_life_device_key(device)}${_entity_suffix(entity_key)}"
+            not in live
         )
 
     coordinator.new_device_callbacks.append(_async_add)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from math import ceil
+from time import monotonic
 from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant, callback
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
     from .coordinator import ImouDataUpdateCoordinator
 
 _TICK = timedelta(minutes=1)
+# A poll that was already in flight must not replace a countdown just written.
+_WRITE_GUARD_SECONDS = 15
+# Cloud remaining time is whole minutes, so one minute of difference is rounding.
 
 
 def parse_countdown_minutes(device: ImouHaDevice) -> int:
@@ -39,11 +43,19 @@ class CountdownTracker:
     def __init__(self) -> None:
         """Initialize empty tracking state."""
         self._ends: dict[str, datetime] = {}
+        self._local_expired: set[str] = set()
+        self._written_at: dict[str, float] = {}
         self._expire_unsub: dict[str, Callable[[], None]] = {}
         self._tick_unsub: Callable[[], None] | None = None
 
+    def tracks(self, device_key: str) -> bool:
+        """Return True when the local clock, not the device cache, owns the value."""
+        return device_key in self._ends or device_key in self._local_expired
+
     def remaining_minutes(self, device_key: str) -> int:
         """Return whole minutes left, rounding up so 1s still shows as 1."""
+        if device_key in self._local_expired and device_key not in self._ends:
+            return 0
         end = self._ends.get(device_key)
         if end is None:
             return 0
@@ -65,10 +77,13 @@ class CountdownTracker:
     ) -> None:
         """Start, replace, or cancel the local clock for one device."""
         self._cancel_expire(device_key)
+        self._written_at[device_key] = monotonic()
         if minutes <= 0:
             self._ends.pop(device_key, None)
+            self._local_expired.add(device_key)
             self._maybe_stop_tick()
             return
+        self._local_expired.discard(device_key)
         self._arm(
             hass,
             coordinator,
@@ -96,13 +111,24 @@ class CountdownTracker:
         coordinator: ImouDataUpdateCoordinator,
         device: ImouHaDevice,
     ) -> None:
-        """Replace the local clock with remaining minutes from a cloud refresh."""
-        self.start_minutes(
-            hass,
-            coordinator,
-            imou_life_device_key(device),
-            parse_countdown_minutes(device),
-        )
+        """Align the local clock when the cloud disagrees by more than a minute.
+
+        The cloud value is truncated to whole minutes, and a poll that started
+        before a write can still complete afterwards. Neither should jump the
+        number the user is looking at.
+        """
+        device_key = imou_life_device_key(device)
+        written = self._written_at.get(device_key)
+        if written is not None and monotonic() - written < _WRITE_GUARD_SECONDS:
+            return
+        cloud = parse_countdown_minutes(device)
+        if (
+            self.tracks(device_key)
+            and abs(cloud - self.remaining_minutes(device_key)) <= 1
+        ):
+            return
+        self._written_at.pop(device_key, None)
+        self.start_minutes(hass, coordinator, device_key, cloud)
 
     def sync_all(
         self, hass: HomeAssistant, coordinator: ImouDataUpdateCoordinator
@@ -118,6 +144,8 @@ class CountdownTracker:
             unsub()
         self._expire_unsub.clear()
         self._ends.clear()
+        self._local_expired.clear()
+        self._written_at.clear()
         self._maybe_stop_tick()
 
     def _arm(
@@ -133,9 +161,9 @@ class CountdownTracker:
         def _expire(_now: datetime) -> None:
             self._expire_unsub.pop(device_key, None)
             self._ends.pop(device_key, None)
-            device = coordinator.get_device(device_key)
-            if device is not None and PARAM_COUNT_DOWN_SWITCH in device.texts:
-                device.texts[PARAM_COUNT_DOWN_SWITCH][PARAM_STATE] = "0"
+            # Leave the device cache for the next cloud read. Writing 0 here
+            # makes the number flicker until that read arrives.
+            self._local_expired.add(device_key)
             self._maybe_stop_tick()
             coordinator.async_update_listeners()
 
