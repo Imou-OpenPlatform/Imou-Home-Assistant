@@ -6,7 +6,7 @@
 
 #### Added
 
-- Color bulbs appear as one **Light**. You can turn it on or off, set brightness, choose a color temperature or a color, and pick a scene (daylight, night light, movie, and the other scenes from the Imou Life app). The bulb also has a countdown. Adjusting color temperature switches the bulb to white light. White brightness and color brightness stay independent. On the color wheel, moving the dot sets the color and its saturation; brightness stays on the brightness control.
+- Color bulbs appear as one **Light**. You can turn it on or off, set brightness, choose a color temperature or a color, and pick a scene (daylight, night light, movie, and the other scenes from the Imou Life app). The bulb also has a countdown. Adjusting color temperature switches the bulb to white light. White brightness and color brightness stay independent. On the color wheel, moving the dot sets the color and its saturation; brightness stays on the brightness control (#97)
 
 #### Changed
 
@@ -342,7 +342,7 @@
 
 #### 新增
 
-- 彩色灯泡会显示为一盏 **灯**。可以开关、调节亮度、选择色温或颜色，并选择场景（日光、夜灯、观影等，与乐橙 App 里的灯光场景一致）。灯泡上还有倒计时。调节色温会把灯泡切到白光。白光亮度和彩光亮度互不影响。色盘上移动圆点会同时改颜色和饱和度，亮度仍用亮度控件。
+- 彩色灯泡会显示为一盏 **灯**。可以开关、调节亮度、选择色温或颜色，并选择场景（日光、夜灯、观影等，与乐橙 App 里的灯光场景一致）。灯泡上还有倒计时。调节色温会把灯泡切到白光。白光亮度和彩光亮度互不影响。色盘上移动圆点会同时改颜色和饱和度，亮度仍用亮度控件（#97）
 
 #### 变更
 
