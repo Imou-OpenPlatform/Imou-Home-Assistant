@@ -216,7 +216,8 @@ def async_add_imou_entities(
         """
         hass = getattr(coordinator, "hass", None)
         states = getattr(hass, "states", None)
-        if hass is None or not hasattr(states, "get"):
+        get_state = getattr(states, "get", None)
+        if hass is None or not callable(get_state):
             return set()
         try:
             registry = er.async_get(hass)
@@ -229,11 +230,10 @@ def async_add_imou_entities(
             entity_id = getattr(entity, "entity_id", None)
             if not isinstance(unique_id, str) or not isinstance(entity_id, str):
                 continue
-            state = states.get(entity_id)
+            state = get_state(entity_id)
             attributes = getattr(state, "attributes", None)
-            if not isinstance(attributes, dict) or attributes.get("restored"):
-                continue
-            live.add(unique_id)
+            if isinstance(attributes, dict) and not attributes.get("restored"):
+                live.add(unique_id)
         return live
 
     def _async_add(new_devices: list[ImouHaDevice]) -> None:
