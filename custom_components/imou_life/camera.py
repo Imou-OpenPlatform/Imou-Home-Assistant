@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from time import monotonic
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -34,6 +36,10 @@ PARALLEL_UPDATES = 1
 # An established pull keeps the cloud ticket valid. About 10s after the last
 # viewer, drop the cached Stream so the next open fetches a new URL.
 STREAM_IDLE_CHECK = timedelta(seconds=10)
+
+# The cloud still is one picture. Opening the camera again inside this window
+# shows that picture instead of asking for another snapshot.
+SNAPSHOT_REUSE = timedelta(seconds=30)
 
 
 def _iter_cameras(
@@ -68,11 +74,15 @@ class ImouCamera(ImouEntity, Camera):
         Camera.__init__(self)
         ImouEntity.__init__(self, coordinator, config_entry, entity_type, device)
         self._idle_unsub: Callable[[], None] | None = None
+        self._snapshot: bytes | None = None
+        self._snapshot_at = 0.0
+        self._snapshot_task: asyncio.Task[bytes] | None = None
 
     async def async_added_to_hass(self) -> None:
         """Cancel the idle check when the entity is removed."""
         await super().async_added_to_hass()
         self.async_on_remove(self._cancel_idle_check)
+        self.async_on_remove(self._cancel_snapshot)
 
     async def stream_source(self) -> str | None:
         """Return a live stream URL and watch for the last viewer leaving."""
@@ -121,14 +131,46 @@ class ImouCamera(ImouEntity, Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return bytes of camera image."""
+        """Return a still from the last 30 seconds, or ask the cloud for one.
+
+        Opens that arrive while the camera is still uploading share that grab.
+        """
+        now = monotonic()
+        if (
+            self._snapshot is not None
+            and now - self._snapshot_at < SNAPSHOT_REUSE.total_seconds()
+        ):
+            return self._snapshot
+        if self._snapshot_task is None:
+            self._snapshot_task = asyncio.get_running_loop().create_task(
+                self._async_fetch_snapshot()
+            )
+        task = self._snapshot_task
         try:
-            return await self.coordinator.device_manager.async_get_device_image(
+            return await task
+        finally:
+            if self._snapshot_task is task and task.done():
+                self._snapshot_task = None
+
+    async def _async_fetch_snapshot(self) -> bytes:
+        """Ask the cloud for one still and keep it for the reuse window."""
+        try:
+            image = await self.coordinator.device_manager.async_get_device_image(
                 self.device,
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
             self._raise_imou_ha_error(e, "camera_image_failed")
+        self._snapshot = image
+        self._snapshot_at = monotonic()
+        return image
+
+    @callback
+    def _cancel_snapshot(self) -> None:
+        """Drop an in-flight grab when the camera entity is removed."""
+        task = self._snapshot_task
+        if task is not None and not task.done():
+            task.cancel()
 
     @property
     def motion_detection_enabled(self) -> bool:

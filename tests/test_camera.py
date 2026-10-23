@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.camera import STREAM_IDLE_CHECK, ImouCamera
@@ -17,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 from pyimouapi.const import PARAM_STATE
+from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -230,3 +232,100 @@ async def test_motion_detection_raises_when_the_camera_has_no_detect_switch(
     with pytest.raises(HomeAssistantError):
         await camera.async_enable_motion_detection()
     camera.coordinator.device_manager.async_switch_operation.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_recent_snapshot_is_reused(hass: HomeAssistant) -> None:
+    """Opening the still again within 30s must not ask the cloud for another."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(return_value=b"jpeg-1")
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    assert await camera.async_camera_image() == b"jpeg-1"
+    assert await camera.async_camera_image() == b"jpeg-1"
+
+    fetch.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_snapshot_is_fetched_again_after_30_seconds(
+    hass: HomeAssistant,
+) -> None:
+    """A still older than 30s is replaced by a new cloud snapshot."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(side_effect=[b"jpeg-1", b"jpeg-2"])
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    # Check, store, check 30s later, store.
+    with patch(
+        "custom_components.imou_life.camera.monotonic",
+        side_effect=[1000.0, 1000.0, 1030.0, 1030.0],
+    ):
+        assert await camera.async_camera_image() == b"jpeg-1"
+        assert await camera.async_camera_image() == b"jpeg-2"
+
+    assert fetch.await_count == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_snapshot_is_reused_until_30_seconds(hass: HomeAssistant) -> None:
+    """29 seconds is still inside the window, so the cloud is not asked again."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(return_value=b"jpeg-1")
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    with patch(
+        "custom_components.imou_life.camera.monotonic",
+        side_effect=[1000.0, 1000.0, 1029.0],
+    ):
+        assert await camera.async_camera_image() == b"jpeg-1"
+        assert await camera.async_camera_image() == b"jpeg-1"
+
+    fetch.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_failed_snapshot_is_requested_again(hass: HomeAssistant) -> None:
+    """A failed grab is not kept, so the next open tries the cloud again."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(side_effect=[ImouException("no picture"), b"jpeg-1"])
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    with pytest.raises(HomeAssistantError):
+        await camera.async_camera_image()
+    assert await camera.async_camera_image() == b"jpeg-1"
+
+    assert fetch.await_count == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_overlapping_snapshot_requests_share_one_cloud_call(
+    hass: HomeAssistant,
+) -> None:
+    """Two opens while the camera is still uploading share one grab."""
+    device = _device()
+    camera = _camera(hass, device)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _slow_image(*_args: object) -> bytes:
+        started.set()
+        await release.wait()
+        return b"jpeg-1"
+
+    camera.coordinator.device_manager.async_get_device_image = AsyncMock(
+        side_effect=_slow_image
+    )
+
+    first = asyncio.create_task(camera.async_camera_image())
+    await started.wait()
+    second = asyncio.create_task(camera.async_camera_image())
+    release.set()
+
+    assert await first == b"jpeg-1"
+    assert await second == b"jpeg-1"
+    camera.coordinator.device_manager.async_get_device_image.assert_awaited_once()

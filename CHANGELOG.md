@@ -2,6 +2,12 @@
 
 ## English
 
+### [1.4.5]
+
+#### Changed
+
+- The **Live** camera reuses the last still for 30 seconds. Opening it again in that time shows the same picture and does not ask the cloud for another snapshot
+
 ### [1.4.4]
 
 #### Added
@@ -337,6 +343,12 @@
 ---
 
 ## 中文
+
+### [1.4.5]
+
+#### 变更
+
+- **直播** 会把最近一张静止画面留 30 秒。这段时间里再次打开用的是同一张图，不会再向云端要一张
 
 ### [1.4.4]
 
