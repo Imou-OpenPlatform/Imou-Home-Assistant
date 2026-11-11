@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from custom_components.imou_life.const import (
     CONF_API_URL_FK,
+    CONF_API_URL_INTL,
     CONF_API_URL_OR,
     CONF_API_URL_SG,
     DOMAIN,
@@ -35,12 +36,15 @@ assert "/openapi/" not in _CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
 def test_api_url_region_mapping() -> None:
     """Login region keys map to stored hostnames and back."""
+    assert api_url_from_region("intl") == CONF_API_URL_INTL
     assert api_url_from_region("sg") == CONF_API_URL_SG
     assert api_url_from_region("eu") == CONF_API_URL_FK
     assert api_url_from_region("na") == CONF_API_URL_OR
+    assert api_url_region_from_value(CONF_API_URL_INTL) == "intl"
     assert api_url_region_from_value(CONF_API_URL_SG) == "sg"
     assert api_url_region_from_value(CONF_API_URL_FK) == "eu"
     assert api_url_region_from_value(CONF_API_URL_OR) == "na"
+    assert api_url_region_from_value("intl") == "intl"
     assert api_url_region_from_value("sg") == "sg"
 
 

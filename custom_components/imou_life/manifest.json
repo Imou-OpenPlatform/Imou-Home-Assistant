@@ -9,6 +9,8 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "media_player",
+    "media_source",
     "persistent_notification",
     "webhook"
   ],

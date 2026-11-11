@@ -78,12 +78,14 @@ def imou_life_device_keys_from_ids(
 
 
 # Configuration definitions
+CONF_API_URL_INTL = "openapi.easy4ip.com"
 CONF_API_URL_SG = "openapi-sg.easy4ip.com"
 CONF_API_URL_OR = "openapi-or.easy4ip.com"
 CONF_API_URL_FK = "openapi-fk.easy4ip.com"
 CONF_API_URL_HZ = "openapi.lechange.cn"
 
 API_URL_REGIONS: dict[str, str] = {
+    "intl": CONF_API_URL_INTL,
     "sg": CONF_API_URL_SG,
     "eu": CONF_API_URL_FK,
     "na": CONF_API_URL_OR,
@@ -94,12 +96,12 @@ _API_URL_REGION_BY_HOSTNAME = {
     hostname: region for region, hostname in API_URL_REGIONS.items()
 }
 
-DEFAULT_API_URL_REGION = "sg"
+DEFAULT_API_URL_REGION = "intl"
 
 
 def api_url_from_region(region: str) -> str:
     """Map a config-flow region key to the stored API hostname."""
-    return API_URL_REGIONS.get(region, CONF_API_URL_SG)
+    return API_URL_REGIONS.get(region, CONF_API_URL_INTL)
 
 
 def api_url_region_from_value(value: str) -> str:
@@ -127,6 +129,14 @@ PARAM_ENABLE_EVENT_PUSH = "enable_event_push"
 PARAM_EVENT_PUSH_TYPES = "event_push_types"
 PARAM_NOTIFY_SERVICES = "notify_services"
 SERVICE_DEVICE_SNAP_DETECT = "device_snap_detect"
+SERVICE_SEARCH_AI_ALARMS = "search_ai_alarms"
+SERVICE_REFRESH_AI_INSIGHT_BRIEFING = "refresh_ai_insight_briefing"
+PARAM_INSIGHT_WORKBENCH_DEVICE = "insight_workbench_device"
+PARAM_INSIGHT_SEARCH_RESULT = "insight_search_result"
+PARAM_INSIGHT_BRIEFING = "insight_briefing"
+PARAM_AI_INSIGHT_TRIAL = "ai_insight_trial"
+PARAM_TRIAL_CONTACT_URL = "trial_contact_url"
+DEFAULT_INSIGHT_LOOKBACK_DAYS = 7
 PARAM_NOTIFY_ON_ALARM = "notify_on_alarm"
 PARAM_ATTACH_DECRYPTED_THUMBNAIL = "attach_decrypted_thumbnail"
 PARAM_DEFAULT_DEVICE_PASSWORD = "default_device_password"
@@ -145,6 +155,16 @@ PARAM_ALARM_PICTURE = "alarm_picture"
 PARAM_SIREN = "siren"
 SIREN_OFF_DELAY = 15
 PARAM_STATUS = "status"
+PARAM_AI_INSIGHT_STATUS = "ai_insight_status"
+PARAM_CLOUD_STORAGE_STATUS = "cloud_storage_status"
+AI_INSIGHT_STATUS_OPTIONS = ("active", "inactive", "unavailable")
+CLOUD_STORAGE_STATUS_OPTIONS = (
+    "insight",
+    "event",
+    "continuous",
+    "none",
+    "unknown",
+)
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
 PARAM_ALARM_PIR = "alarm_pir"

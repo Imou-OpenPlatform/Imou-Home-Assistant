@@ -38,6 +38,8 @@ from .const import (
     PARAM_WEBHOOK_URL,
     PLATFORMS,
     SERVICE_DEVICE_SNAP_DETECT,
+    SERVICE_REFRESH_AI_INSIGHT_BRIEFING,
+    SERVICE_SEARCH_AI_ALARMS,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -51,6 +53,7 @@ from .helpers import (
 )
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
+from .insight_workbench import async_register_insight_workbench_services
 from .snap_detect import async_register_snap_detect_service
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -246,6 +249,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     entry.async_on_unload(runtime.countdown.async_unload)
     async_register_snap_detect_service(hass)
+    async_register_insight_workbench_services(hass)
     return True
 
 
@@ -253,10 +257,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
     async_delete_quota_issue(hass, entry)
-    if hass.services.has_service(
-        DOMAIN, SERVICE_DEVICE_SNAP_DETECT
-    ) and len(hass.config_entries.async_entries(DOMAIN)) <= 1:
-        hass.services.async_remove(DOMAIN, SERVICE_DEVICE_SNAP_DETECT)
+    if len(hass.config_entries.async_entries(DOMAIN)) <= 1:
+        if hass.services.has_service(DOMAIN, SERVICE_DEVICE_SNAP_DETECT):
+            hass.services.async_remove(DOMAIN, SERVICE_DEVICE_SNAP_DETECT)
+        if hass.services.has_service(DOMAIN, SERVICE_SEARCH_AI_ALARMS):
+            hass.services.async_remove(DOMAIN, SERVICE_SEARCH_AI_ALARMS)
+        if hass.services.has_service(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING):
+            hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 

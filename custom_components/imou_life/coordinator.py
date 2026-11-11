@@ -268,6 +268,13 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             runtime = getattr(self.config_entry, "runtime_data", None)
             if runtime is not None:
                 runtime.countdown.sync_all(self.hass, self)
+                from .insight_cloud import async_refresh_cloud_service_snapshots
+
+                await async_refresh_cloud_service_snapshots(
+                    self._device_manager.delegate,
+                    devices_to_update,
+                    runtime.cloud_service_by_key,
+                )
 
     def _async_add_remove_devices(
         self,

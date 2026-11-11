@@ -1,0 +1,46 @@
+# AI Insight workbench (Lovelace example)
+# Dashboards → Add dashboard → Import from YAML, or copy the cards below.
+#
+# Requires Imou Life 2.0 with AI Insight on the chosen camera channel.
+# Default time window is 7 days (service field `days`).
+
+title: AI Insight
+views:
+  - title: Workbench
+    cards:
+      - type: entities
+        title: Device
+        entities:
+          - entity: select.imou_life_insight_workbench_device
+            name: Camera
+      - type: entities
+        title: Actions
+        entities:
+          - type: button
+            name: Search
+            icon: mdi:magnify
+            tap_action:
+              action: call-service
+              service: imou_life.search_ai_alarms
+              target:
+                entity_id: select.imou_life_insight_workbench_device
+              data:
+                keyword: "person"
+                days: 7
+          - type: button
+            name: Refresh briefing
+            icon: mdi:chart-timeline-variant
+            tap_action:
+              action: call-service
+              service: imou_life.refresh_ai_insight_briefing
+              target:
+                entity_id: select.imou_life_insight_workbench_device
+              data:
+                days: 7
+          - entity: button.imou_life_ai_insight_trial
+      - type: markdown
+        title: Search results
+        content: "{{ states('sensor.imou_life_insight_search_result') }}"
+      - type: markdown
+        title: Daily briefing
+        content: "{{ states('sensor.imou_life_insight_briefing') }}"

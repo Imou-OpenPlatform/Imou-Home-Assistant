@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import voluptuous as vol
+from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -17,13 +18,16 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     DOMAIN,
+    PARAM_AI_INSIGHT_TRIAL,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
     PARAM_ROTATION_DURATION,
+    PARAM_TRIAL_CONTACT_URL,
     SERVICE_CONTROL_MOVE_PTZ,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .insight_account import ImouAccountEntity, trial_notification_copy
 
 _LOGGER = logging.getLogger(__package__)
 
@@ -51,6 +55,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou button entities."""
     async_add_imou_entities(entry, async_add_entities, ImouButton, _iter_buttons)
+    async_add_entities(
+        [ImouAiInsightTrialButton(entry.runtime_data.coordinator, entry)]
+    )
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
@@ -62,6 +69,31 @@ async def async_setup_entry(
         },
         "async_handle_control_move_ptz",
     )
+
+
+class ImouAiInsightTrialButton(ImouAccountEntity, ButtonEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_AI_INSIGHT_TRIAL)
+
+    async def async_press(self) -> None:
+        url = str(
+            self._config_entry.options.get(PARAM_TRIAL_CONTACT_URL) or ""
+        ).strip()
+        title, message = trial_notification_copy(self._config_entry)
+        if url:
+            message = f"{message}\n\n{url}"
+        persistent_notification.async_create(
+            self.coordinator.hass,
+            message,
+            title=title,
+            notification_id=f"{DOMAIN}_{self._config_entry.entry_id}_ai_insight_trial",
+        )
 
 
 class ImouButton(ImouEntity, ButtonEntity):

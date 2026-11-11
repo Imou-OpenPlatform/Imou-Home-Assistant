@@ -7,19 +7,24 @@ from typing import override
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    DOMAIN,
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
+    PARAM_INSIGHT_WORKBENCH_DEVICE,
     PARAM_NIGHT_VISION_MODE,
     PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .insight_account import ImouAccountEntity, camera_select_options
+from .runtime_data import get_runtime_data
 
 PARALLEL_UPDATES = 1
 
@@ -67,6 +72,59 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou select entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSelect, _iter_selects)
+    async_add_entities(
+        [ImouInsightWorkbenchSelect(entry.runtime_data.coordinator, entry)]
+    )
+
+
+class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
+    """Pick which camera channel the AI Insight workbench uses."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_INSIGHT_WORKBENCH_DEVICE)
+        self._label_to_key: dict[str, str] = {}
+        self._refresh_options()
+
+    def _refresh_options(self) -> None:
+        labels, mapping = camera_select_options(self.coordinator.devices)
+        self._label_to_key = mapping
+        self._attr_options = labels
+        runtime = get_runtime_data(self._config_entry)
+        if runtime is not None and runtime.workbench_device_key:
+            for label, key in mapping.items():
+                if key == runtime.workbench_device_key:
+                    self._attr_current_option = label
+                    return
+        if labels:
+            self._attr_current_option = labels[0]
+            if runtime is not None:
+                runtime.workbench_device_key = mapping[labels[0]]
+        else:
+            self._attr_current_option = None
+
+    async def async_select_option(self, option: str) -> None:
+        key = self._label_to_key.get(option)
+        if key is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="insight_workbench_unknown_device",
+            )
+        self._attr_current_option = option
+        runtime = get_runtime_data(self._config_entry)
+        if runtime is not None:
+            runtime.workbench_device_key = key
+        self.async_write_ha_state()
+
+    @property
+    @override
+    def available(self) -> bool:
+        return bool(self._attr_options) and super().available
 
 
 class ImouSelect(ImouEntity, SelectEntity):

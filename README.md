@@ -21,7 +21,7 @@ Requires Home Assistant **2025.4** or later.
 
 ## Documentation
 
-README covers install and a feature list. Options live in the [Configure reference](guides/configuration.md): every **Configure** page, Home Assistant URL, decrypt libraries, **Record on alarm**, and what depends on what.
+README covers install and a feature list. Options live in the [Configure reference](guides/configuration.md): every **Configure** page, Home Assistant URL, decrypt libraries, **Record on alarm**, **Media browser**, **AI Insight workbench**, and what depends on what.
 
 ## Installation
 
@@ -33,7 +33,7 @@ Register on the **international** Open Platform, then install via HACS.
 | --- | --- |
 | Portal | [open.imoulife.com](https://open.imoulife.com/) |
 | Console | [My App](https://open.imoulife.com/consoleNew/myApp/appInfo) |
-| Server region (HA login) | Singapore / Europe / North America (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
+| Server region (HA login) | Imou Life (default) / Singapore / Europe / North America / China (see [API domains](https://open.imoulife.com/book/http/develop.html)) |
 | API domain doc | [develop.html](https://open.imoulife.com/book/http/develop.html) |
 | My Resources | [Resource manage](https://open.imoulife.com/consoleNew/resourceManage/myResource) |
 
@@ -43,7 +43,7 @@ Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App*
 
 ### 3. Install via HACS
 
-<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your App ID and App secret, and select the **server region** closest to your account (**Europe / North America / Singapore**). The region must match the international portal where the app was created.
+<b>Navigate to HACS, search for `Imou Life`, and install the integration.</b> On the login page, enter your App ID and App secret, and pick the **server region** that matches your Open Platform app (**Imou Life (default)** for most accounts on [open.imoulife.com](https://open.imoulife.com/), or **Singapore / Europe / North America / China** when your console uses a regional endpoint).
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
@@ -55,7 +55,7 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it.
+Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it.
 
 Page-by-page options, including the **Settings → System → Network** steps that alarm push and alarm pictures need, and **Record on alarm**: [Configure reference](guides/configuration.md#english).
 
@@ -78,8 +78,8 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Bind a new device** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
   - Device selection at setup and in **Configure → Choose devices to poll** (poll only chosen devices)
-  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
-  - Login aligned with Home Assistant Core: **server region** dropdown (Europe / North America / Singapore)
+  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
+  - Login aligned with Home Assistant Core: **server region** dropdown (Imou Life default, Singapore, Europe, North America, China)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 for Open Platform API access
 * **Event push & automations**
@@ -107,6 +107,8 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; does not require event push for manual control. Entity state auto-clears after about 15 seconds (typical firmware hold), or immediately on a `sirenOff` push when event push is enabled
   - Audio recording, prompt sound, abnormal sound alarm
   - Restart device
+  - **Media browser** — cloud and local recordings per channel under **Media** ([details](guides/configuration.md#media-browser))
+  - **AI Insight** — **AI Insight** / **Cloud storage** sensors, alarm text with optional AI line, account workbench (search, briefing, trial) and [`device_snap_detect`](guides/configuration.md#capture-and-detect) ([details](guides/configuration.md#ai-insight-workbench))
 * **Alarm sensors**
   - Status (name, online, battery, …)
   - Arming — `alarm_control_panel` (home / away / disarm)
@@ -183,7 +185,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 | --- | --- |
 | 平台入口 | [open.imou.com](https://open.imou.com/) |
 | 控制台 | [我的应用](https://open.imou.com/consoleNew/myApp/appInfo) |
-| 服务器区域（HA 登录） | **中国** |
+| 服务器区域（HA 登录） | Imou Life（默认）/ 新加坡 / 欧洲 / 北美 / 中国（见 [接口域名](https://open.imou.com/book/http/develop.html)） |
 | API 域名文档 | [develop.html](https://open.imou.com/book/http/develop.html) |
 | 我的资源 | [资源管理](https://open.imou.com/consoleNew/resourceManage/myResource) |
 
@@ -193,7 +195,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 ### 3. 通过 HACS 安装
 
-<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 App ID、App secret，服务器区域选择 **中国**（须与在 open.imou.com 创建应用时使用的区域一致）。
+<b>在 HACS 中搜索 `Imou Life` 并安装集成。</b> 在登录页填写 App ID、App secret，**服务器区域** 须与创建应用时一致（[open.imou.com](https://open.imou.com/) 国内账号选 **中国**；open.imoulife.com 多数账号选 **Imou Life（默认）**，控制台标明区域接入点时再选新加坡、欧洲或北美）。
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
@@ -205,9 +207,9 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。
+在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。
 
-逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**，还有 **告警时录像**：见 [配置项参考](guides/configuration.md#zh-hans)。
+逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**，还有 **告警时录像**、**媒体浏览器**、**智见工作台**：见 [配置项参考](guides/configuration.md#zh-hans)。
 
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
@@ -229,8 +231,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 * **集成与账号**
   - 在 **配置 → 绑定新设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
   - 安装时及 **配置 → 选择要轮询的设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
-  - 登录界面与 Home Assistant Core 对齐：**服务器区域** 选择 **中国**
+  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
+  - 登录界面与 Home Assistant Core 对齐：**服务器区域**（Imou Life 默认、新加坡、欧洲、北美、中国）
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 访问开放平台 API
 * **事件推送与自动化**
@@ -258,6 +260,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
   - 音频录制、设备提示音、异常音告警
   - 重启设备
+  - **媒体浏览器** — 在 **媒体** 中按通道浏览云 / 本地录像（[说明](guides/configuration.md#media-browser-zh)）
+  - **智见** — **智见** / **云存储** 传感器、告警可选 AI 文案、账号工作台（搜索、简报、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
 * **告警传感器**
   - 状态（名称、在线、电量等）
   - 布防 — `alarm_control_panel`（在家 / 离家 / 撤防）

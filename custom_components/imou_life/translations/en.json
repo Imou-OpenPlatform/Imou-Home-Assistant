@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "Select the server region closest to your location",
+          "api_url": "Must match where your App was created. Most accounts on open.imoulife.com use Imou Life (default); pick a regional endpoint only when your console specifies one.",
           "app_id": "The app ID obtained from the Imou cloud platform",
           "app_secret": "The app secret obtained from the Imou cloud platform"
         }
@@ -99,7 +99,8 @@
           "local_recording": "Record on alarm",
           "select_poll_devices": "Choose devices to poll",
           "bind_device": "Bind a new device",
-          "finish": "Done"
+          "finish": "Done",
+          "ai_insight": "AI Insight workbench"
         }
       },
       "general_settings": {
@@ -220,6 +221,16 @@
           "device_id": "Serial number (SN) printed on the device or shown in the Imou Life app",
           "code": "Optional. Leave empty if the device does not require a binding code"
         }
+      },
+      "ai_insight": {
+        "data": {
+          "trial_contact_url": "Trial or purchase link"
+        },
+        "data_description": {
+          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
+        },
+        "description": "Optional link shown when someone presses **AI Insight trial** on the workbench.",
+        "title": "AI Insight workbench"
       }
     }
   },
@@ -229,7 +240,8 @@
         "cn": "China",
         "eu": "Europe",
         "na": "North America",
-        "sg": "Singapore (Asia-Pacific)"
+        "sg": "Singapore (Asia-Pacific)",
+        "intl": "Imou Life (default)"
       }
     },
     "webhook_placeholder": {
@@ -273,6 +285,7 @@
         "labels": "Labels: {labels}",
         "time": "Time: {time_str}",
         "details": "Details: {desc_type}",
+        "ai_insight": "AI: {ai_text}",
         "unknown_device": "Unknown device",
         "unknown_alarm": "Alarm"
       }
@@ -479,6 +492,24 @@
           "upgrading": "Upgrading"
         }
       },
+      "ai_insight_status": {
+        "name": "AI Insight",
+        "state": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "unavailable": "Unavailable"
+        }
+      },
+      "cloud_storage_status": {
+        "name": "Cloud storage",
+        "state": {
+          "insight": "AI Insight plan",
+          "event": "Event plan",
+          "continuous": "Continuous plan",
+          "none": "None",
+          "unknown": "Unknown"
+        }
+      },
       "storage_used": {
         "name": "Storage used"
       },
@@ -490,6 +521,12 @@
       },
       "use_time": {
         "name": "Usage duration"
+      },
+      "insight_briefing": {
+        "name": "AI Insight briefing"
+      },
+      "insight_search_result": {
+        "name": "AI Insight search"
       }
     },
     "select": {
@@ -519,6 +556,9 @@
         "state": {
           "select_collection_point": "Select a collection point…"
         }
+      },
+      "insight_workbench_device": {
+        "name": "AI Insight device"
       }
     },
     "light": {
@@ -606,6 +646,9 @@
       },
       "siren_stop": {
         "name": "Stop siren"
+      },
+      "ai_insight_trial": {
+        "name": "AI Insight trial"
       }
     },
     "camera": {
@@ -648,6 +691,10 @@
         "name": "Max power (W)"
       }
     }
+  },
+  "media_source": {
+    "record_media_cloud_folder": "Cloud recordings",
+    "record_media_local_folder": "Local recordings"
   },
   "services": {
     "control_move_ptz": {
@@ -728,6 +775,36 @@
     },
     "snap_detect_failed": {
       "message": "Imou could not run capture and detection: {error}"
+    },
+    "record_media_unresolved": {
+      "message": "This recording item could not be opened."
+    },
+    "record_media_not_loaded": {
+      "message": "Imou is not loaded for this account."
+    },
+    "record_playback_failed": {
+      "message": "Could not start recording playback: {error}"
+    },
+    "insight_briefing_failed": {
+      "message": "Imou could not load the briefing: {error}"
+    },
+    "insight_search_failed": {
+      "message": "Imou could not search alarms: {error}"
+    },
+    "insight_search_keyword_required": {
+      "message": "Enter a search keyword."
+    },
+    "insight_workbench_entry_required": {
+      "message": "Target an Imou entity when more than one Imou account is loaded."
+    },
+    "insight_workbench_no_device": {
+      "message": "Choose a camera on the AI Insight workbench first."
+    },
+    "insight_workbench_not_ready": {
+      "message": "Imou is still starting. Try again in a moment."
+    },
+    "insight_workbench_unknown_device": {
+      "message": "That camera is not on the AI Insight workbench list."
     }
   }
 }

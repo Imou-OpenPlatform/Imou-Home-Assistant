@@ -34,7 +34,13 @@ CONFIG_SWITCHES = {
     "smart_track",
 }
 CONFIG_SELECTS = {"device_volume", "night_vision_mode", "wide_dynamic"}
-DIAGNOSTIC_SENSORS = {PARAM_STATUS, "battery", "storage_used"}
+DIAGNOSTIC_SENSORS = {
+    PARAM_STATUS,
+    "battery",
+    "storage_used",
+    "ai_insight_status",
+    "cloud_storage_status",
+}
 
 
 def _categorised(descriptions, category: EntityCategory) -> set[str]:

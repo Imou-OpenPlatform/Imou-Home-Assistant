@@ -8,6 +8,12 @@
 
 - **Event push** can subscribe to **Device capability events** (V2) alongside legacy alarm and device status types. Configure under **Configure → Alarm push and notifications**.
 - Entities are created only for capabilities your device reports on the Open Platform **capability list** (same gate for plugs and cameras).
+- **Media browser** — browse **cloud** and **local** recordings per camera channel under **Media**, then play clips with HLS (local tree appears when the device supports local recording file access).
+- **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; optional **AI** line in alarm notification templates when your template includes it.
+- **AI Insight workbench** (per account) — **AI Insight device** select, **AI Insight search** and **AI Insight briefing** sensors (Markdown-friendly state), **AI Insight trial** button, and services **`search_ai_alarms`** / **`refresh_ai_insight_briefing`** (default last 7 days). Optional trial link under **Configure → AI Insight workbench**. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
+- Service **`device_snap_detect`** — cloud snapshot with person / vehicle / pet detection; optional notify targets (defaults to persistent notification and every `mobile_app_*` notify service when omitted).
+- Configure menu entry **AI Insight workbench**.
+- Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
 
 #### Changed
 
@@ -360,6 +366,12 @@
 
 - 告警推送可订阅 **设备事件消息**（V2 能力事件），与原有告警、设备状态等类型并存；在 **配置 → 告警推送与通知** 中选择。
 - 实体仅根据开放平台返回的 **能力列表** 创建（插座与摄像头同一套门控）。
+- **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像** 与 **本地录像**（设备支持本地录像文件能力时显示本地树），用 HLS 播放片段。
+- **智见**（摄像头通道）— 诊断用 **智见**、**云存储** 传感器；告警通知模板可选用 **智见** 文案行。
+- **智见工作台**（按账号）— **智见设备** 选择框、**智见搜索** / **智见简报** 传感器（状态适合 Markdown 卡片）、**智见试用** 按钮，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。可在 **配置 → 智见工作台** 填写试用链接。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- 服务 **`device_snap_detect`** — 云端抓图并做人 / 车 / 宠检测；可指定通知目标（省略时默认持久通知与各 `mobile_app_*` 通知服务）。
+- 配置菜单新增 **智见工作台**。
+- 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
 #### 变更
 

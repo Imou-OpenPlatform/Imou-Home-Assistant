@@ -55,6 +55,7 @@ def test_iter_sensors_ignores_unknown_keys() -> None:
             "legacy_unknown_sensor": {PARAM_STATE: "1"},
         }
     )
+    device.channel_id = None
     pairs = _iter_sensors(_mock_coordinator([device]))
     assert len(pairs) == 1
     assert pairs[0][0].key == PARAM_BATTERY

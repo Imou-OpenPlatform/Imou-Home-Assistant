@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "选择离你最近的服务器区域",
+          "api_url": "须与创建应用时使用的区域一致。多数 open.imoulife.com 账号选「Imou Life（默认）」；仅当控制台标明区域接入点时再选新加坡、欧洲或北美。",
           "app_id": "在 Imou 开放平台创建应用后获得的 App ID",
           "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
@@ -99,7 +99,8 @@
           "local_recording": "告警时录像",
           "select_poll_devices": "选择要轮询的设备",
           "bind_device": "绑定新设备",
-          "finish": "完成"
+          "finish": "完成",
+          "ai_insight": "智见工作台"
         }
       },
       "general_settings": {
@@ -220,16 +221,27 @@
           "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看",
           "code": "可选。若设备不需要绑定码可留空"
         }
+      },
+      "ai_insight": {
+        "data": {
+          "trial_contact_url": "试用或购买链接"
+        },
+        "data_description": {
+          "trial_contact_url": "链接或简短说明。智见套餐需在云端人工开通，Home Assistant 不会代为购买。"
+        },
+        "description": "用户点按工作台 **智见试用** 按钮时显示的链接（可选）。",
+        "title": "智见工作台"
       }
     }
   },
   "selector": {
     "api_url": {
       "options": {
-        "cn": "中国",
+        "intl": "Imou Life（默认）",
+        "sg": "新加坡（亚太）",
         "eu": "欧洲",
         "na": "北美",
-        "sg": "新加坡（亚太）"
+        "cn": "中国"
       }
     },
     "webhook_placeholder": {
@@ -273,6 +285,7 @@
         "labels": "标签：{labels}",
         "time": "时间：{time_str}",
         "details": "详情：{desc_type}",
+        "ai_insight": "智见：{ai_text}",
         "unknown_device": "未知设备",
         "unknown_alarm": "告警"
       }
@@ -479,6 +492,24 @@
           "upgrading": "升级中"
         }
       },
+      "ai_insight_status": {
+        "name": "智见",
+        "state": {
+          "active": "已开通",
+          "inactive": "未开通",
+          "unavailable": "未知"
+        }
+      },
+      "cloud_storage_status": {
+        "name": "云存储",
+        "state": {
+          "insight": "智见套餐",
+          "event": "事件云存储",
+          "continuous": "连续云存储",
+          "none": "无",
+          "unknown": "未知"
+        }
+      },
       "storage_used": {
         "name": "存储使用率"
       },
@@ -490,6 +521,12 @@
       },
       "use_time": {
         "name": "使用时长"
+      },
+      "insight_briefing": {
+        "name": "智见简报"
+      },
+      "insight_search_result": {
+        "name": "智见搜索"
       }
     },
     "select": {
@@ -519,6 +556,9 @@
         "state": {
           "select_collection_point": "选择收藏点…"
         }
+      },
+      "insight_workbench_device": {
+        "name": "智见设备"
       }
     },
     "light": {
@@ -606,6 +646,9 @@
       },
       "siren_stop": {
         "name": "关闭警笛"
+      },
+      "ai_insight_trial": {
+        "name": "智见试用"
       }
     },
     "camera": {
@@ -648,6 +691,10 @@
         "name": "最大功率（W）"
       }
     }
+  },
+  "media_source": {
+    "record_media_cloud_folder": "云录像",
+    "record_media_local_folder": "本地录像"
   },
   "services": {
     "control_move_ptz": {
@@ -728,6 +775,36 @@
     },
     "snap_detect_failed": {
       "message": "Imou 无法完成抓图检测：{error}"
+    },
+    "record_media_unresolved": {
+      "message": "无法打开该录像项。"
+    },
+    "record_media_not_loaded": {
+      "message": "该账号的 Imou 集成未加载。"
+    },
+    "record_playback_failed": {
+      "message": "无法开始录像播放：{error}"
+    },
+    "insight_briefing_failed": {
+      "message": "Imou could not load the briefing: {error}"
+    },
+    "insight_search_failed": {
+      "message": "Imou could not search alarms: {error}"
+    },
+    "insight_search_keyword_required": {
+      "message": "Enter a search keyword."
+    },
+    "insight_workbench_entry_required": {
+      "message": "Target an Imou entity when more than one Imou account is loaded."
+    },
+    "insight_workbench_no_device": {
+      "message": "Choose a camera on the AI Insight workbench first."
+    },
+    "insight_workbench_not_ready": {
+      "message": "Imou is still starting. Try again in a moment."
+    },
+    "insight_workbench_unknown_device": {
+      "message": "That camera is not on the AI Insight workbench list."
     }
   }
 }

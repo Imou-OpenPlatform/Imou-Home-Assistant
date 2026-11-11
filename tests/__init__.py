@@ -9,13 +9,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 USER_INPUT = {
     "app_id": "test_app_id",
     "app_secret": "test_app_secret",
-    "api_url": "openapi-sg.easy4ip.com",
+    "api_url": "openapi.easy4ip.com",
 }
 
 LOGIN_INPUT = {
     "app_id": "test_app_id",
     "app_secret": "test_app_secret",
-    "api_url": "sg",
+    "api_url": "intl",
 }
 
 

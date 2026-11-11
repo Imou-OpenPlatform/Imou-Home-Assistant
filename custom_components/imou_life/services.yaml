@@ -23,3 +23,34 @@ device_snap_detect:
       example: ["notify.mobile_app_phone"]
       selector:
         object:
+search_ai_alarms:
+  target:
+    entity:
+      integration: imou_life
+  fields:
+    keyword:
+      required: true
+      example: "person in black coat"
+      selector:
+        text:
+    days:
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 31
+          unit_of_measurement: days
+refresh_ai_insight_briefing:
+  target:
+    entity:
+      integration: imou_life
+  fields:
+    days:
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 31
+          unit_of_measurement: days

@@ -114,6 +114,51 @@ Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch b
 | Camera unavailable | Wait until the camera state is not `unavailable` after restart. |
 | Empty / failed MP4 | Stream URL expired, network issue, or quota; retry; check logs around stream / ffmpeg. On Home Assistant Core, if logs say Stream is not set up, add `stream:` to `configuration.yaml` and restart. |
 
+<a id="media-browser"></a>
+
+### Media browser (recordings)
+
+Open **Media**, pick your **Imou Life** account, then a camera channel. You get two trees:
+
+| Tree | When it appears |
+| --- | --- |
+| Cloud recordings | When the channel has cloud storage history |
+| Local recordings | When the device reports local recording file access |
+
+Drill down by month → days with clips → individual segments. Playback uses **HLS** through the **Stream** integration. If nothing plays, confirm **Stream** is enabled and check integration logs.
+
+### AI Insight workbench
+
+**AI Insight** (smart search and daily briefings) needs the channel on an **AI Insight** or **AI Insight cloud storage** plan. Check **AI Insight** / **Cloud storage** on the camera device page.
+
+Per account (integration device page):
+
+| Item | What it does |
+| --- | --- |
+| **AI Insight device** | Choose which camera channel search and briefing use |
+| **AI Insight search** | Markdown text updated by **`imou_life.search_ai_alarms`** |
+| **AI Insight briefing** | Markdown text updated by **`imou_life.refresh_ai_insight_briefing`** |
+| **AI Insight trial** | Opens a persistent notification with how plans are opened (not in-app purchase). Default contact text follows your login region (China vs overseas); **Configure → AI Insight workbench** can add an extra link. |
+
+| Service | Fields | Default window |
+| --- | --- | --- |
+| `imou_life.search_ai_alarms` | `keyword` (required), `days` | 7 days |
+| `imou_life.refresh_ai_insight_briefing` | `days` | 7 days |
+
+Target the workbench **select** entity or any entity on the chosen camera. Example Lovelace layout: [`dashboard-ai-insight.yaml`](../guides/dashboard-ai-insight.yaml) — replace entity IDs with yours from **Developer tools → States**.
+
+| Option | What it does |
+| --- | --- |
+| **Trial or purchase link** (`Configure → AI Insight workbench`) | Optional URL or note appended when someone presses **AI Insight trial** |
+
+Alarm notifications can include an **AI:** line when your notify template uses the integration’s AI placeholder (same text as pushed alarms with AI copy).
+
+### Capture and detect
+
+| Service | What it does |
+| --- | --- |
+| `imou_life.device_snap_detect` | Grabs a cloud snapshot on the targeted camera channel, runs person / vehicle / pet detection, and optionally sends a notify message. Without `notify_targets`, uses persistent notification and each `notify.mobile_app_*` service found. |
+
 ### Devices
 
 | Page | What it does |
@@ -245,6 +290,55 @@ homeassistant:
 | 选项保存被拒 / 路径不在白名单 | 目录不在 `allowlist_external_dirs`、文件夹不存在、或绝对路径不一致。修正后重启。 |
 | 相机不可用 | 重启后等待相机状态非 `unavailable`。 |
 | MP4 为空或失败 | 流地址过期、网络或配额问题；重试；查看 stream / ffmpeg 相关日志。Home Assistant Core 若日志说 Stream 未启用，在 `configuration.yaml` 增加 `stream:` 后重启。 |
+
+<a id="media-browser-zh"></a>
+
+### 媒体浏览器（录像）
+
+打开 **媒体**，进入 **Imou Life** 账号，再选摄像头通道。会出现两棵树：
+
+| 树 | 何时出现 |
+| --- | --- |
+| 云录像 | 该通道有云存储历史时 |
+| 本地录像 | 设备上报本地录像文件能力时 |
+
+按 月 → 有录像的日期 → 片段逐级进入，用 **Stream** 以 **HLS** 播放。播不出来时确认已启用 **Stream**，并查看集成日志。
+
+<a id="ai-insight-zh"></a>
+
+### 智见工作台
+
+**智见**（智能搜索与每日简报）需要该通道已开通 **智见** 或 **智见云存储** 套餐。可在摄像头设备页看 **智见**、**云存储** 传感器。
+
+每个账号（集成设备页）：
+
+| 项目 | 作用 |
+| --- | --- |
+| **智见设备** | 选择搜索与简报针对哪路镜头 |
+| **智见搜索** | 由 **`imou_life.search_ai_alarms`** 写入的 Markdown 文本 |
+| **智见简报** | 由 **`imou_life.refresh_ai_insight_briefing`** 写入的 Markdown 文本 |
+| **智见试用** | 弹出持久通知，说明如何人工开通（非应用内购买）；默认联系文案随登录区域（国内 / 海外）不同，**配置 → 智见工作台** 可再附自定义链接。 |
+
+| 服务 | 字段 | 默认时间范围 |
+| --- | --- | --- |
+| `imou_life.search_ai_alarms` | `keyword`（必填）、`days` | 7 天 |
+| `imou_life.refresh_ai_insight_briefing` | `days` | 7 天 |
+
+可 targeting 工作台 **选择框** 实体，或所选摄像头上的任意实体。Lovelace 示例见 [`dashboard-ai-insight.yaml`](../guides/dashboard-ai-insight.yaml)，实体 ID 请在 **开发者工具 → 状态** 中改成你的。
+
+| 选项 | 作用 |
+| --- | --- |
+| **试用或购买链接**（**配置 → 智见工作台**） | 点 **智见试用** 时附加的可选链接或说明 |
+
+告警通知可在模板里加上 **智见：** 行（与带 AI 文案的推送一致）。
+
+<a id="snap-detect-zh"></a>
+
+### 抓图检测
+
+| 服务 | 作用 |
+| --- | --- |
+| `imou_life.device_snap_detect` | 对目标摄像头通道云端抓图，做人 / 车 / 宠检测，并可发通知。未填 `notify_targets` 时默认持久通知与各 `notify.mobile_app_*` 服务。 |
 
 ### 设备
 

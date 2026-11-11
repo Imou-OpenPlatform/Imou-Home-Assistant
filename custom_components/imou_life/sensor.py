@@ -21,15 +21,27 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from pyimouapi.const import PARAM_STATE, PARAM_STATE_VARIANT, STATE_VARIANT_NUMERIC
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import PARAM_STATUS
+from .const import (
+    AI_INSIGHT_STATUS_OPTIONS,
+    CLOUD_STORAGE_STATUS_OPTIONS,
+    PARAM_AI_INSIGHT_STATUS,
+    PARAM_CLOUD_STORAGE_STATUS,
+    PARAM_INSIGHT_BRIEFING,
+    PARAM_INSIGHT_SEARCH_RESULT,
+    PARAM_STATUS,
+    imou_life_device_key,
+)
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
+from .insight_account import ImouAccountEntity
+from .runtime_data import get_runtime_data
 
 PARALLEL_UPDATES = 0
 
@@ -116,6 +128,20 @@ SENSOR_DESCRIPTIONS: dict[str, ImouSensorEntityDescription] = {
         native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
+    PARAM_AI_INSIGHT_STATUS: ImouSensorEntityDescription(
+        key=PARAM_AI_INSIGHT_STATUS,
+        translation_key=PARAM_AI_INSIGHT_STATUS,
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        options=list(AI_INSIGHT_STATUS_OPTIONS),
+    ),
+    PARAM_CLOUD_STORAGE_STATUS: ImouSensorEntityDescription(
+        key=PARAM_CLOUD_STORAGE_STATUS,
+        translation_key=PARAM_CLOUD_STORAGE_STATUS,
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        options=list(CLOUD_STORAGE_STATUS_OPTIONS),
+    ),
 }
 
 
@@ -123,12 +149,17 @@ def _iter_sensors(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[ImouSensorEntityDescription, ImouHaDevice]]:
     """Return (description, device) pairs for supported sensors."""
-    return [
+    standard = [
         (SENSOR_DESCRIPTIONS[sensor_type], device)
         for device in coordinator.devices
         for sensor_type in device.sensors
         if sensor_type in SENSOR_DESCRIPTIONS
     ]
+    insight: list[tuple[ImouSensorEntityDescription, ImouHaDevice]] = []
+    for device in camera_channel_devices(coordinator.devices):
+        insight.append((SENSOR_DESCRIPTIONS[PARAM_AI_INSIGHT_STATUS], device))
+        insight.append((SENSOR_DESCRIPTIONS[PARAM_CLOUD_STORAGE_STATUS], device))
+    return standard + insight
 
 
 async def async_setup_entry(
@@ -138,6 +169,57 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou sensor entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSensor, _iter_sensors)
+    coordinator = entry.runtime_data.coordinator
+    async_add_entities(
+        [
+            ImouInsightSearchSensor(coordinator, entry),
+            ImouInsightBriefingSensor(coordinator, entry),
+        ]
+    )
+
+
+_DEFAULT_SEARCH_MARKDOWN = "Run **Search AI alarms** to see matches here."
+_DEFAULT_BRIEFING_MARKDOWN = "Run **Refresh AI Insight briefing** to load the report."
+
+
+class ImouInsightSearchSensor(ImouAccountEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_INSIGHT_SEARCH_RESULT)
+        self._attr_native_value = _DEFAULT_SEARCH_MARKDOWN
+        runtime = get_runtime_data(config_entry)
+        if runtime is not None:
+            runtime.workbench_search_sensor = self
+
+    @callback
+    def set_markdown(self, text: str) -> None:
+        self._attr_native_value = text
+        self.async_write_ha_state()
+
+
+class ImouInsightBriefingSensor(ImouAccountEntity, SensorEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_INSIGHT_BRIEFING)
+        self._attr_native_value = _DEFAULT_BRIEFING_MARKDOWN
+        runtime = get_runtime_data(config_entry)
+        if runtime is not None:
+            runtime.workbench_briefing_sensor = self
+
+    @callback
+    def set_markdown(self, text: str) -> None:
+        self._attr_native_value = text
+        self.async_write_ha_state()
 
 
 class ImouSensor(ImouEntity, SensorEntity):
@@ -174,9 +256,31 @@ class ImouSensor(ImouEntity, SensorEntity):
         Numeric sensors only expose numeric values; error codes such as
         storage_used e1/e2 become None (unknown) instead of mixing enum states.
         """
+        if self._entity_type == PARAM_AI_INSIGHT_STATUS:
+            return self._ai_insight_state()
+        if self._entity_type == PARAM_CLOUD_STORAGE_STATUS:
+            return self._cloud_storage_state()
         value = self.device.sensors[self._entity_type][PARAM_STATE]
         if self.entity_description.device_class == SensorDeviceClass.ENUM:
             return value
         if not self._is_numeric_variant:
             return None
         return value
+
+    def _cloud_snapshot(self):
+        runtime = get_runtime_data(self.coordinator.config_entry)
+        if runtime is None:
+            return None
+        return runtime.cloud_service_by_key.get(imou_life_device_key(self.device))
+
+    def _ai_insight_state(self) -> str:
+        snapshot = self._cloud_snapshot()
+        if snapshot is None:
+            return "unavailable"
+        return "active" if snapshot.ai_insight_active else "inactive"
+
+    def _cloud_storage_state(self) -> str:
+        snapshot = self._cloud_snapshot()
+        if snapshot is None:
+            return "unknown"
+        return snapshot.cloud_storage_label

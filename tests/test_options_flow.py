@@ -135,6 +135,7 @@ async def test_options_flow_init_shows_menu(hass) -> None:
         "event_push",
         "alarm_image_decrypt",
         "local_recording",
+        "ai_insight",
         "select_poll_devices",
         "bind_device",
         "finish",

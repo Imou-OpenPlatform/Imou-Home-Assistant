@@ -353,6 +353,11 @@ async def _async_build_notification_message(
             message += "\n" + notif(
                 "details", "Details: {desc_type}", desc_type=desc_type
             )
+    ai_copy = event_data.get("ai_copywriting")
+    if isinstance(ai_copy, str) and ai_copy.strip():
+        message += "\n" + notif(
+            "ai_insight", "AI: {ai_text}", ai_text=ai_copy.strip()
+        )
     return title, message
 
 

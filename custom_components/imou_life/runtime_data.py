@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
+
+if TYPE_CHECKING:
+    from pyimouapi.insight.cloud import DeviceCloudService
 
 from .const import PUSH_DISPATCH_LIMIT
 from .countdown import CountdownTracker
@@ -53,6 +56,10 @@ class ImouRuntimeData:
     )
     thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
     countdown: CountdownTracker = field(default_factory=CountdownTracker)
+    cloud_service_by_key: dict[str, DeviceCloudService] = field(default_factory=dict)
+    workbench_device_key: str | None = None
+    workbench_search_sensor: Any = None
+    workbench_briefing_sensor: Any = None
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""
