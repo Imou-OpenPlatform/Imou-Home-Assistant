@@ -13,7 +13,6 @@ from custom_components.imou_life.const import (
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
-    PARAM_WIDE_DYNAMIC,
 )
 from custom_components.imou_life.switch import (
     SWITCH_TYPES,
@@ -30,7 +29,6 @@ FEATURE_SWITCH_KEYS = {
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_SMART_TRACK,
-    PARAM_WIDE_DYNAMIC,
 }
 
 

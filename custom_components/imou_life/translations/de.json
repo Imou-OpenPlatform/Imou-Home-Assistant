@@ -253,11 +253,10 @@
     },
     "event_push_type": {
       "options": {
+        "capability_event": "Gerätefähigkeitsereignisse",
         "alarm": "Gerätealarme (Rauch, Gas, Person, Bildänderung usw.)",
         "device_status": "Gerät online/offline",
-        "iot": "IoT-Gerätenachrichten. Wenn dies ausgewählt und Ereignis-Push an ist, aktualisieren Thing-Modell-Geräte Schalter/Sensoren/Scharfschaltung sofort aus iotProperty und überspringen die Intervall-Eigenschaftsabfrage. Schalte Ereignis-Push aus oder entferne die Markierung, um diese Eigenschaften wieder abzufragen.",
-        "numberstat": "Personenzählung",
-        "face_analysis": "Gesichtsanalyse"
+        "iot": "IoT-Gerätenachrichten. Wenn dies ausgewählt und Ereignis-Push an ist, aktualisieren Thing-Modell-Geräte Schalter/Sensoren/Scharfschaltung sofort aus iotProperty und überspringen die Intervall-Eigenschaftsabfrage. Schalte Ereignis-Push aus oder entferne die Markierung, um diese Eigenschaften wieder abzufragen."
       }
     },
     "device_status": {

@@ -1029,7 +1029,7 @@ async def test_options_event_push_callback_failure_stays_on_form(
     client.async_set_message_callback.assert_awaited_once()
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
 async def test_options_event_push_requires_callback_url_when_enabled(hass) -> None:
     """Enabling event push with a blank callback URL must stay on the form."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})

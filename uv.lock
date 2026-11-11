@@ -2002,16 +2002,18 @@ wheels = [
 
 [[package]]
 name = "pyimouapi"
-version = "1.4.4"
+version = "2.0.0"
 source = { editable = "../Py-Imou-Open-Api" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "pyyaml" },
     { name = "simpleeval" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.11.9,<4.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "simpleeval", specifier = ">=1.0.3" },
 ]
 

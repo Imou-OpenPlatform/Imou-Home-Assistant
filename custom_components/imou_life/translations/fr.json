@@ -256,8 +256,7 @@
         "alarm": "Alarmes d'appareil (fumée, gaz, personne, changement d'image, etc.)",
         "device_status": "Appareil en ligne/hors ligne",
         "iot": "Messages d'appareils IoT. Lorsque ceci est sélectionné et que le push d'événements est activé, les appareils à modèle d'objet mettent à jour interrupteurs/capteurs/armement depuis iotProperty immédiatement et ignorent l'interrogation périodique des propriétés. Désactivez le push d'événements ou décochez ceci pour interroger à nouveau ces propriétés.",
-        "numberstat": "Comptage de personnes",
-        "face_analysis": "Analyse faciale"
+        "capability_event": "Événements de capacités de l'appareil"
       }
     },
     "device_status": {

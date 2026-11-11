@@ -35,6 +35,7 @@ from pyimouapi.exceptions import (
 )
 from pyimouapi.openapi import ImouOpenApiClient
 from pyimouapi.pic_decode import is_tcm_ability
+from pyimouapi.push import parse_callback_flag
 
 from . import pic_thumbnail
 from .const import (
@@ -50,7 +51,6 @@ from .const import (
     DOMAIN,
     DORMANT_WRITE_RETRY_WAIT_MAX,
     DORMANT_WRITE_RETRY_WAIT_MIN,
-    EVENT_PUSH_TYPE_OPTIONS,
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
@@ -75,7 +75,9 @@ from .const import (
     api_url_from_region,
     api_url_region_from_value,
     callback_flags_to_event_push_types,
+    event_push_selector_options,
     event_push_types_to_callback_flags,
+    sanitize_event_push_types,
 )
 from .helpers import (
     async_build_device_map,
@@ -623,7 +625,9 @@ class ImouOptionsFlow(OptionsFlow):
         enable_push = bool(flat.get(PARAM_ENABLE_EVENT_PUSH, False))
         event_push_types = flat.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
         if isinstance(event_push_types, list):
-            event_push_types = callback_flags_to_event_push_types(event_push_types)
+            event_push_types = sanitize_event_push_types(
+                callback_flags_to_event_push_types(event_push_types)
+            )
 
         # Prefill the generated address so turning push on does not first fail
         # on an empty field the user has to copy out of the description.
@@ -653,9 +657,15 @@ class ImouOptionsFlow(OptionsFlow):
                 user_input.get(PARAM_WEBHOOK_URL, stored_options.get(PARAM_WEBHOOK_URL))
                 or ""
             ).strip(),
-            PARAM_EVENT_PUSH_TYPES: user_input.get(
-                PARAM_EVENT_PUSH_TYPES,
-                stored_options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_EVENT_PUSH_TYPES: sanitize_event_push_types(
+                list(
+                    user_input.get(
+                        PARAM_EVENT_PUSH_TYPES,
+                        stored_options.get(
+                            PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES
+                        ),
+                    )
+                )
             ),
         }
         if SECTION_EVENT_PUSH_NOTIFICATIONS in user_input:
@@ -670,7 +680,9 @@ class ImouOptionsFlow(OptionsFlow):
             )
         return flat
 
-    def _event_push_schema(self) -> vol.Schema:
+    def _event_push_schema(
+        self, account_callback_flags: set[str] | None = None
+    ) -> vol.Schema:
         """Build the event push options form."""
         stored_notify = parse_notify_services(
             self.config_entry.options.get(PARAM_NOTIFY_SERVICES)
@@ -687,7 +699,7 @@ class ImouOptionsFlow(OptionsFlow):
                     default=DEFAULT_EVENT_PUSH_TYPES,
                 ): SelectSelector(
                     SelectSelectorConfig(
-                        options=list(EVENT_PUSH_TYPE_OPTIONS),
+                        options=event_push_selector_options(account_callback_flags),
                         multiple=True,
                         translation_key="event_push_type",
                     )
@@ -1084,10 +1096,42 @@ class ImouOptionsFlow(OptionsFlow):
             return None
         return "record_path_not_allowed"
 
+    async def _async_account_callback_flags(self) -> set[str] | None:
+        """Query Open Platform for callbackFlag; None means degrade to always-only."""
+        runtime = get_runtime_data(self.config_entry)
+        client = runtime.client if runtime is not None else None
+        owned = False
+        if client is None:
+            client = ImouOpenApiClient(
+                self.config_entry.data[PARAM_APP_ID],
+                self.config_entry.data[PARAM_APP_SECRET],
+                self.config_entry.data[PARAM_API_URL],
+            )
+            owned = True
+        try:
+            data = await client.async_get_message_callback()
+            callback_flag = data.get("callbackFlag")
+            if callback_flag is None and isinstance(data.get("callbackFlags"), str):
+                callback_flag = data.get("callbackFlags")
+            flags = parse_callback_flag(callback_flag)
+            _LOGGER.debug("getMessageCallback callbackFlag=%s", sorted(flags))
+            return flags
+        except Exception:
+            _LOGGER.warning(
+                "getMessageCallback failed; event push types limited to "
+                "capability_event and device_status",
+                exc_info=True,
+            )
+            return set()
+        finally:
+            if owned:
+                await client.async_close()
+
     async def async_step_event_push(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage options — event push and notification targets."""
+        account_callback_flags = await self._async_account_callback_flags()
         stored = dict(self.config_entry.options)
         errors: dict[str, Any] = {}
         error_detail = ""
@@ -1118,7 +1162,7 @@ class ImouOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="event_push",
             data_schema=self.add_suggested_values_to_schema(
-                self._event_push_schema(),
+                self._event_push_schema(account_callback_flags),
                 self._nested_event_push_suggestions(suggested_source),
             ),
             errors=errors,

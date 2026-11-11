@@ -2011,3 +2011,131 @@ async def test_webhook_german_device_line(hass: HomeAssistant) -> None:
     )
     assert "Gerät: Cam" in message
     assert "Device: Cam" not in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_capability_push_requires_subscription(
+    hass: HomeAssistant,
+) -> None:
+    """V2 capabilityEvent pushes are ignored when capability_event is not selected."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(hass, selected_devices=["SN1"])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "detection.motion.detected",
+                "deviceId": "SN1",
+                "channelId": "0",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_capability_push_gated_by_device_events(
+    hass: HomeAssistant,
+) -> None:
+    """V2 eventId must appear in the device capability list."""
+    from unittest.mock import MagicMock
+
+    from custom_components.imou_life.const import (
+        PARAM_EVENT_PUSH_TYPES,
+        imou_life_device_key,
+    )
+    from pyimouapi.capability.catalog import CapabilitySet
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={
+            PARAM_EVENT_PUSH_TYPES: ["capability_event"],
+        },
+    )
+    device = MagicMock()
+    device.device_id = "SN1"
+    device.channel_id = "0"
+    device.product_id = None
+    device.capability_set = CapabilitySet(
+        properties={},
+        services=frozenset(),
+        events=frozenset({"detection.person.detected"}),
+    )
+    key = imou_life_device_key(device)
+    runtime.coordinator.devices_by_key = {key: device}
+    runtime.coordinator.devices = [device]
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "detection.motion.detected",
+                "deviceId": "SN1",
+                "channelId": "0",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_motion_maps_to_legacy_msg_type(
+    hass: HomeAssistant,
+) -> None:
+    """V2 motion event maps to videoMotion for alarm dispatch."""
+    from unittest.mock import MagicMock
+
+    from custom_components.imou_life.const import (
+        PARAM_EVENT_PUSH_TYPES,
+        imou_life_device_key,
+    )
+    from pyimouapi.capability.catalog import CapabilitySet
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={
+            PARAM_EVENT_PUSH_TYPES: ["capability_event"],
+        },
+    )
+    device = MagicMock()
+    device.device_id = "SN1"
+    device.channel_id = "0"
+    device.product_id = None
+    device.capability_set = CapabilitySet(
+        properties={},
+        services=frozenset(),
+        events=frozenset({"detection.motion.detected"}),
+    )
+    key = imou_life_device_key(device)
+    runtime.coordinator.devices_by_key = {key: device}
+    runtime.coordinator.devices = [device]
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "detection.motion.detected",
+                "deviceId": "SN1",
+                "channelId": "0",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert response.status == 200
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == "videoMotion"

@@ -2,9 +2,19 @@
 
 ## English
 
-### [1.4.5]
+### [2.0.0]
+
+#### Added
+
+- **Event push** can subscribe to **Device capability events** (V2) alongside legacy alarm and device status types. Configure under **Configure → Alarm push and notifications**.
+- Entities are created only for capabilities your device reports on the Open Platform **capability list** (same gate for plugs and cameras).
 
 #### Changed
+
+- Requires **pyimouapi 2.0.0**, installed automatically with this integration.
+- On devices that use the new capability path, **Wide dynamic** appears as a **select** (off / on / adaptive where supported), not a switch.
+
+#### Fixed
 
 - The **Live** camera reuses the last still for 30 seconds. Opening it again in that time shows the same picture and does not ask the cloud for another snapshot
 
@@ -344,9 +354,19 @@
 
 ## 中文
 
-### [1.4.5]
+### [2.0.0]
+
+#### 新增
+
+- 告警推送可订阅 **设备事件消息**（V2 能力事件），与原有告警、设备状态等类型并存；在 **配置 → 告警推送与通知** 中选择。
+- 实体仅根据开放平台返回的 **能力列表** 创建（插座与摄像头同一套门控）。
 
 #### 变更
+
+- 需要 **pyimouapi 2.0.0**，随本集成自动安装。
+- 走新标准能力路径的设备上，**宽动态** 为 **选择框**（关 / 开 / 自适应，以设备能力为准），不再是开关。
+
+#### 修复
 
 - **直播** 会把最近一张静止画面留 30 秒。这段时间里再次打开用的是同一张图，不会再向云端要一张
 

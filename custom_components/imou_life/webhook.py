@@ -18,18 +18,23 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers import translation
+from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.push import (
     event_ref_lookup_key,
     iot_property_values,
     is_alarm_msg_type,
     is_iot_non_event,
+    is_v2_capability_event_id,
+    legacy_msg_type_from_v2_event,
     normalize_push_payload,
+    v2_capability_event_permitted,
 )
 
 from .const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
@@ -38,6 +43,7 @@ from .const import (
 )
 from .helpers import (
     alarm_type_option_key,
+    event_push_type_active,
     fill_template,
     get_excluded_device_ids,
     get_selected_device_ids,
@@ -500,6 +506,47 @@ def _get_entry_and_runtime(
     return None
 
 
+def _devices_by_key(runtime: ImouRuntimeData) -> dict[str, ImouHaDevice] | None:
+    """Return coordinator devices keyed like Imou Life entities."""
+    coordinator = runtime.coordinator
+    devices_by_key = getattr(coordinator, "devices_by_key", None)
+    if isinstance(devices_by_key, dict):
+        return devices_by_key
+    devices = getattr(coordinator, "devices", None)
+    if not isinstance(devices, list):
+        return None
+    return {imou_life_device_key(d): d for d in devices}
+
+
+def _resolve_imou_ha_device_for_push(
+    runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> ImouHaDevice | None:
+    """Match a normalized push to the coordinator's ImouHaDevice, if any."""
+    devices_by_key = _devices_by_key(runtime)
+    if not devices_by_key:
+        return None
+    for key in imou_life_device_keys_from_ids(
+        event_data.get("device_id"),
+        event_data.get("channel_id"),
+        event_data.get("product_id"),
+    ):
+        device = devices_by_key.get(key)
+        if device is not None:
+            return device
+    return None
+
+
+def _v2_capability_event_allowed(
+    ha_device: ImouHaDevice | None, event_id: str
+) -> bool:
+    """Gate V2 eventId pushes on device.capability.list when that list is known."""
+    if ha_device is None:
+        return False
+    cap = ha_device.capability_set
+    events = cap.events if cap is not None else None
+    return v2_capability_event_permitted(events, event_id)
+
+
 def _apply_iot_property_push(
     runtime: ImouRuntimeData, event_data: dict[str, Any]
 ) -> None:
@@ -511,24 +558,10 @@ def _apply_iot_property_push(
             "iotProperty with no properties for %s", event_data.get("device_id")
         )
         return
-    coordinator = runtime.coordinator
-    devices_by_key = getattr(coordinator, "devices_by_key", None)
-    if not isinstance(devices_by_key, dict):
-        devices = getattr(coordinator, "devices", None)
-        if not isinstance(devices, list):
-            return
-        devices_by_key = {imou_life_device_key(d): d for d in devices}
-    device = None
-    for key in imou_life_device_keys_from_ids(
-        event_data.get("device_id"),
-        event_data.get("channel_id"),
-        event_data.get("product_id"),
-    ):
-        device = devices_by_key.get(key)
-        if device is not None:
-            break
+    device = _resolve_imou_ha_device_for_push(runtime, event_data)
     if device is None:
         return
+    coordinator = runtime.coordinator
     if coordinator.device_manager.apply_iot_property_values(device, values):
         coordinator.async_update_listeners()
 
@@ -572,6 +605,12 @@ async def _async_dispatch_imou_push(
 ) -> None:
     """Resolve identifiers, classify, fire events, and notify after webhook ACK."""
     try:
+        msg_type = event_data.get("msg_type")
+        if is_v2_capability_event_id(msg_type):
+            legacy = legacy_msg_type_from_v2_event(msg_type)
+            if legacy != msg_type:
+                event_data["msg_type"] = legacy
+                event_data["msg_type_name"] = legacy
         await _async_apply_event_identifier(runtime, event_data)
         runtime.record_push_msg(event_data.get("msg_type"))
         thumbnail_local = None
@@ -692,6 +731,25 @@ async def async_handle_imou_webhook(
         return web.Response(status=200, text="ok")
 
     event_data["device_name"] = ha_device_name
+
+    msg_type = event_data.get("msg_type")
+    if is_v2_capability_event_id(msg_type):
+        if not event_push_type_active(entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT):
+            _LOGGER.debug(
+                "Ignoring V2 capability push (capability_event not subscribed) "
+                "for %s: %s",
+                device_id,
+                msg_type,
+            )
+            return web.Response(status=200, text="ok")
+        ha_device = _resolve_imou_ha_device_for_push(runtime, event_data)
+        if not _v2_capability_event_allowed(ha_device, str(msg_type)):
+            _LOGGER.debug(
+                "Ignoring V2 event not in device capability list for %s: %s",
+                device_id,
+                msg_type,
+            )
+            return web.Response(status=200, text="ok")
 
     # ACK first so Imou does not stop pushing while we resolve/notify. The task is
     # tied to the entry so it cannot outlive the runtime data it holds.

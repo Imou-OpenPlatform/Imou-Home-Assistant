@@ -256,8 +256,7 @@
         "alarm": "Allarmi dispositivo (fumo, gas, persona, cambio immagine, ecc.)",
         "device_status": "Dispositivo online/offline",
         "iot": "Messaggi dispositivi IoT. Quando è selezionato e il push eventi è attivo, i dispositivi thing-model aggiornano interruttori/sensori/armamento da iotProperty subito e saltano l'interrogazione periodica delle proprietà. Disattiva il push eventi o deseleziona questa voce per interrogare di nuovo quelle proprietà.",
-        "numberstat": "Conteggio persone",
-        "face_analysis": "Analisi volti"
+        "capability_event": "Eventi capacità dispositivo"
       }
     },
     "device_status": {

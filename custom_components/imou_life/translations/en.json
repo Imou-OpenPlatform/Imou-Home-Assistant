@@ -253,11 +253,10 @@
     },
     "event_push_type": {
       "options": {
+        "capability_event": "Device capability events",
         "alarm": "Device alarms (smoke, gas, human, picture change, etc.)",
         "device_status": "Device online/offline",
-        "iot": "IoT device messages. When this is selected and event push is on, thing-model devices update switches/sensors/arming from iotProperty immediately and skip the interval property poll. Turn event push off or uncheck this to poll those properties again.",
-        "numberstat": "People counting",
-        "face_analysis": "Face analysis"
+        "iot": "IoT device messages. When this is selected and event push is on, thing-model devices update switches/sensors/arming from iotProperty immediately and skip the interval property poll. Turn event push off or uncheck this to poll those properties again."
       }
     },
     "device_status": {

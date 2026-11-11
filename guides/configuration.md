@@ -54,7 +54,7 @@ Live streams always use `https`. There is no protocol choice: on an HTTPS Home A
 | --- | --- | --- |
 | Enable event push | Registers this Home Assistant's webhook with the Imou cloud. Everything alarm-driven — notifications, alarm pictures, record on alarm — runs off this. Alarms still reach the Imou Life app either way. | Off |
 | Callback URL | Where the Imou cloud POSTs alarms. Prefilled from **Step 0**; must be reachable from the internet. Only change the hostname and port unless a proxy also rewrites the path. | generated |
-| Subscribe to | Which cloud message types to receive. | Device alarms, online/offline, IoT messages |
+| Subscribe to | Which cloud message types to receive. **Device event messages** is listed first when available; turn it on for V2 capability events. Other types (device alarms, online/offline, IoT messages) only appear when your cloud callback already supports them. None are selected by default. | none selected |
 | Notification targets | Registered notify services to message on an alarm, one message per alarm. Leave empty to drive everything from automations instead. Add `notify.persistent_notification` to also get the alarm in the Home Assistant web notification drawer. | empty |
 
 A device page also has a **Notify on alarm** switch, so one noisy camera can be silenced without touching this page.
@@ -186,7 +186,7 @@ Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch b
 | --- | --- | --- |
 | 启用事件推送 | 把本实例的 Webhook 注册到 Imou 云。所有由告警驱动的功能——通知、图片解密、告警时录像——都跑在这条链路上。无论开关如何，告警都会同步到乐橙 App。 | 关 |
 | 回调地址 | Imou 云向哪个地址推送告警。由 **第 0 步** 预填，必须公网可达。除非代理也改写了路径，否则只改主机名和端口。 | 自动生成 |
-| 订阅类型 | 要接收哪些云端消息类型。 | 设备告警、上下线、IoT 消息 |
+| 订阅类型 | 要接收哪些云端消息类型。列表最上方为 **设备事件消息**（V2 能力事件）；**设备告警**、**上下线**、**IoT 消息** 仅在云端已支持对应订阅时出现。默认不勾选任何类型。 | 默认不勾选 |
 | 通知目标 | 告警时要通知的 notify 服务，每条告警发一条消息。留空则完全交给自动化。想在 Home Assistant 网页通知栏也看到告警，把 `notify.persistent_notification` 加进来。 | 空 |
 
 设备页上还有一个 **告警时通知** 开关，可以单独静音某个吵闹的摄像头，不用动这一页。

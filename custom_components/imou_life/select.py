@@ -16,6 +16,7 @@ from .const import (
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
     PARAM_NIGHT_VISION_MODE,
+    PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
@@ -33,6 +34,11 @@ SELECT_TYPES: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key=PARAM_NIGHT_VISION_MODE,
         translation_key=PARAM_NIGHT_VISION_MODE,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SelectEntityDescription(
+        key=PARAM_WIDE_DYNAMIC,
+        translation_key=PARAM_WIDE_DYNAMIC,
         entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(

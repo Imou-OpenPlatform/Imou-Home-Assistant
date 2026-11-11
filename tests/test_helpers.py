@@ -4,15 +4,22 @@ from types import SimpleNamespace
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
+    CALLBACK_FLAG_ALARM,
+    CALLBACK_FLAG_IOT,
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
     EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_NUMBERSTAT,
+    EVENT_PUSH_TYPES_ALL,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
+    event_push_selector_options,
     imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
+    sanitize_event_push_types,
 )
 from custom_components.imou_life.helpers import (
     alarm_push_active,
@@ -269,7 +276,7 @@ def test_iot_property_push_active_needs_push_and_iot_type() -> None:
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
         },
     )
     assert iot_property_push_active(on) is True
@@ -299,7 +306,7 @@ def test_alarm_push_active_needs_push_and_alarm_type() -> None:
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
         },
     )
     assert alarm_push_active(on) is True
@@ -329,7 +336,7 @@ def test_decrypt_pictures_active_needs_push_and_switch() -> None:
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
         },
     )
@@ -340,7 +347,7 @@ def test_decrypt_pictures_active_needs_push_and_switch() -> None:
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: False,
         },
     )
@@ -379,6 +386,35 @@ def test_fill_template_falls_back_when_placeholders_break() -> None:
     assert fill_template("Hi {name}", "Hi {name}", name="Ada") == "Hi Ada"
     assert fill_template("Hi {missing}", "Hi {name}", name="Ada") == "Hi Ada"
     assert fill_template("Hi {broken", "plain", name="Ada") == "plain"
+
+
+def test_event_push_selector_options_degrades_to_always() -> None:
+    """API failure uses an empty flag set — no alarm/iot choices."""
+    assert event_push_selector_options(set()) == [
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+    ]
+
+
+def test_event_push_selector_options_entitled_flags() -> None:
+    """Alarm and iot appear only when getMessageCallback lists them."""
+    assert event_push_selector_options({CALLBACK_FLAG_ALARM}) == [
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+        EVENT_PUSH_TYPE_ALARM,
+    ]
+    assert event_push_selector_options({CALLBACK_FLAG_IOT}) == [
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+        EVENT_PUSH_TYPE_IOT,
+    ]
+
+
+def test_sanitize_event_push_types_drops_legacy() -> None:
+    """客流/人脸 keys are stripped from stored options."""
+    assert sanitize_event_push_types(
+        ["alarm", EVENT_PUSH_TYPE_NUMBERSTAT, "device_status", "face_analysis"]
+    ) == ["alarm", "device_status"]
 
 
 def test_alarm_type_option_key_is_hassfest_safe() -> None:

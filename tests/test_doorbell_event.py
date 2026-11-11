@@ -8,10 +8,10 @@ from unittest.mock import MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPES_ALL,
     PARAM_DOORBELL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -81,7 +81,7 @@ def _online_doorbell(
     if types is not None:
         options[PARAM_EVENT_PUSH_TYPES] = types
     elif push:
-        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
+        options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
     return ImouDoorbellEvent(
         coordinator,
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),

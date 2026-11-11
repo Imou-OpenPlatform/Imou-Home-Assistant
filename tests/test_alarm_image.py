@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPES_ALL,
     PARAM_ALARM_PICTURE,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
@@ -76,7 +76,7 @@ def _online_alarm_image(
     if types is not None:
         options[PARAM_EVENT_PUSH_TYPES] = types
     elif push:
-        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
+        options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
     return ImouAlarmImage(
         coordinator,
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),

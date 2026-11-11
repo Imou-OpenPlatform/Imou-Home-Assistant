@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    EVENT_PUSH_TYPES_ALL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -270,18 +270,16 @@ async def test_coordinator_default_interval_is_five_minutes(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_skips_ability_refs_when_device_set_unchanged(
+async def test_rediscovery_never_fetches_ability_refs_when_device_set_unchanged(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A rediscovery that finds the same devices must not re-fetch ability refs."""
+    """pyimouapi 2.x discovery always uses capability.list, not IoT ability refs."""
     devices = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, devices)
     device_manager.async_get_devices.assert_awaited()
     assert (
-        device_manager.async_get_devices.await_args.kwargs.get(
-            "fetch_ability_refs", True
-        )
-        is True
+        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
+        is False
     )
 
     device_manager.async_get_devices.reset_mock()
@@ -297,10 +295,10 @@ async def test_rediscovery_skips_ability_refs_when_device_set_unchanged(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
+async def test_rediscovery_relists_devices_when_a_new_device_appears(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A newly appeared device is the only one that spends a detail call."""
+    """A new account device triggers a second list call; refs are never fetched."""
     first = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, first)
 
@@ -311,13 +309,8 @@ async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
     await coordinator._async_update_data()
 
     assert device_manager.async_get_devices.await_count == 2
-    assert (
-        device_manager.async_get_devices.await_args_list[0].kwargs["fetch_ability_refs"]
-        is False
-    )
-    assert device_manager.async_get_devices.await_args_list[1].kwargs[
-        "fetch_ability_refs"
-    ] == {"d2"}
+    for call in device_manager.async_get_devices.await_args_list:
+        assert call.kwargs["fetch_ability_refs"] is False
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
 
 
@@ -420,7 +413,7 @@ async def test_property_push_skips_iot_detail_after_first_fetch(
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
-        PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+        PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
     }
     coordinator = await _run_update(hass, device_manager, [device], options=options)
     first_skip = device_manager.async_update_devices_status.await_args.kwargs.get(

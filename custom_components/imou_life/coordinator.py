@@ -154,17 +154,15 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _async_discover_devices(self) -> None:
         """Refresh which devices the account holds.
 
-        Ability-ref detail calls are only needed to register entities for a
-        device Home Assistant has not seen yet. A rediscovery that finds the
-        same keys therefore lists without spending those calls; when something
-        new appears, only that device's ids are queried again.
+        Entity registration uses ``device.capability.list`` in pyimouapi 2.x;
+        listing does not fetch legacy IoT ability refs.
         """
         _LOGGER.debug("Listing Imou devices")
         first_discovery = not self._devices_initialized
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fresh_devices = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=first_discovery
+                    fetch_ability_refs=False
                 )
         except TimeoutError as err:
             if first_discovery:
@@ -202,11 +200,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         new_keys = set(fresh_by_key) - set(self.devices_by_key)
         if new_keys:
-            new_ids = {fresh_by_key[key].device_id for key in new_keys}
             try:
                 async with asyncio.timeout(UPDATE_TIMEOUT):
                     detailed = await self._device_manager.async_get_devices(
-                        fetch_ability_refs=new_ids
+                        fetch_ability_refs=False
                     )
             except TimeoutError as err:
                 _LOGGER.warning(
@@ -423,7 +420,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 detailed = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=ability_ids
+                    fetch_ability_refs=False
                 )
         except InvalidAppIdOrSecretException as err:
             raise ConfigEntryAuthFailed(

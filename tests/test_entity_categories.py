@@ -32,9 +32,8 @@ CONFIG_SWITCHES = {
     "pet_detect",
     "play_sound",
     "smart_track",
-    "wide_dynamic",
 }
-CONFIG_SELECTS = {"device_volume", "night_vision_mode"}
+CONFIG_SELECTS = {"device_volume", "night_vision_mode", "wide_dynamic"}
 DIAGNOSTIC_SENSORS = {PARAM_STATUS, "battery", "storage_used"}
 
 

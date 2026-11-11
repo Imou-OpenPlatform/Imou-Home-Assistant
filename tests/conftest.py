@@ -19,6 +19,20 @@ IMOU_TOKEN_RETURN = {
     "currentDomain": "https://openapi.imoulife.com:443",
 }
 
+_MESSAGE_CALLBACK_FLAGS = "alarm,deviceStatus,iot,capabilityEvent"
+
+
+def _imou_client_instance() -> MagicMock:
+    """Shared mock client for config flow tests."""
+    instance = MagicMock()
+    instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+    instance.async_get_message_callback = AsyncMock(
+        return_value={"callbackFlag": _MESSAGE_CALLBACK_FLAGS}
+    )
+    instance.async_set_message_callback = AsyncMock()
+    instance.async_close = AsyncMock()
+    return instance
+
 
 @pytest.fixture
 def imou_config_flow() -> Generator[MagicMock]:
@@ -32,10 +46,7 @@ def imou_config_flow() -> Generator[MagicMock]:
             AsyncMock(return_value={}),
         ),
     ):
-        instance = MagicMock()
-        instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_set_message_callback = AsyncMock()
-        instance.async_close = AsyncMock()
+        instance = _imou_client_instance()
         mock_client.return_value = instance
         yield mock_client
 
@@ -57,10 +68,7 @@ def imou_config_flow_with_devices() -> Generator[MagicMock]:
             ),
         ),
     ):
-        instance = MagicMock()
-        instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_set_message_callback = AsyncMock()
-        instance.async_close = AsyncMock()
+        instance = _imou_client_instance()
         mock_client.return_value = instance
         yield mock_client
 

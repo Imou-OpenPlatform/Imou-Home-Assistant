@@ -34,7 +34,6 @@ from .const import (
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
-    PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
@@ -116,11 +115,6 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         key=PARAM_PLUG_SWITCH,
         translation_key=PARAM_PLUG_SWITCH,
         device_class=SwitchDeviceClass.SWITCH,
-    ),
-    SwitchEntityDescription(
-        key=PARAM_WIDE_DYNAMIC,
-        translation_key=PARAM_WIDE_DYNAMIC,
-        entity_category=EntityCategory.CONFIG,
     ),
 )
 

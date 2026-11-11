@@ -188,20 +188,34 @@ OVERCHARGE_MAX_WATTS_HIGH = 3680
 OVERCHARGE_HIGH_REF = "128900"
 
 # event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
+EVENT_PUSH_TYPE_CAPABILITY_EVENT = "capability_event"
 EVENT_PUSH_TYPE_ALARM = "alarm"
 EVENT_PUSH_TYPE_DEVICE_STATUS = "device_status"
 EVENT_PUSH_TYPE_IOT = "iot"
+# Legacy keys — stripped on save; never shown in Configure UI
 EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
 EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
 
-EVENT_PUSH_TYPE_OPTIONS = (
-    EVENT_PUSH_TYPE_ALARM,
+EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
-    EVENT_PUSH_TYPE_NUMBERSTAT,
-    EVENT_PUSH_TYPE_FACE_ANALYSIS,
 )
 
+EVENT_PUSH_TYPE_OPTIONS_ENTITLED = (
+    EVENT_PUSH_TYPE_ALARM,
+    EVENT_PUSH_TYPE_IOT,
+)
+
+# Full list for hassfest / tests that need every key
+EVENT_PUSH_TYPE_OPTIONS = (
+    EVENT_PUSH_TYPE_OPTIONS_ALWAYS + EVENT_PUSH_TYPE_OPTIONS_ENTITLED
+)
+
+LEGACY_EVENT_PUSH_TYPES_DROP = frozenset(
+    {EVENT_PUSH_TYPE_NUMBERSTAT, EVENT_PUSH_TYPE_FACE_ANALYSIS}
+)
+
+CALLBACK_FLAG_CAPABILITY_EVENT = "capabilityEvent"
 CALLBACK_FLAG_ALARM = "alarm"
 CALLBACK_FLAG_DEVICE_STATUS = "deviceStatus"
 CALLBACK_FLAG_IOT = "iot"
@@ -209,6 +223,7 @@ CALLBACK_FLAG_NUMBERSTAT = "numberstat"
 CALLBACK_FLAG_FACE_ANALYSIS = "faceAnalysis"
 
 EVENT_PUSH_TYPE_TO_CALLBACK_FLAG: dict[str, str] = {
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT: CALLBACK_FLAG_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_ALARM: CALLBACK_FLAG_ALARM,
     EVENT_PUSH_TYPE_DEVICE_STATUS: CALLBACK_FLAG_DEVICE_STATUS,
     EVENT_PUSH_TYPE_IOT: CALLBACK_FLAG_IOT,
@@ -220,23 +235,63 @@ CALLBACK_FLAG_TO_EVENT_PUSH_TYPE: dict[str, str] = {
     v: k for k, v in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG.items()
 }
 
-DEFAULT_EVENT_PUSH_TYPES = [
+# Configure UI: multi-select starts with nothing checked; user chooses explicitly.
+DEFAULT_EVENT_PUSH_TYPES: list[str] = []
+
+# Every selectable type (fixtures / tests only; not a Configure default).
+EVENT_PUSH_TYPES_ALL = (
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
     EVENT_PUSH_TYPE_IOT,
-]
+)
 
 
 def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
     """Map config option values to Imou API callbackFlag strings."""
     flags: list[str] = []
     for value in types:
+        if value in LEGACY_EVENT_PUSH_TYPES_DROP:
+            continue
         if value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
             flags.append(EVENT_PUSH_TYPE_TO_CALLBACK_FLAG[value])
+        elif value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
+            continue
         else:
             # Legacy v1.2.10 options stored API flag strings directly
             flags.append(value)
     return flags
+
+
+def event_push_selector_options(
+    account_callback_flags: set[str] | None = None,
+) -> list[str]:
+    """Build Configure selector keys; alarm/iot only when account has the flag.
+
+    ``None`` shows every key (unit tests). An empty set is the API-failure degrade path
+    (only capability_event + device_status).
+    """
+    options = list(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
+    if account_callback_flags is None:
+        options.extend(EVENT_PUSH_TYPE_OPTIONS_ENTITLED)
+        return options
+    if CALLBACK_FLAG_ALARM in account_callback_flags:
+        options.append(EVENT_PUSH_TYPE_ALARM)
+    if CALLBACK_FLAG_IOT in account_callback_flags:
+        options.append(EVENT_PUSH_TYPE_IOT)
+    return options
+
+
+def sanitize_event_push_types(types: list[str]) -> list[str]:
+    """Drop legacy UI keys and unknown strings that map only to removed flags."""
+    cleaned: list[str] = []
+    for value in types:
+        if value in LEGACY_EVENT_PUSH_TYPES_DROP:
+            continue
+        if value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
+            continue
+        cleaned.append(value)
+    return cleaned
 
 
 def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
@@ -244,11 +299,12 @@ def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
     types: list[str] = []
     for value in flags:
         if value in CALLBACK_FLAG_TO_EVENT_PUSH_TYPE:
-            types.append(CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value])
+            mapped = CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value]
+            if mapped not in LEGACY_EVENT_PUSH_TYPES_DROP:
+                types.append(mapped)
         elif value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
-            types.append(value)
-        else:
-            types.append(value)
+            if value not in LEGACY_EVENT_PUSH_TYPES_DROP:
+                types.append(value)
     return types
 
 
