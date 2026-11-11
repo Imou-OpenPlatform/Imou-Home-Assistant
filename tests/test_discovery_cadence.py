@@ -86,9 +86,9 @@ async def test_listing_resumes_once_the_interval_passes(
         await coordinator._async_update_data()
     assert len(coordinator.devices) == 1
 
-    device_manager.async_get_devices.side_effect = [
-        [_mock_device("d1"), _mock_device("d2")],
-        [_mock_device("d1"), _mock_device("d2")],
+    device_manager.async_get_devices.return_value = [
+        _mock_device("d1"),
+        _mock_device("d2"),
     ]
     with patch(
         "custom_components.imou_life.coordinator.monotonic",
@@ -96,8 +96,8 @@ async def test_listing_resumes_once_the_interval_passes(
     ):
         await coordinator._async_update_data()
 
-    # First discovery + list-only rediscovery + ability refs for the new id.
-    assert device_manager.async_get_devices.await_count == 3
+    # First discovery + one rediscovery list (capability.list included).
+    assert device_manager.async_get_devices.await_count == 2
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
     assert [d.device_id for batch in added for d in batch] == ["d2"]
 

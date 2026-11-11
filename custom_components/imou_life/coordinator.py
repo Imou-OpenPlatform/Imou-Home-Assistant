@@ -200,50 +200,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
         new_keys = set(fresh_by_key) - set(self.devices_by_key)
         if new_keys:
-            try:
-                async with asyncio.timeout(UPDATE_TIMEOUT):
-                    detailed = await self._device_manager.async_get_devices(
-                        fetch_ability_refs=False
-                    )
-            except TimeoutError as err:
-                _LOGGER.warning(
-                    "Timeout while loading new Imou device details: %s", err
-                )
-                for key in new_keys:
-                    fresh_by_key.pop(key, None)
-                self._last_discovery = None
-                self._async_add_remove_devices(fresh_by_key, account_by_key)
-                return
-            except InvalidAppIdOrSecretException as err:
-                raise ConfigEntryAuthFailed(
-                    translation_domain=DOMAIN,
-                    translation_key="invalid_auth",
-                ) from err
-            except ImouException as err:
-                async_notify_imou_api_error(self.hass, self.config_entry, err)
-                # Keep removals from the shallow list. Leave brand-new keys out
-                # until detail succeeds (shallow IoT shells have no configured
-                # refs yet) and rewind the discovery clock to retry soon.
-                _LOGGER.warning(
-                    "Could not load new Imou device details: %s", err.message or err
-                )
-                for key in new_keys:
-                    fresh_by_key.pop(key, None)
-                self._last_discovery = None
-                self._async_add_remove_devices(fresh_by_key, account_by_key)
-                return
-            # Merge into the shallow account map; never replace it with a
-            # partial list if a future library change returns only new ids.
-            for device in detailed:
-                account_by_key[imou_life_device_key(device)] = device
-            detailed_by_key = {
-                imou_life_device_key(d): d for d in self._filter_devices(detailed)
-            }
-            for key in new_keys:
-                if key in detailed_by_key:
-                    fresh_by_key[key] = detailed_by_key[key]
-
-        if new_keys:
             await self._async_prefetch_event_maps(
                 [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
             )

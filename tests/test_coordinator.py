@@ -295,22 +295,24 @@ async def test_rediscovery_never_fetches_ability_refs_when_device_set_unchanged(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_relists_devices_when_a_new_device_appears(
+async def test_rediscovery_registers_new_device_from_single_list(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A new account device triggers a second list call; refs are never fetched."""
+    """pyimouapi 2.x configures entities on the first list; no second list pass."""
     first = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, first)
 
     second = [_mock_device("d1"), _mock_device("d2")]
     device_manager.async_get_devices.reset_mock()
-    device_manager.async_get_devices.side_effect = [second, second]
+    device_manager.async_get_devices.return_value = second
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    assert device_manager.async_get_devices.await_count == 2
-    for call in device_manager.async_get_devices.await_args_list:
-        assert call.kwargs["fetch_ability_refs"] is False
+    device_manager.async_get_devices.assert_awaited_once()
+    assert (
+        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
+        is False
+    )
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
 
 
@@ -360,27 +362,22 @@ async def test_new_iot_device_prefetches_event_map(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_detail_failure_still_removes_devices(
+async def test_rediscovery_single_list_removes_gone_and_adds_new(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Detail failure must not skip account removals for the same rediscovery."""
-    from pyimouapi.exceptions import RequestFailedException
-
+    """One capability.list pass updates additions and removals together."""
     first = [_mock_device("d1"), _mock_device("gone")]
     coordinator = await _run_update(hass, device_manager, first)
     assert {d.device_id for d in coordinator.devices} == {"d1", "gone"}
 
     remaining = [_mock_device("d1"), _mock_device("new")]
     device_manager.async_get_devices.reset_mock()
-    device_manager.async_get_devices.side_effect = [
-        remaining,
-        RequestFailedException("detail failed"),
-    ]
+    device_manager.async_get_devices.return_value = remaining
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    assert {d.device_id for d in coordinator.devices} == {"d1"}
-    assert coordinator._last_discovery is None
+    assert {d.device_id for d in coordinator.devices} == {"d1", "new"}
+    assert coordinator._last_discovery is not None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
