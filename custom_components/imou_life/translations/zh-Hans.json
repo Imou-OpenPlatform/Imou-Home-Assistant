@@ -659,6 +659,16 @@
           "description": "云台转动持续时间"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "抓图检测",
+      "description": "抓取当前画面并进行目标检测，把结果发到通知目标。",
+      "fields": {
+        "notify_targets": {
+          "name": "通知目标",
+          "description": "本次调用使用的 notify 服务；不填则使用「事件推送」里配置的通知目标。"
+        }
+      }
     }
   },
   "exceptions": {
@@ -703,6 +713,21 @@
     },
     "remove_device_no_runtime": {
       "message": "无法删除设备 {name}：集成未加载。"
+    },
+    "snap_detect_entity_required": {
+      "message": "请选择要抓图检测的 Imou 实体。"
+    },
+    "snap_detect_entity_not_found": {
+      "message": "该实体不属于本 Imou 集成。"
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou 仍在启动，请稍后再试。"
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "该设备当前未在 Imou 中加载。"
+    },
+    "snap_detect_failed": {
+      "message": "Imou 无法完成抓图检测：{error}"
     }
   }
 }

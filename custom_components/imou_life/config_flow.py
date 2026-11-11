@@ -82,6 +82,7 @@ from .const import (
 from .helpers import (
     async_build_device_map,
     notify_service_selector_options,
+    notify_services_from_entry_options,
     parse_notify_services,
     resolve_ui_language,
     selector_option_label,
@@ -637,8 +638,8 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_ENABLE_EVENT_PUSH: enable_push,
             PARAM_EVENT_PUSH_TYPES: event_push_types,
             SECTION_EVENT_PUSH_NOTIFICATIONS: {
-                PARAM_NOTIFY_SERVICES: parse_notify_services(
-                    flat.get(PARAM_NOTIFY_SERVICES)
+                PARAM_NOTIFY_SERVICES: notify_services_from_entry_options(
+                    self.hass, options
                 ),
             },
         }
@@ -684,8 +685,8 @@ class ImouOptionsFlow(OptionsFlow):
         self, account_callback_flags: set[str] | None = None
     ) -> vol.Schema:
         """Build the event push options form."""
-        stored_notify = parse_notify_services(
-            self.config_entry.options.get(PARAM_NOTIFY_SERVICES)
+        stored_notify = notify_services_from_entry_options(
+            self.hass, self.config_entry.options
         )
         notify_options = notify_service_selector_options(self.hass, stored_notify)
         return vol.Schema(
@@ -708,7 +709,7 @@ class ImouOptionsFlow(OptionsFlow):
                     vol.Schema(
                         {
                             vol.Optional(
-                                PARAM_NOTIFY_SERVICES, default=[]
+                                PARAM_NOTIFY_SERVICES, default=stored_notify
                             ): SelectSelector(
                                 SelectSelectorConfig(
                                     options=notify_options,

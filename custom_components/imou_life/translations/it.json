@@ -659,6 +659,16 @@
           "description": "Durata rotazione PTZ"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "Cattura e rilevamento",
+      "description": "Scatta un'istantanea, esegui il rilevamento Imou e invia il risultato alle destinazioni di notifica.",
+      "fields": {
+        "notify_targets": {
+          "name": "Destinazioni di notifica",
+          "description": "Servizi notify opzionali per questa chiamata. Se omessi, usa le destinazioni configurate in Push eventi."
+        }
+      }
     }
   },
   "exceptions": {
@@ -703,6 +713,21 @@
     },
     "remove_device_no_runtime": {
       "message": "Impossibile rimuovere il dispositivo {name}: l'integrazione non è caricata."
+    },
+    "snap_detect_entity_required": {
+      "message": "Scegli un'entità Imou per cattura e rilevamento."
+    },
+    "snap_detect_entity_not_found": {
+      "message": "Questa entità non appartiene a questa integrazione Imou."
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou si sta ancora avviando. Riprova tra un momento."
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "Questo dispositivo non è caricato in Imou al momento."
+    },
+    "snap_detect_failed": {
+      "message": "Imou non ha potuto eseguire cattura e rilevamento: {error}"
     }
   }
 }

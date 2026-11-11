@@ -15,12 +15,14 @@ from .const import (
     BASE_PUSH_ALWAYS,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
-    PARAM_NOTIFY_SERVICES,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
     event_push_types_to_callback_flags,
 )
-from .helpers import get_selected_device_ids, parse_notify_services
+from .helpers import (
+    get_selected_device_ids,
+    notify_services_from_entry_options,
+)
 from .repairs import (
     async_create_event_push_callback_failed_issue,
     async_create_event_push_no_url_issue,
@@ -80,9 +82,7 @@ async def async_setup_event_push(
     else:
         async_delete_event_push_issues(hass, entry)
 
-    runtime.notify_services = parse_notify_services(
-        entry.options.get(PARAM_NOTIFY_SERVICES)
-    )
+    runtime.notify_services = notify_services_from_entry_options(hass, entry.options)
 
     return webhook_id, generated_url
 

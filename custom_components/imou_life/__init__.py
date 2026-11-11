@@ -32,12 +32,12 @@ from .const import (
     PARAM_EXCLUDED_DEVICES,
     PARAM_MOTION,
     PARAM_NOTIFY_ON_ALARM,
-    PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
     PLATFORMS,
+    SERVICE_DEVICE_SNAP_DETECT,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -47,10 +47,11 @@ from .helpers import (
     dormant_write_retry_wait_seconds,
     get_excluded_device_ids,
     get_selected_device_ids,
-    parse_notify_services,
+    notify_services_from_entry_options,
 )
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
+from .snap_detect import async_register_snap_detect_service
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -244,6 +245,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     entry.async_on_unload(runtime.countdown.async_unload)
+    async_register_snap_detect_service(hass)
     return True
 
 
@@ -251,6 +253,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
     async_delete_quota_issue(hass, entry)
+    if hass.services.has_service(
+        DOMAIN, SERVICE_DEVICE_SNAP_DETECT
+    ) and len(hass.config_entries.async_entries(DOMAIN)) <= 1:
+        hass.services.async_remove(DOMAIN, SERVICE_DEVICE_SNAP_DETECT)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
 
@@ -294,8 +300,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     new_signature = options_reload_signature(entry.options)
     if runtime is not None and runtime.defer_reload:
         runtime.reload_pending = new_signature != runtime.reload_signature
-        runtime.notify_services = parse_notify_services(
-            entry.options.get(PARAM_NOTIFY_SERVICES)
+        runtime.notify_services = notify_services_from_entry_options(
+            hass, entry.options
         )
         runtime.selected_devices = get_selected_device_ids(entry)
         runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(
@@ -303,8 +309,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
         )
         return
     if runtime is not None and runtime.reload_signature == new_signature:
-        runtime.notify_services = parse_notify_services(
-            entry.options.get(PARAM_NOTIFY_SERVICES)
+        runtime.notify_services = notify_services_from_entry_options(
+            hass, entry.options
         )
         runtime.selected_devices = get_selected_device_ids(entry)
         runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(

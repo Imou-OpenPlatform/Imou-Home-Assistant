@@ -659,6 +659,16 @@
           "description": "Durée de rotation PTZ"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "Capture et détection",
+      "description": "Prendre une capture, lancer la détection Imou et envoyer le résultat aux cibles de notification.",
+      "fields": {
+        "notify_targets": {
+          "name": "Cibles de notification",
+          "description": "Services notify optionnels pour cet appel. Si omis, utilise les cibles configurées sous Push d'événements."
+        }
+      }
     }
   },
   "exceptions": {
@@ -703,6 +713,21 @@
     },
     "remove_device_no_runtime": {
       "message": "Impossible de supprimer l'appareil {name} : l'intégration n'est pas chargée."
+    },
+    "snap_detect_entity_required": {
+      "message": "Choisissez une entité Imou pour la capture et la détection."
+    },
+    "snap_detect_entity_not_found": {
+      "message": "Cette entité n'appartient pas à cette intégration Imou."
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou démarre encore. Réessayez dans un instant."
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "Cet appareil n'est pas chargé dans Imou pour le moment."
+    },
+    "snap_detect_failed": {
+      "message": "Imou n'a pas pu effectuer la capture et la détection : {error}"
     }
   }
 }

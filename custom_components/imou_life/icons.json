@@ -139,6 +139,9 @@
 	"services": {
 		"control_move_ptz": {
 			"service": "mdi:cursor-move"
+		},
+		"device_snap_detect": {
+			"service": "mdi:image-search"
 		}
 	}
 }

@@ -659,6 +659,16 @@
           "description": "PTZ-Drehdauer"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "Aufnahme und Erkennung",
+      "description": "Schnappschuss aufnehmen, Imou-Zielerkennung ausführen und das Ergebnis an Benachrichtigungsziele senden.",
+      "fields": {
+        "notify_targets": {
+          "name": "Benachrichtigungsziele",
+          "description": "Optionale Notify-Dienste für diesen Aufruf. Wenn leer, werden die unter Ereignis-Push konfigurierten Ziele verwendet."
+        }
+      }
     }
   },
   "exceptions": {
@@ -703,6 +713,21 @@
     },
     "remove_device_no_runtime": {
       "message": "Gerät {name} kann nicht entfernt werden: die Integration ist nicht geladen."
+    },
+    "snap_detect_entity_required": {
+      "message": "Wählen Sie eine Imou-Entität für Aufnahme und Erkennung."
+    },
+    "snap_detect_entity_not_found": {
+      "message": "Diese Entität gehört nicht zu dieser Imou-Integration."
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou startet noch. Versuchen Sie es in einem Moment erneut."
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "Dieses Gerät ist in Imou derzeit nicht geladen."
+    },
+    "snap_detect_failed": {
+      "message": "Imou konnte Aufnahme und Erkennung nicht ausführen: {error}"
     }
   }
 }

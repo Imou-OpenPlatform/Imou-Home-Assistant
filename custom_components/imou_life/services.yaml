@@ -13,3 +13,13 @@ control_move_ptz:
           min: 100
           max: 10000
           unit_of_measurement: ms
+device_snap_detect:
+  target:
+    entity:
+      integration: imou_life
+  fields:
+    notify_targets:
+      required: false
+      example: ["notify.mobile_app_phone"]
+      selector:
+        object:

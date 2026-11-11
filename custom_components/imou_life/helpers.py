@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -25,6 +26,7 @@ from .const import (
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_EXCLUDED_DEVICES,
+    PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     callback_flags_to_event_push_types,
     imou_life_device_keys_from_ids,
@@ -198,6 +200,61 @@ def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:
     return label
 
 
+def default_notify_service_targets(hass: HomeAssistant) -> list[str]:
+    """Default alarm/detect notify targets: web drawer + mobile companion apps."""
+    targets = ["notify.persistent_notification"]
+    notify = hass.services.async_services().get("notify", {})
+    for name in notify:
+        if name.startswith("mobile_app_"):
+            targets.append(f"notify.{name}")
+    return sorted(set(targets))
+
+
+async def async_deliver_message_to_targets(
+    hass: HomeAssistant,
+    title: str,
+    message: str,
+    notify_services: list[str],
+    *,
+    image_url: str | None = None,
+) -> None:
+    """Send a title/message to configured notify or persistent_notification targets."""
+    for svc in notify_services:
+        parts = _split_notify_target(svc)
+        if parts is None:
+            continue
+        domain, service = parts
+        if domain == "persistent_notification" and service == "create":
+            persistent_notification.async_create(hass, message, title=title)
+            continue
+        if domain == "notify" and service == "persistent_notification":
+            await hass.services.async_call(
+                "notify",
+                "persistent_notification",
+                {"message": message, "title": title},
+                blocking=False,
+            )
+            continue
+        if domain == "notify":
+            data: dict[str, Any] = {"message": message, "title": title}
+            if image_url and service.startswith("mobile_app_"):
+                data["data"] = {"image": image_url}
+            await hass.services.async_call(
+                domain, service, data, blocking=False
+            )
+
+
+def _split_notify_target(target: str) -> tuple[str, str] | None:
+    """Split a configured target into (domain, service); bare names are notify."""
+    target = target.strip()
+    if not target:
+        return None
+    if "." in target:
+        domain, service = target.split(".", 1)
+        return domain, service
+    return "notify", target
+
+
 def parse_notify_services(raw: Any) -> list[str]:
     """Normalize stored notify options to a list of domain.service ids."""
     if isinstance(raw, list):
@@ -205,6 +262,15 @@ def parse_notify_services(raw: Any) -> list[str]:
     if isinstance(raw, str) and raw.strip():
         return [part.strip() for part in raw.split(",") if part.strip()]
     return []
+
+
+def notify_services_from_entry_options(
+    hass: HomeAssistant, options: Mapping[str, Any]
+) -> list[str]:
+    """Return configured notify targets, or the integration default when unset."""
+    if PARAM_NOTIFY_SERVICES not in options:
+        return default_notify_service_targets(hass)
+    return parse_notify_services(options.get(PARAM_NOTIFY_SERVICES))
 
 
 _NOTIFY_SERVICES_NOT_TARGETS = frozenset({"send_message"})

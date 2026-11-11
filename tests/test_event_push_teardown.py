@@ -190,6 +190,30 @@ async def test_setup_event_push_loads_notify_services(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_setup_event_push_defaults_notify_when_unset(
+    hass: HomeAssistant,
+) -> None:
+    """Missing notify_services option loads persistent + mobile defaults."""
+    from custom_components.imou_life.helpers import default_notify_service_targets
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh-default"},
+        options={},
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    with patch(
+        "custom_components.imou_life.event_push.async_register_imou_webhook",
+        return_value="https://example.test/hook",
+    ):
+        await async_setup_event_push(hass, entry, MagicMock(), runtime)
+
+    assert runtime.notify_services == default_notify_service_targets(hass)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_setup_event_push_does_not_log_full_callback_url(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:

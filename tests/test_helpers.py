@@ -26,9 +26,11 @@ from custom_components.imou_life.helpers import (
     alarm_type_option_key,
     camera_channel_devices,
     decrypt_pictures_active,
+    default_notify_service_targets,
     fill_template,
     iot_property_push_active,
     notify_service_selector_options,
+    notify_services_from_entry_options,
     parse_notify_services,
     resolve_ha_device_entry,
     resolve_ha_device_name,
@@ -92,6 +94,44 @@ def test_device_key_from_ids_incomplete_returns_none() -> None:
 def test_parse_notify_services_normalizes_legacy_and_list(raw, expected) -> None:
     """Stored comma strings and lists both become a clean service id list."""
     assert parse_notify_services(raw) == expected
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_default_notify_targets_include_persistent_and_mobile(
+    hass: HomeAssistant,
+) -> None:
+    """Unset notify options default to the web drawer and companion apps."""
+    from homeassistant.core import ServiceCall
+
+    async def _notify(_call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "mobile_app_phone", _notify)
+    targets = default_notify_service_targets(hass)
+    assert "notify.persistent_notification" in targets
+    assert "notify.mobile_app_phone" in targets
+
+
+@pytest.mark.parametrize(
+    ("options", "expected"),
+    [
+        ({}, "default"),
+        ({"notify_services": []}, []),
+        ({"notify_services": ["notify.custom"]}, ["notify.custom"]),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_notify_services_from_entry_options(
+    hass: HomeAssistant, options: dict, expected: list[str] | str
+) -> None:
+    """Missing key uses defaults; empty list stays explicit."""
+
+    if expected == "default":
+        assert notify_services_from_entry_options(hass, options) == (
+            default_notify_service_targets(hass)
+        )
+        return
+    assert notify_services_from_entry_options(hass, options) == expected
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

@@ -659,6 +659,16 @@
           "description": "PTZ rotation duration"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "Capture and detect",
+      "description": "Take a snapshot, run Imou target detection, and send the result to notification targets.",
+      "fields": {
+        "notify_targets": {
+          "name": "Notification targets",
+          "description": "Optional notify services for this call. When omitted, uses the targets configured under event push notifications."
+        }
+      }
     }
   },
   "exceptions": {
@@ -703,6 +713,21 @@
     },
     "remove_device_no_runtime": {
       "message": "Cannot remove device {name}: integration is not loaded."
+    },
+    "snap_detect_entity_required": {
+      "message": "Choose an Imou entity for this capture and detection."
+    },
+    "snap_detect_entity_not_found": {
+      "message": "That entity is not from this Imou integration."
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou is still starting. Try again in a moment."
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "That device is not loaded in Imou right now."
+    },
+    "snap_detect_failed": {
+      "message": "Imou could not run capture and detection: {error}"
     }
   }
 }
