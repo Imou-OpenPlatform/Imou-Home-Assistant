@@ -270,17 +270,13 @@ async def test_coordinator_default_interval_is_five_minutes(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_never_fetches_ability_refs_when_device_set_unchanged(
+async def test_rediscovery_uses_single_capability_list_when_unchanged(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """pyimouapi 2.x discovery always uses capability.list, not IoT ability refs."""
+    """Rediscovery lists the account once; pyimouapi runs capability.list inside."""
     devices = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, devices)
     device_manager.async_get_devices.assert_awaited()
-    assert (
-        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
-        is False
-    )
 
     device_manager.async_get_devices.reset_mock()
     device_manager.async_get_devices.return_value = devices
@@ -288,10 +284,6 @@ async def test_rediscovery_never_fetches_ability_refs_when_device_set_unchanged(
     await coordinator._async_update_data()
 
     device_manager.async_get_devices.assert_awaited_once()
-    assert (
-        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
-        is False
-    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -309,10 +301,6 @@ async def test_rediscovery_registers_new_device_from_single_list(
     await coordinator._async_update_data()
 
     device_manager.async_get_devices.assert_awaited_once()
-    assert (
-        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
-        is False
-    )
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
 
 

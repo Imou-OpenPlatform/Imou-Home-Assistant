@@ -161,9 +161,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         first_discovery = not self._devices_initialized
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                fresh_devices = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=False
-                )
+                fresh_devices = await self._device_manager.async_get_devices()
         except TimeoutError as err:
             if first_discovery:
                 raise UpdateFailed(f"Timeout while fetching data: {err}") from err
@@ -375,9 +373,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                detailed = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=False
-                )
+                detailed = await self._device_manager.async_get_devices()
         except InvalidAppIdOrSecretException as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=DOMAIN,
