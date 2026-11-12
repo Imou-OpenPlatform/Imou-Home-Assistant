@@ -97,7 +97,6 @@
           "event_push": "Alarm push and notifications",
           "alarm_image_decrypt": "Alarm pictures",
           "local_recording": "Record on alarm",
-          "ai_insight": "AI Insight workbench",
           "select_poll_devices": "Choose devices to poll",
           "bind_device": "Bind a new device",
           "finish": "Done"
@@ -109,12 +108,14 @@
         "data": {
           "enable_polling": "Enable status polling",
           "update_interval": "Polling interval (seconds)",
-          "dormant_write_retry_wait_seconds": "Sleep control retry wait (seconds)"
+          "dormant_write_retry_wait_seconds": "Sleep control retry wait (seconds)",
+          "trial_contact_url": "AI Insight trial link"
         },
         "data_description": {
           "enable_polling": "Turn off to skip periodic cloud refreshes. Entity states may become outdated. Setup and reload still fetch the device list once. When event push is on and subscribe types include IoT device messages, thing-model device *properties* are not refreshed on this interval (setup and reload still take one snapshot). Online status, PaaS abilities, and service-backed entities still poll.",
           "update_interval": "Default 300s (5 minutes), range 30–900s. Ignored when polling is off.",
-          "dormant_write_retry_wait_seconds": "When device status is Sleep and a control fails, Home Assistant waits this long before sending the same command once more. Default 5s, range 5–60s."
+          "dormant_write_retry_wait_seconds": "When device status is Sleep and a control fails, Home Assistant waits this long before sending the same command once more. Default 5s, range 5–60s.",
+          "trial_contact_url": "Optional URL or note appended when someone presses **AI Insight trial** on the dashboard. Plans are opened manually in the cloud console or through your dealer."
         },
         "sections": {
           "camera_defaults": {
@@ -173,16 +174,6 @@
           "default_device_password": "Fallback for devices that do not have their own password below.",
           "clear_default_device_password": "Deletes the stored default. Per-device passwords are unchanged.",
           "remove_device_passwords": "Checked serials are deleted."
-        }
-      },
-      "ai_insight": {
-        "title": "AI Insight workbench",
-        "description": "Optional link shown when someone presses **AI Insight trial** on the workbench.",
-        "data": {
-          "trial_contact_url": "Trial or purchase link"
-        },
-        "data_description": {
-          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
         }
       },
       "local_recording": {
@@ -285,6 +276,14 @@
         "ai_insight": "AI: {ai_text}",
         "unknown_device": "Unknown device",
         "unknown_alarm": "Alarm"
+      }
+    },
+    "insight_trial_dialog": {
+      "options": {
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。套餐需在乐橙云端或渠道人工开通。\n\n有问题请添加 17799860785 官方微信联系。",
+        "intl_title": "AI Insight trial",
+        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Plans are opened manually in the Imou cloud console or through your dealer.\n\nFor questions, add official WhatsApp +86 19106884129."
       }
     },
     "alarm_type": {

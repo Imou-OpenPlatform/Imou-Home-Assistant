@@ -440,13 +440,13 @@ def test_event_push_selector_options_entitled_flags() -> None:
     """Alarm and iot appear only when getMessageCallback lists them."""
     assert event_push_selector_options({CALLBACK_FLAG_ALARM}) == [
         EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-        EVENT_PUSH_TYPE_DEVICE_STATUS,
         EVENT_PUSH_TYPE_ALARM,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
     ]
     assert event_push_selector_options({CALLBACK_FLAG_IOT}) == [
         EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-        EVENT_PUSH_TYPE_DEVICE_STATUS,
         EVENT_PUSH_TYPE_IOT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
     ]
 
 

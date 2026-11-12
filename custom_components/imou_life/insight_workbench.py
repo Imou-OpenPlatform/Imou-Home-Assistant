@@ -20,7 +20,6 @@ from pyimouapi.insight.statistics import (
 )
 
 from .const import (
-    DEFAULT_INSIGHT_BRIEFING_DAYS,
     DEFAULT_INSIGHT_LOOKBACK_DAYS,
     DOMAIN,
     PARAM_INSIGHT_WORKBENCH_DEVICE,
@@ -178,10 +177,8 @@ def _briefing_stat_days(call: ServiceCall) -> tuple[str, str]:
             raise ServiceValidationError(msg) from err
         day = end_dt.strftime("%Y%m%d")
         return day, day
-    days = int(call.data.get("days") or DEFAULT_INSIGHT_BRIEFING_DAYS)
-    days = max(1, min(days, 1))
-    _, _, start_day, end_day = _time_window(days)
-    return start_day, end_day
+    today = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%d")
+    return today, today
 
 
 async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) -> None:

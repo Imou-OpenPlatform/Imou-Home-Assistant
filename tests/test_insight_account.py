@@ -2,13 +2,15 @@
 
 from unittest.mock import MagicMock
 
+import pytest
 from custom_components.imou_life.const import CONF_API_URL_HZ, CONF_API_URL_INTL, PARAM_API_URL
 from custom_components.imou_life.insight_account import (
     ai_insight_channel_devices,
+    async_trial_dialog_copy,
     camera_select_options,
     is_china_api_entry,
-    trial_notification_copy,
 )
+from homeassistant.core import HomeAssistant
 from pyimouapi.insight.cloud import DeviceCloudService
 
 
@@ -22,18 +24,20 @@ def _camera(device_id: str, channel_id: str = "0") -> MagicMock:
     return device
 
 
-def test_trial_copy_china() -> None:
+@pytest.mark.asyncio
+async def test_trial_copy_china(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {PARAM_API_URL: CONF_API_URL_HZ}
-    title, body = trial_notification_copy(entry)
+    title, body = await async_trial_dialog_copy(hass, entry)
     assert title == "智见试用"
     assert "17799860785" in body
 
 
-def test_trial_copy_overseas() -> None:
+@pytest.mark.asyncio
+async def test_trial_copy_overseas(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {PARAM_API_URL: CONF_API_URL_INTL}
-    title, body = trial_notification_copy(entry)
+    title, body = await async_trial_dialog_copy(hass, entry)
     assert title == "AI Insight trial"
     assert "19106884129" in body
     assert is_china_api_entry(entry) is False

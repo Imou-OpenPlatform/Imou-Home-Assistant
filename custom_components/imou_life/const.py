@@ -225,10 +225,7 @@ EVENT_PUSH_TYPE_IOT = "iot"
 EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
 EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
 
-EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (
-    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-    EVENT_PUSH_TYPE_DEVICE_STATUS,
-)
+EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (EVENT_PUSH_TYPE_CAPABILITY_EVENT,)
 
 EVENT_PUSH_TYPE_OPTIONS_ENTITLED = (
     EVENT_PUSH_TYPE_ALARM,
@@ -237,7 +234,9 @@ EVENT_PUSH_TYPE_OPTIONS_ENTITLED = (
 
 # Full list for hassfest / tests that need every key
 EVENT_PUSH_TYPE_OPTIONS = (
-    EVENT_PUSH_TYPE_OPTIONS_ALWAYS + EVENT_PUSH_TYPE_OPTIONS_ENTITLED
+    EVENT_PUSH_TYPE_OPTIONS_ALWAYS
+    + EVENT_PUSH_TYPE_OPTIONS_ENTITLED
+    + (EVENT_PUSH_TYPE_DEVICE_STATUS,)
 )
 
 LEGACY_EVENT_PUSH_TYPES_DROP = frozenset(
@@ -303,11 +302,12 @@ def event_push_selector_options(
     options = list(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
     if account_callback_flags is None:
         options.extend(EVENT_PUSH_TYPE_OPTIONS_ENTITLED)
-        return options
-    if CALLBACK_FLAG_ALARM in account_callback_flags:
-        options.append(EVENT_PUSH_TYPE_ALARM)
-    if CALLBACK_FLAG_IOT in account_callback_flags:
-        options.append(EVENT_PUSH_TYPE_IOT)
+    else:
+        if CALLBACK_FLAG_ALARM in account_callback_flags:
+            options.append(EVENT_PUSH_TYPE_ALARM)
+        if CALLBACK_FLAG_IOT in account_callback_flags:
+            options.append(EVENT_PUSH_TYPE_IOT)
+    options.append(EVENT_PUSH_TYPE_DEVICE_STATUS)
     return options
 
 

@@ -287,6 +287,14 @@
         "unknown_alarm": "Allarme"
       }
     },
+    "insight_trial_dialog": {
+      "options": {
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。套餐需在乐橙云端或渠道人工开通。\n\n有问题请添加 17799860785 官方微信联系。",
+        "intl_title": "AI Insight trial",
+        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Plans are opened manually in the Imou cloud console or through your dealer.\n\nFor questions, add official WhatsApp +86 19106884129."
+      }
+    },
     "alarm_type": {
       "options": {
         "abalarmsound": "Suono insolito rilevato",

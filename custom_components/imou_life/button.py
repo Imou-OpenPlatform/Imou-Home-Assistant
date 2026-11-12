@@ -27,7 +27,7 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
-from .insight_account import ImouAccountEntity, trial_notification_copy
+from .insight_account import ImouAccountEntity, async_trial_dialog_copy
 
 _LOGGER = logging.getLogger(__package__)
 
@@ -85,7 +85,9 @@ class ImouAiInsightTrialButton(ImouAccountEntity, ButtonEntity):
         url = str(
             self._config_entry.options.get(PARAM_TRIAL_CONTACT_URL) or ""
         ).strip()
-        title, message = trial_notification_copy(self._config_entry)
+        title, message = await async_trial_dialog_copy(
+            self.hass, self._config_entry
+        )
         if url:
             message = f"{message}\n\n{url}"
         self.hass.bus.async_fire(

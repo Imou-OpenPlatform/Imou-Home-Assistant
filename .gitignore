@@ -184,7 +184,7 @@ releases/
 # Local Home Assistant runtime next to this checkout (never ship)
 config/
 log/
-www/
+config/www/
 custom_components/imou_life/config/
 
 # User-installed decrypt libraries (download per README; never commit)

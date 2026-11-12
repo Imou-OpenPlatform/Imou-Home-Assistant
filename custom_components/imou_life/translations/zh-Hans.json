@@ -99,8 +99,7 @@
           "local_recording": "告警时录像",
           "select_poll_devices": "选择要轮询的设备",
           "bind_device": "绑定新设备",
-          "finish": "完成",
-          "ai_insight": "智见工作台"
+          "finish": "完成"
         }
       },
       "general_settings": {
@@ -109,12 +108,14 @@
         "data": {
           "enable_polling": "启用状态轮询",
           "update_interval": "轮询间隔（秒）",
-          "dormant_write_retry_wait_seconds": "休眠控制重试等待（秒）"
+          "dormant_write_retry_wait_seconds": "休眠控制重试等待（秒）",
+          "trial_contact_url": "智见试用链接"
         },
         "data_description": {
           "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了物模型设备消息时，那些设备的**属性**不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态、PaaS 能力和靠 Service 读的实体仍按间隔刷新。",
           "update_interval": "默认 300 秒，范围 30–900 秒。关闭轮询时不生效。",
-          "dormant_write_retry_wait_seconds": "设备状态为休眠且控制失败时，Home Assistant 会先等待这段时间，再发送同一命令一次。默认 5 秒，范围 5–60 秒。"
+          "dormant_write_retry_wait_seconds": "设备状态为休眠且控制失败时，Home Assistant 会先等待这段时间，再发送同一命令一次。默认 5 秒，范围 5–60 秒。",
+          "trial_contact_url": "可选。在仪表盘按下 **智见试用** 时附加的网址或说明。套餐需在乐橙云端或渠道人工开通。"
         },
         "sections": {
           "camera_defaults": {
@@ -221,16 +222,6 @@
           "device_id": "设备上印制的序列号（SN），或在乐橙 App 中查看",
           "code": "可选。若设备不需要绑定码可留空"
         }
-      },
-      "ai_insight": {
-        "data": {
-          "trial_contact_url": "试用或购买链接"
-        },
-        "data_description": {
-          "trial_contact_url": "链接或简短说明。智见套餐需在云端人工开通，Home Assistant 不会代为购买。"
-        },
-        "description": "用户点按工作台 **智见试用** 按钮时显示的链接（可选）。",
-        "title": "智见工作台"
       }
     }
   },
@@ -285,6 +276,14 @@
         "ai_insight": "智见：{ai_text}",
         "unknown_device": "未知设备",
         "unknown_alarm": "告警"
+      }
+    },
+    "insight_trial_dialog": {
+      "options": {
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。套餐需在乐橙云端或渠道人工开通。\n\n有问题请添加 17799860785 官方微信联系。",
+        "intl_title": "AI Insight 试用",
+        "intl_message": "AI Insight 为摄像头提供智能搜索与每日简报。套餐需在 Imou 云端控制台或通过经销商人工开通。\n\n如有疑问，请添加官方 WhatsApp +86 19106884129。"
       }
     },
     "alarm_type": {

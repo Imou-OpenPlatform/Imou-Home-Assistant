@@ -69,6 +69,7 @@ from .const import (
     PARAM_NOTIFY_SERVICES,
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
+    PARAM_TRIAL_CONTACT_URL,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
@@ -103,6 +104,7 @@ _GENERAL_OPTION_KEYS = (
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_LIVE_RESOLUTION,
     PARAM_ROTATION_DURATION,
+    PARAM_TRIAL_CONTACT_URL,
 )
 
 _EVENT_PUSH_OPTION_KEYS = (
@@ -518,6 +520,7 @@ class ImouOptionsFlow(OptionsFlow):
                     ),
                     {"collapsed": False},
                 ),
+                vol.Optional(PARAM_TRIAL_CONTACT_URL, default=""): str,
             }
         )
 
@@ -532,6 +535,7 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_DORMANT_WRITE_RETRY_WAIT: flat.get(
                 PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
             ),
+            PARAM_TRIAL_CONTACT_URL: str(flat.get(PARAM_TRIAL_CONTACT_URL) or ""),
             SECTION_CAMERA_DEFAULTS: {
                 PARAM_DOWNLOAD_SNAP_WAIT_TIME: flat.get(
                     PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3
@@ -554,6 +558,9 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_DORMANT_WRITE_RETRY_WAIT: user_input.get(
                 PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
             ),
+            PARAM_TRIAL_CONTACT_URL: str(
+                user_input.get(PARAM_TRIAL_CONTACT_URL) or ""
+            ).strip(),
         }
         if SECTION_CAMERA_DEFAULTS in user_input:
             flat.update(user_input[SECTION_CAMERA_DEFAULTS])

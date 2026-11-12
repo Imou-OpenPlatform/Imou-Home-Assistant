@@ -9,10 +9,6 @@ from typing import override
 
 from homeassistant.components.camera import DynamicStreamSettings
 from homeassistant.components.media_player import BrowseError, MediaClass, MediaType
-from homeassistant.components.stream import create_stream
-from homeassistant.components.stream.const import HLS_PROVIDER
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.components.media_source import (
     BrowseMediaSource,
     MediaSource,
@@ -20,15 +16,16 @@ from homeassistant.components.media_source import (
     PlayMedia,
     Unresolvable,
 )
+from homeassistant.components.stream import create_stream
+from homeassistant.components.stream.const import HLS_PROVIDER
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
-from pyimouapi.cloud_record import (
-    parse_cloud_record_bitmap_days,
-    parse_cloud_records_data,
-)
+from pyimouapi.cloud_record import parse_cloud_record_bitmap_days
 from pyimouapi.exceptions import ImouException
 from pyimouapi.local_record import (
     day_time_window,
@@ -36,12 +33,14 @@ from pyimouapi.local_record import (
     parse_local_bitmap_days,
     parse_local_record_list,
 )
-from pyimouapi.playback.hls import is_hls_playback_url
-from pyimouapi.playback.hls import RECORD_TYPE_CLOUD, RECORD_TYPE_LOCAL
+from pyimouapi.playback.hls import (
+    RECORD_TYPE_CLOUD,
+    RECORD_TYPE_LOCAL,
+    is_hls_playback_url,
+)
 
 from .alarm_saved_clips import clips_on_day, days_with_clips, resolve_clip_path
 from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH
-from .runtime_data import get_runtime_data
 from .record_hls_proxy import (
     async_create_record_hls_proxy_playlist_url,
     async_register_record_hls_proxy,
@@ -52,6 +51,7 @@ from .record_playback_mp4 import (
     register_playback_source,
     signed_record_playback_url,
 )
+from .runtime_data import get_runtime_data
 from .saved_record_http import async_register_saved_record_view, signed_saved_record_url
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,6 +81,7 @@ async def _async_try_hls_playback(
     """Return Stream HLS PlayMedia when the Stream integration can remux the clip."""
     if "stream" not in hass.config.components:
         return None
+    stream = None
     try:
         signed_playlist = await async_create_record_hls_proxy_playlist_url(
             hass, upstream_playlist_url
@@ -106,6 +107,8 @@ async def _async_try_hls_playback(
         _LOGGER.debug(
             "Imou recording HLS via Stream failed (%s), will try MP4", err
         )
+        if stream is not None:
+            await stream.stop()
         return None
 
 
@@ -553,13 +556,13 @@ class ImouRecordMediaSource(MediaSource):
                             )
                         )
             elif kind == KIND_CLOUD:
-                data = await manager.async_query_cloud_records(
+                segments = await manager.async_list_cloud_record_segments(
                     device_id,
                     channel_id,
                     begin_time=begin_time,
                     end_time=end_time,
                 )
-                for segment in parse_cloud_records_data(data):
+                for segment in segments:
                     play_id = "|".join(
                         [
                             PREFIX_PLAY,

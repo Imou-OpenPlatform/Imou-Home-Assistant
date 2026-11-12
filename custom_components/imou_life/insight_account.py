@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import translation
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.ha_device import ImouHaDevice
@@ -9,7 +11,7 @@ from pyimouapi.insight.cloud import DeviceCloudService
 
 from .const import CONF_API_URL_HZ, DOMAIN, PARAM_API_URL, imou_life_device_key
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .helpers import camera_channel_devices
+from .helpers import camera_channel_devices, resolve_ui_language, selector_option_label
 
 
 def is_china_api_entry(config_entry: ImouConfigEntry) -> bool:
@@ -17,23 +19,30 @@ def is_china_api_entry(config_entry: ImouConfigEntry) -> bool:
     return host == CONF_API_URL_HZ or host.endswith("lechange.cn")
 
 
-def trial_notification_copy(config_entry: ImouConfigEntry) -> tuple[str, str]:
-    """Return (title, body) for the AI Insight trial persistent notification."""
-    if is_china_api_entry(config_entry):
-        return (
-            "智见试用",
-            "智见为您的摄像头提供智能搜索与每日简报。"
-            "套餐需在乐橙云端或渠道人工开通。\n\n"
-            "有问题请添加17799860785官方微信联系",
-        )
-    return (
-        "AI Insight trial",
-        "AI Insight adds smart search and daily safety briefings "
-        "for your cameras. Plans are opened manually in the Imou "
-        "cloud console or through your dealer.\n\n"
-        "If you have any questions, please add official "
-        "WhatsApp:+86 19106884129 Contact",
+async def async_trial_dialog_copy(
+    hass: HomeAssistant, config_entry: ImouConfigEntry
+) -> tuple[str, str]:
+    """Return (title, body) for the AI Insight trial dialog."""
+    language = resolve_ui_language(hass.config.language)
+    await translation.async_get_translations(
+        hass, language, "selector", integrations={DOMAIN}
     )
+    region = "china" if is_china_api_entry(config_entry) else "intl"
+    title = selector_option_label(
+        hass,
+        language,
+        "insight_trial_dialog",
+        f"{region}_title",
+        "AI Insight trial",
+    )
+    message = selector_option_label(
+        hass,
+        language,
+        "insight_trial_dialog",
+        f"{region}_message",
+        "",
+    )
+    return title, message
 
 
 def device_option_label(device: ImouHaDevice) -> str:

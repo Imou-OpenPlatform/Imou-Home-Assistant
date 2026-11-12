@@ -2,9 +2,9 @@
 # Dashboards → Add dashboard → Import from YAML, or copy the cards below.
 #
 # Requires Imou Life 2.0 with AI Insight on the chosen camera channel.
-# Default time window is 7 days (service field `days`).
+# Search defaults to the last 7 days; briefing uses one calendar day via end_date.
 
-title: AI Insight
+title: Imou Life AI Insight
 views:
   - title: Workbench
     cards:
@@ -13,6 +13,8 @@ views:
         entities:
           - entity: select.imou_life_insight_workbench_device
             name: Camera
+          - entity: input_datetime.imou_insight_briefing_end
+            name: Briefing date
       - type: entities
         title: Actions
         entities:
@@ -36,7 +38,7 @@ views:
               target:
                 entity_id: select.imou_life_insight_workbench_device
               data:
-                days: 7
+                end_date: "{{ states('input_datetime.imou_insight_briefing_end') }}"
           - entity: button.imou_life_ai_insight_trial
       - type: markdown
         title: Search results
