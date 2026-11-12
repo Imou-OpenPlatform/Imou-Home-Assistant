@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 import voluptuous as vol
-from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -18,6 +17,7 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     DOMAIN,
+    EVENT_AI_INSIGHT_TRIAL,
     PARAM_AI_INSIGHT_TRIAL,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
@@ -88,11 +88,9 @@ class ImouAiInsightTrialButton(ImouAccountEntity, ButtonEntity):
         title, message = trial_notification_copy(self._config_entry)
         if url:
             message = f"{message}\n\n{url}"
-        persistent_notification.async_create(
-            self.coordinator.hass,
-            message,
-            title=title,
-            notification_id=f"{DOMAIN}_{self._config_entry.entry_id}_ai_insight_trial",
+        self.hass.bus.async_fire(
+            EVENT_AI_INSIGHT_TRIAL,
+            {"title": title, "message": message},
         )
 
 

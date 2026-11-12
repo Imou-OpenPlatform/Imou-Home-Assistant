@@ -46,11 +46,8 @@ refresh_ai_insight_briefing:
     entity:
       integration: imou_life
   fields:
-    days:
+    end_date:
       required: false
-      default: 7
+      example: "2026-11-12"
       selector:
-        number:
-          min: 1
-          max: 31
-          unit_of_measurement: days
+        date:

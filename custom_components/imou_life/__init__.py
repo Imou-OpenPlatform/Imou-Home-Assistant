@@ -53,6 +53,7 @@ from .helpers import (
 )
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
+from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
 from .snap_detect import async_register_snap_detect_service
 
@@ -216,6 +217,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
             "Failed to set up event push (non-fatal, integration continues normally)"
         )
 
+    await async_register_insight_trial_frontend(hass)
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
     async_remove_ungated_push_entities(hass, entry)

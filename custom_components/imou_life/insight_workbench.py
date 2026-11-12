@@ -20,6 +20,7 @@ from pyimouapi.insight.statistics import (
 )
 
 from .const import (
+    DEFAULT_INSIGHT_BRIEFING_DAYS,
     DEFAULT_INSIGHT_LOOKBACK_DAYS,
     DOMAIN,
     PARAM_INSIGHT_WORKBENCH_DEVICE,
@@ -27,6 +28,7 @@ from .const import (
     SERVICE_SEARCH_AI_ALARMS,
 )
 from .coordinator import ImouConfigEntry
+from .insight_account import camera_select_options
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,6 +75,15 @@ def _resolve_workbench_device(
             and row.unique_id.endswith(f"${PARAM_INSIGHT_WORKBENCH_DEVICE}")
         ):
             key = runtime.workbench_device_key
+            if not key:
+                state = hass.states.get(entity_id)
+                label = state.state if state is not None else ""
+                if label not in ("unknown", "unavailable", ""):
+                    _, mapping = camera_select_options(
+                        runtime.coordinator.devices,
+                        cloud_by_key=runtime.cloud_service_by_key,
+                    )
+                    key = mapping.get(label)
         else:
             key = _device_key_from_entity_id(hass, entity_id)
 
@@ -156,8 +167,24 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
     )
 
 
+def _briefing_stat_days(call: ServiceCall) -> tuple[str, str]:
+    """Resolve YYYYMMDD start/end for a single calendar day."""
+    end_raw = str(call.data.get("end_date") or "").strip()
+    if end_raw:
+        try:
+            end_dt = datetime.strptime(end_raw[:10], "%Y-%m-%d")
+        except ValueError as err:
+            msg = f"Invalid end_date: {end_raw!r}"
+            raise ServiceValidationError(msg) from err
+        day = end_dt.strftime("%Y%m%d")
+        return day, day
+    days = int(call.data.get("days") or DEFAULT_INSIGHT_BRIEFING_DAYS)
+    days = max(1, min(days, 1))
+    _, _, start_day, end_day = _time_window(days)
+    return start_day, end_day
+
+
 async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) -> None:
-    days = int(call.data.get("days") or DEFAULT_INSIGHT_LOOKBACK_DAYS)
     entry = _resolve_config_entry(hass, call)
     device = _resolve_workbench_device(hass, entry, call)
     channel = device.channel_id
@@ -166,7 +193,7 @@ async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) 
             translation_domain=DOMAIN,
             translation_key="insight_workbench_no_device",
         )
-    _, _, start_day, end_day = _time_window(days)
+    start_day, end_day = _briefing_stat_days(call)
     runtime = get_runtime_data(entry)
     assert runtime is not None
     try:

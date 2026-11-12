@@ -69,7 +69,6 @@ from .const import (
     PARAM_NOTIFY_SERVICES,
     PARAM_ROTATION_DURATION,
     PARAM_SELECTED_DEVICES,
-    PARAM_TRIAL_CONTACT_URL,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
@@ -776,7 +775,6 @@ class ImouOptionsFlow(OptionsFlow):
                 "event_push",
                 "alarm_image_decrypt",
                 "local_recording",
-                "ai_insight",
                 "select_poll_devices",
                 "bind_device",
                 "finish",
@@ -1018,40 +1016,6 @@ class ImouOptionsFlow(OptionsFlow):
                 ),
                 "push_hint": self._push_prerequisite_hint(),
             },
-        )
-
-    def _ai_insight_schema(self, options: Mapping[str, Any]) -> vol.Schema:
-        """Build the AI Insight workbench options form."""
-        return vol.Schema(
-            {
-                vol.Optional(
-                    PARAM_TRIAL_CONTACT_URL,
-                    default=str(options.get(PARAM_TRIAL_CONTACT_URL) or ""),
-                ): str,
-            }
-        )
-
-    async def async_step_ai_insight(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Manage options — AI Insight workbench link."""
-        options = self.config_entry.options
-        if user_input is not None:
-            self._save_options(
-                **{
-                    PARAM_TRIAL_CONTACT_URL: str(
-                        user_input.get(PARAM_TRIAL_CONTACT_URL) or ""
-                    ).strip(),
-                }
-            )
-            return await self.async_step_init()
-
-        await self._async_load_selector_translations()
-        return self.async_show_form(
-            step_id="ai_insight",
-            data_schema=self.add_suggested_values_to_schema(
-                self._ai_insight_schema(options), dict(options)
-            ),
         )
 
     def _local_recording_schema(self) -> vol.Schema:

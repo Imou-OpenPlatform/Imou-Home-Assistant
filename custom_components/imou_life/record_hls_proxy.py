@@ -12,7 +12,10 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
-from pyimouapi.playback.hls import parse_hls_media_segment_urls
+from pyimouapi.playback.hls import (
+    parse_hls_media_segment_urls,
+    pick_hls_variant_playlist_url,
+)
 
 from .record_http_fetch import async_fetch_url_bytes, async_fetch_url_text
 
@@ -96,13 +99,27 @@ def _build_proxy_playlist(
     return "\n".join(lines) + "\n"
 
 
+async def _load_media_playlist(
+    hass: HomeAssistant, playlist_url: str
+) -> tuple[str, list[str]]:
+    body = await async_fetch_url_text(hass, playlist_url)
+    segment_urls = parse_hls_media_segment_urls(body, playlist_url)
+    if segment_urls:
+        return body, segment_urls
+    variant = pick_hls_variant_playlist_url(body, playlist_url)
+    if variant is None:
+        return body, segment_urls
+    body = await async_fetch_url_text(hass, variant)
+    segment_urls = parse_hls_media_segment_urls(body, variant)
+    return body, segment_urls
+
+
 async def async_create_record_hls_proxy_playlist_url(
     hass: HomeAssistant, upstream_playlist_url: str
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
     _prune_sessions(hass)
-    body = await async_fetch_url_text(hass, upstream_playlist_url)
-    segment_urls = parse_hls_media_segment_urls(body)
+    body, segment_urls = await _load_media_playlist(hass, upstream_playlist_url)
     if not segment_urls:
         msg = "Imou HLS playlist had no segments"
         raise ValueError(msg)
@@ -171,5 +188,11 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         if seg_index < 0 or seg_index >= len(record.segment_urls):
             raise web.HTTPNotFound()
         upstream = record.segment_urls[seg_index]
-        payload = await async_fetch_url_bytes(hass, upstream)
+        try:
+            payload = await async_fetch_url_bytes(hass, upstream)
+        except OSError as err:
+            _LOGGER.warning(
+                "Imou HLS segment %s fetch failed: %s", seg_index, err
+            )
+            raise web.HTTPBadGateway() from err
         return web.Response(body=payload, content_type="video/mp2t")

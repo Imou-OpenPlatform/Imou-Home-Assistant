@@ -2,6 +2,7 @@
   "domain": "imou_life",
   "name": "Imou Life Official",
   "after_dependencies": [
+    "frontend",
     "stream"
   ],
   "codeowners": [

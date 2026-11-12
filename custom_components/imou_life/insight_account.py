@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.insight.cloud import DeviceCloudService
 
 from .const import CONF_API_URL_HZ, DOMAIN, PARAM_API_URL, imou_life_device_key
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
@@ -42,13 +43,38 @@ def device_option_label(device: ImouHaDevice) -> str:
     return name
 
 
+def _device_has_ai_insight_cloud(snapshot: DeviceCloudService | None) -> bool:
+    if snapshot is None:
+        return False
+    return snapshot.ai_insight_active or snapshot.cloud_storage_label == "insight"
+
+
+def ai_insight_channel_devices(
+    devices: list[ImouHaDevice],
+    cloud_by_key: dict[str, DeviceCloudService],
+) -> list[ImouHaDevice]:
+    """Camera channels with an active or insight-type cloud plan."""
+    return [
+        device
+        for device in camera_channel_devices(devices)
+        if _device_has_ai_insight_cloud(
+            cloud_by_key.get(imou_life_device_key(device))
+        )
+    ]
+
+
 def camera_select_options(
     devices: list[ImouHaDevice],
+    *,
+    cloud_by_key: dict[str, DeviceCloudService] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """Return select labels and label → registry key."""
     labels: list[str] = []
     label_to_key: dict[str, str] = {}
-    for device in camera_channel_devices(devices):
+    channel_devices = camera_channel_devices(devices)
+    if cloud_by_key is not None:
+        channel_devices = ai_insight_channel_devices(devices, cloud_by_key)
+    for device in channel_devices:
         label = device_option_label(device)
         base = label
         suffix = 2

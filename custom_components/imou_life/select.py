@@ -93,7 +93,11 @@ class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        labels, mapping = camera_select_options(self.coordinator.devices)
+        runtime = get_runtime_data(self._config_entry)
+        cloud_by_key = runtime.cloud_service_by_key if runtime is not None else {}
+        labels, mapping = camera_select_options(
+            self.coordinator.devices, cloud_by_key=cloud_by_key
+        )
         self._label_to_key = mapping
         self._attr_options = labels
         runtime = get_runtime_data(self._config_entry)
@@ -101,13 +105,28 @@ class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
             for label, key in mapping.items():
                 if key == runtime.workbench_device_key:
                     self._attr_current_option = label
+                    self._sync_workbench_device_key()
                     return
+            runtime.workbench_device_key = None
         if labels:
             self._attr_current_option = labels[0]
-            if runtime is not None:
-                runtime.workbench_device_key = mapping[labels[0]]
         else:
             self._attr_current_option = None
+        self._sync_workbench_device_key()
+
+    def _sync_workbench_device_key(self) -> None:
+        runtime = get_runtime_data(self._config_entry)
+        if runtime is None:
+            return
+        option = self._attr_current_option
+        if option and option in self._label_to_key:
+            runtime.workbench_device_key = self._label_to_key[option]
+        else:
+            runtime.workbench_device_key = None
+
+    def _handle_coordinator_update(self) -> None:
+        self._refresh_options()
+        super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
         key = self._label_to_key.get(option)
@@ -117,9 +136,7 @@ class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
                 translation_key="insight_workbench_unknown_device",
             )
         self._attr_current_option = option
-        runtime = get_runtime_data(self._config_entry)
-        if runtime is not None:
-            runtime.workbench_device_key = key
+        self._sync_workbench_device_key()
         self.async_write_ha_state()
 
     @property
