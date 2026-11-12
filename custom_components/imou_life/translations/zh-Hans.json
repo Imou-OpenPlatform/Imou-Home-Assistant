@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "须与创建应用时使用的区域一致。多数 open.imoulife.com 账号选「Imou Life（默认）」；仅当控制台标明区域接入点时再选新加坡、欧洲或北美。",
+          "api_url": "须与创建应用时使用的区域一致。open.imoulife.com 及海外账号一般选「国际」；在乐橙/国内开放平台创建的应用选「中国」。",
           "app_id": "在 Imou 开放平台创建应用后获得的 App ID",
           "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
@@ -237,10 +237,7 @@
   "selector": {
     "api_url": {
       "options": {
-        "intl": "Imou Life（默认）",
-        "sg": "新加坡（亚太）",
-        "eu": "欧洲",
-        "na": "北美",
+        "intl": "国际",
         "cn": "中国"
       }
     },
@@ -501,7 +498,7 @@
         }
       },
       "cloud_storage_status": {
-        "name": "云存储",
+        "name": "智见云存储",
         "state": {
           "insight": "智见套餐",
           "event": "事件云存储",
@@ -555,6 +552,14 @@
         "name": "转到收藏点",
         "state": {
           "select_collection_point": "选择收藏点…"
+        }
+      },
+      "wide_dynamic": {
+        "name": "宽动态",
+        "state": {
+          "off": "关",
+          "on": "开",
+          "adaptive": "自适应"
         }
       },
       "insight_workbench_device": {
@@ -694,7 +699,8 @@
   },
   "media_source": {
     "record_media_cloud_folder": "云录像",
-    "record_media_local_folder": "本地录像"
+    "record_media_local_folder": "本地录像",
+    "record_media_alarm_folder": "告警时录像"
   },
   "services": {
     "control_move_ptz": {

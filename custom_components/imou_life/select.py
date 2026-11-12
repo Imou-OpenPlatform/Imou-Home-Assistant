@@ -9,7 +9,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
+from pyimouapi.const import PARAM_COLLECTION_POINT_PROMPT, PARAM_CURRENT_OPTION, PARAM_OPTIONS
+from pyimouapi.select_option import to_friendly
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
@@ -153,7 +154,21 @@ class ImouSelect(ImouEntity, SelectEntity):
     @override
     def current_option(self) -> str | None:
         """Return the selected option."""
-        return self.device.selects[self._entity_type][PARAM_CURRENT_OPTION]
+        state = self.device.selects[self._entity_type]
+        current = state[PARAM_CURRENT_OPTION]
+        options = state[PARAM_OPTIONS]
+        if current in options:
+            return current
+        if current not in (None, ""):
+            friendly = to_friendly(self._entity_type, current)
+            if friendly in options:
+                return friendly
+        if (
+            self._entity_type == PARAM_COLLECTION_POINT
+            and PARAM_COLLECTION_POINT_PROMPT in options
+        ):
+            return PARAM_COLLECTION_POINT_PROMPT
+        return options[0] if options else None
 
     @override
     async def async_select_option(self, option: str) -> None:

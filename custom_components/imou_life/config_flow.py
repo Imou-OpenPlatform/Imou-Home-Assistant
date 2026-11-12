@@ -39,7 +39,7 @@ from pyimouapi.push import parse_callback_flag
 
 from . import pic_thumbnail
 from .const import (
-    API_URL_REGIONS,
+    API_URL_LOGIN_REGIONS,
     BASE_PUSH_ALWAYS,
     CONF_HD,
     CONF_SD,

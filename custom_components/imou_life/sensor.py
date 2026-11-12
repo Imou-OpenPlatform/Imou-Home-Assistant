@@ -183,7 +183,7 @@ _DEFAULT_BRIEFING_MARKDOWN = "Run **Refresh AI Insight briefing** to load the re
 
 
 class ImouInsightSearchSensor(ImouAccountEntity, SensorEntity):
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -203,7 +203,7 @@ class ImouInsightSearchSensor(ImouAccountEntity, SensorEntity):
 
 
 class ImouInsightBriefingSensor(ImouAccountEntity, SensorEntity):
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,

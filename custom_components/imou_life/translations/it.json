@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "Must match where your App was created. Most accounts on open.imoulife.com use Imou Life (default); pick a regional endpoint only when your console specifies one.",
+          "api_url": "Must match where your App was created. Choose International for open.imoulife.com and most overseas accounts; choose China for apps created on the China open platform.",
           "app_id": "L'App ID ottenuto dalla piattaforma cloud Imou",
           "app_secret": "L'App secret ottenuto dalla piattaforma cloud Imou"
         }
@@ -237,11 +237,8 @@
   "selector": {
     "api_url": {
       "options": {
-        "cn": "Cina",
-        "eu": "Europa",
-        "na": "Nord America",
-        "sg": "Singapore (Asia-Pacifico)",
-        "intl": "Imou Life (default)"
+        "intl": "Internazionale",
+        "cn": "Cina"
       }
     },
     "webhook_placeholder": {
@@ -557,6 +554,14 @@
           "select_collection_point": "Seleziona un punto di raccolta…"
         }
       },
+      "wide_dynamic": {
+        "name": "Wide dynamic range",
+        "state": {
+          "off": "Spento",
+          "on": "Acceso",
+          "adaptive": "Adattivo"
+        }
+      },
       "insight_workbench_device": {
         "name": "AI Insight device"
       }
@@ -694,7 +699,8 @@
   },
   "media_source": {
     "record_media_cloud_folder": "Cloud recordings",
-    "record_media_local_folder": "Local recordings"
+    "record_media_local_folder": "Local recordings",
+    "record_media_alarm_folder": "Record on alarm"
   },
   "services": {
     "control_move_ptz": {
