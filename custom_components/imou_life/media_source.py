@@ -322,9 +322,11 @@ class ImouRecordMediaSource(MediaSource):
                 entry_id=entry_id,
                 expires_at=source.expires_at,
             )
+            proxy_origin = get_url(self.hass).rstrip("/")
             return RecordHlsDescriptor(
-                f"{get_url(self.hass).rstrip('/')}{signed_playlist}",
+                f"{proxy_origin}{signed_playlist}",
                 source.expires_at,
+                proxy_origin,
             )
 
         register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -105,7 +106,13 @@ def _remux_command(source_url: str, output: Path) -> list[str]:
         or parsed.hostname is None
         or parsed.username is not None
         or parsed.password is not None
-        or not parsed.path.startswith("/api/imou_life/record_hls/")
+        or re.fullmatch(
+            r"/api/imou_life/record_hls/[0-9a-f]{32}/playlist\.m3u8",
+            parsed.path,
+        )
+        is None
+        or not parse_qs(parsed.query).get("authSig")
+        or parsed.fragment
     ):
         raise ValueError("MP4 source must be a generated local HLS proxy URL")
     cmd = [
@@ -131,6 +138,21 @@ def _remux_command(source_url: str, output: Path) -> list[str]:
         ]
     )
     return cmd
+
+
+def _validate_local_hls_proxy_source(source: RecordHlsDescriptor) -> None:
+    """Require the exact trusted origin used to construct a signed proxy URL."""
+    if source.proxy_origin is None:
+        raise ValueError("MP4 source must be a local HLS proxy URL")
+    parsed = urlsplit(source.playlist_url)
+    origin = urlsplit(source.proxy_origin)
+    if (
+        parsed.scheme.lower() != origin.scheme.lower()
+        or parsed.hostname != origin.hostname
+        or parsed.port != origin.port
+    ):
+        raise ValueError("MP4 source must be a local HLS proxy URL")
+    _remux_command(source.playlist_url, Path("unused.mp4"))
 
 
 async def _async_stop_process(process: asyncio.subprocess.Process) -> None:
@@ -250,6 +272,7 @@ async def async_prepare_record_mp4(
                 except Exception as err:
                     async_create_record_playback_issue(hass, entry_id, err)
                     raise
+                _validate_local_hls_proxy_source(source)
                 try:
                     await _async_remux_source_to_mp4(source.playlist_url, partial)
                 except (OSError, TimeoutError):
@@ -261,6 +284,7 @@ async def async_prepare_record_mp4(
                     except Exception as refresh_err:
                         async_create_record_playback_issue(hass, entry_id, refresh_err)
                         raise
+                    _validate_local_hls_proxy_source(source)
                     await _async_remux_source_to_mp4(source.playlist_url, partial)
                 if not partial.is_file() or partial.stat().st_size < 1:
                     raise OSError("ffmpeg produced an empty recording file")

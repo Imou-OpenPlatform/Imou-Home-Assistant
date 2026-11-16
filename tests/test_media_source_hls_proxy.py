@@ -63,7 +63,8 @@ HLS_UPSTREAM = (
     "https://mes502-online-hzali.lechange.com:7080/localvod/x.m3u8?proto=https&uid=abc"
 )
 LOCAL_HLS_PROXY = (
-    "http://ha.local:8123/api/imou_life/record_hls/session/playlist.m3u8?authSig=x"
+    "http://ha.local:8123/api/imou_life/record_hls/"
+    "0123456789abcdef0123456789abcdef/playlist.m3u8?authSig=x"
 )
 HLS_PLAYLIST = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:42
@@ -72,6 +73,17 @@ https://media.example/segment.ts?token=old
 #EXT-X-ENDLIST
 """
 HLS_REFRESHED_PLAYLIST = HLS_PLAYLIST.replace("token=old", "token=fresh")
+
+
+def _local_hls_descriptor(
+    marker: str = "", expires_at: float | None = None
+) -> RecordHlsDescriptor:
+    suffix = f"&marker={marker}" if marker else ""
+    return RecordHlsDescriptor(
+        f"{LOCAL_HLS_PROXY}{suffix}",
+        expires_at,
+        "http://ha.local:8123",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -741,6 +753,52 @@ two.m4s?token=secret
 #EXT-X-KEY:METHOD=NONE
 #EXT-X-ENDLIST
 """
+    )
+
+
+@pytest.mark.asyncio
+async def test_variant_key_and_map_resolve_from_media_playlist_url(
+    hass: HomeAssistant,
+) -> None:
+    master = """#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1
+variants/media/index.m3u8
+"""
+    media = """#EXTM3U
+#EXT-X-KEY:METHOD=AES-128,URI="keys/key.bin"
+#EXT-X-MAP:URI="init/init.mp4"
+#EXTINF:2,
+https://segments.example/chunks/one.m4s
+"""
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            side_effect=[master, media],
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://playlists.example/root/master.m3u8",
+            refresh=AsyncMock(),
+            entry_id="entry-a",
+        )
+
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+    resources = hass.data[DATA_RECORD_HLS_PROXY][session_id].resources
+    assert resources["key"][0].url == (
+        "https://playlists.example/root/variants/media/keys/key.bin"
+    )
+    assert resources["map"][0].url == (
+        "https://playlists.example/root/variants/media/init/init.mp4"
     )
 
 
@@ -2075,8 +2133,8 @@ async def test_mp4_expired_source_refreshes_once_and_succeeds(
     )
     provider = AsyncMock(
         side_effect=[
-            RecordHlsDescriptor("https://media.example/expired.m3u8", time.time() - 1),
-            RecordHlsDescriptor("https://media.example/fresh.m3u8", time.time() + 60),
+            _local_hls_descriptor("expired", time.time() - 1),
+            _local_hls_descriptor("fresh", time.time() + 60),
         ]
     )
 
@@ -2095,8 +2153,8 @@ async def test_mp4_expired_source_refreshes_once_and_succeeds(
     assert path.read_bytes() == b"mp4"
     assert provider.await_count == 2
     assert [call.args[0] for call in remux_mock.call_args_list] == [
-        "https://media.example/expired.m3u8",
-        "https://media.example/fresh.m3u8",
+        f"{LOCAL_HLS_PROXY}&marker=expired",
+        f"{LOCAL_HLS_PROXY}&marker=fresh",
     ]
     assert (
         DOMAIN,
@@ -2105,10 +2163,7 @@ async def test_mp4_expired_source_refreshes_once_and_succeeds(
 
 
 def test_mp4_ffmpeg_command_accepts_only_local_hls_proxy(tmp_path: Path) -> None:
-    command = _remux_command(
-        "http://ha.local:8123/api/imou_life/record_hls/session/playlist.m3u8?authSig=x",
-        tmp_path / "output.mp4",
-    )
+    command = _remux_command(LOCAL_HLS_PROXY, tmp_path / "output.mp4")
 
     assert command[command.index("-i") + 1].startswith(
         "http://ha.local:8123/api/imou_life/record_hls/"
@@ -2120,14 +2175,51 @@ def test_mp4_ffmpeg_command_accepts_only_local_hls_proxy(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_url",
+    [
+        (
+            "https://evil.example/api/imou_life/record_hls/"
+            "0123456789abcdef0123456789abcdef/playlist.m3u8?authSig=x"
+        ),
+        (
+            "http://ha.local:8123/api/imou_life/record_hls/"
+            "0123456789abcdef0123456789abcdef/playlist.m3u8"
+        ),
+        "http://ha.local:8123/api/imou_life/record_hls/not-a-session/playlist.m3u8?authSig=x",
+    ],
+)
+async def test_mp4_rejects_nonlocal_or_unsigned_proxy_source(
+    hass: HomeAssistant, source_url: str
+) -> None:
+    cache_id = f"unsafe-source-{time.time_ns()}"
+    provider = AsyncMock(
+        return_value=RecordHlsDescriptor(
+            source_url,
+            proxy_origin="http://ha.local:8123",
+        )
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_mp4._async_remux_source_to_mp4",
+            new_callable=AsyncMock,
+        ) as remux,
+        pytest.raises(ValueError, match="local HLS proxy"),
+    ):
+        await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    remux.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_mp4_second_expired_failure_is_final(
     hass: HomeAssistant,
 ) -> None:
     cache_id = f"expired-twice-{time.time_ns()}"
     provider = AsyncMock(
         side_effect=[
-            RecordHlsDescriptor("first", time.time() - 1),
-            RecordHlsDescriptor("second", time.time() - 1),
+            _local_hls_descriptor("first", time.time() - 1),
+            _local_hls_descriptor("second", time.time() - 1),
         ]
     )
     with (
@@ -2155,7 +2247,7 @@ async def test_mp4_unproven_expiry_does_not_refresh_or_create_issue(
     expires_at: float | None,
 ) -> None:
     cache_id = f"network-failure-{time.time_ns()}"
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source", expires_at))
+    provider = AsyncMock(return_value=_local_hls_descriptor(expires_at=expires_at))
     with (
         patch(
             "custom_components.imou_life.record_playback_mp4._async_remux_source_to_mp4",
@@ -2180,7 +2272,7 @@ async def test_mp4_refresh_failure_is_final_and_cleans_partial(
     cache_id = f"refresh-failure-{time.time_ns()}"
     provider = AsyncMock(
         side_effect=[
-            RecordHlsDescriptor("source", time.time() - 1),
+            _local_hls_descriptor(expires_at=time.time() - 1),
             RequestFailedException("No permission", api_code=ERROR_CODE_NO_PERMISSION),
         ]
     )
@@ -2215,7 +2307,7 @@ async def test_mp4_refresh_cancellation_propagates_and_cleans_partial(
     cache_id = f"refresh-cancel-{time.time_ns()}"
     provider = AsyncMock(
         side_effect=[
-            RecordHlsDescriptor("source", time.time() - 1),
+            _local_hls_descriptor(expires_at=time.time() - 1),
             asyncio.CancelledError(),
         ]
     )
@@ -2247,9 +2339,10 @@ async def test_mp4_signed_url_expiry_allows_one_refresh(
     provider = AsyncMock(
         side_effect=[
             RecordHlsDescriptor(
-                f"https://media.example/record.m3u8?expire={time.time() - 1}"
+                f"{LOCAL_HLS_PROXY}&expire={time.time() - 1}",
+                proxy_origin="http://ha.local:8123",
             ),
-            RecordHlsDescriptor("https://media.example/fresh.m3u8"),
+            _local_hls_descriptor("fresh"),
         ]
     )
 
@@ -2335,7 +2428,7 @@ async def test_mp4_cancel_during_communicate_terminates_process(
     process.wait = AsyncMock(return_value=-15)
     process.terminate = MagicMock()
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     with patch(
         "custom_components.imou_life.record_playback_mp4.asyncio.create_subprocess_exec",
@@ -2376,7 +2469,7 @@ async def test_mp4_timeout_terminates_then_kills_process(
     process.wait = AsyncMock(side_effect=[TimeoutError, -9])
     process.terminate = MagicMock()
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     with (
         patch(
@@ -2408,7 +2501,7 @@ async def test_mp4_terminate_refusal_falls_back_to_kill(
     process.wait = AsyncMock(return_value=-9)
     process.terminate = MagicMock(side_effect=PermissionError)
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     with (
         patch(
@@ -2438,7 +2531,7 @@ async def test_mp4_process_success_atomically_publishes_output(
         return b"", b""
 
     process.communicate = AsyncMock(side_effect=communicate)
-    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     with patch(
         "custom_components.imou_life.record_playback_mp4.asyncio.create_subprocess_exec",
@@ -2458,7 +2551,7 @@ async def test_mp4_process_failure_captures_stderr_without_refresh(
     cache_id = f"process-failure-{time.time_ns()}"
     process = MagicMock(returncode=1)
     process.communicate = AsyncMock(return_value=(b"", b"ffmpeg diagnostic"))
-    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     with (
         patch(
@@ -2481,7 +2574,7 @@ async def test_cancelling_same_cache_waiter_does_not_touch_owner_partial(
     partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
     remux_started = asyncio.Event()
     allow_remux = asyncio.Event()
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
 
     async def remux(_source_url: str, output: Path) -> None:
         await hass.async_add_executor_job(output.write_bytes, b"partial")
@@ -2522,7 +2615,7 @@ async def test_cancelling_same_cache_owner_allows_waiter_to_take_over(
     cache_id = f"owner-cancel-{time.time_ns()}"
     first_remux_started = asyncio.Event()
     first_remux_cancelled = asyncio.Event()
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=_local_hls_descriptor())
     remux_calls = 0
 
     async def remux(_source_url: str, output: Path) -> None:

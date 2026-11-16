@@ -48,6 +48,16 @@ class RecordHlsDescriptor:
 
     playlist_url: str
     expires_at: float | None = None
+    proxy_origin: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _LoadedMediaPlaylist:
+    """A media playlist plus the URL used to resolve its relative URIs."""
+
+    body: str
+    segment_urls: list[str]
+    base_url: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -555,22 +565,22 @@ def _validate_byte_range_response(
 
 async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
-) -> tuple[str, list[str]]:
+) -> _LoadedMediaPlaylist:
     body = await async_fetch_url_text(hass, playlist_url)
     segment_urls = parse_hls_media_segment_urls(body, playlist_url)
     if segment_urls:
         for segment_url in segment_urls:
             await async_pin_public_url(hass, segment_url)
-        return body, segment_urls
+        return _LoadedMediaPlaylist(body, segment_urls, playlist_url)
     variant = pick_hls_variant_playlist_url(body, playlist_url)
     if variant is None:
-        return body, segment_urls
+        return _LoadedMediaPlaylist(body, segment_urls, playlist_url)
     await async_pin_public_url(hass, variant)
     body = await async_fetch_url_text(hass, variant)
     segment_urls = parse_hls_media_segment_urls(body, variant)
     for segment_url in segment_urls:
         await async_pin_public_url(hass, segment_url)
-    return body, segment_urls
+    return _LoadedMediaPlaylist(body, segment_urls, variant)
 
 
 async def async_create_record_hls_proxy_playlist_url(
@@ -583,12 +593,21 @@ async def async_create_record_hls_proxy_playlist_url(
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
     _prune_sessions(hass)
-    body, segment_urls = await _load_media_playlist(hass, upstream_playlist_url)
+    loaded = await _load_media_playlist(hass, upstream_playlist_url)
+    if isinstance(loaded, _LoadedMediaPlaylist):
+        body, segment_urls, media_playlist_url = (
+            loaded.body,
+            loaded.segment_urls,
+            loaded.base_url,
+        )
+    else:
+        body, segment_urls = loaded
+        media_playlist_url = upstream_playlist_url
     if not segment_urls:
         msg = "Imou HLS playlist had no segments"
         raise ValueError(msg)
     segments = _segment_descriptors(body, segment_urls)
-    resources = _playlist_resource_descriptors(body, segment_urls[0])
+    resources = _playlist_resource_descriptors(body, media_playlist_url)
     await _async_validate_playlist_targets(hass, resources)
     session_id = secrets.token_hex(16)
     _sessions(hass)[session_id] = RecordHlsSession(
@@ -656,15 +675,24 @@ async def _async_refresh_record_hls_session(
                 record.refresh_task = None
             if isinstance(descriptor, str):
                 descriptor = RecordHlsDescriptor(descriptor)
-            body, segment_urls = await _load_media_playlist(
-                hass, descriptor.playlist_url
-            )
+            loaded = await _load_media_playlist(hass, descriptor.playlist_url)
+            if isinstance(loaded, _LoadedMediaPlaylist):
+                body, segment_urls, media_playlist_url = (
+                    loaded.body,
+                    loaded.segment_urls,
+                    loaded.base_url,
+                )
+            else:
+                body, segment_urls = loaded
+                media_playlist_url = descriptor.playlist_url
             if not record.active or _sessions(hass).get(session_id) is not record:
                 raise web.HTTPNotFound()
             if not segment_urls:
                 raise ValueError("Refreshed Imou HLS playlist had no segments")
             refreshed_segments = _segment_descriptors(body, segment_urls)
-            refreshed_resources = _playlist_resource_descriptors(body, segment_urls[0])
+            refreshed_resources = _playlist_resource_descriptors(
+                body, media_playlist_url
+            )
             await _async_validate_playlist_targets(hass, refreshed_resources)
             record.refreshed_segments = {
                 refreshed.identity: refreshed
