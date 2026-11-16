@@ -760,6 +760,12 @@ two.m4s?token=secret
 async def test_variant_key_and_map_resolve_from_media_playlist_url(
     hass: HomeAssistant,
 ) -> None:
+    class RedirectedText(str):
+        def __new__(cls, value: str, final_url: str):
+            instance = super().__new__(cls, value)
+            instance.final_url = final_url
+            return instance
+
     master = """#EXTM3U
 #EXT-X-STREAM-INF:BANDWIDTH=1
 variants/media/index.m3u8
@@ -774,7 +780,16 @@ https://segments.example/chunks/one.m4s
         patch(
             "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
             new_callable=AsyncMock,
-            side_effect=[master, media],
+            side_effect=[
+                RedirectedText(
+                    master,
+                    "https://redirected.example/canonical/master.m3u8",
+                ),
+                RedirectedText(
+                    media,
+                    "https://cdn.example/final/media/index.m3u8",
+                ),
+            ],
         ),
         patch(
             "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
@@ -787,19 +802,15 @@ https://segments.example/chunks/one.m4s
     ):
         signed = await async_create_record_hls_proxy_playlist_url(
             hass,
-            "https://playlists.example/root/master.m3u8",
+            "https://playlists.example/start.m3u8",
             refresh=AsyncMock(),
             entry_id="entry-a",
         )
 
     session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
     resources = hass.data[DATA_RECORD_HLS_PROXY][session_id].resources
-    assert resources["key"][0].url == (
-        "https://playlists.example/root/variants/media/keys/key.bin"
-    )
-    assert resources["map"][0].url == (
-        "https://playlists.example/root/variants/media/init/init.mp4"
-    )
+    assert resources["key"][0].url == ("https://cdn.example/final/media/keys/key.bin")
+    assert resources["map"][0].url == ("https://cdn.example/final/media/init/init.mp4")
 
 
 @pytest.mark.asyncio

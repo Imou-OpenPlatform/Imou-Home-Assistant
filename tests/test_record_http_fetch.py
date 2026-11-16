@@ -101,6 +101,37 @@ async def test_redirect_to_private_target_is_rejected(
         await async_fetch_url_response(hass, "https://public.example/start")
 
 
+async def test_public_redirect_reports_final_pinned_url(
+    hass: HomeAssistant,
+) -> None:
+    async def pin(_hass: HomeAssistant, url: str) -> PinnedUrl:
+        return PinnedUrl(url, "public.example", 443, ("8.8.8.8",))
+
+    with (
+        patch(
+            "custom_components.imou_life.record_http_fetch.async_pin_public_url",
+            side_effect=pin,
+        ),
+        patch(
+            "custom_components.imou_life.record_http_fetch._async_fetch_pinned_once",
+            new_callable=AsyncMock,
+            side_effect=[
+                SimpleNamespace(
+                    status=302,
+                    headers={"Location": "/media/index.m3u8"},
+                    body=b"",
+                ),
+                SimpleNamespace(status=200, headers={}, body=b"#EXTM3U\n"),
+            ],
+        ),
+    ):
+        response = await async_fetch_url_response(
+            hass, "https://public.example/start.m3u8"
+        )
+
+    assert response.final_url == "https://public.example/media/index.m3u8"
+
+
 def test_curl_uses_pinned_ip_and_never_follows_redirects() -> None:
     pinned = PinnedUrl(
         "https://media.example:8443/video.ts?token=secret",

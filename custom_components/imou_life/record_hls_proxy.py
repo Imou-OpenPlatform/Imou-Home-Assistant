@@ -567,20 +567,22 @@ async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
 ) -> _LoadedMediaPlaylist:
     body = await async_fetch_url_text(hass, playlist_url)
-    segment_urls = parse_hls_media_segment_urls(body, playlist_url)
+    media_playlist_url = getattr(body, "final_url", playlist_url)
+    segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     if segment_urls:
         for segment_url in segment_urls:
             await async_pin_public_url(hass, segment_url)
-        return _LoadedMediaPlaylist(body, segment_urls, playlist_url)
-    variant = pick_hls_variant_playlist_url(body, playlist_url)
+        return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
+    variant = pick_hls_variant_playlist_url(body, media_playlist_url)
     if variant is None:
-        return _LoadedMediaPlaylist(body, segment_urls, playlist_url)
+        return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
     await async_pin_public_url(hass, variant)
     body = await async_fetch_url_text(hass, variant)
-    segment_urls = parse_hls_media_segment_urls(body, variant)
+    media_playlist_url = getattr(body, "final_url", variant)
+    segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     for segment_url in segment_urls:
         await async_pin_public_url(hass, segment_url)
-    return _LoadedMediaPlaylist(body, segment_urls, variant)
+    return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
 
 
 async def async_create_record_hls_proxy_playlist_url(

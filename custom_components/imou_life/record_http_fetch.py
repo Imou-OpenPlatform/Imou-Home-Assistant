@@ -30,6 +30,18 @@ class UrlFetchResponse:
     status: int
     headers: Mapping[str, str]
     body: bytes
+    final_url: str | None = None
+
+
+class UrlFetchText(str):
+    """Fetched text carrying the final URL after validated redirects."""
+
+    final_url: str
+
+    def __new__(cls, value: str, final_url: str) -> UrlFetchText:
+        instance = super().__new__(cls, value)
+        instance.final_url = final_url
+        return instance
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +283,12 @@ async def async_fetch_url_response(
         response = await _async_fetch_pinned_once(hass, pinned, range_header)
         location = _redirect_location(response)
         if location is None:
-            return response
+            return UrlFetchResponse(
+                response.status,
+                response.headers,
+                response.body,
+                current_url,
+            )
         if redirect_count == _MAX_REDIRECTS:
             raise OSError("Too many outbound media redirects")
         current_url = urljoin(current_url, location)
@@ -289,4 +306,7 @@ async def async_fetch_url_bytes(hass: HomeAssistant, url: str) -> bytes:
 
 async def async_fetch_url_text(hass: HomeAssistant, url: str) -> str:
     """GET text (m3u8) from Imou media CDN."""
-    return (await async_fetch_url_bytes(hass, url)).decode()
+    response = await async_fetch_url_response(hass, url)
+    if response.status >= 400:
+        raise OSError(f"HTTP {response.status} fetching outbound media")
+    return UrlFetchText(response.body.decode(), response.final_url or url)
