@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import (
@@ -20,7 +20,9 @@ from custom_components.imou_life.media_source import (
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.local_record import LocalRecordSegment
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -223,3 +225,81 @@ async def test_alarm_folder_follows_save_directory_configuration(
         titles = await _browse_record_kinds(source, entry)
 
     assert ("Record on alarm" in titles) is expected
+
+
+async def test_local_day_uses_aggregate_record_list(
+    hass: HomeAssistant,
+) -> None:
+    """A local day uses the public aggregate and keeps DAV paths as metadata."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.set_product_id("pid")
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    dav_path = "/mnt/sd/2026-11-01/001/dav/00/00.06.55-00.08.10[M][0@0][0].dav"
+    manager.async_list_local_record_segments = AsyncMock(
+        return_value=[
+            LocalRecordSegment(
+                file_name=dav_path,
+                begin_time="2026-11-01 00:06:55",
+                end_time="2026-11-01 00:08:10",
+            )
+        ]
+    )
+    manager.async_local_record_list = AsyncMock()
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    manager.async_list_local_record_segments.assert_awaited_once_with(
+        "SN1",
+        "0",
+        begin_time="2026-11-01 00:00:00",
+        end_time="2026-11-01 23:59:59",
+        product_id="pid",
+    )
+    manager.async_local_record_list.assert_not_awaited()
+    assert len(browse.children or []) == 1
+    child = (browse.children or [])[0]
+    assert child.title == "00:06:55 - 00:08:10"
+    assert dav_path not in (child.identifier or "")
+
+
+async def test_local_day_is_empty_when_aggregate_fails(
+    hass: HomeAssistant,
+) -> None:
+    """An unavailable SD card leaves the selected day empty."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        side_effect=ImouException("SD card unavailable")
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    manager.async_list_local_record_segments.assert_awaited_once()
+    assert browse.children == []
+    assert browse.can_expand is False

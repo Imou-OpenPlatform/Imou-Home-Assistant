@@ -32,7 +32,6 @@ from pyimouapi.local_record import (
     day_time_window,
     local_record_display_title,
     parse_local_bitmap_days,
-    parse_local_record_list,
 )
 from pyimouapi.playback.hls import (
     RECORD_TYPE_CLOUD,
@@ -609,13 +608,20 @@ class ImouRecordMediaSource(MediaSource):
                         )
                     )
             else:
-                data = await manager.async_local_record_list(
+                device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
+                device = (
+                    runtime.coordinator.get_device(device_key)
+                    if device_key is not None
+                    else None
+                )
+                segments = await manager.async_list_local_record_segments(
                     device_id,
                     channel_id,
                     begin_time=begin_time,
                     end_time=end_time,
+                    product_id=device.product_id if device is not None else None,
                 )
-                for segment in parse_local_record_list(data):
+                for segment in segments:
                     play_parts = [
                         PREFIX_PLAY,
                         kind,
