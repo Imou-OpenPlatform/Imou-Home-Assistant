@@ -549,7 +549,7 @@ def _resolve_imou_ha_device_for_push(
 
 def _event_push_subscription_allows(entry: ConfigEntry, msg_type: str | None) -> bool:
     """Require the matching Configure subscription for this push category."""
-    if PARAM_EVENT_PUSH_TYPES not in entry.options:
+    if msg_type is None or PARAM_EVENT_PUSH_TYPES not in entry.options:
         return True
     kind = push_subscription_kind(msg_type)
     if kind == "iot":

@@ -1279,11 +1279,21 @@ async def test_webhook_missing_msg_type_is_not_alarm(
     hass: HomeAssistant,
 ) -> None:
     """Payload without msgType still fires generic event, not alarm."""
+    from custom_components.imou_life.const import (
+        EVENT_PUSH_TYPE_ALARM,
+        PARAM_EVENT_PUSH_TYPES,
+    )
+
     generic_events: list[Event] = []
     alarm_events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
     hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
-    setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
+    setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["device_1"],
+        options={PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_ALARM]},
+    )
 
     response = await async_handle_imou_webhook(
         hass,
