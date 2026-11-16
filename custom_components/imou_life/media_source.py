@@ -271,9 +271,11 @@ class ImouRecordMediaSource(MediaSource):
                 raise
             source_url = data.get("url") if isinstance(data, dict) else None
             if not source_url or not is_hls_playback_url(str(source_url)):
-                err = RecordPlaybackEmptySourceError()
-                async_create_record_playback_issue(self.hass, entry_id, err)
-                raise err
+                empty_source_error = RecordPlaybackEmptySourceError()
+                async_create_record_playback_issue(
+                    self.hass, entry_id, empty_source_error
+                )
+                raise empty_source_error
             return RecordHlsDescriptor(
                 str(source_url),
                 _record_hls_expiry(data),
@@ -309,8 +311,8 @@ class ImouRecordMediaSource(MediaSource):
             return hls_play
         cache_id = record_playback_cache_id(item.identifier or "")
 
-        async def async_mp4_source() -> str:
-            return (await async_record_hls_descriptor()).playlist_url
+        async def async_mp4_source() -> RecordHlsDescriptor:
+            return await async_record_hls_descriptor()
 
         register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)
         _LOGGER.info(

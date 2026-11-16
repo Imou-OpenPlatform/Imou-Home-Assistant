@@ -18,7 +18,17 @@ from custom_components.imou_life.repairs import (
     is_quota_exceeded,
 )
 from homeassistant.helpers import issue_registry as ir
-from pyimouapi.exceptions import RequestFailedException
+from pyimouapi.const import (
+    ERROR_CODE_INVALID_APP,
+    ERROR_CODE_NO_PERMISSION,
+    ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
+    ERROR_CODE_TOKEN_OVERDUE,
+)
+from pyimouapi.exceptions import (
+    ConnectFailedException,
+    InvalidAppIdOrSecretException,
+    RequestFailedException,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -27,11 +37,13 @@ from . import USER_INPUT
 def test_is_quota_exceeded_detects_open_platform_limit() -> None:
     """The monthly call-limit code is what the repair is for."""
     assert is_quota_exceeded(
-        RequestFailedException("OP1013:Call interface times exceed limit (total).")
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED)
     )
-    assert is_quota_exceeded(RequestFailedException("op1013: quota"))
     assert not is_quota_exceeded(RequestFailedException("cloud down"))
-    assert not is_quota_exceeded(RequestFailedException("OP1009:No permission"))
+    assert not is_quota_exceeded(RequestFailedException("quota-looking message OP1013"))
+    assert not is_quota_exceeded(
+        RequestFailedException("denied", api_code=ERROR_CODE_NO_PERMISSION)
+    )
     assert not is_quota_exceeded(TimeoutError("timeout"))
 
 
@@ -67,7 +79,7 @@ async def test_quota_issue_lifecycle(hass) -> None:
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
     issue = ir.async_get(hass).issues[(DOMAIN, issue_id)]
@@ -95,7 +107,7 @@ async def test_quota_repair_learn_more_uses_china_console(hass) -> None:
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
 
@@ -122,7 +134,7 @@ async def test_quota_repair_not_cleared_when_every_device_is_skipped(
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
     issue_id = f"{ISSUE_OPEN_API_QUOTA}_{entry.entry_id}"
@@ -155,7 +167,7 @@ async def test_record_playback_issue_lifecycle_is_entry_scoped(hass) -> None:
     entry_a.add_to_hass(hass)
     entry_b.add_to_hass(hass)
 
-    error = RequestFailedException("OP1009: No permission")
+    error = RequestFailedException("No permission", api_code=ERROR_CODE_NO_PERMISSION)
     async_create_record_playback_issue(hass, entry_a.entry_id, error)
     async_create_record_playback_issue(hass, entry_a.entry_id, error)
     async_create_record_playback_issue(hass, entry_b.entry_id, error)
@@ -179,8 +191,10 @@ async def test_record_playback_issue_lifecycle_is_entry_scoped(hass) -> None:
 @pytest.mark.parametrize(
     "error",
     [
-        RequestFailedException("Authentication failed"),
-        RequestFailedException("Account access denied"),
+        RequestFailedException("denied", api_code=ERROR_CODE_NO_PERMISSION),
+        RequestFailedException("expired", api_code=ERROR_CODE_TOKEN_OVERDUE),
+        InvalidAppIdOrSecretException("invalid", api_code=ERROR_CODE_INVALID_APP),
+        RequestFailedException("forbidden", status_code=403),
         RecordPlaybackEmptySourceError(),
     ],
 )
@@ -202,6 +216,8 @@ async def test_record_playback_stable_failures_create_issue(hass, error) -> None
         OSError("connection reset"),
         TimeoutError("timed out"),
         RequestFailedException("temporary network failure"),
+        ConnectFailedException("forbidden-looking message"),
+        RequestFailedException("OP1009: message only"),
         ValueError("malformed segment"),
     ],
 )

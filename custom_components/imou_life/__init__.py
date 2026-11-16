@@ -54,6 +54,7 @@ from .helpers import (
 from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
 from .record_hls_proxy import async_remove_record_hls_proxy_sessions
+from .record_playback_mp4 import async_remove_record_playback_sources
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
 from .snap_detect import async_register_snap_detect_service
@@ -267,6 +268,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
             hass.services.async_remove(DOMAIN, SERVICE_SEARCH_AI_ALARMS)
         if hass.services.has_service(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING):
             hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
+    await async_remove_record_playback_sources(hass, entry.entry_id)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     await async_remove_record_hls_proxy_sessions(hass, entry.entry_id)

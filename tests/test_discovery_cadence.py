@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
+from pyimouapi.const import ERROR_CODE_OPEN_API_QUOTA_EXCEEDED
 from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
@@ -187,7 +188,8 @@ async def test_quota_poll_failure_creates_repair_and_clears_on_success(
     assert (DOMAIN, issue_id) not in ir.async_get(hass).issues
 
     device_manager.async_update_devices_status.side_effect = RequestFailedException(
-        "OP1013:Call interface times exceed limit (total)."
+        "Call interface times exceed limit (total).",
+        api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
     )
     await coordinator.async_refresh()
     await hass.async_block_till_done()
