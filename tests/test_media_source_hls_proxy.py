@@ -1245,6 +1245,86 @@ async def test_unload_removes_only_entry_sessions_and_reschedules_timer(
 
 
 @pytest.mark.asyncio
+async def test_failed_platform_unload_preserves_all_playback_state(
+    hass: HomeAssistant,
+) -> None:
+    entry_a = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry_b = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-b")
+    entry_a.add_to_hass(hass)
+    entry_b.add_to_hass(hass)
+    hls_session = await _create_refreshable_session(
+        hass,
+        AsyncMock(return_value="https://media.example/a.m3u8"),
+        entry_id=entry_a.entry_id,
+    )
+    provider_started = asyncio.Event()
+
+    async def provider_a() -> RecordHlsDescriptor:
+        provider_started.set()
+        await asyncio.Event().wait()
+        return RecordHlsDescriptor("source-a")
+
+    register_playback_source(hass, "mp4-a", entry_a.entry_id, provider_a)
+    register_playback_source(
+        hass,
+        "mp4-b",
+        entry_b.entry_id,
+        AsyncMock(return_value=RecordHlsDescriptor("source-b")),
+    )
+    task = asyncio.create_task(
+        async_prepare_record_mp4(hass, "mp4-a", entry_a.entry_id, provider_a)
+    )
+    await provider_started.wait()
+
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
+        AsyncMock(return_value=False),
+    ):
+        assert await async_unload_entry(hass, entry_a) is False
+
+    store = hass.data[DATA_RECORD_PLAYBACK_MP4]
+    assert store["owners"] == {"mp4-a": "entry-a", "mp4-b": "entry-b"}
+    assert {"mp4-a", "mp4-b"} <= store["sources"].keys()
+    assert "mp4-a" in store["locks"]
+    assert task in store["tasks"]["mp4-a"]
+    assert hls_session in hass.data[DATA_RECORD_HLS_PROXY]
+    assert not task.cancelled()
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_platform_unload_exception_preserves_playback_state(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry.add_to_hass(hass)
+    hls_session = await _create_refreshable_session(
+        hass,
+        AsyncMock(return_value="https://media.example/a.m3u8"),
+        entry_id=entry.entry_id,
+    )
+    provider = AsyncMock(return_value=RecordHlsDescriptor("source-a"))
+    register_playback_source(hass, "mp4-a", entry.entry_id, provider)
+
+    with (
+        patch(
+            "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
+            AsyncMock(side_effect=RuntimeError("unload failed")),
+        ),
+        pytest.raises(RuntimeError, match="unload failed"),
+    ):
+        await async_unload_entry(hass, entry)
+
+    store = hass.data[DATA_RECORD_PLAYBACK_MP4]
+    assert store["owners"]["mp4-a"] == entry.entry_id
+    assert "mp4-a" in store["sources"]
+    assert hls_session in hass.data[DATA_RECORD_HLS_PROXY]
+
+
+@pytest.mark.asyncio
 async def test_unload_awaits_in_progress_refresh_cancellation(
     hass: HomeAssistant,
 ) -> None:
@@ -2038,3 +2118,91 @@ async def test_mp4_process_failure_captures_stderr_without_refresh(
         await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
 
     provider.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_cancelling_same_cache_waiter_does_not_touch_owner_partial(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"waiter-cancel-{time.time_ns()}"
+    partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
+    remux_started = asyncio.Event()
+    allow_remux = asyncio.Event()
+    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+
+    async def remux(_source_url: str, output: Path) -> None:
+        await hass.async_add_executor_job(output.write_bytes, b"partial")
+        remux_started.set()
+        await allow_remux.wait()
+        await hass.async_add_executor_job(output.write_bytes, b"complete")
+
+    with patch(
+        "custom_components.imou_life.record_playback_mp4._async_remux_source_to_mp4",
+        side_effect=remux,
+    ):
+        owner = asyncio.create_task(
+            async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+        )
+        await remux_started.wait()
+        waiter = asyncio.create_task(
+            async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+        )
+        await asyncio.sleep(0)
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+
+        assert await hass.async_add_executor_job(partial.read_bytes) == b"partial"
+        allow_remux.set()
+        output = await owner
+        cached = await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    assert output == cached
+    assert await hass.async_add_executor_job(output.read_bytes) == b"complete"
+    provider.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_cancelling_same_cache_owner_allows_waiter_to_take_over(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"owner-cancel-{time.time_ns()}"
+    first_remux_started = asyncio.Event()
+    first_remux_cancelled = asyncio.Event()
+    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    remux_calls = 0
+
+    async def remux(_source_url: str, output: Path) -> None:
+        nonlocal remux_calls
+        remux_calls += 1
+        if remux_calls == 1:
+            await hass.async_add_executor_job(output.write_bytes, b"partial")
+            first_remux_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                first_remux_cancelled.set()
+            return
+        assert not await hass.async_add_executor_job(output.exists)
+        await hass.async_add_executor_job(output.write_bytes, b"complete")
+
+    with patch(
+        "custom_components.imou_life.record_playback_mp4._async_remux_source_to_mp4",
+        side_effect=remux,
+    ):
+        owner = asyncio.create_task(
+            async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+        )
+        await first_remux_started.wait()
+        waiter = asyncio.create_task(
+            async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+        )
+        owner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await owner
+        output = await asyncio.wait_for(waiter, timeout=1)
+
+    assert first_remux_cancelled.is_set()
+    assert await hass.async_add_executor_job(output.read_bytes) == b"complete"
+    assert remux_calls == 2
+    assert provider.await_count == 2

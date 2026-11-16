@@ -268,9 +268,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
             hass.services.async_remove(DOMAIN, SERVICE_SEARCH_AI_ALARMS)
         if hass.services.has_service(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING):
             hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
-    await async_remove_record_playback_sources(hass, entry.entry_id)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    await async_remove_record_playback_sources(hass, entry.entry_id)
     await async_remove_record_hls_proxy_sessions(hass, entry.entry_id)
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")

@@ -229,37 +229,39 @@ async def async_prepare_record_mp4(
     partial = output.with_name(f"{output.stem}.part.mp4")
     try:
         async with lock:
-            if output.is_file() and output.stat().st_size > 0:
+            try:
+                if output.is_file() and output.stat().st_size > 0:
+                    async_delete_record_playback_issue(hass, entry_id)
+                    store["sources"].pop(cache_id, None)
+                    return output
+                partial.unlink(missing_ok=True)
+                _LOGGER.debug("Preparing Imou recording MP4 cache %s", cache_id)
+                try:
+                    source = await source_provider()
+                except Exception as err:
+                    async_create_record_playback_issue(hass, entry_id, err)
+                    raise
+                try:
+                    await _async_remux_source_to_mp4(source.playlist_url, partial)
+                except (OSError, TimeoutError):
+                    if not _source_is_expired(source):
+                        raise
+                    partial.unlink(missing_ok=True)
+                    try:
+                        source = await source_provider()
+                    except Exception as refresh_err:
+                        async_create_record_playback_issue(hass, entry_id, refresh_err)
+                        raise
+                    await _async_remux_source_to_mp4(source.playlist_url, partial)
+                if not partial.is_file() or partial.stat().st_size < 1:
+                    raise OSError("ffmpeg produced an empty recording file")
+                partial.replace(output)
                 async_delete_record_playback_issue(hass, entry_id)
                 store["sources"].pop(cache_id, None)
                 return output
-            partial.unlink(missing_ok=True)
-            _LOGGER.debug("Preparing Imou recording MP4 cache %s", cache_id)
-            try:
-                source = await source_provider()
-            except Exception as err:
-                async_create_record_playback_issue(hass, entry_id, err)
-                raise
-            try:
-                await _async_remux_source_to_mp4(source.playlist_url, partial)
-            except (OSError, TimeoutError):
-                if not _source_is_expired(source):
-                    raise
+            finally:
                 partial.unlink(missing_ok=True)
-                try:
-                    source = await source_provider()
-                except Exception as refresh_err:
-                    async_create_record_playback_issue(hass, entry_id, refresh_err)
-                    raise
-                await _async_remux_source_to_mp4(source.playlist_url, partial)
-            if not partial.is_file() or partial.stat().st_size < 1:
-                raise OSError("ffmpeg produced an empty recording file")
-            partial.replace(output)
-            async_delete_record_playback_issue(hass, entry_id)
-            store["sources"].pop(cache_id, None)
-            return output
     finally:
-        partial.unlink(missing_ok=True)
         tasks.discard(task)
         if not tasks:
             store["tasks"].pop(cache_id, None)
