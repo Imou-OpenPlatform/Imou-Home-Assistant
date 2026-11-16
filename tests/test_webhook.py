@@ -228,6 +228,56 @@ async def test_webhook_respects_entry_options_over_runtime_push_flag(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_legacy_entry_without_type_field_accepts_alarm(
+    hass: HomeAssistant,
+) -> None:
+    """Legacy options without event_push_types continue accepting alarms."""
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(
+        hass,
+        selected_devices=["device_1"],
+        options={"enable_event_push": True},
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(events) == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_explicit_empty_type_list_rejects_alarm(
+    hass: HomeAssistant,
+) -> None:
+    """An explicitly empty event_push_types list rejects alarms."""
+    from custom_components.imou_life.const import PARAM_EVENT_PUSH_TYPES
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(
+        hass,
+        selected_devices=["device_1"],
+        options={PARAM_EVENT_PUSH_TYPES: []},
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": "alarmLocal", "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_respects_entry_options_over_runtime_selected_devices(
     hass: HomeAssistant,
 ) -> None:
@@ -2018,9 +2068,15 @@ async def test_webhook_v2_capability_push_requires_subscription(
     hass: HomeAssistant,
 ) -> None:
     """V2 capabilityEvent pushes are ignored when capability_event is not selected."""
+    from custom_components.imou_life.const import PARAM_EVENT_PUSH_TYPES
+
     events: list[Event] = []
     hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
-    setup_imou_runtime(hass, selected_devices=["SN1"])
+    setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["alarm"]},
+    )
 
     response = await async_handle_imou_webhook(
         hass,

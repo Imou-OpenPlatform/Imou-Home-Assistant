@@ -27,6 +27,8 @@ from pyimouapi.push import (
     is_v2_capability_event_id,
     legacy_msg_type_from_v2_event,
     normalize_push_payload,
+    push_dispatch_permitted,
+    push_subscription_kind,
     v2_capability_event_permitted,
 )
 
@@ -34,8 +36,12 @@ from .const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
+    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
     imou_life_device_key,
@@ -541,6 +547,22 @@ def _resolve_imou_ha_device_for_push(
     return None
 
 
+def _event_push_subscription_allows(entry: ConfigEntry, msg_type: str | None) -> bool:
+    """Require the matching Configure subscription for this push category."""
+    if PARAM_EVENT_PUSH_TYPES not in entry.options:
+        return True
+    kind = push_subscription_kind(msg_type)
+    if kind == "iot":
+        return event_push_type_active(entry, EVENT_PUSH_TYPE_IOT)
+    if kind == "capability":
+        return event_push_type_active(entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT)
+    if kind == "alarm":
+        return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
+    if kind == "device_status":
+        return event_push_type_active(entry, EVENT_PUSH_TYPE_DEVICE_STATUS)
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_DEVICE_STATUS)
+
+
 def _v2_capability_event_allowed(
     ha_device: ImouHaDevice | None, event_id: str
 ) -> bool:
@@ -681,6 +703,12 @@ async def async_handle_imou_webhook(
 
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
+    msg_type_raw = event_data.get("msg_type")
+    if msg_type_raw is not None and not push_dispatch_permitted(msg_type_raw):
+        _LOGGER.debug(
+            "Ignoring push with unknown msg_type=%r for %s", msg_type_raw, device_id
+        )
+        return web.Response(status=200, text="ok")
     _LOGGER.debug("Parsed Imou push: %s", _redacted_push_for_log(event_data))
 
     # Check: is push enabled? If user disabled it, silently ignore.
@@ -692,6 +720,13 @@ async def async_handle_imou_webhook(
     entry, runtime = entry_and_runtime
     if not entry.options.get(PARAM_ENABLE_EVENT_PUSH):
         _LOGGER.debug("Push is disabled, ignoring event")
+        return web.Response(status=200, text="ok")
+
+    if not _event_push_subscription_allows(entry, msg_type_raw):
+        _LOGGER.debug(
+            "Ignoring push %r (subscription does not include this category)",
+            msg_type_raw,
+        )
         return web.Response(status=200, text="ok")
 
     # IoT devices (product id present) only accept iotEvent or iotProperty envelopes.
@@ -739,14 +774,6 @@ async def async_handle_imou_webhook(
 
     msg_type = event_data.get("msg_type")
     if is_v2_capability_event_id(msg_type):
-        if not event_push_type_active(entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT):
-            _LOGGER.debug(
-                "Ignoring V2 capability push (capability_event not subscribed) "
-                "for %s: %s",
-                device_id,
-                msg_type,
-            )
-            return web.Response(status=200, text="ok")
         ha_device = _resolve_imou_ha_device_for_push(runtime, event_data)
         if not _v2_capability_event_allowed(ha_device, str(msg_type)):
             _LOGGER.debug(
