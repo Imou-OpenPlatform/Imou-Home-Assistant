@@ -402,9 +402,8 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 for device in self._filter_devices(detailed):
-                    if (
-                        device.device_id not in ability_ids
-                        or not isinstance(device.capability_set, CapabilitySet)
+                    if device.device_id not in ability_ids or not isinstance(
+                        device.capability_set, CapabilitySet
                     ):
                         continue
                     key = imou_life_device_key(device)
