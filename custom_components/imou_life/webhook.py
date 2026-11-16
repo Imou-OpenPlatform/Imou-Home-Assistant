@@ -733,7 +733,8 @@ async def async_handle_imou_webhook(
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
     msg_type_raw = event_data.get("msg_type")
-    if not push_dispatch_permitted(msg_type_raw):
+    msg_type_missing = "msgType" not in payload
+    if not msg_type_missing and not push_dispatch_permitted(msg_type_raw):
         _LOGGER.debug(
             "Ignoring push with unknown msg_type=%r for %s", msg_type_raw, device_id
         )
@@ -773,7 +774,9 @@ async def async_handle_imou_webhook(
         return web.Response(status=200, text="ok")
 
     # IoT devices (product id present) only accept iotEvent or iotProperty envelopes.
-    if is_iot_non_event(event_data.get("product_id"), event_data.get("msg_type")):
+    if not msg_type_missing and is_iot_non_event(
+        event_data.get("product_id"), event_data.get("msg_type")
+    ):
         _LOGGER.debug(
             "Ignoring non-iotEvent/iotProperty push for IoT device %s (msg_type=%s)",
             device_id,

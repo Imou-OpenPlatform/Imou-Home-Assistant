@@ -1501,10 +1501,10 @@ async def test_webhook_security_alarms_fire_alarm_event(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_missing_msg_type_is_rejected(
+async def test_webhook_missing_msg_type_fires_generic_without_media(
     hass: HomeAssistant,
 ) -> None:
-    """Payload without msgType is malformed and must not dispatch."""
+    """Missing msgType preserves legacy generic dispatch without alarm work."""
     from custom_components.imou_life.const import (
         EVENT_PUSH_TYPE_ALARM,
         PARAM_EVENT_PUSH_TYPES,
@@ -1521,16 +1521,83 @@ async def test_webhook_missing_msg_type_is_rejected(
         options={PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_ALARM]},
     )
 
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook._async_send_notifications",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest({"deviceId": "device_1"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(generic_events) == 1
+    assert generic_events[0].data["msg_type"] is None
+    assert alarm_events == []
+    mock_thumbnail.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+    mock_record.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("blocked_by", ["global", "account", "device"])
+async def test_webhook_missing_msg_type_respects_admission_filters(
+    hass: HomeAssistant, blocked_by: str
+) -> None:
+    """Untyped compatibility never bypasses global, account, or device filters."""
+    enabled = blocked_by != "global"
+    setup_imou_runtime(
+        hass,
+        webhook_id="owned-webhook",
+        push_enabled=enabled,
+        selected_devices=["OTHER"] if blocked_by == "device" else ["device_1"],
+        options={"enable_event_push": enabled, "event_push_types": ["alarm"]},
+    )
+    generic_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+
     response = await async_handle_imou_webhook(
         hass,
-        "webhook-id",
+        "other-webhook" if blocked_by == "account" else "owned-webhook",
         MockRequest({"deviceId": "device_1"}),
     )
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert generic_events == []
-    assert alarm_events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("msg_type", [None, "", "  ", 1, [], {}])
+async def test_webhook_malformed_msg_type_does_not_use_untyped_compatibility(
+    hass: HomeAssistant, msg_type: object
+) -> None:
+    """Only an absent msgType gets compatibility dispatch."""
+    generic_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    setup_imou_runtime(hass, push_enabled=True, selected_devices=["device_1"])
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest({"msgType": msg_type, "deviceId": "device_1"}),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert generic_events == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -2577,25 +2644,25 @@ async def test_webhook_v2_property_report_updates_switch(
         ) as mock_record,
         patch("custom_components.imou_life.webhook._async_publish_alarm") as mock_alarm,
     ):
+        payload = {
+            "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+            "deviceId": "SN1",
+            "channelId": 0,
+            "properties": {target: {"enabled": 1}},
+        }
         response = await async_handle_imou_webhook(
-            hass,
-            "webhook-id",
-            MockRequest(
-                {
-                    "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
-                    "deviceId": "SN1",
-                    "channelId": 0,
-                    "properties": {target: {"enabled": 1}},
-                }
-            ),
+            hass, "webhook-id", MockRequest(payload)
         )
+        await async_handle_imou_webhook(hass, "webhook-id", MockRequest(payload))
         await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert device.switches["close_camera"][PARAM_STATE] is True
     runtime.coordinator.async_update_listeners.assert_called_once()
-    assert len(events) == 1
-    assert events[0].data["msg_type"] == V2_PROPERTY_REPORT_MSG_TYPE
+    assert [event.data["msg_type"] for event in events] == [
+        V2_PROPERTY_REPORT_MSG_TYPE,
+        V2_PROPERTY_REPORT_MSG_TYPE,
+    ]
     mock_thumbnail.assert_not_awaited()
     mock_alarm.assert_not_called()
     mock_record.assert_not_awaited()
