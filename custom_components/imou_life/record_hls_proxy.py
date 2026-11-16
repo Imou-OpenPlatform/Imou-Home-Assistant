@@ -247,7 +247,7 @@ def _segment_descriptors(
     has_byte_range = False
     program_date_time: str | None = None
     previous_range: HlsByteRange | None = None
-    previous_path: str | None = None
+    previous_resource: tuple[str, str, str, str] | None = None
     segment_index = 0
     for line in playlist_body.splitlines():
         stripped = line.strip()
@@ -263,6 +263,17 @@ def _segment_descriptors(
                     if segment_index < len(segment_urls)
                     else urlsplit(stripped).path
                 )
+                parsed_resource = urlsplit(
+                    segment_urls[segment_index]
+                    if segment_index < len(segment_urls)
+                    else stripped
+                )
+                resource = (
+                    parsed_resource.scheme.lower(),
+                    parsed_resource.netloc.lower(),
+                    parsed_resource.path,
+                    parsed_resource.query,
+                )
                 byte_range: HlsByteRange | None = None
                 valid = True
                 if has_byte_range:
@@ -276,7 +287,9 @@ def _segment_descriptors(
                         length = int(match.group("length"))
                         if (offset := match.group("offset")) is not None:
                             start = int(offset)
-                        elif previous_range is not None and previous_path == path:
+                        elif (
+                            previous_range is not None and previous_resource == resource
+                        ):
                             start = previous_range.end + 1
                         else:
                             valid = False
@@ -285,7 +298,7 @@ def _segment_descriptors(
                             byte_range = HlsByteRange(start, length)
                 metadata.append((byte_range, program_date_time, valid))
                 previous_range = byte_range
-                previous_path = path if byte_range is not None else None
+                previous_resource = resource if byte_range is not None else None
                 segment_index += 1
             pending_byte_range = None
             has_byte_range = False

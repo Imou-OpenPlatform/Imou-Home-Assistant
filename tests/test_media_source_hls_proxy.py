@@ -651,6 +651,135 @@ https://media.example/segment.ts
 
 
 @pytest.mark.asyncio
+async def test_implicit_byterange_rejects_same_path_with_different_query(
+    hass: HomeAssistant,
+) -> None:
+    playlist = """#EXTM3U
+#EXT-X-BYTERANGE:100@50
+#EXTINF:2,
+https://media.example/segment.ts?part=a
+#EXT-X-BYTERANGE:25
+#EXTINF:2,
+https://media.example/segment.ts?part=b
+"""
+    session_id = await _create_session_from_playlist(
+        hass,
+        playlist,
+        [
+            "https://media.example/segment.ts?part=a",
+            "https://media.example/segment.ts?part=b",
+        ],
+    )
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+        ) as fetch,
+        pytest.raises(web.HTTPBadGateway),
+    ):
+        await ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "1")
+
+    fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_implicit_byterange_normalizes_relative_and_absolute_uri(
+    hass: HomeAssistant,
+) -> None:
+    absolute = (
+        "https://mes502-online-hzali.lechange.com:7080/localvod/segment.m4s?part=a"
+    )
+    playlist = f"""#EXTM3U
+#EXT-X-BYTERANGE:100@50
+#EXTINF:2,
+segment.m4s?part=a#first
+#EXT-X-BYTERANGE:25
+#EXTINF:2,
+{absolute}#second
+"""
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            HLS_UPSTREAM,
+            refresh=AsyncMock(return_value="https://media.example/fresh.m3u8"),
+            entry_id="entry-a",
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+        new_callable=AsyncMock,
+        return_value=_range_response(150, 174, b"normalized range"),
+    ) as fetch:
+        response = await ImouRecordHlsSegmentView().get(
+            _segment_request(hass), session_id, "1"
+        )
+
+    assert response.body == b"normalized range"
+    fetch.assert_awaited_once_with(
+        hass,
+        f"{absolute}#second",
+        range_header="bytes=150-174",
+    )
+
+
+@pytest.mark.parametrize(
+    ("first_url", "second_url"),
+    [
+        (
+            "https://media-a.example/segment.ts",
+            "https://media-b.example/segment.ts",
+        ),
+        (
+            "https://media.example/a.ts",
+            "https://media.example/b.ts",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_implicit_byterange_rejects_different_resource(
+    hass: HomeAssistant,
+    first_url: str,
+    second_url: str,
+) -> None:
+    playlist = f"""#EXTM3U
+#EXT-X-BYTERANGE:100@50
+#EXTINF:2,
+{first_url}
+#EXT-X-BYTERANGE:25
+#EXTINF:2,
+{second_url}
+"""
+    session_id = await _create_session_from_playlist(
+        hass,
+        playlist,
+        [first_url, second_url],
+    )
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+        ) as fetch,
+        pytest.raises(web.HTTPBadGateway),
+    ):
+        await ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "1")
+
+    fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_refresh_rejects_changed_absolute_byterange(
     hass: HomeAssistant,
 ) -> None:
