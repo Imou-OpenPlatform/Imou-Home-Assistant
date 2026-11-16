@@ -99,8 +99,7 @@
           "local_recording": "Bei Alarm aufzeichnen",
           "select_poll_devices": "Zu abfragende Geräte wählen",
           "bind_device": "Neues Gerät koppeln",
-          "finish": "Fertig",
-          "ai_insight": "AI Insight workbench"
+          "finish": "Fertig"
         }
       },
       "general_settings": {
@@ -109,12 +108,14 @@
         "data": {
           "enable_polling": "Statusabfrage aktivieren",
           "update_interval": "Abfrageintervall (Sekunden)",
-          "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)"
+          "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)",
+          "trial_contact_url": "Trial or purchase link"
         },
         "data_description": {
           "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
           "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
-          "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s."
+          "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s.",
+          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
         },
         "sections": {
           "camera_defaults": {
@@ -221,16 +222,6 @@
           "device_id": "Seriennummer (SN) auf dem Gerät oder in der Imou Life App",
           "code": "Optional. Leer lassen, wenn das Gerät keinen Kopplungscode benötigt"
         }
-      },
-      "ai_insight": {
-        "data": {
-          "trial_contact_url": "Trial or purchase link"
-        },
-        "data_description": {
-          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
-        },
-        "description": "Optional link shown when someone presses **AI Insight trial** on the workbench.",
-        "title": "AI Insight workbench"
       }
     }
   },
