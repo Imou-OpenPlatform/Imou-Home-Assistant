@@ -137,44 +137,75 @@ class ImouBulbLight(ImouEntity, LightEntity):
         entity_type: str,
         device: ImouHaDevice,
     ) -> None:
-        """Initialize color modes and the scene list."""
+        """Initialize the bulb entity."""
         super().__init__(coordinator, config_entry, entity_type, device)
-        if device.bulb_v2 and device.capability_set is not None:
-            property_ids = set(device.capability_set.properties)
-            self._supported_property_refs = {
+
+    @property
+    def _supported_property_refs(self) -> set[str]:
+        """Return property refs from the device's current capability snapshot."""
+        if self.device.bulb_v2 and self.device.capability_set is not None:
+            property_ids = set(self.device.capability_set.properties)
+            return {
                 ref
                 for ref, property_id in BULB_V2_PROPERTY_BY_REF.items()
                 if property_id in property_ids
             }
-        else:
-            self._supported_property_refs = set(BULB_V2_PROPERTY_BY_REF)
+        return set(BULB_V2_PROPERTY_BY_REF)
 
+    @property
+    def _supported_color_modes(self) -> set[ColorMode]:
+        """Return modes valid for the device's current property subset."""
+        supported_property_refs = self._supported_property_refs
         color_modes: set[ColorMode] = set()
-        if REF_COLOR_TEMP in self._supported_property_refs:
+        if {REF_BRIGHTNESS, REF_COLOR_TEMP} <= supported_property_refs:
             color_modes.add(ColorMode.COLOR_TEMP)
         if {
             REF_HUE,
             REF_SATURATION,
             REF_VALUE,
-        } <= self._supported_property_refs:
+        } <= supported_property_refs:
             color_modes.add(ColorMode.HS)
         if not color_modes:
             color_modes.add(
                 ColorMode.BRIGHTNESS
-                if REF_BRIGHTNESS in self._supported_property_refs
+                if REF_BRIGHTNESS in supported_property_refs
                 else ColorMode.ONOFF
             )
-        self._supported_color_modes = color_modes
-        self._attr_supported_color_modes = self._supported_color_modes
+        return color_modes
 
-        if REF_COLOR_TEMP in self._supported_property_refs:
-            self._attr_min_color_temp_kelvin = MIN_KELVIN
-            self._attr_max_color_temp_kelvin = MAX_KELVIN
+    @property
+    @override
+    def supported_color_modes(self) -> set[ColorMode]:
+        """Return color modes from the current capability snapshot."""
+        return self._supported_color_modes
+
+    @property
+    @override
+    def supported_features(self) -> LightEntityFeature:
+        """Return scene support from the current capability snapshot."""
         if REF_SCENE in self._supported_property_refs:
-            self._attr_supported_features = LightEntityFeature.EFFECT
-            self._attr_effect_list = scene_effect_names()
-        else:
-            self._attr_supported_features = LightEntityFeature(0)
+            return LightEntityFeature.EFFECT
+        return LightEntityFeature(0)
+
+    @property
+    @override
+    def effect_list(self) -> list[str] | None:
+        """Return scenes only while the scene property is supported."""
+        if REF_SCENE in self._supported_property_refs:
+            return scene_effect_names()
+        return None
+
+    @property
+    @override
+    def min_color_temp_kelvin(self) -> int:
+        """Return the bulb's minimum supported color temperature."""
+        return MIN_KELVIN
+
+    @property
+    @override
+    def max_color_temp_kelvin(self) -> int:
+        """Return the bulb's maximum supported color temperature."""
+        return MAX_KELVIN
 
     @property
     def _state(self) -> dict[str, Any]:

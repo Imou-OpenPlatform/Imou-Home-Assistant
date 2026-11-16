@@ -167,6 +167,18 @@ def _bulb_device(*, supported_refs: set[str] | None = None) -> MagicMock:
     return device
 
 
+def _set_bulb_capabilities(
+    device: MagicMock,
+    supported_refs: set[str],
+) -> None:
+    """Replace the public capability snapshot used by an existing entity."""
+    device.capability_set = CapabilitySet(
+        properties={BULB_V2_PROPERTY_BY_REF[ref]: None for ref in supported_refs},  # type: ignore[dict-item]
+        services=frozenset(),
+        events=frozenset(),
+    )
+
+
 def _bulb(hass: HomeAssistant, device: MagicMock) -> ImouBulbLight:
     coordinator = _coordinator(device)
     coordinator.device_manager.async_set_bulb_light = AsyncMock()
@@ -201,6 +213,11 @@ def test_bulb_supports_color_temperature_color_and_scenes(
         (
             {REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP},
             {ColorMode.COLOR_TEMP},
+            LightEntityFeature(0),
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_COLOR_TEMP},
+            {ColorMode.ONOFF},
             LightEntityFeature(0),
         ),
         (
@@ -245,13 +262,105 @@ def test_v2_bulb_attributes_follow_capability_snapshot(
     assert light.effect_list == (
         scene_effect_names() if REF_SCENE in supported_refs else None
     )
-    if REF_COLOR_TEMP in supported_refs:
+    if {REF_BRIGHTNESS, REF_COLOR_TEMP} <= supported_refs:
         assert light.min_color_temp_kelvin == 2700
         assert light.max_color_temp_kelvin == 6500
     else:
         assert "min_color_temp_kelvin" not in light.capability_attributes
         assert "max_color_temp_kelvin" not in light.capability_attributes
     assert light.color_mode in supported_color_modes
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_v2_bulb_live_entity_tracks_capability_rediscovery(
+    hass: HomeAssistant,
+) -> None:
+    """One live entity immediately follows an expanded and reduced snapshot."""
+    device = _bulb_device(supported_refs={REF_SWITCH})
+    device.bulb_light["on"] = True
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    assert light.supported_color_modes == {ColorMode.ONOFF}
+    assert light.supported_features == LightEntityFeature(0)
+    assert light.effect_list is None
+
+    all_refs = {
+        REF_SWITCH,
+        REF_MODE,
+        REF_BRIGHTNESS,
+        REF_COLOR_TEMP,
+        REF_HUE,
+        REF_SATURATION,
+        REF_VALUE,
+        REF_SCENE,
+    }
+    _set_bulb_capabilities(device, all_refs)
+
+    assert light.supported_color_modes == {ColorMode.COLOR_TEMP, ColorMode.HS}
+    assert light.color_mode is ColorMode.COLOR_TEMP
+    assert light.supported_features == LightEntityFeature.EFFECT
+    assert light.effect_list == scene_effect_names()
+    assert light.capability_attributes["min_color_temp_kelvin"] == 2700
+    assert light.capability_attributes["max_color_temp_kelvin"] == 6500
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128, ATTR_COLOR_TEMP_KELVIN: 4000})
+    light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
+        device,
+        {
+            REF_SWITCH: 1,
+            REF_MODE: MODE_WHITE,
+            REF_BRIGHTNESS: 50,
+            REF_COLOR_TEMP: 4000,
+        },
+    )
+
+    light.coordinator.device_manager.async_set_bulb_light.reset_mock()
+    _set_bulb_capabilities(device, {REF_SWITCH})
+
+    assert light.supported_color_modes == {ColorMode.ONOFF}
+    assert light.color_mode is ColorMode.ONOFF
+    assert light.supported_features == LightEntityFeature(0)
+    assert light.effect_list is None
+    assert "min_color_temp_kelvin" not in light.capability_attributes
+    assert "max_color_temp_kelvin" not in light.capability_attributes
+    assert ATTR_BRIGHTNESS not in light.state_attributes
+    assert ATTR_COLOR_TEMP_KELVIN not in light.state_attributes
+    assert ATTR_EFFECT not in light.state_attributes
+
+    await light.async_turn_on(
+        **{
+            ATTR_BRIGHTNESS: 128,
+            ATTR_COLOR_TEMP_KELVIN: 4000,
+            ATTR_HS_COLOR: (120, 60),
+            ATTR_EFFECT: "Movie",
+        }
+    )
+    light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
+        device, {REF_SWITCH: 1}
+    )
+    assert [candidate for _, candidate in _iter_bulbs(light.coordinator)] == [device]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_v2_bulb_color_temperature_requires_white_level(
+    hass: HomeAssistant,
+) -> None:
+    """CT without white brightness remains ONOFF and rejects CT service fields."""
+    device = _bulb_device(supported_refs={REF_SWITCH, REF_MODE, REF_COLOR_TEMP})
+    device.bulb_light["on"] = True
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    assert light.supported_color_modes == {ColorMode.ONOFF}
+    assert light.color_mode is ColorMode.ONOFF
+    assert ATTR_BRIGHTNESS not in light.state_attributes
+    assert ATTR_COLOR_TEMP_KELVIN not in light.state_attributes
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128, ATTR_COLOR_TEMP_KELVIN: 4000})
+    light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
+        device, {REF_SWITCH: 1}
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
