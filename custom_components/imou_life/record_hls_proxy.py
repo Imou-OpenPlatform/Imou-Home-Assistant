@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import secrets
 import time
 from collections import Counter
@@ -44,19 +45,46 @@ class RecordHlsDescriptor:
     expires_at: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class HlsByteRange:
+    """One absolute byte range from an HLS media playlist."""
+
+    start: int
+    length: int
+
+    @property
+    def end(self) -> int:
+        """Return the inclusive final byte."""
+        return self.start + self.length - 1
+
+    @property
+    def request_header(self) -> str:
+        """Return the corresponding HTTP Range header."""
+        return f"bytes={self.start}-{self.end}"
+
+
+@dataclass(frozen=True, slots=True)
+class HlsSegment:
+    """One upstream segment and its stable refresh identity."""
+
+    url: str
+    identity: str | None
+    byte_range: HlsByteRange | None
+    valid: bool = True
+
+
 @dataclass(slots=True)
 class RecordHlsSession:
     """Upstream segment URLs for one proxied recording playback."""
 
     entry_id: str
-    segment_urls: list[str]
-    segment_identities: list[str | None]
+    segments: list[HlsSegment]
     playlist_body: str
     expires_at: float
     refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]] | None
     refresh_lock: asyncio.Lock
     refresh_task: asyncio.Task[RecordHlsDescriptor | str] | None = None
-    refreshed_segment_urls: dict[str, str] | None = None
+    refreshed_segments: dict[str, HlsSegment] | None = None
     refresh_attempted: bool = False
     generation: int = 0
     active: bool = True
@@ -69,10 +97,9 @@ class RecordHlsSession:
         if refresh_task is not None:
             refresh_task.cancel()
         self.refresh_task = None
-        self.segment_urls.clear()
-        self.segment_identities.clear()
-        if self.refreshed_segment_urls is not None:
-            self.refreshed_segment_urls.clear()
+        self.segments.clear()
+        if self.refreshed_segments is not None:
+            self.refreshed_segments.clear()
         return refresh_task
 
 
@@ -171,11 +198,16 @@ def _build_proxy_playlist(
     hass: HomeAssistant, session_id: str, session: RecordHlsSession
 ) -> str:
     target = _playlist_target_duration(session.playlist_body)
-    lines = ["#EXTM3U", "#EXT-X-VERSION:3", f"#EXT-X-TARGETDURATION:{target}"]
+    version = 4 if any(segment.byte_range for segment in session.segments) else 3
+    lines = [
+        "#EXTM3U",
+        f"#EXT-X-VERSION:{version}",
+        f"#EXT-X-TARGETDURATION:{target}",
+    ]
     if "#EXT-X-ENDLIST" in session.playlist_body:
         lines.append("#EXT-X-PLAYLIST-TYPE:VOD")
     remaining_ttl = max(0, session.expires_at - time.time())
-    for index in range(len(session.segment_urls)):
+    for index, segment in enumerate(session.segments):
         segment_path = SEGMENT_URL.format(session_id=session_id, index=index)
         signed = async_sign_path(
             hass,
@@ -184,64 +216,121 @@ def _build_proxy_playlist(
             use_content_user=True,
         )
         lines.append(f"#EXTINF:{target},")
+        if segment.byte_range is not None:
+            lines.append(
+                "#EXT-X-BYTERANGE:"
+                f"{segment.byte_range.length}@{segment.byte_range.start}"
+            )
         lines.append(signed)
     if "#EXT-X-ENDLIST" in session.playlist_body:
         lines.append("#EXT-X-ENDLIST")
     return "\n".join(lines) + "\n"
 
 
-def _segment_identities(
+def _segment_descriptors(
     playlist_body: str, segment_urls: list[str]
-) -> list[str | None]:
-    """Build identities only when playlist metadata proves a stable mapping."""
+) -> list[HlsSegment]:
+    """Parse absolute byte ranges and stable identities for media segments."""
+    media_sequence: int | None = None
     for line in playlist_body.splitlines():
         stripped = line.strip()
         if not stripped.startswith("#EXT-X-MEDIA-SEQUENCE:"):
             continue
         try:
-            sequence = int(stripped.split(":", 1)[1])
+            media_sequence = int(stripped.split(":", 1)[1])
         except ValueError:
             break
-        return [f"sequence:{sequence + index}" for index in range(len(segment_urls))]
+        break
 
-    metadata: list[tuple[str | None, str | None]] = []
-    byte_range: str | None = None
+    metadata: list[tuple[HlsByteRange | None, str | None, bool]] = []
+    pending_byte_range: str | None = None
+    has_byte_range = False
     program_date_time: str | None = None
+    previous_range: HlsByteRange | None = None
+    previous_path: str | None = None
+    segment_index = 0
     for line in playlist_body.splitlines():
         stripped = line.strip()
         if stripped.startswith("#EXT-X-BYTERANGE:"):
-            value = stripped.split(":", 1)[1]
-            byte_range = value if "@" in value else None
+            pending_byte_range = stripped.split(":", 1)[1]
+            has_byte_range = True
         elif stripped.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
             program_date_time = stripped.split(":", 1)[1]
         elif stripped and not stripped.startswith("#"):
             if not urlsplit(stripped).path.lower().endswith(".m3u8"):
-                metadata.append((byte_range, program_date_time))
-            byte_range = None
+                path = (
+                    urlsplit(segment_urls[segment_index]).path
+                    if segment_index < len(segment_urls)
+                    else urlsplit(stripped).path
+                )
+                byte_range: HlsByteRange | None = None
+                valid = True
+                if has_byte_range:
+                    match = re.fullmatch(
+                        r"(?P<length>\d+)(?:@(?P<offset>\d+))?",
+                        pending_byte_range or "",
+                    )
+                    if match is None or int(match.group("length")) <= 0:
+                        valid = False
+                    else:
+                        length = int(match.group("length"))
+                        if (offset := match.group("offset")) is not None:
+                            start = int(offset)
+                        elif previous_range is not None and previous_path == path:
+                            start = previous_range.end + 1
+                        else:
+                            valid = False
+                            start = 0
+                        if valid:
+                            byte_range = HlsByteRange(start, length)
+                metadata.append((byte_range, program_date_time, valid))
+                previous_range = byte_range
+                previous_path = path if byte_range is not None else None
+                segment_index += 1
+            pending_byte_range = None
+            has_byte_range = False
             program_date_time = None
-    metadata.extend([(None, None)] * (len(segment_urls) - len(metadata)))
+    metadata.extend([(None, None, True)] * max(0, len(segment_urls) - len(metadata)))
 
     paths = [urlsplit(url).path for url in segment_urls]
     path_counts = Counter(paths)
-    identities: list[str | None] = []
-    for index, path in enumerate(paths):
-        if path_counts[path] == 1:
-            identities.append(f"path:{path}")
-            continue
-        segment_range, segment_time = metadata[index]
-        if segment_range is None and segment_time is None:
-            identities.append(None)
-            continue
-        identities.append(
-            f"path:{path}|range:{segment_range or ''}|time:{segment_time or ''}"
+    segments: list[HlsSegment] = []
+    for index, (url, path) in enumerate(zip(segment_urls, paths, strict=True)):
+        segment_range, segment_time, valid = metadata[index]
+        range_identity = (
+            f"{segment_range.start}:{segment_range.length}"
+            if segment_range is not None
+            else ""
         )
+        if not valid:
+            identity = None
+        elif media_sequence is not None:
+            identity = f"sequence:{media_sequence + index}|range:{range_identity}"
+        elif path_counts[path] == 1:
+            identity = f"path:{path}|range:{range_identity}"
+        elif segment_range is not None or segment_time is not None:
+            identity = f"path:{path}|range:{range_identity}|time:{segment_time or ''}"
+        else:
+            identity = None
+        segments.append(HlsSegment(url, identity, segment_range, valid))
 
-    for identity in {identity for identity in identities if identity is not None}:
-        if identities.count(identity) > 1:
-            identities = [
-                None if candidate == identity else candidate for candidate in identities
-            ]
-    return identities
+    duplicate_identities = {
+        identity
+        for identity in (segment.identity for segment in segments)
+        if identity is not None
+        and sum(candidate.identity == identity for candidate in segments) > 1
+    }
+    if duplicate_identities:
+        segments = [
+            HlsSegment(
+                segment.url,
+                None if segment.identity in duplicate_identities else segment.identity,
+                segment.byte_range,
+                segment.valid,
+            )
+            for segment in segments
+        ]
+    return segments
 
 
 def _url_expiry(url: str, now: float) -> float | None:
@@ -276,6 +365,53 @@ def _session_expiry(
     return max(now, min(candidates))
 
 
+def _upstream_range_header(segment: HlsSegment, client_range: str | None) -> str | None:
+    """Return a safe upstream Range constrained to the HLS descriptor."""
+    if not segment.valid:
+        msg = "Malformed HLS byte range"
+        raise ValueError(msg)
+    if segment.byte_range is None:
+        return client_range
+    if client_range is None:
+        return segment.byte_range.request_header
+    match = re.fullmatch(r"bytes=(\d+)-(\d+)", client_range.strip())
+    if match is None:
+        msg = "Unsupported Range for HLS byte-range segment"
+        raise ValueError(msg)
+    start, end = (int(value) for value in match.groups())
+    if start > end or start < segment.byte_range.start or end > segment.byte_range.end:
+        msg = "Range exceeds HLS byte-range segment"
+        raise ValueError(msg)
+    return f"bytes={start}-{end}"
+
+
+def _validate_byte_range_response(
+    segment: HlsSegment,
+    requested_range: str | None,
+    status: int,
+    headers,
+) -> None:
+    """Reject upstream responses that could expose bytes outside a descriptor."""
+    if segment.byte_range is None:
+        return
+    if status != 206 or requested_range is None:
+        msg = "Upstream ignored HLS byte range"
+        raise ValueError(msg)
+    content_range = next(
+        (value for name, value in headers.items() if name.lower() == "content-range"),
+        None,
+    )
+    match = (
+        re.fullmatch(r"bytes (\d+)-(\d+)/(?:\d+|\*)", content_range)
+        if content_range is not None
+        else None
+    )
+    requested = re.fullmatch(r"bytes=(\d+)-(\d+)", requested_range)
+    if match is None or requested is None or match.groups() != requested.groups():
+        msg = "Upstream returned the wrong HLS byte range"
+        raise ValueError(msg)
+
+
 async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
 ) -> tuple[str, list[str]]:
@@ -305,12 +441,11 @@ async def async_create_record_hls_proxy_playlist_url(
     if not segment_urls:
         msg = "Imou HLS playlist had no segments"
         raise ValueError(msg)
-    segment_identities = _segment_identities(body, segment_urls)
+    segments = _segment_descriptors(body, segment_urls)
     session_id = secrets.token_hex(16)
     _sessions(hass)[session_id] = RecordHlsSession(
         entry_id=entry_id,
-        segment_urls=segment_urls,
-        segment_identities=segment_identities,
+        segments=segments,
         playlist_body=body,
         expires_at=_session_expiry(
             upstream_playlist_url,
@@ -384,22 +519,29 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             seg_index = int(index)
         except ValueError as err:
             raise web.HTTPBadRequest() from err
-        if seg_index < 0 or seg_index >= len(record.segment_urls):
+        if seg_index < 0 or seg_index >= len(record.segments):
             raise web.HTTPNotFound()
-        identity = record.segment_identities[seg_index]
-        if record.refreshed_segment_urls is None:
-            upstream = record.segment_urls[seg_index]
+        segment = record.segments[seg_index]
+        identity = segment.identity
+        if record.refreshed_segments is None:
+            upstream = segment.url
         elif (
             identity is None
-            or (upstream := record.refreshed_segment_urls.get(identity)) is None
+            or (segment := record.refreshed_segments.get(identity)) is None
         ):
             raise web.HTTPBadGateway()
+        else:
+            upstream = segment.url
+        try:
+            range_header = _upstream_range_header(segment, request.headers.get("Range"))
+        except ValueError as err:
+            raise web.HTTPBadGateway() from err
         generation = record.generation
         try:
             upstream_response = await async_fetch_url_response(
                 hass,
                 upstream,
-                range_header=request.headers.get("Range"),
+                range_header=range_header,
             )
         except (OSError, TimeoutError, ValueError) as err:
             _LOGGER.warning("Imou HLS segment %s fetch failed: %s", seg_index, err)
@@ -437,13 +579,11 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                         if not segment_urls:
                             msg = "Refreshed Imou HLS playlist had no segments"
                             raise ValueError(msg)
-                        refreshed_identities = _segment_identities(body, segment_urls)
-                        record.refreshed_segment_urls = {
-                            identity: url
-                            for identity, url in zip(
-                                refreshed_identities, segment_urls, strict=True
-                            )
-                            if identity is not None
+                        refreshed_segments = _segment_descriptors(body, segment_urls)
+                        record.refreshed_segments = {
+                            refreshed.identity: refreshed
+                            for refreshed in refreshed_segments
+                            if refreshed.identity is not None
                         }
                         record.playlist_body = body
                         record.expires_at = _session_expiry(
@@ -464,17 +604,23 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                 refreshed = (
                     record.generation > generation
                     and identity is not None
-                    and record.refreshed_segment_urls is not None
-                    and (upstream := record.refreshed_segment_urls.get(identity))
-                    is not None
+                    and record.refreshed_segments is not None
+                    and (segment := record.refreshed_segments.get(identity)) is not None
                 )
             if not refreshed:
                 raise web.HTTPBadGateway()
+            upstream = segment.url
+            try:
+                range_header = _upstream_range_header(
+                    segment, request.headers.get("Range")
+                )
+            except ValueError as err:
+                raise web.HTTPBadGateway() from err
             try:
                 upstream_response = await async_fetch_url_response(
                     hass,
                     upstream,
-                    range_header=request.headers.get("Range"),
+                    range_header=range_header,
                 )
             except (OSError, TimeoutError, ValueError) as err:
                 _LOGGER.warning(
@@ -485,6 +631,15 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                 raise web.HTTPBadGateway() from err
             if not record.active or _sessions(hass).get(session_id) is not record:
                 raise web.HTTPNotFound()
+        try:
+            _validate_byte_range_response(
+                segment,
+                range_header,
+                upstream_response.status,
+                upstream_response.headers,
+            )
+        except ValueError as err:
+            raise web.HTTPBadGateway() from err
         if not 200 <= upstream_response.status < 300:
             raise web.HTTPBadGateway()
         response_headers = {
