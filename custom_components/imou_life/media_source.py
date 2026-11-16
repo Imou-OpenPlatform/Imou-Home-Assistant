@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import override
 
@@ -42,6 +44,7 @@ from pyimouapi.playback.hls import (
 from .alarm_saved_clips import clips_on_day, days_with_clips, resolve_clip_path
 from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH, imou_life_device_key_from_ids
 from .record_hls_proxy import (
+    RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
     async_register_record_hls_proxy,
 )
@@ -77,7 +80,10 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
 
 
 async def _async_try_hls_playback(
-    hass: HomeAssistant, upstream_playlist_url: str, stream_label: str
+    hass: HomeAssistant,
+    descriptor: RecordHlsDescriptor,
+    refresh: Callable[[], Awaitable[RecordHlsDescriptor]],
+    stream_label: str,
 ) -> PlayMedia | None:
     """Return Stream HLS PlayMedia when the Stream integration can remux the clip."""
     if "stream" not in hass.config.components:
@@ -85,7 +91,10 @@ async def _async_try_hls_playback(
     stream = None
     try:
         signed_playlist = await async_create_record_hls_proxy_playlist_url(
-            hass, upstream_playlist_url
+            hass,
+            descriptor.playlist_url,
+            refresh=refresh,
+            expires_at=descriptor.expires_at,
         )
         playlist_source = f"{get_url(hass).rstrip('/')}{signed_playlist}"
         stream = create_stream(
@@ -109,6 +118,25 @@ async def _async_try_hls_playback(
         if stream is not None:
             await stream.stop()
         return None
+
+
+def _record_hls_expiry(data: object) -> float | None:
+    """Extract an absolute URL expiry from public playback response metadata."""
+    if not isinstance(data, dict):
+        return None
+    now = time.time()
+    for key in ("expiresAt", "expireAt", "expiry", "expireTime"):
+        value = data.get(key)
+        if value is None:
+            continue
+        try:
+            expiry = float(value)
+        except (TypeError, ValueError):
+            continue
+        if expiry >= 1_000_000_000:
+            return max(now, expiry)
+        return now + max(0, expiry)
+    return None
 
 
 def _saved_clip_folder(hass: HomeAssistant, entry_id: str) -> Path | None:
@@ -220,7 +248,8 @@ class ImouRecordMediaSource(MediaSource):
             )
         record_type = RECORD_TYPE_CLOUD if kind == KIND_CLOUD else RECORD_TYPE_LOCAL
         manager = runtime.coordinator.device_manager.delegate
-        try:
+
+        async def async_record_hls_descriptor() -> RecordHlsDescriptor:
             data = await manager.async_create_device_record_hls(
                 device_id,
                 channel_id,
@@ -229,28 +258,43 @@ class ImouRecordMediaSource(MediaSource):
                 record_type=record_type,
                 file_name=file_name if kind == KIND_LOCAL else None,
             )
+            source_url = data.get("url") if isinstance(data, dict) else None
+            if not source_url or not is_hls_playback_url(str(source_url)):
+                msg = "No playback URL from Imou"
+                raise ValueError(msg)
+            return RecordHlsDescriptor(
+                str(source_url),
+                _record_hls_expiry(data),
+            )
+
+        try:
+            descriptor = await async_record_hls_descriptor()
         except ImouException as err:
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
                 translation_placeholders={"error": err.message or str(err)},
             ) from err
-        source_url = data.get("url") if isinstance(data, dict) else None
-        if not source_url or not is_hls_playback_url(str(source_url)):
+        except ValueError as err:
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
-                translation_placeholders={"error": "No playback URL from Imou"},
-            )
+                translation_placeholders={"error": str(err)},
+            ) from err
         clip_label = f"{device_id} {begin_time}–{end_time}"
-        hls_play = await _async_try_hls_playback(self.hass, str(source_url), clip_label)
+        hls_play = await _async_try_hls_playback(
+            self.hass,
+            descriptor,
+            async_record_hls_descriptor,
+            clip_label,
+        )
         if hls_play is not None:
             _LOGGER.debug(
                 "Imou recording playback %s – %s (HLS via Stream)", begin_time, end_time
             )
             return hls_play
         cache_id = record_playback_cache_id(item.identifier or "")
-        register_playback_source(self.hass, cache_id, str(source_url))
+        register_playback_source(self.hass, cache_id, descriptor.playlist_url)
         _LOGGER.info(
             "Imou recording %s: HLS unavailable, using MP4 fallback", clip_label
         )
