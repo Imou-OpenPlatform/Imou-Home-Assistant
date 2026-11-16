@@ -7,6 +7,7 @@ import hashlib
 import logging
 import shutil
 import subprocess
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
 
@@ -14,6 +15,11 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant, callback
+
+from .repairs import (
+    async_create_record_playback_issue,
+    async_delete_record_playback_issue,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,11 +55,14 @@ def async_register_record_playback_mp4(hass: HomeAssistant) -> None:
 
 @callback
 def register_playback_source(
-    hass: HomeAssistant, cache_id: str, source_url: str
+    hass: HomeAssistant,
+    cache_id: str,
+    entry_id: str,
+    source_provider: Callable[[], Awaitable[str]],
 ) -> None:
-    """Remember the Imou stream URL until the MP4 cache file exists."""
+    """Remember how to request a stream URL until the MP4 cache file exists."""
     store = hass.data.setdefault(DATA_RECORD_PLAYBACK_MP4, {"locks": {}, "sources": {}})
-    store["sources"][cache_id] = source_url
+    store["sources"][cache_id] = (entry_id, source_provider)
 
 
 def signed_record_playback_url(hass: HomeAssistant, cache_id: str) -> str:
@@ -109,27 +118,84 @@ def _remux_source_to_mp4(source_url: str, output: Path) -> None:
         raise OSError("ffmpeg produced an empty recording file")
 
 
+def _is_expired_input_error(error: BaseException) -> bool:
+    """Return whether ffmpeg rejected an expired or unauthorized input URL."""
+    text = str(error).lower()
+    return any(
+        marker in text
+        for marker in (
+            "401 unauthorized",
+            "403 forbidden",
+            "404 not found",
+            "http error 401",
+            "http error 403",
+            "http error 404",
+            "input url expired",
+            "url has expired",
+        )
+    )
+
+
 async def async_prepare_record_mp4(
-    hass: HomeAssistant, cache_id: str, source_url: str
+    hass: HomeAssistant,
+    cache_id: str,
+    entry_id: str,
+    source_provider: Callable[[], Awaitable[str]],
 ) -> Path:
     """Download/remux once, then reuse the cached MP4."""
     cache_dir = _cache_dir(hass)
     cache_dir.mkdir(parents=True, exist_ok=True)
     output = cache_dir / f"{cache_id}.mp4"
     if output.is_file() and output.stat().st_size > 0:
+        async_delete_record_playback_issue(hass, entry_id)
+        hass.data.get(DATA_RECORD_PLAYBACK_MP4, {}).get("sources", {}).pop(
+            cache_id, None
+        )
         return output
-    store = hass.data.setdefault(DATA_RECORD_PLAYBACK_MP4, {"locks": {}})
+    store = hass.data.setdefault(DATA_RECORD_PLAYBACK_MP4, {"locks": {}, "sources": {}})
     locks: dict[str, asyncio.Lock] = store["locks"]
     lock = locks.setdefault(cache_id, asyncio.Lock())
     async with lock:
         if output.is_file() and output.stat().st_size > 0:
+            async_delete_record_playback_issue(hass, entry_id)
+            store["sources"].pop(cache_id, None)
             return output
         partial = output.with_name(f"{output.stem}.part.mp4")
         partial.unlink(missing_ok=True)
         _LOGGER.debug("Preparing Imou recording MP4 cache %s", cache_id)
-        await hass.async_add_executor_job(_remux_source_to_mp4, source_url, partial)
-        partial.replace(output)
-        return output
+        try:
+            try:
+                source_url = await source_provider()
+            except Exception as err:
+                async_create_record_playback_issue(hass, entry_id, err)
+                raise
+            try:
+                await hass.async_add_executor_job(
+                    _remux_source_to_mp4, source_url, partial
+                )
+            except (OSError, TimeoutError) as err:
+                if not _is_expired_input_error(err):
+                    async_create_record_playback_issue(hass, entry_id, err)
+                    raise
+                partial.unlink(missing_ok=True)
+                try:
+                    source_url = await source_provider()
+                except Exception as refresh_err:
+                    async_create_record_playback_issue(hass, entry_id, refresh_err)
+                    raise
+                try:
+                    await hass.async_add_executor_job(
+                        _remux_source_to_mp4, source_url, partial
+                    )
+                except (OSError, TimeoutError) as final_err:
+                    async_create_record_playback_issue(hass, entry_id, final_err)
+                    raise
+            partial.replace(output)
+            async_delete_record_playback_issue(hass, entry_id)
+            store["sources"].pop(cache_id, None)
+            return output
+        finally:
+            partial.unlink(missing_ok=True)
 
 
 class ImouRecordPlaybackMp4View(HomeAssistantView):
@@ -148,15 +214,16 @@ class ImouRecordPlaybackMp4View(HomeAssistantView):
         path = _cache_dir(hass) / f"{cache_id}.mp4"
         if not path.is_file() or path.stat().st_size == 0:
             store = hass.data.get(DATA_RECORD_PLAYBACK_MP4) or {}
-            source_url = store.get("sources", {}).get(cache_id)
-            if not source_url:
+            source = store.get("sources", {}).get(cache_id)
+            if not source:
                 raise web.HTTPNotFound()
+            entry_id, source_provider = source
             try:
-                path = await async_prepare_record_mp4(hass, cache_id, str(source_url))
-            except (OSError, TimeoutError) as err:
-                _LOGGER.error(
-                    "Imou recording transcode failed for %s: %s", cache_id, err
+                path = await async_prepare_record_mp4(
+                    hass, cache_id, entry_id, source_provider
                 )
+            except Exception as err:
+                _LOGGER.error("Imou recording transcode failed for %s", cache_id)
                 raise web.HTTPServiceUnavailable() from err
         if not hass.config.is_allowed_path(str(path)):
             raise web.HTTPNotFound()

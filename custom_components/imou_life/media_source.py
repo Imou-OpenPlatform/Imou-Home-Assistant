@@ -54,6 +54,11 @@ from .record_playback_mp4 import (
     register_playback_source,
     signed_record_playback_url,
 )
+from .repairs import (
+    RecordPlaybackEmptySourceError,
+    async_create_record_playback_issue,
+    async_delete_record_playback_issue,
+)
 from .runtime_data import get_runtime_data
 from .saved_record_http import async_register_saved_record_view, signed_saved_record_url
 
@@ -252,18 +257,23 @@ class ImouRecordMediaSource(MediaSource):
         manager = runtime.coordinator.device_manager.delegate
 
         async def async_record_hls_descriptor() -> RecordHlsDescriptor:
-            data = await manager.async_create_device_record_hls(
-                device_id,
-                channel_id,
-                begin_time=begin_time,
-                end_time=end_time,
-                record_type=record_type,
-                file_name=file_name if kind == KIND_LOCAL else None,
-            )
+            try:
+                data = await manager.async_create_device_record_hls(
+                    device_id,
+                    channel_id,
+                    begin_time=begin_time,
+                    end_time=end_time,
+                    record_type=record_type,
+                    file_name=file_name if kind == KIND_LOCAL else None,
+                )
+            except ImouException as err:
+                async_create_record_playback_issue(self.hass, entry_id, err)
+                raise
             source_url = data.get("url") if isinstance(data, dict) else None
             if not source_url or not is_hls_playback_url(str(source_url)):
-                msg = "No playback URL from Imou"
-                raise ValueError(msg)
+                err = RecordPlaybackEmptySourceError()
+                async_create_record_playback_issue(self.hass, entry_id, err)
+                raise err
             return RecordHlsDescriptor(
                 str(source_url),
                 _record_hls_expiry(data),
@@ -275,13 +285,13 @@ class ImouRecordMediaSource(MediaSource):
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
-                translation_placeholders={"error": err.message or str(err)},
+                translation_placeholders={"error": "Recording playback is unavailable"},
             ) from err
-        except ValueError as err:
+        except RecordPlaybackEmptySourceError as err:
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
-                translation_placeholders={"error": str(err)},
+                translation_placeholders={"error": "Recording playback is unavailable"},
             ) from err
         clip_label = f"{device_id} {begin_time}–{end_time}"
         hls_play = await _async_try_hls_playback(
@@ -295,9 +305,14 @@ class ImouRecordMediaSource(MediaSource):
             _LOGGER.debug(
                 "Imou recording playback %s – %s (HLS via Stream)", begin_time, end_time
             )
+            async_delete_record_playback_issue(self.hass, entry_id)
             return hls_play
         cache_id = record_playback_cache_id(item.identifier or "")
-        register_playback_source(self.hass, cache_id, descriptor.playlist_url)
+
+        async def async_mp4_source() -> str:
+            return (await async_record_hls_descriptor()).playlist_url
+
+        register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)
         _LOGGER.info(
             "Imou recording %s: HLS unavailable, using MP4 fallback", clip_label
         )

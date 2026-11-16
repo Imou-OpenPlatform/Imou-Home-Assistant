@@ -76,6 +76,10 @@
     "open_api_quota_exceeded": {
       "title": "Monatliches Kontingent der Imou Open Platform aufgebraucht",
       "description": "Diese App-ID hat in diesem Monat keine Open-Platform-Aufrufe mehr. Geräteliste, Live-Ansicht und Schalter erreichen die Cloud erst wieder, wenn du Kontingent nachlegst oder der Monat zurückgesetzt wird. Öffne **Meine Ressourcen** in der Open-Platform-Konsole und lade die Integration anschließend neu."
+    },
+    "record_playback": {
+      "title": "Aufnahmen können nicht wiedergegeben werden",
+      "description": "Dieses Imou-Konto kann derzeit keine Aufnahmen wiedergeben. Versuche es erneut mit dem primären Imou-Konto."
     }
   },
   "options": {

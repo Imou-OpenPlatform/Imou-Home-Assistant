@@ -11,10 +11,28 @@ from .const import DOMAIN, PARAM_API_URL, api_url_region_from_value
 ISSUE_EVENT_PUSH_NO_URL = "event_push_no_external_url"
 ISSUE_EVENT_PUSH_CALLBACK = "event_push_callback_failed"
 ISSUE_OPEN_API_QUOTA = "open_api_quota_exceeded"
+ISSUE_RECORD_PLAYBACK = "record_playback"
 
 _QUOTA_CODE = "OP1013"
+_RECORD_PLAYBACK_DENIED_MARKERS = (
+    "op1009",
+    "permission",
+    "unauthorized",
+    "forbidden",
+    "authentication",
+    "access denied",
+    "account denied",
+    "invalid token",
+    "token invalid",
+    "expired token",
+    "token expired",
+)
 _RESOURCES_CN = "https://open.imou.com/consoleNew/resourceManage/myResource"
 _RESOURCES_OVERSEAS = "https://open.imoulife.com/consoleNew/resourceManage/myResource"
+
+
+class RecordPlaybackEmptySourceError(ValueError):
+    """Raised when Imou returns no playable recording source."""
 
 
 def _issue_id(key: str, entry_id: str) -> str:
@@ -96,3 +114,29 @@ def async_delete_event_push_issues(hass: HomeAssistant, entry: ConfigEntry) -> N
     """Clear event push repair issues for a config entry."""
     for key in (ISSUE_EVENT_PUSH_NO_URL, ISSUE_EVENT_PUSH_CALLBACK):
         ir.async_delete_issue(hass, DOMAIN, _issue_id(key, entry.entry_id))
+
+
+@callback
+def async_create_record_playback_issue(
+    hass: HomeAssistant, entry_id: str, error: BaseException
+) -> None:
+    """Warn when a stable account failure prevents recording playback."""
+    text = str(getattr(error, "message", None) or error).lower()
+    if not isinstance(error, RecordPlaybackEmptySourceError) and not any(
+        marker in text for marker in _RECORD_PLAYBACK_DENIED_MARKERS
+    ):
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _issue_id(ISSUE_RECORD_PLAYBACK, entry_id),
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=ISSUE_RECORD_PLAYBACK,
+    )
+
+
+@callback
+def async_delete_record_playback_issue(hass: HomeAssistant, entry_id: str) -> None:
+    """Clear the recording playback issue after playback succeeds."""
+    ir.async_delete_issue(hass, DOMAIN, _issue_id(ISSUE_RECORD_PLAYBACK, entry_id))

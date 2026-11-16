@@ -7,9 +7,13 @@ from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.repairs import (
     ISSUE_EVENT_PUSH_NO_URL,
     ISSUE_OPEN_API_QUOTA,
+    ISSUE_RECORD_PLAYBACK,
+    RecordPlaybackEmptySourceError,
     async_create_event_push_no_url_issue,
+    async_create_record_playback_issue,
     async_delete_event_push_issues,
     async_delete_quota_issue,
+    async_delete_record_playback_issue,
     async_notify_imou_api_error,
     is_quota_exceeded,
 )
@@ -141,3 +145,75 @@ async def test_quota_repair_not_cleared_when_every_device_is_skipped(
 
     assert (DOMAIN, issue_id) in ir.async_get(hass).issues
     manager.async_update_devices_status.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_issue_lifecycle_is_entry_scoped(hass) -> None:
+    """Stable playback failures create one issue per entry and success clears one."""
+    entry_a = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry_b = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-b")
+    entry_a.add_to_hass(hass)
+    entry_b.add_to_hass(hass)
+
+    error = RequestFailedException("OP1009: No permission")
+    async_create_record_playback_issue(hass, entry_a.entry_id, error)
+    async_create_record_playback_issue(hass, entry_a.entry_id, error)
+    async_create_record_playback_issue(hass, entry_b.entry_id, error)
+    await hass.async_block_till_done()
+
+    issues = ir.async_get(hass).issues
+    issue_a = issues[(DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_a.entry_id}")]
+    assert issue_a.translation_key == ISSUE_RECORD_PLAYBACK
+    assert issue_a.translation_placeholders is None
+    assert issue_a.severity is ir.IssueSeverity.ERROR
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_b.entry_id}") in issues
+
+    async_delete_record_playback_issue(hass, entry_a.entry_id)
+    async_delete_record_playback_issue(hass, entry_a.entry_id)
+    await hass.async_block_till_done()
+
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_a.entry_id}") not in issues
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_b.entry_id}") in issues
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RequestFailedException("Authentication failed"),
+        RequestFailedException("Account access denied"),
+        RecordPlaybackEmptySourceError(),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_stable_failures_create_issue(hass, error) -> None:
+    """Authentication, account denial, and empty sources need user action."""
+    async_create_record_playback_issue(hass, "entry-a", error)
+    await hass.async_block_till_done()
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OSError("connection reset"),
+        TimeoutError("timed out"),
+        RequestFailedException("temporary network failure"),
+        ValueError("malformed segment"),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_transient_failures_do_not_create_issue(
+    hass, error
+) -> None:
+    """Network, timeout, and segment failures must not persist a repair."""
+    async_create_record_playback_issue(hass, "entry-a", error)
+    await hass.async_block_till_done()
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) not in ir.async_get(hass).issues

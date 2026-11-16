@@ -76,6 +76,10 @@
     "open_api_quota_exceeded": {
       "title": "Chiamate mensili della piattaforma aperta Imou esaurite",
       "description": "Questo App ID non ha più chiamate Open Platform per questo mese. Elenco dispositivi, vista live e interruttori non raggiungono il cloud finché non aggiungi quota o il mese non si azzera. Apri **Le mie risorse** nella console Open Platform, poi ricarica l'integrazione."
+    },
+    "record_playback": {
+      "title": "Riproduzione delle registrazioni non disponibile",
+      "description": "Questo account Imou al momento non può riprodurre le registrazioni. Riprova con l'account Imou principale."
     }
   },
   "options": {

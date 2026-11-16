@@ -76,6 +76,10 @@
     "open_api_quota_exceeded": {
       "title": "Imou 开放平台本月调用次数已用完",
       "description": "这个 App ID 本月的开放平台调用次数已经用完。设备列表、直播和开关暂时都无法访问云端，需要补充配额或等到下月重置。请到开放平台控制台打开 **我的资源**，然后重新加载集成。"
+    },
+    "record_playback": {
+      "title": "录像暂时无法播放",
+      "description": "当前 Imou 账号无法播放录像。请改用主账号后重试。"
     }
   },
   "options": {

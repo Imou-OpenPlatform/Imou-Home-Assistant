@@ -76,6 +76,10 @@
     "open_api_quota_exceeded": {
       "title": "Appels mensuels de la plateforme ouverte Imou épuisés",
       "description": "Cet App ID n'a plus d'appels Open Platform pour ce mois. La liste des appareils, la vue en direct et les interrupteurs ne peuvent pas joindre le cloud tant que vous n'ajoutez pas de quota ou que le mois n'est pas réinitialisé. Ouvrez **Mes ressources** dans la console Open Platform, puis rechargez l'intégration."
+    },
+    "record_playback": {
+      "title": "La lecture des enregistrements est indisponible",
+      "description": "Ce compte Imou ne peut actuellement pas lire les enregistrements. Réessayez avec le compte Imou principal."
     }
   },
   "options": {

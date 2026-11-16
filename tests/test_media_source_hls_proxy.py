@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,10 +26,20 @@ from custom_components.imou_life.record_hls_proxy import (
     async_create_record_hls_proxy_playlist_url,
     async_remove_record_hls_proxy_sessions,
 )
+from custom_components.imou_life.record_playback_mp4 import (
+    async_prepare_record_mp4,
+)
+from custom_components.imou_life.repairs import (
+    ISSUE_RECORD_PLAYBACK,
+    async_create_record_playback_issue,
+)
+from homeassistant.components.media_source import Unresolvable
 from homeassistant.components.media_source.models import MediaSourceItem
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
+from pyimouapi.exceptions import RequestFailedException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -285,6 +296,10 @@ async def test_segment_500_does_not_refresh(hass: HomeAssistant) -> None:
         await ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "0")
 
     refresh.assert_not_awaited()
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) not in ir.async_get(hass).issues
 
 
 @pytest.mark.parametrize("empty_playlist", [False, True])
@@ -1508,3 +1523,236 @@ async def test_resolve_cloud_clip_mp4_when_create_stream_fails(
 
     register_mock.assert_called_once()
     assert play.mime_type == MIME_MP4
+
+
+@pytest.mark.asyncio
+async def test_stable_resolve_failure_creates_playback_issue(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    runtime = _runtime_with_hls_url()
+    runtime.coordinator.device_manager.delegate.async_create_device_record_hls = (
+        AsyncMock(side_effect=RequestFailedException("OP1009: No permission"))
+    )
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=runtime,
+        ),
+        pytest.raises(Unresolvable),
+    ):
+        await ImouRecordMediaSource(hass).async_resolve_media(item)
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_{entry.entry_id}",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_empty_hls_resolve_creates_playback_issue(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=_runtime_with_hls_url({"url": ""}),
+        ),
+        pytest.raises(Unresolvable),
+    ):
+        await ImouRecordMediaSource(hass).async_resolve_media(item)
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_{entry.entry_id}",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_successful_hls_resolve_clears_playback_issue(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    hass.config.components.add("stream")
+    async_create_record_playback_issue(
+        hass, entry.entry_id, RequestFailedException("OP1009: No permission")
+    )
+    stream_mock = MagicMock()
+    stream_mock.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=_runtime_with_hls_url(),
+        ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://example.local:8123",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.create_stream",
+            return_value=stream_mock,
+        ),
+    ):
+        await ImouRecordMediaSource(hass).async_resolve_media(item)
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_{entry.entry_id}",
+    ) not in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_mp4_expired_source_refreshes_once_and_succeeds(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"expired-success-{time.time_ns()}"
+    async_create_record_playback_issue(
+        hass, "entry-a", RequestFailedException("OP1009: No permission")
+    )
+    provider = AsyncMock(
+        side_effect=[
+            "https://media.example/expired.m3u8",
+            "https://media.example/fresh.m3u8",
+        ]
+    )
+
+    def remux(source_url, output):
+        if "expired" in source_url:
+            raise OSError("Server returned 403 Forbidden")
+        output.write_bytes(b"mp4")
+
+    with patch(
+        "custom_components.imou_life.record_playback_mp4._remux_source_to_mp4",
+        side_effect=remux,
+    ) as remux_mock:
+        path = await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    assert path.read_bytes() == b"mp4"
+    assert provider.await_count == 2
+    assert [call.args[0] for call in remux_mock.call_args_list] == [
+        "https://media.example/expired.m3u8",
+        "https://media.example/fresh.m3u8",
+    ]
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) not in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_mp4_second_expired_failure_is_final(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"expired-twice-{time.time_ns()}"
+    provider = AsyncMock(side_effect=["first", "second"])
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_mp4._remux_source_to_mp4",
+            side_effect=OSError("HTTP error 403 Forbidden"),
+        ) as remux_mock,
+        pytest.raises(OSError),
+    ):
+        await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    assert provider.await_count == 2
+    assert remux_mock.call_count == 2
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_mp4_nonexpired_failure_does_not_refresh_or_create_issue(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"network-failure-{time.time_ns()}"
+    provider = AsyncMock(return_value="source")
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_mp4._remux_source_to_mp4",
+            side_effect=OSError("connection reset by peer"),
+        ),
+        pytest.raises(OSError),
+    ):
+        await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    provider.assert_awaited_once_with()
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) not in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_mp4_refresh_failure_is_final_and_cleans_partial(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"refresh-failure-{time.time_ns()}"
+    provider = AsyncMock(
+        side_effect=["source", RequestFailedException("Authentication failed")]
+    )
+    partial = hass.config.path(f"www/imou/playback/{cache_id}.part.mp4")
+
+    def expired_remux(_source_url, output):
+        output.write_bytes(b"partial")
+        raise OSError("input URL expired")
+
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_mp4._remux_source_to_mp4",
+            side_effect=expired_remux,
+        ),
+        pytest.raises(RequestFailedException),
+    ):
+        await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    assert provider.await_count == 2
+    assert not await hass.async_add_executor_job(Path(partial).exists)
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.asyncio
+async def test_mp4_refresh_cancellation_propagates_and_cleans_partial(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"refresh-cancel-{time.time_ns()}"
+    provider = AsyncMock(side_effect=["source", asyncio.CancelledError()])
+    partial = hass.config.path(f"www/imou/playback/{cache_id}.part.mp4")
+
+    def expired_remux(_source_url, output):
+        output.write_bytes(b"partial")
+        raise OSError("input URL expired")
+
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_mp4._remux_source_to_mp4",
+            side_effect=expired_remux,
+        ),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await async_prepare_record_mp4(hass, cache_id, "entry-a", provider)
+
+    assert provider.await_count == 2
+    assert not await hass.async_add_executor_job(Path(partial).exists)
