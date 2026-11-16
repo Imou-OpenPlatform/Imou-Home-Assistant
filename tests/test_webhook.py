@@ -2205,3 +2205,180 @@ async def test_webhook_v2_motion_maps_to_legacy_msg_type(
     assert response.status == 200
     assert len(events) == 1
     assert events[0].data["msg_type"] == "videoMotion"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_property_report_updates_switch(
+    hass: HomeAssistant,
+) -> None:
+    """V2 property report updates entities when capability_event is selected."""
+    from unittest.mock import MagicMock
+
+    from custom_components.imou_life.const import (
+        PARAM_EVENT_PUSH_TYPES,
+        imou_life_device_key,
+    )
+    from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
+    from pyimouapi.const import PARAM_STATE, PARAM_V2_TARGET_ID
+    from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+    from pyimouapi.push import V2_PROPERTY_REPORT_MSG_TYPE
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["capability_event"]},
+    )
+    device = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    target = "privacy.cover.enabled"
+    device.switches["close_camera"] = {
+        PARAM_V2_TARGET_ID: target,
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={target: PropertyCapability(target, "rw", "struct")},
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    key = imou_life_device_key(device)
+    runtime.coordinator.devices_by_key = {key: device}
+    runtime.coordinator.devices = [device]
+    runtime.coordinator.device_manager = ImouHaDeviceManager(MagicMock())
+
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+        patch("custom_components.imou_life.webhook._async_publish_alarm") as mock_alarm,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+                    "deviceId": "SN1",
+                    "channelId": 0,
+                    "properties": {target: {"enabled": 1}},
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert device.switches["close_camera"][PARAM_STATE] is True
+    runtime.coordinator.async_update_listeners.assert_called_once()
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == V2_PROPERTY_REPORT_MSG_TYPE
+    mock_thumbnail.assert_not_awaited()
+    mock_alarm.assert_not_called()
+    mock_record.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("capability_available", [True, False])
+async def test_webhook_v2_property_report_fires_event_without_mutation(
+    hass: HomeAssistant, capability_available: bool
+) -> None:
+    """Admission does not depend on capability metadata or a mapped property."""
+    from custom_components.imou_life.const import (
+        PARAM_EVENT_PUSH_TYPES,
+        imou_life_device_key,
+    )
+    from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
+    from pyimouapi.const import PARAM_REF, PARAM_STATE, PARAM_V2_TARGET_ID
+    from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+    from pyimouapi.push import V2_PROPERTY_REPORT_MSG_TYPE
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["capability_event"]},
+    )
+    device = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.switches["close_camera"] = {
+        PARAM_REF: "unknown.property",
+        PARAM_V2_TARGET_ID: "privacy.cover.enabled",
+        PARAM_STATE: False,
+    }
+    if capability_available:
+        device.set_capability_set(
+            CapabilitySet(
+                properties={
+                    "privacy.cover.enabled": PropertyCapability(
+                        "privacy.cover.enabled", "rw", "struct"
+                    )
+                },
+                services=frozenset(),
+                events=frozenset(),
+            )
+        )
+    key = imou_life_device_key(device)
+    runtime.coordinator.devices_by_key = {key: device}
+    runtime.coordinator.devices = [device]
+    runtime.coordinator.device_manager = ImouHaDeviceManager(MagicMock())
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "  device.property.report  ",
+                "deviceId": "SN1",
+                "channelId": 0,
+                "properties": {"unknown.property": 1},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == V2_PROPERTY_REPORT_MSG_TYPE
+    assert device.switches["close_camera"][PARAM_STATE] is False
+    runtime.coordinator.async_update_listeners.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_property_report_requires_subscription(
+    hass: HomeAssistant,
+) -> None:
+    """Property reports are rejected before dispatch without the subscription."""
+    from custom_components.imou_life.const import PARAM_EVENT_PUSH_TYPES
+    from pyimouapi.push import V2_PROPERTY_REPORT_MSG_TYPE
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["alarm"]},
+    )
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+                "deviceId": "SN1",
+                "properties": {"privacy.cover.enabled": {"enabled": 1}},
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []

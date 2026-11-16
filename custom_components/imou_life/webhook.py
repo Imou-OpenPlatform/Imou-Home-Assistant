@@ -25,11 +25,13 @@ from pyimouapi.push import (
     is_alarm_msg_type,
     is_iot_non_event,
     is_v2_capability_event_id,
+    is_v2_property_report,
     legacy_msg_type_from_v2_event,
     normalize_push_payload,
     push_dispatch_permitted,
     push_subscription_kind,
     v2_capability_event_permitted,
+    v2_property_report_values,
 )
 
 from .const import (
@@ -574,23 +576,50 @@ def _v2_capability_event_allowed(
     return v2_capability_event_permitted(events, event_id)
 
 
+def _apply_property_push_values(
+    runtime: ImouRuntimeData,
+    event_data: dict[str, Any],
+    values: dict[str, Any],
+    label: str,
+    *,
+    require_capability: bool = False,
+) -> None:
+    """Write property values from iotProperty or property report onto a device."""
+    if not values:
+        _LOGGER.debug(
+            "%s with no properties for %s", label, event_data.get("device_id")
+        )
+        return
+    device = _resolve_imou_ha_device_for_push(runtime, event_data)
+    if device is None or (require_capability and device.capability_set is None):
+        return
+    coordinator = runtime.coordinator
+    if coordinator.device_manager.apply_property_values(device, values):
+        coordinator.async_update_listeners()
+
+
 def _apply_iot_property_push(
     runtime: ImouRuntimeData, event_data: dict[str, Any]
 ) -> None:
     """Write iotProperty refs onto the matching device."""
     raw = event_data.get("raw")
     values = iot_property_values(raw if isinstance(raw, dict) else {})
-    if not values:
-        _LOGGER.debug(
-            "iotProperty with no properties for %s", event_data.get("device_id")
-        )
-        return
-    device = _resolve_imou_ha_device_for_push(runtime, event_data)
-    if device is None:
-        return
-    coordinator = runtime.coordinator
-    if coordinator.device_manager.apply_iot_property_values(device, values):
-        coordinator.async_update_listeners()
+    _apply_property_push_values(runtime, event_data, values, "iotProperty")
+
+
+def _apply_v2_property_report_push(
+    runtime: ImouRuntimeData, event_data: dict[str, Any]
+) -> None:
+    """Write V2 propertyId keys from device.property.report onto the matching device."""
+    raw = event_data.get("raw")
+    values = v2_property_report_values(raw if isinstance(raw, dict) else {})
+    _apply_property_push_values(
+        runtime,
+        event_data,
+        values,
+        "device.property.report",
+        require_capability=True,
+    )
 
 
 def _async_publish_alarm(
@@ -653,8 +682,11 @@ async def _async_dispatch_imou_push(
                 event_data.get("device_id"),
                 thumbnail_local or "none",
             )
-        if event_data.get("msg_type") == "iotProperty":
+        msg_type = event_data.get("msg_type")
+        if msg_type == "iotProperty":
             _apply_iot_property_push(runtime, event_data)
+        elif is_v2_property_report(msg_type):
+            _apply_v2_property_report_push(runtime, event_data)
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
         if is_alarm:
             _async_publish_alarm(hass, runtime, event_data)
