@@ -344,6 +344,166 @@ def test_subscription_category_options_matrix(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("payload", "selected_type", "dispatched_type", "is_alarm"),
+    [
+        ({"msgType": "iotProperty"}, "iot", "iotProperty", False),
+        (
+            {"msgType": "device.property.report", "properties": {}},
+            "capability_event",
+            "device.property.report",
+            False,
+        ),
+        (
+            {"msgType": "detection.motion.detected", "channelId": "0"},
+            "capability_event",
+            "videoMotion",
+            True,
+        ),
+        ({"msgType": "alarmLocal"}, "alarm", "alarmLocal", True),
+        ({"msgType": "online"}, "device_status", "online", False),
+        ({"msgType": "storageEmpty"}, None, "storageEmpty", False),
+    ],
+)
+@pytest.mark.parametrize(
+    "configured_types",
+    [[], ["iot"], ["capability_event"], ["alarm"], ["device_status"]],
+)
+async def test_webhook_category_options_dispatch_matrix(
+    hass: HomeAssistant,
+    payload: dict[str, Any],
+    selected_type: str | None,
+    dispatched_type: str,
+    is_alarm: bool,
+    configured_types: list[str],
+) -> None:
+    """The full webhook path applies categories before event and media dispatch."""
+    from custom_components.imou_life.const import (
+        PARAM_ENABLE_EVENT_PUSH,
+        PARAM_EVENT_PUSH_TYPES,
+        imou_life_device_key,
+    )
+    from pyimouapi.capability.catalog import CapabilitySet
+
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        notify_services=["notify.test"],
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: configured_types,
+        },
+    )
+    if payload["msgType"] == "detection.motion.detected":
+        device = MagicMock()
+        device.device_id = "SN1"
+        device.channel_id = "0"
+        device.product_id = None
+        device.capability_set = CapabilitySet(
+            properties={},
+            services=frozenset(),
+            events=frozenset({"detection.motion.detected"}),
+        )
+        runtime.coordinator.devices_by_key = {imou_life_device_key(device): device}
+        runtime.coordinator.devices = [device]
+
+    accepted = selected_type is None or selected_type in configured_types
+    body = {"deviceId": "SN1", **payload}
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook._async_send_notifications",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+    ):
+        response = await async_handle_imou_webhook(
+            hass, "webhook-id", MockRequest(body)
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert [event.data["msg_type"] for event in generic_events] == (
+        [dispatched_type] if accepted else []
+    )
+    expect_alarm_dispatch = accepted and is_alarm
+    assert [event.data["msg_type"] for event in alarm_events] == (
+        [dispatched_type] if expect_alarm_dispatch else []
+    )
+    assert mock_thumbnail.await_count == int(expect_alarm_dispatch)
+    assert mock_notify.await_count == int(expect_alarm_dispatch)
+    assert mock_record.await_count == int(expect_alarm_dispatch)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("blocked_by", ["global", "account", "selected", "excluded"])
+async def test_webhook_admission_filters_before_dispatch(
+    hass: HomeAssistant, blocked_by: str
+) -> None:
+    """Global, account, and device filters reject before events or media."""
+    from custom_components.imou_life.const import (
+        PARAM_ENABLE_EVENT_PUSH,
+        PARAM_EVENT_PUSH_TYPES,
+        PARAM_EXCLUDED_DEVICES,
+    )
+
+    enabled = blocked_by != "global"
+    selected_devices = ["SN1"] if blocked_by != "selected" else ["OTHER"]
+    options: dict[str, Any] = {
+        PARAM_ENABLE_EVENT_PUSH: enabled,
+        PARAM_EVENT_PUSH_TYPES: ["alarm"],
+    }
+    if blocked_by == "excluded":
+        options[PARAM_EXCLUDED_DEVICES] = ["SN1"]
+    setup_imou_runtime(
+        hass,
+        webhook_id="owned-webhook",
+        push_enabled=enabled,
+        selected_devices=selected_devices,
+        options=options,
+    )
+    generic_events: list[Event] = []
+    alarm_events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, generic_events.append)
+    hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
+
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "other-webhook" if blocked_by == "account" else "owned-webhook",
+            MockRequest({"msgType": "alarmLocal", "deviceId": "SN1"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert generic_events == []
+    assert alarm_events == []
+    mock_thumbnail.assert_not_awaited()
+    mock_record.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_respects_entry_options_over_runtime_selected_devices(
     hass: HomeAssistant,
 ) -> None:
@@ -1386,15 +1546,31 @@ async def test_webhook_unknown_legacy_alarm_fires_generic_and_alarm(
     setup_imou_runtime(
         hass,
         selected_devices=["device_1"],
+        notify_services=["notify.test"],
         options={"event_push_types": ["alarm"]},
     )
 
-    response = await async_handle_imou_webhook(
-        hass,
-        "webhook-id",
-        MockRequest({"msgType": "newAlarmFromCloud", "deviceId": "device_1"}),
-    )
-    await hass.async_block_till_done(wait_background_tasks=True)
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook._async_send_notifications",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest({"msgType": "newAlarmFromCloud", "deviceId": "device_1"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert [event.data["msg_type"] for event in generic_events] == [
@@ -1403,12 +1579,17 @@ async def test_webhook_unknown_legacy_alarm_fires_generic_and_alarm(
     assert [event.data["msg_type"] for event in alarm_events] == [
         "newAlarmFromCloud"
     ]
+    mock_thumbnail.assert_awaited_once()
+    mock_notify.assert_awaited_once()
+    mock_record.assert_awaited_once()
     assert "Unknown Legacy msg_type='newAlarmFromCloud'" in caplog.text
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("msg_type", ["numberstat", "e_numberstat", " E_NumberStat "])
 async def test_webhook_recognized_non_alarm_operation_keeps_explicit_deny(
     hass: HomeAssistant,
+    msg_type: str,
 ) -> None:
     """A recognized operation outside the dispatch allowlist stays denied."""
     generic_events: list[Event] = []
@@ -1417,16 +1598,34 @@ async def test_webhook_recognized_non_alarm_operation_keeps_explicit_deny(
     hass.bus.async_listen(EVENT_IMOU_ALARM, alarm_events.append)
     setup_imou_runtime(hass, selected_devices=["device_1"])
 
-    response = await async_handle_imou_webhook(
-        hass,
-        "webhook-id",
-        MockRequest({"msgType": "numberstat", "deviceId": "device_1"}),
-    )
-    await hass.async_block_till_done(wait_background_tasks=True)
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook._async_send_notifications",
+            new_callable=AsyncMock,
+        ) as mock_notify,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest({"msgType": msg_type, "deviceId": "device_1"}),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
     assert generic_events == []
     assert alarm_events == []
+    mock_thumbnail.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+    mock_record.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
