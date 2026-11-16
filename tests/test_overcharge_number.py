@@ -19,6 +19,7 @@ from custom_components.imou_life.number import (
 from homeassistant.components.number import NumberDeviceClass, NumberMode
 from homeassistant.const import UnitOfPower
 from homeassistant.core import HomeAssistant
+from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.const import PARAM_REF, PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -40,6 +41,7 @@ def _device(*, ref: str = "1008") -> MagicMock:
     device.texts = {
         PARAM_OVERCHARGE_SWITCH: {PARAM_STATE: "100", PARAM_REF: ref},
     }
+    device.capability_set = None
     return device
 
 
@@ -110,3 +112,17 @@ def test_iterators_split_countdown_and_overcharge() -> None:
         PARAM_OVERCHARGE_SWITCH
     }
     assert {key for key, _ in _iter_countdowns(coordinator)} == {"count_down_switch"}
+
+
+def test_v2_overcharge_does_not_duplicate_legacy_number() -> None:
+    """Capability-backed overcharge remains on the switch platform only."""
+    device = _device()
+    device.capability_set = CapabilitySet(
+        properties={},
+        services=frozenset(),
+        events=frozenset(),
+    )
+    device.switches = {PARAM_OVERCHARGE_SWITCH: {PARAM_STATE: True}}
+    coordinator = _coordinator(device)
+
+    assert _iter_overcharge(coordinator) == []

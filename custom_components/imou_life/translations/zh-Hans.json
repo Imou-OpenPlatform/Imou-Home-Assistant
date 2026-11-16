@@ -610,6 +610,9 @@
       "motion_detect": {
         "name": "画面变化"
       },
+      "overcharge_switch": {
+        "name": "过充保护"
+      },
       "pet_detect": {
         "name": "宠物检测"
       },

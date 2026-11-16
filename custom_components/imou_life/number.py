@@ -44,7 +44,7 @@ def _iter_overcharge(
     return [
         (PARAM_OVERCHARGE_SWITCH, device)
         for device in coordinator.devices
-        if PARAM_OVERCHARGE_SWITCH in device.texts
+        if (PARAM_OVERCHARGE_SWITCH in device.texts and device.capability_set is None)
     ]
 
 

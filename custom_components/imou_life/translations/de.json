@@ -610,6 +610,9 @@
       "motion_detect": {
         "name": "Bildänderung"
       },
+      "overcharge_switch": {
+        "name": "Überladeschutz"
+      },
       "pet_detect": {
         "name": "Haustiererkennung"
       },

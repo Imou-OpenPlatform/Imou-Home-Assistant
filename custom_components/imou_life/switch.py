@@ -30,6 +30,7 @@ from .const import (
     PARAM_LOCAL_EVENT_RECORD,
     PARAM_MOTION_DETECT,
     PARAM_NOTIFY_ON_ALARM,
+    PARAM_OVERCHARGE_SWITCH,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
@@ -95,6 +96,10 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         key=PARAM_MOTION_DETECT,
         translation_key=PARAM_MOTION_DETECT,
         entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key=PARAM_OVERCHARGE_SWITCH,
+        translation_key=PARAM_OVERCHARGE_SWITCH,
     ),
     SwitchEntityDescription(
         key=PARAM_PET_DETECT,

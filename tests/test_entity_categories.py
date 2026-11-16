@@ -55,7 +55,7 @@ def test_switch_configuration_split() -> None:
     """Detection and indicator toggles are configuration, controls are not."""
     assert _categorised(SWITCH_TYPES, EntityCategory.CONFIG) == CONFIG_SWITCHES
     remaining = {d.key for d in SWITCH_TYPES} - CONFIG_SWITCHES
-    assert remaining == {"close_camera", "switch"}
+    assert remaining == {"close_camera", "overcharge_switch", "switch"}
 
 
 def test_select_configuration_split() -> None:
