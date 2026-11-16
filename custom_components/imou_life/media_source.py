@@ -232,11 +232,11 @@ class ImouRecordMediaSource(MediaSource):
                 translation_key="record_playback_failed",
                 translation_placeholders={"error": "No playback URL from Imou"},
             )
-        clip_label = f"{device_id} {begin_time}-{end_time}"
+        clip_label = f"{device_id} {begin_time}–{end_time}"
         hls_play = await _async_try_hls_playback(self.hass, str(source_url), clip_label)
         if hls_play is not None:
             _LOGGER.debug(
-                "Imou recording playback %s - %s (HLS via Stream)", begin_time, end_time
+                "Imou recording playback %s – %s (HLS via Stream)", begin_time, end_time
             )
             return hls_play
         cache_id = record_playback_cache_id(item.identifier or "")

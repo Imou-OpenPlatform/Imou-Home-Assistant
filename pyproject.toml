@@ -41,6 +41,10 @@ select = [
   "ASYNC", "G", "LOG",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+".github/scripts/close_inactive_author_issues.py" = ["E501", "RUF001", "RUF002", "RUF003"]
+"custom_components/imou_life/media_source.py" = ["RUF001"]
+
 [tool.ruff.format]
 quote-style = "double"
 

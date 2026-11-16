@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
 """
-在 GitHub Actions 中运行: 按 Issue **评论时间线**上**最后一条评论**的发起人判断。
+在 GitHub Actions 中运行：按 Issue **评论时间线**上**最后一条评论**的发起人判断。
 
-规则:
-  · 若最后一条评论来自配置的维护者账号, 且该评论距今 ≥ INACTIVE_DAYS
-    (默认 30) 天 → 先发关闭说明评论, 再关闭 Issue。
-  · 若最后一条评论来自维护者, 且距今 ≥ STALE_AFTER_DAYS (默认 21) 天
-    且 < 关闭阈值 → 打上 STALE_LABEL (默认 stale), 便于筛选「待跟进」。
-  · 若最后一条评论**不是**维护者 (社区/他人已回复), 则移除 STALE_LABEL
-    (若存在), 避免误标。
+规则：
+  · 若最后一条评论来自配置的维护者账号，且该评论距今 ≥ INACTIVE_DAYS（默认 30）天 →
+    先发关闭说明评论，再关闭 Issue。
+  · 若最后一条评论来自维护者，且距今 ≥ STALE_AFTER_DAYS（默认 21）天且 < 关闭阈值 →
+    打上 STALE_LABEL（默认 stale），便于筛选「待跟进」。
+  · 若最后一条评论**不是**维护者（社区/他人已回复），则移除 STALE_LABEL（若存在），避免误标。
 
-环境变量:
-  GITHUB_TOKEN / GH_TOKEN — 需 issues:write (Actions 自动注入; 本地可省略)
-  GITHUB_REPOSITORY — owner/repo (Actions 自动注入; 本地未设时默认本仓库)
-  MAINTAINERS — 逗号分隔的维护者登录名, 默认 Imou-OpenPlatform
-  STALE_AFTER_DAYS — 打 stale 标签的天数阈值, 默认 21
-  INACTIVE_DAYS — 关闭的天数阈值, 默认 30 (应 ≥ STALE_AFTER_DAYS)
-  STALE_LABEL — 标签名, 默认 stale
-    (请在本仓库预先创建该 label, 或首次在网页上建同名标签)
-  INACTIVE_EXCLUDE_LABELS — 逗号分隔, 命中则跳过
-    (默认含 no-auto-close, feature)
-  DRY_RUN — 设为 1 时只打印, 不修改 Issue
+环境变量：
+  GITHUB_TOKEN / GH_TOKEN — 需 issues:write（Actions 自动注入；本地可省略）
+  GITHUB_REPOSITORY — owner/repo（Actions 自动注入；本地未设时默认本仓库）
+  MAINTAINERS — 逗号分隔的维护者登录名，默认 Imou-OpenPlatform
+  STALE_AFTER_DAYS — 打 stale 标签的天数阈值，默认 21
+  INACTIVE_DAYS — 关闭的天数阈值，默认 30（应 ≥ STALE_AFTER_DAYS）
+  STALE_LABEL — 标签名，默认 stale（请在本仓库预先创建该 label，或首次在网页上建同名标签）
+  INACTIVE_EXCLUDE_LABELS — 逗号分隔，命中则跳过（默认含 no-auto-close, feature）
+  DRY_RUN — 设为 1 时只打印，不修改 Issue
 
-本地未设置 GITHUB_TOKEN 时, 会读取
+本地未设置 GITHUB_TOKEN 时，会读取
   .cursor/skills/github-open-items-report/github_report.secrets.json
 """
 from __future__ import annotations
@@ -95,9 +92,9 @@ def _token() -> str:
     if t:
         return t
     print(
-        "未找到 GitHub token: 请设置环境变量 GITHUB_TOKEN / GH_TOKEN, 或在仓库根下\n"
+        "未找到 GitHub token：请设置环境变量 GITHUB_TOKEN / GH_TOKEN，或在仓库根下\n"
         "  .cursor/skills/github-open-items-report/github_report.secrets.json\n"
-        "中写入 github_token (与开放项汇报脚本共用)。",
+        "中写入 github_token（与开放项汇报脚本共用）。",
         file=sys.stderr,
     )
     raise SystemExit(1)
@@ -178,11 +175,11 @@ def gh(method: str, url: str, *, data: dict | list | None = None) -> object:
     except urllib.error.HTTPError as e:
         if e.code == 401:
             print(
-                "GitHub 返回 401: token 无效、已撤销, "
-                "或仍是示例占位符 (ghp_+36 个 x)。\n"
+                "GitHub 返回 401：token 无效、已撤销，"
+                "或仍是示例占位符（ghp_+36 个 x）。\n"
                 "请换用 Settings → Developer settings → Personal access tokens "
-                "里生成的真实 PAT,\n"
-                "写入 github_report.secrets.json 的 github_token, "
+                "里生成的真实 PAT，\n"
+                "写入 github_report.secrets.json 的 github_token，"
                 "或导出 GITHUB_TOKEN 后再运行。",
                 file=sys.stderr,
             )
@@ -207,7 +204,7 @@ def gh_delete(url: str) -> None:
     except urllib.error.HTTPError as e:
         if e.code == 401:
             print(
-                "GitHub 返回 401: 请检查 token 与仓库权限 (issues: write)。",
+                "GitHub 返回 401：请检查 token 与仓库权限（issues: write）。",
                 file=sys.stderr,
             )
         raise
@@ -271,8 +268,8 @@ def main() -> None:
     tok = _token()
     if _github_token_is_example_placeholder(tok):
         print(
-            "当前 token 为示例占位符 (ghp_ 后跟 36 个 x), 无法调用 API。\n"
-            "请将真实 PAT 写入 github_report.secrets.json, 或设置 GITHUB_TOKEN。",
+            "当前 token 为示例占位符（ghp_ 后跟 36 个 x），无法调用 API。\n"
+            "请将真实 PAT 写入 github_report.secrets.json，或设置 GITHUB_TOKEN。",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -283,7 +280,7 @@ def main() -> None:
     stale_days = _stale_days()
     if stale_days > close_days:
         print(
-            f"警告: STALE_AFTER_DAYS ({stale_days}) > INACTIVE_DAYS ({close_days}), "
+            f"警告：STALE_AFTER_DAYS（{stale_days}）> INACTIVE_DAYS（{close_days}），"
             f"将按 STALE_AFTER_DAYS={close_days} 处理打标区间。",
             file=sys.stderr,
         )
@@ -318,7 +315,7 @@ def main() -> None:
             continue
         last_t = parse_dt(last_ca)
 
-        # 最后一条不是维护者: 线程已由他人跟进, 去掉误打的 stale
+        # 最后一条不是维护者：线程已由他人跟进，去掉误打的 stale
         if last_login not in maintainers:
             if stale_label_l in labels_l:
                 msg = (
@@ -337,8 +334,7 @@ def main() -> None:
 
         # 最后一条是维护者
         if last_t > close_cutoff:
-            # 未满关闭天数: 若已早于 stale 阈值则打 stale;
-            # 若未满 stale 天则去掉 stale (维护者刚回复)
+            # 未满关闭天数：若已早于 stale 阈值则打 stale；若未满 stale 天则去掉 stale（维护者刚回复）
             if last_t <= stale_cutoff:
                 if stale_label_l not in labels_l:
                     msg = (
