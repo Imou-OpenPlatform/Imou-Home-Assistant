@@ -5,12 +5,15 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from custom_components.imou_life.config_flow import ImouConfigFlow
 from custom_components.imou_life.const import (
+    API_URL_LOGIN_REGIONS,
     CONF_API_URL_FK,
     CONF_API_URL_INTL,
     CONF_API_URL_OR,
     CONF_API_URL_SG,
     DOMAIN,
+    PARAM_API_URL,
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     api_url_from_region,
@@ -46,6 +49,15 @@ def test_api_url_region_mapping() -> None:
     assert api_url_region_from_value(CONF_API_URL_OR) == "na"
     assert api_url_region_from_value("intl") == "intl"
     assert api_url_region_from_value("sg") == "sg"
+
+
+def test_user_schema_uses_login_regions_only() -> None:
+    schema = ImouConfigFlow._user_schema()
+    api_url_field = next(
+        key for key in schema.schema if getattr(key, "schema", None) == PARAM_API_URL
+    )
+    selector = schema.schema[api_url_field]
+    assert selector.config["options"] == list(API_URL_LOGIN_REGIONS)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")

@@ -240,7 +240,7 @@ class ImouConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(PARAM_APP_SECRET): str,
                 vol.Required(PARAM_API_URL, default=default_region): SelectSelector(
                     SelectSelectorConfig(
-                        options=list(API_URL_REGIONS),
+                        options=list(API_URL_LOGIN_REGIONS),
                         translation_key="api_url",
                         mode=SelectSelectorMode.DROPDOWN,
                     )
