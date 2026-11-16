@@ -3,6 +3,7 @@
   "name": "Imou Life Official",
   "after_dependencies": [
     "frontend",
+    "http",
     "stream"
   ],
   "codeowners": [
