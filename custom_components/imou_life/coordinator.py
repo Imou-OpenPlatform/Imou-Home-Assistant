@@ -15,6 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.device import compose_iot_device_id
 from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
@@ -352,9 +353,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _async_refresh_known_devices(
         self, fresh_by_key: dict[str, ImouHaDevice]
     ) -> None:
-        """Update name and firmware, and reload abilities when they change."""
+        """Update identity and merge complete capability snapshots."""
         identity_changed: list[ImouHaDevice] = []
         ability_ids: set[str] = set()
+        refreshed: dict[str, ImouHaDevice] = {}
         for key, fresh in fresh_by_key.items():
             current = self.devices_by_key.get(key)
             if current is None:
@@ -376,32 +378,49 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 and current_ability != fresh_ability
             ):
                 ability_ids.add(fresh.device_id)
+            if (
+                isinstance(fresh.capability_set, CapabilitySet)
+                and current.capability_snapshot != fresh.capability_snapshot
+            ):
+                removed = current.replace_capabilities(fresh)
+                self._async_remove_entity_suffixes(key, removed)
+                refreshed[key] = current
         if identity_changed:
             async_register_imou_devices(self.hass, self.config_entry, identity_changed)
-        if not ability_ids:
-            return
-        try:
-            async with asyncio.timeout(UPDATE_TIMEOUT):
-                detailed = await self._device_manager.async_get_devices()
-        except InvalidAppIdOrSecretException as err:
-            raise ConfigEntryAuthFailed(
-                translation_domain=DOMAIN,
-                translation_key="invalid_auth",
-            ) from err
-        except (TimeoutError, ImouException) as err:
-            _LOGGER.warning("Could not refresh changed Imou device abilities: %s", err)
-            return
-        refreshed: list[ImouHaDevice] = []
-        for device in self._filter_devices(detailed):
-            key = imou_life_device_key(device)
-            current = self.devices_by_key.get(key)
-            if current is None:
-                continue
-            removed = current.replace_capabilities(device)
-            self._async_remove_entity_suffixes(key, removed)
-            refreshed.append(current)
-        for callback in self.new_device_callbacks:
-            callback(refreshed)
+        if ability_ids:
+            try:
+                async with asyncio.timeout(UPDATE_TIMEOUT):
+                    detailed = await self._device_manager.async_get_devices()
+            except InvalidAppIdOrSecretException as err:
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_auth",
+                ) from err
+            except (TimeoutError, ImouException) as err:
+                _LOGGER.warning(
+                    "Could not refresh changed Imou device abilities: %s", err
+                )
+            else:
+                for device in self._filter_devices(detailed):
+                    if (
+                        device.device_id not in ability_ids
+                        or not isinstance(device.capability_set, CapabilitySet)
+                    ):
+                        continue
+                    key = imou_life_device_key(device)
+                    current = self.devices_by_key.get(key)
+                    if (
+                        current is None
+                        or current.capability_snapshot == device.capability_snapshot
+                    ):
+                        continue
+                    removed = current.replace_capabilities(device)
+                    self._async_remove_entity_suffixes(key, removed)
+                    refreshed[key] = current
+        if refreshed:
+            ready = list(refreshed.values())
+            for callback in self.new_device_callbacks:
+                callback(ready)
 
     async def _async_retry_event_maps(self) -> None:
         """Retry product-model events that failed earlier, then add entities."""

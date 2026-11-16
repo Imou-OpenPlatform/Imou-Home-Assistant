@@ -20,6 +20,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
+from pyimouapi.bulb_light import empty_bulb_state
+from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -305,6 +307,46 @@ async def test_rediscovery_registers_new_device_from_single_list(
 
     device_manager.async_get_devices.assert_awaited_once()
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_retries_and_merges_complete_v2_snapshot(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A recovered product/capability lookup adds entities to the live device."""
+    missing = ImouHaDevice("lamp", "Lamp", "Imou", "L1", "1.0")
+    missing.set_product_id("lamp-product")
+    coordinator = await _run_update(hass, device_manager, [missing])
+    callback = MagicMock()
+    coordinator.new_device_callbacks.append(callback)
+
+    capability = CapabilitySet(
+        properties=dict.fromkeys(("control.outlet.enabled",)),  # type: ignore[arg-type]
+        services=frozenset(),
+        events=frozenset(),
+    )
+    recovered = ImouHaDevice("lamp", "Lamp", "Imou", "L1", "1.0")
+    recovered.set_product_id("lamp-product")
+    recovered.set_product_device_type("Lamp")
+    recovered.set_capability_set(capability)
+    recovered.bulb_light = empty_bulb_state()
+    recovered.set_bulb_v2(True)
+
+    device_manager.async_get_devices.return_value = [recovered]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    current = coordinator.devices[0]
+    assert current is missing
+    assert current.product_device_type == "Lamp"
+    assert current.capability_set == capability
+    assert current.bulb_light is not None
+    callback.assert_called_once_with([current])
+
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    callback.assert_called_once_with([current])
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
