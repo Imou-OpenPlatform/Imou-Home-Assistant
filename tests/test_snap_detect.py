@@ -53,4 +53,3 @@ async def test_device_snap_detect_notifies(hass: HomeAssistant) -> None:
     runtime.coordinator.device_manager.delegate.async_device_snap_detect.assert_awaited_once_with(
         "SN1", "0"
     )
-

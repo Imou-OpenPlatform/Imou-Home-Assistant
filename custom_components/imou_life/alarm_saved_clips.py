@@ -43,7 +43,9 @@ def _parse_clip(path: Path) -> SavedAlarmClip | None:
     )
 
 
-def list_saved_clips(folder: Path, device_id: str, channel_id: str) -> list[SavedAlarmClip]:
+def list_saved_clips(
+    folder: Path, device_id: str, channel_id: str
+) -> list[SavedAlarmClip]:
     """Return clips for this device channel in the save folder (newest first)."""
     if not folder.is_dir():
         return []
@@ -89,7 +91,9 @@ def clips_on_day(
     ]
 
 
-def resolve_clip_path(folder: Path, device_id: str, channel_id: str, file_name: str) -> Path:
+def resolve_clip_path(
+    folder: Path, device_id: str, channel_id: str, file_name: str
+) -> Path:
     """Resolve a basename to a path; raises ValueError when invalid."""
     if "/" in file_name or "\\" in file_name or file_name in (".", ".."):
         raise ValueError("invalid file name")

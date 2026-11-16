@@ -127,9 +127,7 @@ async def async_prepare_record_mp4(
         partial = output.with_name(f"{output.stem}.part.mp4")
         partial.unlink(missing_ok=True)
         _LOGGER.debug("Preparing Imou recording MP4 cache %s", cache_id)
-        await hass.async_add_executor_job(
-            _remux_source_to_mp4, source_url, partial
-        )
+        await hass.async_add_executor_job(_remux_source_to_mp4, source_url, partial)
         partial.replace(output)
         return output
 

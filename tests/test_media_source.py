@@ -5,11 +5,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.media_source import (
-    ImouRecordMediaSource,
     MEDIA_SOURCE_NAME,
+    ImouRecordMediaSource,
     _split,
 )
 from homeassistant.config_entries import ConfigEntryState

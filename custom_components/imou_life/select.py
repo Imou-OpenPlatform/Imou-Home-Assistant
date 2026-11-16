@@ -9,10 +9,14 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from pyimouapi.const import PARAM_COLLECTION_POINT_PROMPT, PARAM_CURRENT_OPTION, PARAM_OPTIONS
-from pyimouapi.select_option import to_friendly
+from pyimouapi.const import (
+    PARAM_COLLECTION_POINT_PROMPT,
+    PARAM_CURRENT_OPTION,
+    PARAM_OPTIONS,
+)
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.select_option import to_friendly
 
 from .const import (
     DOMAIN,

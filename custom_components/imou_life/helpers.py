@@ -239,9 +239,7 @@ async def async_deliver_message_to_targets(
             data: dict[str, Any] = {"message": message, "title": title}
             if image_url and service.startswith("mobile_app_"):
                 data["data"] = {"image": image_url}
-            await hass.services.async_call(
-                domain, service, data, blocking=False
-            )
+            await hass.services.async_call(domain, service, data, blocking=False)
 
 
 def _split_notify_target(target: str) -> tuple[str, str] | None:

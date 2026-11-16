@@ -55,14 +55,18 @@ async def async_fetch_url_bytes(hass: HomeAssistant, url: str) -> bytes:
         except OSError:
             if _lechange_cdn_url(url):
                 raise
-            _LOGGER.debug("curl fetch failed for %s, trying aiohttp", url, exc_info=True)
+            _LOGGER.debug(
+                "curl fetch failed for %s, trying aiohttp", url, exc_info=True
+            )
     session = async_get_clientsession(hass)
     try:
         return await _async_aiohttp_get(session, url)
     except Exception:
         if not _curl_available():
             raise
-        _LOGGER.debug("aiohttp fetch failed for %s, retrying with curl", url, exc_info=True)
+        _LOGGER.debug(
+            "aiohttp fetch failed for %s, retrying with curl", url, exc_info=True
+        )
         return await hass.async_add_executor_job(_sync_curl, url)
 
 

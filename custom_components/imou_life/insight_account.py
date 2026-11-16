@@ -66,9 +66,7 @@ def ai_insight_channel_devices(
     return [
         device
         for device in camera_channel_devices(devices)
-        if _device_has_ai_insight_cloud(
-            cloud_by_key.get(imou_life_device_key(device))
-        )
+        if _device_has_ai_insight_cloud(cloud_by_key.get(imou_life_device_key(device)))
     ]
 
 

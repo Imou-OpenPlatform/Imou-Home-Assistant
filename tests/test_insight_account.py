@@ -3,7 +3,11 @@
 from unittest.mock import MagicMock
 
 import pytest
-from custom_components.imou_life.const import CONF_API_URL_HZ, CONF_API_URL_INTL, PARAM_API_URL
+from custom_components.imou_life.const import (
+    CONF_API_URL_HZ,
+    CONF_API_URL_INTL,
+    PARAM_API_URL,
+)
 from custom_components.imou_life.insight_account import (
     ai_insight_channel_devices,
     async_trial_dialog_copy,
@@ -47,12 +51,8 @@ def test_ai_insight_select_filters_non_insight_cameras() -> None:
     insight = _camera("cam-insight")
     other = _camera("cam-event")
     cloud = {
-        "cam-insight_0": DeviceCloudService(
-            True, "1", "plan", "6", 1, None, None
-        ),
-        "cam-event_0": DeviceCloudService(
-            True, "2", "event", "2", 1, None, None
-        ),
+        "cam-insight_0": DeviceCloudService(True, "1", "plan", "6", 1, None, None),
+        "cam-event_0": DeviceCloudService(True, "2", "event", "2", 1, None, None),
     }
     filtered = ai_insight_channel_devices([insight, other], cloud)
     assert [d.device_id for d in filtered] == ["cam-insight"]

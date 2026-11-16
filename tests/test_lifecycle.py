@@ -69,9 +69,7 @@ async def test_trial_frontend_registers_once(hass: HomeAssistant) -> None:
     hass.config.components.add("frontend")
 
     with (
-        patch.object(
-            hass.http, "async_register_static_paths", AsyncMock()
-        ) as register,
+        patch.object(hass.http, "async_register_static_paths", AsyncMock()) as register,
         patch(
             "custom_components.imou_life.insight_frontend.frontend.add_extra_js_url"
         ) as add_js,

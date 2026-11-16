@@ -82,12 +82,8 @@ class ImouAiInsightTrialButton(ImouAccountEntity, ButtonEntity):
         super().__init__(coordinator, config_entry, PARAM_AI_INSIGHT_TRIAL)
 
     async def async_press(self) -> None:
-        url = str(
-            self._config_entry.options.get(PARAM_TRIAL_CONTACT_URL) or ""
-        ).strip()
-        title, message = await async_trial_dialog_copy(
-            self.hass, self._config_entry
-        )
+        url = str(self._config_entry.options.get(PARAM_TRIAL_CONTACT_URL) or "").strip()
+        title, message = await async_trial_dialog_copy(self.hass, self._config_entry)
         if url:
             message = f"{message}\n\n{url}"
         self.hass.bus.async_fire(

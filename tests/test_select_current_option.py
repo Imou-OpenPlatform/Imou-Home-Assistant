@@ -7,10 +7,14 @@ from unittest.mock import MagicMock
 from custom_components.imou_life.const import (
     PARAM_COLLECTION_POINT,
     PARAM_NIGHT_VISION_MODE,
+    imou_life_device_key,
 )
-from custom_components.imou_life.const import imou_life_device_key
-from custom_components.imou_life.select import ImouSelect, SELECT_TYPES
-from pyimouapi.const import PARAM_COLLECTION_POINT_PROMPT, PARAM_CURRENT_OPTION, PARAM_OPTIONS
+from custom_components.imou_life.select import SELECT_TYPES, ImouSelect
+from pyimouapi.const import (
+    PARAM_COLLECTION_POINT_PROMPT,
+    PARAM_CURRENT_OPTION,
+    PARAM_OPTIONS,
+)
 from pyimouapi.ha_device import ImouHaDevice
 
 

@@ -191,8 +191,6 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         try:
             payload = await async_fetch_url_bytes(hass, upstream)
         except OSError as err:
-            _LOGGER.warning(
-                "Imou HLS segment %s fetch failed: %s", seg_index, err
-            )
+            _LOGGER.warning("Imou HLS segment %s fetch failed: %s", seg_index, err)
             raise web.HTTPBadGateway() from err
         return web.Response(body=payload, content_type="video/mp2t")

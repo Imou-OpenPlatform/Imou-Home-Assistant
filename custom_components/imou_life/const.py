@@ -92,7 +92,8 @@ API_URL_REGIONS: dict[str, str] = {
     "cn": CONF_API_URL_HZ,
 }
 
-# Login UI offers International and China only; legacy region keys remain in API_URL_REGIONS.
+# Login UI offers International and China only; legacy region keys remain in
+# API_URL_REGIONS.
 API_URL_LOGIN_REGIONS: dict[str, str] = {
     "intl": CONF_API_URL_INTL,
     "cn": CONF_API_URL_HZ,

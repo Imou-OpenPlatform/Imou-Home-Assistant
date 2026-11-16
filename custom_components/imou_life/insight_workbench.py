@@ -236,6 +236,4 @@ def async_register_insight_workbench_services(hass: HomeAssistant) -> None:
         await async_handle_refresh_briefing(hass, call)
 
     hass.services.async_register(DOMAIN, SERVICE_SEARCH_AI_ALARMS, _search)
-    hass.services.async_register(
-        DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING, _briefing
-    )
+    hass.services.async_register(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING, _briefing)

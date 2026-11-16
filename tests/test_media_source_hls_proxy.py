@@ -5,12 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.media_source import (
-    ImouRecordMediaSource,
     KIND_CLOUD,
     MIME_MP4,
+    ImouRecordMediaSource,
 )
 from homeassistant.components.media_source.models import MediaSourceItem
 from homeassistant.config_entries import ConfigEntryState
@@ -21,12 +20,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from . import USER_INPUT
 
 IDENTIFIER = (
-    f"play|{KIND_CLOUD}|{{entry}}|SN1|0|"
-    "2026-11-01 00:06:55|2026-11-01 00:08:10"
+    f"play|{KIND_CLOUD}|{{entry}}|SN1|0|2026-11-01 00:06:55|2026-11-01 00:08:10"
 )
 HLS_UPSTREAM = (
-    "https://mes502-online-hzali.lechange.com:7080/localvod/x.m3u8"
-    "?proto=https&uid=abc"
+    "https://mes502-online-hzali.lechange.com:7080/localvod/x.m3u8?proto=https&uid=abc"
 )
 
 
@@ -145,7 +142,9 @@ async def test_resolve_cloud_clip_mp4_when_hls_setup_fails(hass: HomeAssistant) 
 
 
 @pytest.mark.asyncio
-async def test_resolve_cloud_clip_mp4_when_create_stream_fails(hass: HomeAssistant) -> None:
+async def test_resolve_cloud_clip_mp4_when_create_stream_fails(
+    hass: HomeAssistant,
+) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
     object.__setattr__(entry, "state", ConfigEntryState.LOADED)

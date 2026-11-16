@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from custom_components.imou_life.const import DOMAIN
 
 _ROOT = Path(__file__).resolve().parents[1]
