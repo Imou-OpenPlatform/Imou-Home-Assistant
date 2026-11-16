@@ -2382,3 +2382,85 @@ async def test_webhook_v2_property_report_requires_subscription(
 
     assert response.status == 200
     assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("include_properties", "properties"),
+    [(False, None), (True, None), (True, []), (True, "invalid")],
+    ids=["missing", "null", "list", "string"],
+)
+async def test_webhook_v2_property_report_rejects_invalid_properties_envelope(
+    hass: HomeAssistant, include_properties: bool, properties: object
+) -> None:
+    """A property report requires a top-level properties object."""
+    from custom_components.imou_life.const import PARAM_EVENT_PUSH_TYPES
+    from pyimouapi.push import V2_PROPERTY_REPORT_MSG_TYPE
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["capability_event"]},
+    )
+    payload: dict[str, object] = {
+        "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+        "deviceId": "SN1",
+    }
+    if include_properties:
+        payload["properties"] = properties
+
+    response = await async_handle_imou_webhook(hass, "webhook-id", MockRequest(payload))
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_v2_property_report_accepts_empty_properties_object(
+    hass: HomeAssistant,
+) -> None:
+    """An empty properties object is a valid report with no entity mutation."""
+    from custom_components.imou_life.const import PARAM_EVENT_PUSH_TYPES
+    from pyimouapi.push import V2_PROPERTY_REPORT_MSG_TYPE
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        selected_devices=["SN1"],
+        options={PARAM_EVENT_PUSH_TYPES: ["capability_event"]},
+    )
+
+    with (
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_decrypt_thumbnail",
+            new_callable=AsyncMock,
+        ) as mock_thumbnail,
+        patch(
+            "custom_components.imou_life.webhook.async_maybe_record_from_alarm",
+            new_callable=AsyncMock,
+        ) as mock_record,
+        patch("custom_components.imou_life.webhook._async_publish_alarm") as mock_alarm,
+    ):
+        response = await async_handle_imou_webhook(
+            hass,
+            "webhook-id",
+            MockRequest(
+                {
+                    "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+                    "deviceId": "SN1",
+                    "properties": {},
+                }
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(events) == 1
+    runtime.coordinator.async_update_listeners.assert_not_called()
+    mock_thumbnail.assert_not_awaited()
+    mock_alarm.assert_not_called()
+    mock_record.assert_not_awaited()

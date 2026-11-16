@@ -741,6 +741,13 @@ async def async_handle_imou_webhook(
             "Ignoring push with unknown msg_type=%r for %s", msg_type_raw, device_id
         )
         return web.Response(status=200, text="ok")
+    if is_v2_property_report(msg_type_raw) and not isinstance(
+        payload.get("properties"), dict
+    ):
+        _LOGGER.debug(
+            "Ignoring property report with invalid properties for %s", device_id
+        )
+        return web.Response(status=200, text="ok")
     _LOGGER.debug("Parsed Imou push: %s", _redacted_push_for_log(event_data))
 
     # Check: is push enabled? If user disabled it, silently ignore.
