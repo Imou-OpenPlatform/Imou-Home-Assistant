@@ -22,6 +22,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DISCOVERY_INTERVAL,
     DOMAIN,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
@@ -32,6 +33,7 @@ from .devices import (
     registry_row_for_key_on_entry,
 )
 from .helpers import (
+    event_push_type_active,
     get_excluded_device_ids,
     get_selected_device_ids,
     iot_property_push_active,
@@ -107,7 +109,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self.devices_by_key: dict[str, ImouHaDevice] = {}
         self._devices_initialized = False
         self._last_discovery: float | None = None
-        self._iot_detail_fetched: set[str] = set()
+        self._v2_state_snapshots: set[str] = set()
         self.new_device_callbacks: list[Callable[[list[ImouHaDevice]], None]] = []
 
     @property
@@ -234,11 +236,10 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if not devices_to_update:
             return
 
-        skip_ids = (
-            set(self._iot_detail_fetched)
-            if iot_property_push_active(self.config_entry)
-            else None
-        )
+        property_push = iot_property_push_active(
+            self.config_entry
+        ) or event_push_type_active(self.config_entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT)
+        skip_ids = set(self._v2_state_snapshots) if property_push else None
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fetched = await self._device_manager.async_update_devices_status(
@@ -263,7 +264,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
         else:
             if isinstance(fetched, set) and fetched:
-                self._iot_detail_fetched.update(fetched)
+                self._v2_state_snapshots.update(fetched)
             async_delete_quota_issue(self.hass, self.config_entry)
             runtime = getattr(self.config_entry, "runtime_data", None)
             if runtime is not None:
@@ -311,7 +312,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             for device_key in removed_keys:
                 del self.devices_by_key[device_key]
-            self._forget_iot_details(removed_devices)
+            self._forget_v2_state_snapshots(removed_devices)
 
         if new_keys := current_keys - known_keys:
             _LOGGER.debug("New Imou device(s) found: %s", ", ".join(new_keys))
@@ -430,14 +431,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         for callback in self.new_device_callbacks:
             callback(ready)
 
-    def _forget_iot_details(self, devices: Iterable[ImouHaDevice]) -> None:
-        """Allow a device that left to fetch detail again when it returns."""
+    def _forget_v2_state_snapshots(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Allow a device that left to fetch a state snapshot when it returns."""
         resolve = self._device_manager._resolve_device_id
         remaining = {resolve(device) for device in self.devices_by_key.values()}
         for device in devices:
             physical_id = resolve(device)
             if physical_id not in remaining:
-                self._iot_detail_fetched.discard(physical_id)
+                self._v2_state_snapshots.discard(physical_id)
 
     def _async_remove_entity_suffixes(
         self, device_key: str, suffixes: list[str]

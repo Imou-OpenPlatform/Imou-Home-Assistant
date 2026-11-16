@@ -6,7 +6,8 @@ import pytest
 from custom_components.imou_life.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
-    EVENT_PUSH_TYPES_ALL,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -390,21 +391,25 @@ async def test_status_poll_uses_shared_device_update(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_property_push_skips_iot_detail_after_first_fetch(
-    hass: HomeAssistant, device_manager: MagicMock
+@pytest.mark.parametrize(
+    "push_type", [EVENT_PUSH_TYPE_CAPABILITY_EVENT, EVENT_PUSH_TYPE_IOT]
+)
+async def test_property_push_skips_v2_state_after_first_snapshot(
+    hass: HomeAssistant, device_manager: MagicMock, push_type: str
 ) -> None:
     """First status update snapshots; the next interval skips those ids."""
     device = _mock_device("d1", "0")
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
-        PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
+        PARAM_EVENT_PUSH_TYPES: [push_type],
     }
     coordinator = await _run_update(hass, device_manager, [device], options=options)
     first_skip = device_manager.async_update_devices_status.await_args.kwargs.get(
         "skip_iot_property_ids"
     )
     assert first_skip in (None, set())
+    assert coordinator._v2_state_snapshots == {"d1"}
 
     device_manager.async_update_devices_status.reset_mock()
     device_manager.async_update_devices_status.return_value = set()
