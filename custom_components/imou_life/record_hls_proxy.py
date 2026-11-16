@@ -6,6 +6,7 @@ import asyncio
 import logging
 import secrets
 import time
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
@@ -14,7 +15,8 @@ from urllib.parse import parse_qs, urlsplit
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from pyimouapi.playback.hls import (
     parse_hls_media_segment_urls,
     pick_hls_variant_playlist_url,
@@ -25,6 +27,9 @@ from .record_http_fetch import async_fetch_url_response, async_fetch_url_text
 _LOGGER = logging.getLogger(__name__)
 
 DATA_RECORD_HLS_PROXY = "imou_life_record_hls_proxy"
+DATA_RECORD_HLS_PROXY_REGISTERED = "imou_life_record_hls_proxy_registered"
+DATA_RECORD_HLS_PROXY_TIMER = "imou_life_record_hls_proxy_timer"
+DATA_RECORD_HLS_PROXY_TIMER_TOKEN = "imou_life_record_hls_proxy_timer_token"
 SESSION_TTL_SECONDS = 600
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
@@ -43,23 +48,42 @@ class RecordHlsDescriptor:
 class RecordHlsSession:
     """Upstream segment URLs for one proxied recording playback."""
 
-    segment_urls: dict[str, str]
-    segment_handles: list[str]
+    entry_id: str
+    segment_urls: list[str]
+    segment_identities: list[str | None]
     playlist_body: str
     expires_at: float
-    refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]]
+    refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]] | None
     refresh_lock: asyncio.Lock
+    refresh_task: asyncio.Task[RecordHlsDescriptor | str] | None = None
+    refreshed_segment_urls: dict[str, str] | None = None
     refresh_attempted: bool = False
     generation: int = 0
+    active: bool = True
+
+    def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
+        """Release callbacks and cancel an in-progress refresh."""
+        self.active = False
+        self.refresh = None
+        refresh_task = self.refresh_task
+        if refresh_task is not None:
+            refresh_task.cancel()
+        self.refresh_task = None
+        self.segment_urls.clear()
+        self.segment_identities.clear()
+        if self.refreshed_segment_urls is not None:
+            self.refreshed_segment_urls.clear()
+        return refresh_task
 
 
 def async_register_record_hls_proxy(hass: HomeAssistant) -> None:
     """Register HLS proxy views once."""
-    if hass.data.get(DATA_RECORD_HLS_PROXY):
+    if hass.data.get(DATA_RECORD_HLS_PROXY_REGISTERED):
         return
     hass.http.register_view(ImouRecordHlsPlaylistView())
     hass.http.register_view(ImouRecordHlsSegmentView())
-    hass.data[DATA_RECORD_HLS_PROXY] = {}
+    hass.data[DATA_RECORD_HLS_PROXY_REGISTERED] = True
+    hass.data.setdefault(DATA_RECORD_HLS_PROXY, {})
 
 
 def _sessions(hass: HomeAssistant) -> dict[str, RecordHlsSession]:
@@ -70,12 +94,66 @@ def _sessions(hass: HomeAssistant) -> dict[str, RecordHlsSession]:
     return store
 
 
-def _prune_sessions(hass: HomeAssistant) -> None:
+def _remove_session(
+    hass: HomeAssistant, session_id: str
+) -> asyncio.Task[RecordHlsDescriptor | str] | None:
+    if (session := _sessions(hass).pop(session_id, None)) is not None:
+        return session.close()
+    return None
+
+
+def _prune_sessions(hass: HomeAssistant, *, reschedule: bool = True) -> None:
     now = time.time()
     sessions = _sessions(hass)
     expired = [key for key, session in sessions.items() if now >= session.expires_at]
     for key in expired:
-        sessions.pop(key, None)
+        _remove_session(hass, key)
+    if expired and reschedule:
+        _schedule_cleanup(hass)
+
+
+def _schedule_cleanup(hass: HomeAssistant) -> None:
+    if (cancel := hass.data.pop(DATA_RECORD_HLS_PROXY_TIMER, None)) is not None:
+        cancel()
+    token = object()
+    hass.data[DATA_RECORD_HLS_PROXY_TIMER_TOKEN] = token
+    sessions = _sessions(hass)
+    if not sessions:
+        hass.data.pop(DATA_RECORD_HLS_PROXY_TIMER_TOKEN, None)
+        return
+
+    @callback
+    def async_cleanup_expired_sessions(_now) -> None:
+        if hass.data.get(DATA_RECORD_HLS_PROXY_TIMER_TOKEN) is not token:
+            return
+        hass.data.pop(DATA_RECORD_HLS_PROXY_TIMER, None)
+        hass.data.pop(DATA_RECORD_HLS_PROXY_TIMER_TOKEN, None)
+        _prune_sessions(hass, reschedule=False)
+        _schedule_cleanup(hass)
+
+    hass.data[DATA_RECORD_HLS_PROXY_TIMER] = async_call_later(
+        hass,
+        max(0, min(session.expires_at for session in sessions.values()) - time.time()),
+        async_cleanup_expired_sessions,
+    )
+
+
+async def async_remove_record_hls_proxy_sessions(
+    hass: HomeAssistant, entry_id: str
+) -> None:
+    """Remove all proxy sessions owned by one config entry."""
+    if not isinstance(hass.data.get(DATA_RECORD_HLS_PROXY), dict):
+        return
+    refresh_tasks: list[asyncio.Task[RecordHlsDescriptor | str]] = []
+    for session_id, session in list(_sessions(hass).items()):
+        if (
+            session.entry_id == entry_id
+            and (task := _remove_session(hass, session_id)) is not None
+        ):
+            refresh_tasks.append(task)
+    _schedule_cleanup(hass)
+    if refresh_tasks:
+        await asyncio.gather(*refresh_tasks, return_exceptions=True)
 
 
 def _playlist_target_duration(playlist_body: str) -> int:
@@ -97,7 +175,7 @@ def _build_proxy_playlist(
     if "#EXT-X-ENDLIST" in session.playlist_body:
         lines.append("#EXT-X-PLAYLIST-TYPE:VOD")
     remaining_ttl = max(0, session.expires_at - time.time())
-    for index in range(len(session.segment_handles)):
+    for index in range(len(session.segment_urls)):
         segment_path = SEGMENT_URL.format(session_id=session_id, index=index)
         signed = async_sign_path(
             hass,
@@ -112,8 +190,10 @@ def _build_proxy_playlist(
     return "\n".join(lines) + "\n"
 
 
-def _segment_handles(playlist_body: str, segment_urls: list[str]) -> list[str]:
-    """Build stable, opaque handles from media sequence or URL path."""
+def _segment_identities(
+    playlist_body: str, segment_urls: list[str]
+) -> list[str | None]:
+    """Build identities only when playlist metadata proves a stable mapping."""
     for line in playlist_body.splitlines():
         stripped = line.strip()
         if not stripped.startswith("#EXT-X-MEDIA-SEQUENCE:"):
@@ -124,14 +204,44 @@ def _segment_handles(playlist_body: str, segment_urls: list[str]) -> list[str]:
             break
         return [f"sequence:{sequence + index}" for index in range(len(segment_urls))]
 
-    occurrences: dict[str, int] = {}
-    handles: list[str] = []
-    for url in segment_urls:
-        path = urlsplit(url).path
-        occurrence = occurrences.get(path, 0)
-        occurrences[path] = occurrence + 1
-        handles.append(f"path:{path}:{occurrence}")
-    return handles
+    metadata: list[tuple[str | None, str | None]] = []
+    byte_range: str | None = None
+    program_date_time: str | None = None
+    for line in playlist_body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#EXT-X-BYTERANGE:"):
+            value = stripped.split(":", 1)[1]
+            byte_range = value if "@" in value else None
+        elif stripped.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
+            program_date_time = stripped.split(":", 1)[1]
+        elif stripped and not stripped.startswith("#"):
+            if not urlsplit(stripped).path.lower().endswith(".m3u8"):
+                metadata.append((byte_range, program_date_time))
+            byte_range = None
+            program_date_time = None
+    metadata.extend([(None, None)] * (len(segment_urls) - len(metadata)))
+
+    paths = [urlsplit(url).path for url in segment_urls]
+    path_counts = Counter(paths)
+    identities: list[str | None] = []
+    for index, path in enumerate(paths):
+        if path_counts[path] == 1:
+            identities.append(f"path:{path}")
+            continue
+        segment_range, segment_time = metadata[index]
+        if segment_range is None and segment_time is None:
+            identities.append(None)
+            continue
+        identities.append(
+            f"path:{path}|range:{segment_range or ''}|time:{segment_time or ''}"
+        )
+
+    for identity in {identity for identity in identities if identity is not None}:
+        if identities.count(identity) > 1:
+            identities = [
+                None if candidate == identity else candidate for candidate in identities
+            ]
+    return identities
 
 
 def _url_expiry(url: str, now: float) -> float | None:
@@ -186,6 +296,7 @@ async def async_create_record_hls_proxy_playlist_url(
     upstream_playlist_url: str,
     *,
     refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]],
+    entry_id: str,
     expires_at: float | None = None,
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
@@ -194,11 +305,12 @@ async def async_create_record_hls_proxy_playlist_url(
     if not segment_urls:
         msg = "Imou HLS playlist had no segments"
         raise ValueError(msg)
-    segment_handles = _segment_handles(body, segment_urls)
+    segment_identities = _segment_identities(body, segment_urls)
     session_id = secrets.token_hex(16)
     _sessions(hass)[session_id] = RecordHlsSession(
-        segment_urls=dict(zip(segment_handles, segment_urls, strict=True)),
-        segment_handles=segment_handles,
+        entry_id=entry_id,
+        segment_urls=segment_urls,
+        segment_identities=segment_identities,
         playlist_body=body,
         expires_at=_session_expiry(
             upstream_playlist_url,
@@ -208,6 +320,7 @@ async def async_create_record_hls_proxy_playlist_url(
         refresh=refresh,
         refresh_lock=asyncio.Lock(),
     )
+    _schedule_cleanup(hass)
     playlist_path = PLAYLIST_URL.format(session_id=session_id)
     signed_playlist = async_sign_path(
         hass,
@@ -271,12 +384,16 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             seg_index = int(index)
         except ValueError as err:
             raise web.HTTPBadRequest() from err
-        if seg_index < 0 or seg_index >= len(record.segment_handles):
+        if seg_index < 0 or seg_index >= len(record.segment_urls):
             raise web.HTTPNotFound()
-        handle = record.segment_handles[seg_index]
-        upstream = record.segment_urls.get(handle)
-        if upstream is None:
-            raise web.HTTPNotFound()
+        identity = record.segment_identities[seg_index]
+        if record.refreshed_segment_urls is None:
+            upstream = record.segment_urls[seg_index]
+        elif (
+            identity is None
+            or (upstream := record.refreshed_segment_urls.get(identity)) is None
+        ):
+            raise web.HTTPBadGateway()
         generation = record.generation
         try:
             upstream_response = await async_fetch_url_response(
@@ -287,24 +404,47 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         except (OSError, TimeoutError, ValueError) as err:
             _LOGGER.warning("Imou HLS segment %s fetch failed: %s", seg_index, err)
             raise web.HTTPBadGateway() from err
+        if not record.active or _sessions(hass).get(session_id) is not record:
+            raise web.HTTPNotFound()
         if upstream_response.status in (401, 403, 404):
             async with record.refresh_lock:
+                if not record.active or _sessions(hass).get(session_id) is not record:
+                    raise web.HTTPNotFound()
                 if generation == record.generation and not record.refresh_attempted:
                     record.refresh_attempted = True
                     try:
-                        descriptor = await record.refresh()
+                        if record.refresh is None:
+                            raise web.HTTPNotFound()
+                        record.refresh_task = hass.async_create_task(record.refresh())
+                        try:
+                            descriptor = await record.refresh_task
+                        except asyncio.CancelledError:
+                            if not record.active:
+                                raise web.HTTPNotFound() from None
+                            raise
+                        finally:
+                            record.refresh_task = None
                         if isinstance(descriptor, str):
                             descriptor = RecordHlsDescriptor(descriptor)
                         body, segment_urls = await _load_media_playlist(
                             hass, descriptor.playlist_url
                         )
+                        if (
+                            not record.active
+                            or _sessions(hass).get(session_id) is not record
+                        ):
+                            raise web.HTTPNotFound()
                         if not segment_urls:
                             msg = "Refreshed Imou HLS playlist had no segments"
                             raise ValueError(msg)
-                        refreshed_handles = _segment_handles(body, segment_urls)
-                        record.segment_urls = dict(
-                            zip(refreshed_handles, segment_urls, strict=True)
-                        )
+                        refreshed_identities = _segment_identities(body, segment_urls)
+                        record.refreshed_segment_urls = {
+                            identity: url
+                            for identity, url in zip(
+                                refreshed_identities, segment_urls, strict=True
+                            )
+                            if identity is not None
+                        }
                         record.playlist_body = body
                         record.expires_at = _session_expiry(
                             descriptor.playlist_url,
@@ -312,6 +452,9 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                             descriptor.expires_at,
                         )
                         record.generation += 1
+                        _schedule_cleanup(hass)
+                    except web.HTTPException:
+                        raise
                     except Exception:
                         _LOGGER.warning(
                             "Imou HLS segment %s refresh failed",
@@ -320,7 +463,10 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                         )
                 refreshed = (
                     record.generation > generation
-                    and (upstream := record.segment_urls.get(handle)) is not None
+                    and identity is not None
+                    and record.refreshed_segment_urls is not None
+                    and (upstream := record.refreshed_segment_urls.get(identity))
+                    is not None
                 )
             if not refreshed:
                 raise web.HTTPBadGateway()
@@ -337,6 +483,8 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
                     err,
                 )
                 raise web.HTTPBadGateway() from err
+            if not record.active or _sessions(hass).get(session_id) is not record:
+                raise web.HTTPNotFound()
         if not 200 <= upstream_response.status < 300:
             raise web.HTTPBadGateway()
         response_headers = {

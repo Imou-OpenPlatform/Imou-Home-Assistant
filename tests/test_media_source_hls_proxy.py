@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import web
+from custom_components.imou_life import async_unload_entry
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.media_source import (
     KIND_CLOUD,
@@ -21,6 +22,7 @@ from custom_components.imou_life.record_hls_proxy import (
     DATA_RECORD_HLS_PROXY,
     ImouRecordHlsSegmentView,
     async_create_record_hls_proxy_playlist_url,
+    async_remove_record_hls_proxy_sessions,
 )
 from homeassistant.components.media_source.models import MediaSourceItem
 from homeassistant.config_entries import ConfigEntryState
@@ -49,6 +51,14 @@ https://media.example/segment.ts?token=old
 HLS_REFRESHED_PLAYLIST = HLS_PLAYLIST.replace("token=old", "token=fresh")
 
 
+@pytest.fixture(autouse=True)
+async def cleanup_record_hls_sessions(hass: HomeAssistant):
+    yield
+    sessions = hass.data.get(DATA_RECORD_HLS_PROXY, {})
+    for entry_id in {session.entry_id for session in sessions.values()}:
+        await async_remove_record_hls_proxy_sessions(hass, entry_id)
+
+
 def _upstream_response(status: int, body: bytes = b"") -> SimpleNamespace:
     return SimpleNamespace(
         status=status,
@@ -64,6 +74,8 @@ def _segment_request(hass: HomeAssistant) -> SimpleNamespace:
 async def _create_refreshable_session(
     hass: HomeAssistant,
     refresh: Callable[[], Awaitable[str]],
+    *,
+    entry_id: str = "entry-a",
 ) -> str:
     with (
         patch(
@@ -85,6 +97,7 @@ async def _create_refreshable_session(
             hass,
             HLS_UPSTREAM,
             refresh=refresh,
+            entry_id=entry_id,
         )
     return signed.split("/record_hls/", 1)[1].split("/", 1)[0]
 
@@ -361,7 +374,7 @@ https://media.example/43.ts?token=fresh
         ),
     ):
         signed = await async_create_record_hls_proxy_playlist_url(
-            hass, HLS_UPSTREAM, refresh=refresh
+            hass, HLS_UPSTREAM, refresh=refresh, entry_id="entry-a"
         )
     session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
 
@@ -393,6 +406,214 @@ https://media.example/43.ts?token=fresh
 
     assert response.body == b"segment 43"
     assert fetch.await_args_list[1].args[1].endswith("43.ts?token=fresh")
+
+
+@pytest.mark.asyncio
+async def test_refresh_rejects_ambiguous_repeated_path_after_playlist_shift(
+    hass: HomeAssistant,
+) -> None:
+    initial = """#EXTM3U
+#EXTINF:2,
+https://media.example/segment.ts?part=a&token=old
+#EXTINF:2,
+https://media.example/segment.ts?part=b&token=old
+"""
+    refreshed = """#EXTM3U
+#EXTINF:2,
+https://media.example/segment.ts?part=new&token=fresh
+#EXTINF:2,
+https://media.example/segment.ts?part=a&token=fresh
+#EXTINF:2,
+https://media.example/segment.ts?part=b&token=fresh
+"""
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                initial,
+                [
+                    "https://media.example/segment.ts?part=a&token=old",
+                    "https://media.example/segment.ts?part=b&token=old",
+                ],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass, HLS_UPSTREAM, refresh=refresh, entry_id="entry-a"
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            side_effect=[
+                _upstream_response(403),
+                _upstream_response(200, b"wrong segment"),
+            ],
+        ) as fetch,
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                refreshed,
+                [
+                    "https://media.example/segment.ts?part=new&token=fresh",
+                    "https://media.example/segment.ts?part=a&token=fresh",
+                    "https://media.example/segment.ts?part=b&token=fresh",
+                ],
+            ),
+        ),
+        pytest.raises(web.HTTPBadGateway),
+    ):
+        await ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "0")
+
+    assert fetch.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_maps_repeated_path_with_explicit_byteranges(
+    hass: HomeAssistant,
+) -> None:
+    initial = """#EXTM3U
+#EXT-X-BYTERANGE:100@100
+#EXTINF:2,
+https://media.example/segment.ts?token=old
+#EXT-X-BYTERANGE:100@200
+#EXTINF:2,
+https://media.example/segment.ts?token=old
+"""
+    refreshed = """#EXTM3U
+#EXT-X-BYTERANGE:100@0
+#EXTINF:2,
+https://media.example/segment.ts?token=fresh
+#EXT-X-BYTERANGE:100@100
+#EXTINF:2,
+https://media.example/segment.ts?token=fresh
+#EXT-X-BYTERANGE:100@200
+#EXTINF:2,
+https://media.example/segment.ts?token=fresh
+"""
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                initial,
+                [
+                    "https://media.example/segment.ts?token=old",
+                    "https://media.example/segment.ts?token=old",
+                ],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass, HLS_UPSTREAM, refresh=refresh, entry_id="entry-a"
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            side_effect=[
+                _upstream_response(403),
+                _upstream_response(200, b"range 100"),
+            ],
+        ) as fetch,
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                refreshed,
+                [
+                    "https://media.example/segment.ts?token=fresh",
+                    "https://media.example/segment.ts?token=fresh",
+                    "https://media.example/segment.ts?token=fresh",
+                ],
+            ),
+        ),
+    ):
+        response = await ImouRecordHlsSegmentView().get(
+            _segment_request(hass), session_id, "0"
+        )
+
+    assert response.body == b"range 100"
+    assert fetch.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_refresh_maps_unique_path_without_media_sequence(
+    hass: HomeAssistant,
+) -> None:
+    initial = """#EXTM3U
+#EXTINF:2,
+https://media.example/a.ts?token=old
+#EXTINF:2,
+https://media.example/b.ts?token=old
+"""
+    refreshed = initial.replace("token=old", "token=fresh")
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                initial,
+                [
+                    "https://media.example/a.ts?token=old",
+                    "https://media.example/b.ts?token=old",
+                ],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass, HLS_UPSTREAM, refresh=refresh, entry_id="entry-a"
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            side_effect=[
+                _upstream_response(403),
+                _upstream_response(200, b"segment b"),
+            ],
+        ) as fetch,
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                refreshed,
+                [
+                    "https://media.example/a.ts?token=fresh",
+                    "https://media.example/b.ts?token=fresh",
+                ],
+            ),
+        ),
+    ):
+        response = await ImouRecordHlsSegmentView().get(
+            _segment_request(hass), session_id, "1"
+        )
+
+    assert response.body == b"segment b"
+    assert fetch.await_args_list[1].args[1].endswith("b.ts?token=fresh")
 
 
 @pytest.mark.asyncio
@@ -508,18 +729,20 @@ async def test_session_ttl_uses_default_and_earlier_upstream_expiry(
         ),
     ):
         first = await async_create_record_hls_proxy_playlist_url(
-            hass, HLS_UPSTREAM, refresh=refresh
+            hass, HLS_UPSTREAM, refresh=refresh, entry_id="entry-a"
         )
         second = await async_create_record_hls_proxy_playlist_url(
             hass,
             HLS_UPSTREAM,
             refresh=refresh,
+            entry_id="entry-a",
             expires_at=now + 30,
         )
         expired = await async_create_record_hls_proxy_playlist_url(
             hass,
             f"https://media.example/record.m3u8?expire={int(now - 1)}",
             refresh=refresh,
+            entry_id="entry-a",
         )
 
     first_id = first.split("/record_hls/", 1)[1].split("/", 1)[0]
@@ -538,6 +761,216 @@ async def test_session_ttl_uses_default_and_earlier_upstream_expiry(
         pytest.raises(web.HTTPNotFound),
     ):
         await ImouRecordHlsSegmentView().get(_segment_request(hass), second_id, "0")
+
+
+@pytest.mark.asyncio
+async def test_session_expiry_timer_releases_refresh_state(
+    hass: HomeAssistant,
+) -> None:
+    scheduled: list[tuple[float, object, MagicMock]] = []
+
+    def schedule(_hass, delay, action):
+        cancel = MagicMock()
+        scheduled.append((float(delay), action, cancel))
+        return cancel
+
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    now = time.time()
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_call_later",
+        create=True,
+        side_effect=schedule,
+    ):
+        session_id = await _create_refreshable_session(hass, refresh)
+        record = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+        assert len(scheduled) == 1
+        assert 590 <= scheduled[0][0] <= 600
+
+        with patch(
+            "custom_components.imou_life.record_hls_proxy.time.time",
+            return_value=now + 601,
+        ):
+            scheduled[0][1](MagicMock())
+
+    assert session_id not in hass.data[DATA_RECORD_HLS_PROXY]
+    assert record.active is False
+    assert record.refresh is None
+
+
+@pytest.mark.asyncio
+async def test_stale_cleanup_timer_is_safe_after_reschedule(
+    hass: HomeAssistant,
+) -> None:
+    scheduled: list[tuple[object, MagicMock]] = []
+
+    def schedule(_hass, _delay, action):
+        cancel = MagicMock()
+        scheduled.append((action, cancel))
+        return cancel
+
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_call_later",
+        create=True,
+        side_effect=schedule,
+    ):
+        first_id = await _create_refreshable_session(hass, refresh)
+        second_id = await _create_refreshable_session(hass, refresh)
+        assert scheduled[0][1].call_count == 1
+
+        with patch(
+            "custom_components.imou_life.record_hls_proxy.time.time",
+            return_value=time.time() + 601,
+        ):
+            scheduled[0][0](MagicMock())
+
+    assert set(hass.data[DATA_RECORD_HLS_PROXY]) == {first_id, second_id}
+
+
+@pytest.mark.asyncio
+async def test_unload_removes_only_entry_sessions_and_reschedules_timer(
+    hass: HomeAssistant,
+) -> None:
+    scheduled: list[tuple[object, MagicMock]] = []
+
+    def schedule(_hass, _delay, action):
+        cancel = MagicMock()
+        scheduled.append((action, cancel))
+        return cancel
+
+    refresh_a = AsyncMock(return_value="https://media.example/a.m3u8")
+    refresh_b = AsyncMock(return_value="https://media.example/b.m3u8")
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_call_later",
+        create=True,
+        side_effect=schedule,
+    ):
+        session_a = await _create_refreshable_session(hass, refresh_a)
+        session_b = await _create_refreshable_session(
+            hass,
+            refresh_b,
+            entry_id="entry-b",
+        )
+        sessions = hass.data[DATA_RECORD_HLS_PROXY]
+        record_a = sessions[session_a]
+        record_b = sessions[session_b]
+
+        entry_a = MockConfigEntry(
+            domain=DOMAIN,
+            data=USER_INPUT,
+            entry_id="entry-a",
+        )
+        entry_a.add_to_hass(hass)
+        entry_b = MockConfigEntry(
+            domain=DOMAIN,
+            data=USER_INPUT,
+            entry_id="entry-b",
+        )
+        entry_b.add_to_hass(hass)
+        with patch(
+            "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
+            AsyncMock(return_value=True),
+        ):
+            assert await async_unload_entry(hass, entry_a) is True
+
+    assert session_a not in hass.data[DATA_RECORD_HLS_PROXY]
+    assert session_b in hass.data[DATA_RECORD_HLS_PROXY]
+    assert record_a.active is False
+    assert record_a.refresh is None
+    assert record_b.active is True
+    assert record_b.refresh is refresh_b
+    assert scheduled[-2][1].call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_unload_awaits_in_progress_refresh_cancellation(
+    hass: HomeAssistant,
+) -> None:
+    refresh_started = asyncio.Event()
+    refresh_cancelled = asyncio.Event()
+
+    async def refresh_source() -> str:
+        refresh_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            refresh_cancelled.set()
+        return "https://media.example/fresh.m3u8"
+
+    session_id = await _create_refreshable_session(hass, refresh_source)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        entry_id="entry-a",
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            return_value=_upstream_response(403),
+        ),
+        patch(
+            "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
+            AsyncMock(return_value=True),
+        ),
+    ):
+        request = asyncio.create_task(
+            ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "0")
+        )
+        await refresh_started.wait()
+        assert await async_unload_entry(hass, entry) is True
+        assert refresh_cancelled.is_set()
+        with pytest.raises(web.HTTPNotFound):
+            await request
+
+
+@pytest.mark.asyncio
+async def test_expiry_during_segment_fetch_does_not_refresh(
+    hass: HomeAssistant,
+) -> None:
+    scheduled: list[object] = []
+
+    def schedule(_hass, _delay, action):
+        scheduled.append(action)
+        return MagicMock()
+
+    refresh = AsyncMock(return_value="https://media.example/fresh.m3u8")
+    fetch_started = asyncio.Event()
+    allow_fetch = asyncio.Event()
+
+    async def fetch(*_args, **_kwargs):
+        fetch_started.set()
+        await allow_fetch.wait()
+        return _upstream_response(403)
+
+    now = time.time()
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_call_later",
+            create=True,
+            side_effect=schedule,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            side_effect=fetch,
+        ),
+    ):
+        session_id = await _create_refreshable_session(hass, refresh)
+        request = asyncio.create_task(
+            ImouRecordHlsSegmentView().get(_segment_request(hass), session_id, "0")
+        )
+        await fetch_started.wait()
+        with patch(
+            "custom_components.imou_life.record_hls_proxy.time.time",
+            return_value=now + 601,
+        ):
+            scheduled[-1](MagicMock())
+        allow_fetch.set()
+        with pytest.raises(web.HTTPNotFound):
+            await request
+
+    refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio

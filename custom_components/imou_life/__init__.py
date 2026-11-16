@@ -53,6 +53,7 @@ from .helpers import (
 )
 from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
+from .record_hls_proxy import async_remove_record_hls_proxy_sessions
 from .repairs import async_delete_quota_issue
 from .runtime_data import ImouRuntimeData, get_runtime_data
 from .snap_detect import async_register_snap_detect_service
@@ -268,6 +269,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
             hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    await async_remove_record_hls_proxy_sessions(hass, entry.entry_id)
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if not webhook_id:

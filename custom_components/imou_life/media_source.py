@@ -83,6 +83,7 @@ async def _async_try_hls_playback(
     hass: HomeAssistant,
     descriptor: RecordHlsDescriptor,
     refresh: Callable[[], Awaitable[RecordHlsDescriptor]],
+    entry_id: str,
     stream_label: str,
 ) -> PlayMedia | None:
     """Return Stream HLS PlayMedia when the Stream integration can remux the clip."""
@@ -94,6 +95,7 @@ async def _async_try_hls_playback(
             hass,
             descriptor.playlist_url,
             refresh=refresh,
+            entry_id=entry_id,
             expires_at=descriptor.expires_at,
         )
         playlist_source = f"{get_url(hass).rstrip('/')}{signed_playlist}"
@@ -286,6 +288,7 @@ class ImouRecordMediaSource(MediaSource):
             self.hass,
             descriptor,
             async_record_hls_descriptor,
+            entry_id,
             clip_label,
         )
         if hls_play is not None:
