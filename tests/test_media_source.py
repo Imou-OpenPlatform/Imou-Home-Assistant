@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
-from custom_components.imou_life.const import DOMAIN
+from custom_components.imou_life.const import (
+    DOMAIN,
+    PARAM_LOCAL_RECORD_PATH,
+    imou_life_device_key,
+)
 from custom_components.imou_life.media_source import (
     MEDIA_SOURCE_NAME,
     ImouRecordMediaSource,
@@ -13,6 +19,8 @@ from custom_components.imou_life.media_source import (
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -40,3 +48,178 @@ async def test_browse_root_lists_loaded_entries(hass: HomeAssistant) -> None:
     browse = await source.async_browse_media(item)
     assert browse.title == MEDIA_SOURCE_NAME
     assert any(child.title == "Imou test" for child in browse.children or [])
+
+
+def _record_device(
+    device_id: str,
+    channel_id: str,
+    services: frozenset[str] | None,
+) -> ImouHaDevice:
+    device = ImouHaDevice(device_id, "Camera", "Imou", "IPC", "1.0")
+    device.set_channel_id(channel_id)
+    if services is not None:
+        device.set_capability_set(
+            CapabilitySet(
+                properties={},
+                services=services,
+                events=frozenset(),
+            )
+        )
+    return device
+
+
+def _record_browse_source(
+    hass: HomeAssistant,
+    devices: list[ImouHaDevice],
+    *,
+    options: dict | None = None,
+) -> tuple[ImouRecordMediaSource, MockConfigEntry, MagicMock]:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        title="Imou test",
+        options=options,
+    )
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {
+        imou_life_device_key(device): device for device in devices
+    }
+    coordinator.get_device.side_effect = coordinator.devices_by_key.get
+    entry.runtime_data = SimpleNamespace(coordinator=coordinator)
+    return ImouRecordMediaSource(hass), entry, coordinator
+
+
+async def _browse_record_kinds(
+    source: ImouRecordMediaSource,
+    entry: MockConfigEntry,
+    *,
+    device_id: str = "SN1",
+    channel_id: str = "0",
+) -> list[str]:
+    browse = await source._browse_kinds(
+        [f"entry:{entry.entry_id}", f"cam:{device_id}:{channel_id}"]
+    )
+    return [child.title for child in browse.children or []]
+
+
+@pytest.mark.parametrize(
+    "services",
+    [
+        None,
+        frozenset(),
+        frozenset({"record.file.bitmap"}),
+        frozenset({"record.file.list"}),
+    ],
+)
+async def test_local_folder_hidden_without_both_record_capabilities(
+    hass: HomeAssistant, services: frozenset[str] | None
+) -> None:
+    """Local recordings require both bitmap and list services."""
+    source, entry, _ = _record_browse_source(
+        hass, [_record_device("SN1", "0", services)]
+    )
+
+    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+
+
+async def test_local_folder_hidden_when_device_is_missing(
+    hass: HomeAssistant,
+) -> None:
+    """A missing coordinator device does not expose local recordings."""
+    source, entry, _ = _record_browse_source(hass, [])
+
+    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+
+
+async def test_local_folder_shown_with_both_record_services(
+    hass: HomeAssistant,
+) -> None:
+    """Both local-recording services expose the local folder."""
+    source, entry, _ = _record_browse_source(
+        hass,
+        [
+            _record_device(
+                "SN1",
+                "0",
+                frozenset({"record.file.bitmap", "record.file.list"}),
+            )
+        ],
+    )
+
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Local recordings",
+    ]
+
+
+async def test_local_folder_uses_channel_device_capabilities(
+    hass: HomeAssistant,
+) -> None:
+    """A channel camera resolves the matching coordinator device."""
+    source, entry, _ = _record_browse_source(
+        hass,
+        [
+            _record_device("SN1", "0", frozenset()),
+            _record_device(
+                "SN1",
+                "1",
+                frozenset({"record.file.bitmap", "record.file.list"}),
+            ),
+        ],
+    )
+
+    assert "Local recordings" not in await _browse_record_kinds(source, entry)
+    assert "Local recordings" in await _browse_record_kinds(
+        source, entry, channel_id="1"
+    )
+
+
+async def test_local_folder_reflects_capability_rediscovery(
+    hass: HomeAssistant,
+) -> None:
+    """Each browse reads the latest coordinator device capability set."""
+    device = _record_device("SN1", "0", frozenset())
+    source, entry, _ = _record_browse_source(hass, [device])
+    assert "Local recordings" not in await _browse_record_kinds(source, entry)
+
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset({"record.file.bitmap", "record.file.list"}),
+            events=frozenset(),
+        )
+    )
+
+    assert "Local recordings" in await _browse_record_kinds(source, entry)
+
+
+async def test_cloud_folder_stays_visible_without_record_data(
+    hass: HomeAssistant,
+) -> None:
+    """Cloud browsing is offered without a device, records, or a query."""
+    source, entry, coordinator = _record_browse_source(hass, [])
+    coordinator.device_manager.delegate.async_query_cloud_record_bitmap.side_effect = (
+        RuntimeError("query unavailable")
+    )
+
+    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+    coordinator.device_manager.delegate.async_query_cloud_record_bitmap.assert_not_called()
+
+
+@pytest.mark.parametrize(("configured", "expected"), [(False, False), (True, True)])
+async def test_alarm_folder_follows_save_directory_configuration(
+    hass: HomeAssistant,
+    tmp_path: Path,
+    configured: bool,
+    expected: bool,
+) -> None:
+    """Alarm recordings remain conditional on a configured save directory."""
+    options = {PARAM_LOCAL_RECORD_PATH: str(tmp_path)} if configured else {}
+    source, entry, _ = _record_browse_source(hass, [], options=options)
+
+    with patch.object(hass.config, "is_allowed_path", return_value=configured):
+        titles = await _browse_record_kinds(source, entry)
+
+    assert ("Record on alarm" in titles) is expected

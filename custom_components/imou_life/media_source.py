@@ -27,6 +27,7 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
 from pyimouapi.cloud_record import parse_cloud_record_bitmap_days
 from pyimouapi.exceptions import ImouException
+from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.local_record import (
     day_time_window,
     local_record_display_title,
@@ -40,7 +41,7 @@ from pyimouapi.playback.hls import (
 )
 
 from .alarm_saved_clips import clips_on_day, days_with_clips, resolve_clip_path
-from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH
+from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH, imou_life_device_key_from_ids
 from .record_hls_proxy import (
     async_create_record_hls_proxy_playlist_url,
     async_register_record_hls_proxy,
@@ -134,6 +135,16 @@ def _encode_file_token(path: str) -> str:
 def _decode_file_token(token: str) -> str:
     pad = "=" * (-len(token) % 4)
     return base64.urlsafe_b64decode(token + pad).decode()
+
+
+def _supports_local_records(device: ImouHaDevice | None) -> bool:
+    """Return whether a device exposes both local-recording services."""
+    if device is None or device.capability_set is None:
+        return False
+    return {
+        "record.file.bitmap",
+        "record.file.list",
+    } <= device.capability_set.services
 
 
 class ImouRecordMediaSource(MediaSource):
@@ -363,16 +374,27 @@ class ImouRecordMediaSource(MediaSource):
                 can_play=False,
                 can_expand=True,
             ),
-            BrowseMediaSource(
-                domain=DOMAIN,
-                identifier="|".join([*parts, KIND_LOCAL]),
-                media_class=MediaClass.DIRECTORY,
-                media_content_type=MediaType.VIDEO,
-                title=await _local_folder_title(self.hass),
-                can_play=False,
-                can_expand=True,
-            ),
         ]
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        runtime = get_runtime_data(entry) if entry is not None else None
+        device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
+        device = (
+            runtime.coordinator.get_device(device_key)
+            if runtime is not None and device_key is not None
+            else None
+        )
+        if _supports_local_records(device):
+            children.append(
+                BrowseMediaSource(
+                    domain=DOMAIN,
+                    identifier="|".join([*parts, KIND_LOCAL]),
+                    media_class=MediaClass.DIRECTORY,
+                    media_content_type=MediaType.VIDEO,
+                    title=await _local_folder_title(self.hass),
+                    can_play=False,
+                    can_expand=True,
+                )
+            )
         if _saved_clip_folder(self.hass, entry_id) is not None:
             children.append(
                 BrowseMediaSource(
