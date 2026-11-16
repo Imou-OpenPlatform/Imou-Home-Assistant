@@ -22,6 +22,7 @@ from custom_components.imou_life.media_source import (
 from custom_components.imou_life.record_hls_proxy import (
     DATA_RECORD_HLS_PROXY,
     ImouRecordHlsPlaylistView,
+    ImouRecordHlsResourceView,
     ImouRecordHlsSegmentView,
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
@@ -30,6 +31,7 @@ from custom_components.imou_life.record_hls_proxy import (
 from custom_components.imou_life.record_playback_mp4 import (
     DATA_RECORD_PLAYBACK_MP4,
     ImouRecordPlaybackMp4View,
+    _remux_command,
     async_prepare_record_mp4,
     async_remove_record_playback_sources,
     register_playback_source,
@@ -59,6 +61,9 @@ LOCAL_IDENTIFIER = (
 )
 HLS_UPSTREAM = (
     "https://mes502-online-hzali.lechange.com:7080/localvod/x.m3u8?proto=https&uid=abc"
+)
+LOCAL_HLS_PROXY = (
+    "http://ha.local:8123/api/imou_life/record_hls/session/playlist.m3u8?authSig=x"
 )
 HLS_PLAYLIST = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:42
@@ -660,7 +665,7 @@ https://media.example/segment.ts
             _segment_request(hass), session_id, "1"
         )
 
-    assert "#EXT-X-VERSION:4" in playlist_response.text
+    assert "#EXT-X-VERSION:" not in playlist_response.text
     assert "#EXT-X-BYTERANGE:100@50" in playlist_response.text
     assert "#EXT-X-BYTERANGE:25@150" in playlist_response.text
     assert segment_response.body == b"second range"
@@ -669,6 +674,326 @@ https://media.example/segment.ts
         "https://media.example/segment.ts",
         range_header="bytes=150-174",
     )
+
+
+@pytest.mark.asyncio
+async def test_playlist_rewrite_preserves_media_semantics_and_proxies_key_map(
+    hass: HomeAssistant,
+) -> None:
+    playlist = """#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:42
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-KEY:METHOD=AES-128,URI="key.bin?token=secret",IV=0x1
+#EXT-X-MAP:URI="init.mp4?token=secret",BYTERANGE="100@20"
+#EXT-X-PROGRAM-DATE-TIME:2026-11-01T00:00:00Z
+#EXTINF:1.25,first title
+one.m4s?token=secret
+#EXT-X-DISCONTINUITY
+#EXTINF:4.75,second title
+two.m4s?token=secret
+#EXT-X-KEY:METHOD=NONE
+#EXT-X-ENDLIST
+"""
+    base = "https://media.example/path/index.m3u8?token=playlist"
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            base,
+            refresh=AsyncMock(return_value=base),
+            entry_id="entry-a",
+        )
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        response = await ImouRecordHlsPlaylistView().get(
+            _segment_request(hass), session_id
+        )
+
+    assert (
+        response.text
+        == f"""#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:42
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-KEY:METHOD=AES-128,URI="/api/imou_life/record_hls/{session_id}/resource/key/0",IV=0x1
+#EXT-X-MAP:URI="/api/imou_life/record_hls/{session_id}/resource/map/0",BYTERANGE="100@20"
+#EXT-X-PROGRAM-DATE-TIME:2026-11-01T00:00:00Z
+#EXTINF:1.25,first title
+/api/imou_life/record_hls/{session_id}/segment/0.ts
+#EXT-X-DISCONTINUITY
+#EXTINF:4.75,second title
+/api/imou_life/record_hls/{session_id}/segment/1.ts
+#EXT-X-KEY:METHOD=NONE
+#EXT-X-ENDLIST
+"""
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "playlist",
+    [
+        "#EXTM3U\n#EXTINF:2,\nhttp://10.0.0.1/segment.ts\n",
+        (
+            '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="http://10.0.0.1/key"\n'
+            "#EXTINF:2,\nhttps://media.example/segment.ts\n"
+        ),
+        (
+            '#EXTM3U\n#EXT-X-MAP:URI="http://[fd00::1]/init.mp4"\n'
+            "#EXTINF:2,\nhttps://media.example/segment.m4s\n"
+        ),
+    ],
+)
+async def test_private_playlist_resources_fail_closed(
+    hass: HomeAssistant, playlist: str
+) -> None:
+    async def validate(_hass: HomeAssistant, url: str):
+        if "10.0.0.1" in url or "fd00::1" in url:
+            raise ValueError("private")
+        return MagicMock()
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            side_effect=validate,
+        ),
+        pytest.raises(ValueError, match="private"),
+    ):
+        await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/index.m3u8",
+            refresh=AsyncMock(),
+            entry_id="entry-a",
+        )
+
+
+@pytest.mark.asyncio
+async def test_private_variant_fails_before_variant_fetch(
+    hass: HomeAssistant,
+) -> None:
+    master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttp://192.168.1.2/private.m3u8\n"
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=master,
+        ) as fetch,
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+            side_effect=ValueError("private variant"),
+        ),
+        pytest.raises(ValueError, match="private variant"),
+    ):
+        await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/master.m3u8",
+            refresh=AsyncMock(),
+            entry_id="entry-a",
+        )
+
+    fetch.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "index", "expected_range", "content_type"),
+    [
+        ("key", "0", None, "application/octet-stream"),
+        ("map", "0", "bytes=20-119", "video/mp4"),
+    ],
+)
+async def test_key_and_map_requests_use_safe_resource_handles(
+    hass: HomeAssistant,
+    kind: str,
+    index: str,
+    expected_range: str | None,
+    content_type: str,
+) -> None:
+    playlist = """#EXTM3U
+#EXT-X-KEY:METHOD=AES-128,URI="key.bin"
+#EXT-X-MAP:URI="init.mp4",BYTERANGE="100@20"
+#EXTINF:2,
+segment.m4s
+"""
+    base = "https://media.example/path/index.m3u8"
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass, base, refresh=AsyncMock(return_value=base), entry_id="entry-a"
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+    upstream = (
+        _range_response(20, 119, b"resource")
+        if expected_range
+        else SimpleNamespace(status=200, body=b"resource", headers={})
+    )
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+        new_callable=AsyncMock,
+        return_value=upstream,
+    ) as fetch:
+        response = await ImouRecordHlsResourceView().get(
+            _segment_request(hass), session_id, kind, index
+        )
+
+    fetch.assert_awaited_once_with(
+        hass,
+        f"https://media.example/path/{'key.bin' if kind == 'key' else 'init.mp4'}",
+        range_header=expected_range,
+    )
+    assert response.content_type == content_type
+
+
+@pytest.mark.asyncio
+async def test_expired_key_refreshes_once_and_keeps_resource_mapping(
+    hass: HomeAssistant,
+) -> None:
+    initial = """#EXTM3U
+#EXT-X-KEY:METHOD=AES-128,URI="key.bin?token=old"
+#EXTINF:2,
+segment.ts?token=old
+"""
+    refreshed = initial.replace("token=old", "token=fresh")
+    refresh = AsyncMock(
+        return_value=RecordHlsDescriptor("https://media.example/fresh.m3u8")
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                initial,
+                ["https://media.example/segment.ts?token=old"],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/index.m3u8",
+            refresh=refresh,
+            entry_id="entry-a",
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            side_effect=[
+                _upstream_response(403),
+                SimpleNamespace(status=200, body=b"fresh key", headers={}),
+            ],
+        ) as fetch,
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                refreshed,
+                ["https://media.example/segment.ts?token=fresh"],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+    ):
+        response = await ImouRecordHlsResourceView().get(
+            _segment_request(hass), session_id, "key", "0"
+        )
+
+    assert response.body == b"fresh key"
+    refresh.assert_awaited_once_with()
+    assert [call.args[1] for call in fetch.await_args_list] == [
+        "https://media.example/key.bin?token=old",
+        "https://media.example/key.bin?token=fresh",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_map_implicit_byterange_offset_is_resolved(
+    hass: HomeAssistant,
+) -> None:
+    playlist = """#EXTM3U
+#EXT-X-MAP:URI="init.mp4",BYTERANGE="100@20"
+#EXT-X-MAP:URI="init.mp4",BYTERANGE="25"
+#EXTINF:2,
+segment.m4s
+"""
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/index.m3u8",
+            refresh=AsyncMock(),
+            entry_id="entry-a",
+        )
+    session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+        new_callable=AsyncMock,
+        return_value=_range_response(120, 144, b"map"),
+    ) as fetch:
+        await ImouRecordHlsResourceView().get(
+            _segment_request(hass), session_id, "map", "1"
+        )
+
+    assert fetch.await_args.kwargs["range_header"] == "bytes=120-144"
 
 
 @pytest.mark.asyncio
@@ -1539,10 +1864,23 @@ async def test_resolve_cloud_clip_mp4_when_stream_missing(hass: HomeAssistant) -
             "custom_components.imou_life.media_source.signed_record_playback_url",
             return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
         ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=y",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://ha.local:8123",
+        ),
     ):
         play = await source.async_resolve_media(item)
+        descriptor = await register_mock.call_args.args[3]()
 
     register_mock.assert_called_once()
+    assert descriptor.playlist_url == (
+        "http://ha.local:8123/api/imou_life/record_hls/sid/playlist.m3u8?authSig=y"
+    )
     assert play.mime_type == MIME_MP4
     assert play.url.startswith("/api/imou_life/record_play/")
 
@@ -1766,6 +2104,21 @@ async def test_mp4_expired_source_refreshes_once_and_succeeds(
     ) not in ir.async_get(hass).issues
 
 
+def test_mp4_ffmpeg_command_accepts_only_local_hls_proxy(tmp_path: Path) -> None:
+    command = _remux_command(
+        "http://ha.local:8123/api/imou_life/record_hls/session/playlist.m3u8?authSig=x",
+        tmp_path / "output.mp4",
+    )
+
+    assert command[command.index("-i") + 1].startswith(
+        "http://ha.local:8123/api/imou_life/record_hls/"
+    )
+    assert command[command.index("-protocol_whitelist") + 1] == (
+        "http,https,tcp,tls,crypto"
+    )
+    assert "-allowed_extensions" not in command
+
+
 @pytest.mark.asyncio
 async def test_mp4_second_expired_failure_is_final(
     hass: HomeAssistant,
@@ -1982,7 +2335,7 @@ async def test_mp4_cancel_during_communicate_terminates_process(
     process.wait = AsyncMock(return_value=-15)
     process.terminate = MagicMock()
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
 
     with patch(
         "custom_components.imou_life.record_playback_mp4.asyncio.create_subprocess_exec",
@@ -2023,7 +2376,7 @@ async def test_mp4_timeout_terminates_then_kills_process(
     process.wait = AsyncMock(side_effect=[TimeoutError, -9])
     process.terminate = MagicMock()
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
 
     with (
         patch(
@@ -2055,7 +2408,7 @@ async def test_mp4_terminate_refusal_falls_back_to_kill(
     process.wait = AsyncMock(return_value=-9)
     process.terminate = MagicMock(side_effect=PermissionError)
     process.kill = MagicMock()
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
 
     with (
         patch(
@@ -2085,7 +2438,7 @@ async def test_mp4_process_success_atomically_publishes_output(
         return b"", b""
 
     process.communicate = AsyncMock(side_effect=communicate)
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
 
     with patch(
         "custom_components.imou_life.record_playback_mp4.asyncio.create_subprocess_exec",
@@ -2105,7 +2458,7 @@ async def test_mp4_process_failure_captures_stderr_without_refresh(
     cache_id = f"process-failure-{time.time_ns()}"
     process = MagicMock(returncode=1)
     process.communicate = AsyncMock(return_value=(b"", b"ffmpeg diagnostic"))
-    provider = AsyncMock(return_value=RecordHlsDescriptor("source"))
+    provider = AsyncMock(return_value=RecordHlsDescriptor(LOCAL_HLS_PROXY))
 
     with (
         patch(

@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -23,7 +23,11 @@ from pyimouapi.playback.hls import (
     pick_hls_variant_playlist_url,
 )
 
-from .record_http_fetch import async_fetch_url_response, async_fetch_url_text
+from .record_http_fetch import (
+    async_fetch_url_response,
+    async_fetch_url_text,
+    async_pin_public_url,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +39,7 @@ SESSION_TTL_SECONDS = 600
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
+RESOURCE_URL = "/api/imou_life/record_hls/{session_id}/resource/{kind}/{index}"
 
 
 @dataclass(slots=True)
@@ -73,18 +78,29 @@ class HlsSegment:
     valid: bool = True
 
 
+@dataclass(frozen=True, slots=True)
+class HlsResource:
+    """One encryption key or initialization map."""
+
+    url: str
+    identity: str
+    byte_range: HlsByteRange | None = None
+
+
 @dataclass(slots=True)
 class RecordHlsSession:
     """Upstream segment URLs for one proxied recording playback."""
 
     entry_id: str
     segments: list[HlsSegment]
+    resources: dict[str, list[HlsResource]]
     playlist_body: str
     expires_at: float
     refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]] | None
     refresh_lock: asyncio.Lock
     refresh_task: asyncio.Task[RecordHlsDescriptor | str] | None = None
     refreshed_segments: dict[str, HlsSegment] | None = None
+    refreshed_resources: dict[str, HlsResource] | None = None
     refresh_attempted: bool = False
     generation: int = 0
     active: bool = True
@@ -100,6 +116,10 @@ class RecordHlsSession:
         self.segments.clear()
         if self.refreshed_segments is not None:
             self.refreshed_segments.clear()
+        for resources in self.resources.values():
+            resources.clear()
+        if self.refreshed_resources is not None:
+            self.refreshed_resources.clear()
         return refresh_task
 
 
@@ -109,6 +129,7 @@ def async_register_record_hls_proxy(hass: HomeAssistant) -> None:
         return
     hass.http.register_view(ImouRecordHlsPlaylistView())
     hass.http.register_view(ImouRecordHlsSegmentView())
+    hass.http.register_view(ImouRecordHlsResourceView())
     hass.data[DATA_RECORD_HLS_PROXY_REGISTERED] = True
     hass.data.setdefault(DATA_RECORD_HLS_PROXY, {})
 
@@ -197,33 +218,57 @@ def _playlist_target_duration(playlist_body: str) -> int:
 def _build_proxy_playlist(
     hass: HomeAssistant, session_id: str, session: RecordHlsSession
 ) -> str:
-    target = _playlist_target_duration(session.playlist_body)
-    version = 4 if any(segment.byte_range for segment in session.segments) else 3
-    lines = [
-        "#EXTM3U",
-        f"#EXT-X-VERSION:{version}",
-        f"#EXT-X-TARGETDURATION:{target}",
-    ]
-    if "#EXT-X-ENDLIST" in session.playlist_body:
-        lines.append("#EXT-X-PLAYLIST-TYPE:VOD")
     remaining_ttl = max(0, session.expires_at - time.time())
-    for index, segment in enumerate(session.segments):
-        segment_path = SEGMENT_URL.format(session_id=session_id, index=index)
-        signed = async_sign_path(
-            hass,
-            segment_path,
-            timedelta(seconds=remaining_ttl),
-            use_content_user=True,
-        )
-        lines.append(f"#EXTINF:{target},")
-        if segment.byte_range is not None:
-            lines.append(
-                "#EXT-X-BYTERANGE:"
-                f"{segment.byte_range.length}@{segment.byte_range.start}"
+    lines: list[str] = []
+    segment_index = 0
+    resource_indexes = {"key": 0, "map": 0}
+    pending_range_line: int | None = None
+    for original in session.playlist_body.splitlines():
+        stripped = original.strip()
+        if stripped.startswith("#EXT-X-BYTERANGE:"):
+            pending_range_line = len(lines)
+            lines.append(original)
+            continue
+        if stripped.startswith(("#EXT-X-KEY:", "#EXT-X-MAP:")):
+            kind = "key" if stripped.startswith("#EXT-X-KEY:") else "map"
+            if "URI=" not in stripped:
+                lines.append(original)
+                continue
+            index = resource_indexes[kind]
+            resource_indexes[kind] += 1
+            resource_path = RESOURCE_URL.format(
+                session_id=session_id, kind=kind, index=index
             )
-        lines.append(signed)
-    if "#EXT-X-ENDLIST" in session.playlist_body:
-        lines.append("#EXT-X-ENDLIST")
+            signed = async_sign_path(
+                hass,
+                resource_path,
+                timedelta(seconds=remaining_ttl),
+                use_content_user=True,
+            )
+            lines.append(re.sub(r'URI="[^"]*"', f'URI="{signed}"', original, count=1))
+            continue
+        if stripped and not stripped.startswith("#"):
+            segment = session.segments[segment_index]
+            if pending_range_line is not None and segment.byte_range is not None:
+                lines[pending_range_line] = (
+                    "#EXT-X-BYTERANGE:"
+                    f"{segment.byte_range.length}@{segment.byte_range.start}"
+                )
+            segment_path = SEGMENT_URL.format(
+                session_id=session_id, index=segment_index
+            )
+            lines.append(
+                async_sign_path(
+                    hass,
+                    segment_path,
+                    timedelta(seconds=remaining_ttl),
+                    use_content_user=True,
+                )
+            )
+            segment_index += 1
+            pending_range_line = None
+            continue
+        lines.append(original)
     return "\n".join(lines) + "\n"
 
 
@@ -346,6 +391,89 @@ def _segment_descriptors(
     return segments
 
 
+def _resource_identity(kind: str, url: str, byte_range: HlsByteRange | None) -> str:
+    parsed = urlsplit(url)
+    range_identity = (
+        f"{byte_range.start}:{byte_range.length}" if byte_range is not None else ""
+    )
+    return (
+        f"{kind}:{parsed.scheme.lower()}://{parsed.netloc.lower()}{parsed.path}"
+        f"|range:{range_identity}"
+    )
+
+
+def _playlist_resource_descriptors(
+    playlist_body: str, base_url: str
+) -> dict[str, list[HlsResource]]:
+    resources: dict[str, list[HlsResource]] = {"key": [], "map": []}
+    previous_map_range: HlsByteRange | None = None
+    previous_map_url: str | None = None
+    for line in playlist_body.splitlines():
+        stripped = line.strip()
+        if (
+            not stripped.startswith(("#EXT-X-KEY:", "#EXT-X-MAP:"))
+            and "URI=" not in stripped
+        ):
+            continue
+        if stripped.startswith("#EXT-X-KEY:"):
+            kind = "key"
+            method = re.search(r"(?:^|,)METHOD=([^,]*)", stripped.split(":", 1)[1])
+            if method is None:
+                raise ValueError("Malformed HLS key")
+            uri_match = re.search(r'(?:^|,)URI="([^"]*)"', stripped.split(":", 1)[1])
+            if method.group(1) == "NONE":
+                if uri_match is not None:
+                    raise ValueError("METHOD=NONE must not have a URI")
+                continue
+            if uri_match is None:
+                raise ValueError("HLS encryption key has no quoted URI")
+            byte_range = None
+        elif stripped.startswith("#EXT-X-MAP:"):
+            kind = "map"
+            uri_match = re.search(r'(?:^|,)URI="([^"]*)"', stripped.split(":", 1)[1])
+            if uri_match is None:
+                raise ValueError("HLS map has no quoted URI")
+            uri = urljoin(base_url, uri_match.group(1))
+            range_match = re.search(
+                r'(?:^|,)BYTERANGE="(\d+)(?:@(\d+))?"',
+                stripped.split(":", 1)[1],
+            )
+            if "BYTERANGE=" in stripped and range_match is None:
+                raise ValueError("Malformed HLS map byte range")
+            if range_match is not None:
+                length = int(range_match.group(1))
+                if length <= 0:
+                    raise ValueError("Malformed HLS map byte range")
+                if range_match.group(2) is not None:
+                    start = int(range_match.group(2))
+                elif previous_map_range is not None and previous_map_url == uri:
+                    start = previous_map_range.end + 1
+                else:
+                    raise ValueError("HLS map byte range requires an offset")
+                byte_range = HlsByteRange(start, length)
+            else:
+                byte_range = None
+        else:
+            raise ValueError("Unsupported HLS URI tag")
+        if kind == "key":
+            uri = urljoin(base_url, uri_match.group(1))
+        resources[kind].append(
+            HlsResource(uri, _resource_identity(kind, uri, byte_range), byte_range)
+        )
+        if kind == "map":
+            previous_map_range = byte_range
+            previous_map_url = uri if byte_range is not None else None
+    return resources
+
+
+async def _async_validate_playlist_targets(
+    hass: HomeAssistant,
+    resources: dict[str, list[HlsResource]],
+) -> None:
+    for url in (resource.url for values in resources.values() for resource in values):
+        await async_pin_public_url(hass, url)
+
+
 def _url_expiry(url: str, now: float) -> float | None:
     """Return an expiry encoded in a signed URL when present."""
     query = parse_qs(urlsplit(url).query)
@@ -399,7 +527,7 @@ def _upstream_range_header(segment: HlsSegment, client_range: str | None) -> str
 
 
 def _validate_byte_range_response(
-    segment: HlsSegment,
+    segment: HlsSegment | HlsResource,
     requested_range: str | None,
     status: int,
     headers,
@@ -431,12 +559,17 @@ async def _load_media_playlist(
     body = await async_fetch_url_text(hass, playlist_url)
     segment_urls = parse_hls_media_segment_urls(body, playlist_url)
     if segment_urls:
+        for segment_url in segment_urls:
+            await async_pin_public_url(hass, segment_url)
         return body, segment_urls
     variant = pick_hls_variant_playlist_url(body, playlist_url)
     if variant is None:
         return body, segment_urls
+    await async_pin_public_url(hass, variant)
     body = await async_fetch_url_text(hass, variant)
     segment_urls = parse_hls_media_segment_urls(body, variant)
+    for segment_url in segment_urls:
+        await async_pin_public_url(hass, segment_url)
     return body, segment_urls
 
 
@@ -455,10 +588,13 @@ async def async_create_record_hls_proxy_playlist_url(
         msg = "Imou HLS playlist had no segments"
         raise ValueError(msg)
     segments = _segment_descriptors(body, segment_urls)
+    resources = _playlist_resource_descriptors(body, segment_urls[0])
+    await _async_validate_playlist_targets(hass, resources)
     session_id = secrets.token_hex(16)
     _sessions(hass)[session_id] = RecordHlsSession(
         entry_id=entry_id,
         segments=segments,
+        resources=resources,
         playlist_body=body,
         expires_at=_session_expiry(
             upstream_playlist_url,
@@ -485,6 +621,74 @@ async def async_create_record_hls_proxy_playlist_url(
         "Imou record HLS proxy %s with %s segments", session_id, len(segment_urls)
     )
     return signed_playlist
+
+
+async def _async_refresh_record_hls_session(
+    hass: HomeAssistant,
+    session_id: str,
+    record: RecordHlsSession,
+    generation: int,
+) -> bool:
+    """Refresh one session once and preserve its original signed handles."""
+    async with record.refresh_lock:
+        if not record.active or _sessions(hass).get(session_id) is not record:
+            raise web.HTTPNotFound()
+        if generation != record.generation:
+            return True
+        if record.refresh_attempted or record.refresh is None:
+            return False
+        record.refresh_attempted = True
+        try:
+
+            async def async_refresh() -> RecordHlsDescriptor | str:
+                if record.refresh is None:
+                    raise web.HTTPNotFound()
+                return await record.refresh()
+
+            record.refresh_task = hass.async_create_task(async_refresh())
+            try:
+                descriptor = await record.refresh_task
+            except asyncio.CancelledError:
+                if not record.active:
+                    raise web.HTTPNotFound() from None
+                raise
+            finally:
+                record.refresh_task = None
+            if isinstance(descriptor, str):
+                descriptor = RecordHlsDescriptor(descriptor)
+            body, segment_urls = await _load_media_playlist(
+                hass, descriptor.playlist_url
+            )
+            if not record.active or _sessions(hass).get(session_id) is not record:
+                raise web.HTTPNotFound()
+            if not segment_urls:
+                raise ValueError("Refreshed Imou HLS playlist had no segments")
+            refreshed_segments = _segment_descriptors(body, segment_urls)
+            refreshed_resources = _playlist_resource_descriptors(body, segment_urls[0])
+            await _async_validate_playlist_targets(hass, refreshed_resources)
+            record.refreshed_segments = {
+                refreshed.identity: refreshed
+                for refreshed in refreshed_segments
+                if refreshed.identity is not None
+            }
+            record.refreshed_resources = {
+                resource.identity: resource
+                for values in refreshed_resources.values()
+                for resource in values
+            }
+            record.expires_at = _session_expiry(
+                descriptor.playlist_url,
+                segment_urls,
+                descriptor.expires_at,
+            )
+            record.generation += 1
+            _schedule_cleanup(hass)
+        except web.HTTPException:
+            raise
+        except Exception:
+            _LOGGER.warning("Imou HLS session refresh failed", exc_info=True)
+            return False
+        return True
 
 
 class ImouRecordHlsPlaylistView(HomeAssistantView):
@@ -538,12 +742,13 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         identity = segment.identity
         if record.refreshed_segments is None:
             upstream = segment.url
-        elif (
-            identity is None
-            or (segment := record.refreshed_segments.get(identity)) is None
-        ):
-            raise web.HTTPBadGateway()
         else:
+            if identity is None:
+                raise web.HTTPBadGateway()
+            refreshed_segment = record.refreshed_segments.get(identity)
+            if refreshed_segment is None:
+                raise web.HTTPBadGateway()
+            segment = refreshed_segment
             upstream = segment.url
         try:
             range_header = _upstream_range_header(segment, request.headers.get("Range"))
@@ -562,66 +767,15 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         if not record.active or _sessions(hass).get(session_id) is not record:
             raise web.HTTPNotFound()
         if upstream_response.status in (401, 403, 404):
-            async with record.refresh_lock:
-                if not record.active or _sessions(hass).get(session_id) is not record:
-                    raise web.HTTPNotFound()
-                if generation == record.generation and not record.refresh_attempted:
-                    record.refresh_attempted = True
-                    try:
-                        if record.refresh is None:
-                            raise web.HTTPNotFound()
-                        record.refresh_task = hass.async_create_task(record.refresh())
-                        try:
-                            descriptor = await record.refresh_task
-                        except asyncio.CancelledError:
-                            if not record.active:
-                                raise web.HTTPNotFound() from None
-                            raise
-                        finally:
-                            record.refresh_task = None
-                        if isinstance(descriptor, str):
-                            descriptor = RecordHlsDescriptor(descriptor)
-                        body, segment_urls = await _load_media_playlist(
-                            hass, descriptor.playlist_url
-                        )
-                        if (
-                            not record.active
-                            or _sessions(hass).get(session_id) is not record
-                        ):
-                            raise web.HTTPNotFound()
-                        if not segment_urls:
-                            msg = "Refreshed Imou HLS playlist had no segments"
-                            raise ValueError(msg)
-                        refreshed_segments = _segment_descriptors(body, segment_urls)
-                        record.refreshed_segments = {
-                            refreshed.identity: refreshed
-                            for refreshed in refreshed_segments
-                            if refreshed.identity is not None
-                        }
-                        record.playlist_body = body
-                        record.expires_at = _session_expiry(
-                            descriptor.playlist_url,
-                            segment_urls,
-                            descriptor.expires_at,
-                        )
-                        record.generation += 1
-                        _schedule_cleanup(hass)
-                    except web.HTTPException:
-                        raise
-                    except Exception:
-                        _LOGGER.warning(
-                            "Imou HLS segment %s refresh failed",
-                            seg_index,
-                            exc_info=True,
-                        )
-                refreshed = (
-                    record.generation > generation
-                    and identity is not None
-                    and record.refreshed_segments is not None
-                    and (segment := record.refreshed_segments.get(identity)) is not None
-                )
-            if not refreshed:
+            refreshed = await _async_refresh_record_hls_session(
+                hass, session_id, record, generation
+            )
+            if not refreshed or identity is None or record.refreshed_segments is None:
                 raise web.HTTPBadGateway()
+            refreshed_segment = record.refreshed_segments.get(identity)
+            if refreshed_segment is None:
+                raise web.HTTPBadGateway()
+            segment = refreshed_segment
             upstream = segment.url
             try:
                 range_header = _upstream_range_header(
@@ -675,4 +829,103 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             body=upstream_response.body,
             status=upstream_response.status,
             headers=response_headers,
+        )
+
+
+class ImouRecordHlsResourceView(HomeAssistantView):
+    """Proxy an HLS encryption key or initialization map."""
+
+    requires_auth = True
+    url = RESOURCE_URL
+    name = "api:imou_life_record_hls_resource"
+    cors_allowed = True
+
+    async def get(
+        self,
+        request: web.Request,
+        session_id: str,
+        kind: str,
+        index: str,
+    ) -> web.StreamResponse:
+        """Return one non-segment HLS resource."""
+        hass = request.app["hass"]
+        _prune_sessions(hass)
+        record = _sessions(hass).get(session_id)
+        if record is None or kind not in {"key", "map"}:
+            raise web.HTTPNotFound()
+        try:
+            resource_index = int(index)
+        except ValueError:
+            raise web.HTTPNotFound() from None
+        if resource_index < 0 or resource_index >= len(record.resources[kind]):
+            raise web.HTTPNotFound()
+        resource = record.resources[kind][resource_index]
+        if record.refreshed_resources is not None:
+            refreshed_resource = record.refreshed_resources.get(resource.identity)
+            if refreshed_resource is None:
+                raise web.HTTPBadGateway()
+            resource = refreshed_resource
+        original_identity = resource.identity
+        generation = record.generation
+
+        def range_for(candidate: HlsResource) -> str | None:
+            return (
+                candidate.byte_range.request_header
+                if candidate.byte_range is not None
+                else request.headers.get("Range")
+            )
+
+        range_header = range_for(resource)
+        try:
+            upstream = await async_fetch_url_response(
+                hass, resource.url, range_header=range_header
+            )
+        except (OSError, TimeoutError, ValueError) as err:
+            raise web.HTTPBadGateway() from err
+        if upstream.status in (401, 403, 404):
+            refreshed = await _async_refresh_record_hls_session(
+                hass, session_id, record, generation
+            )
+            if not refreshed or record.refreshed_resources is None:
+                raise web.HTTPBadGateway()
+            refreshed_resource = record.refreshed_resources.get(original_identity)
+            if refreshed_resource is None:
+                raise web.HTTPBadGateway()
+            resource = refreshed_resource
+            range_header = range_for(resource)
+            try:
+                upstream = await async_fetch_url_response(
+                    hass, resource.url, range_header=range_header
+                )
+            except (OSError, TimeoutError, ValueError) as err:
+                raise web.HTTPBadGateway() from err
+        try:
+            _validate_byte_range_response(
+                resource, range_header, upstream.status, upstream.headers
+            )
+        except ValueError as err:
+            raise web.HTTPBadGateway() from err
+        if not 200 <= upstream.status < 300:
+            raise web.HTTPBadGateway()
+        headers = {
+            name: value
+            for name, value in upstream.headers.items()
+            if name.lower()
+            in {
+                "accept-ranges",
+                "cache-control",
+                "content-length",
+                "content-range",
+                "content-type",
+                "etag",
+                "last-modified",
+            }
+        }
+        headers["Content-Type"] = (
+            "application/octet-stream" if kind == "key" else "video/mp4"
+        )
+        return web.Response(
+            body=upstream.body,
+            status=upstream.status,
+            headers=headers,
         )

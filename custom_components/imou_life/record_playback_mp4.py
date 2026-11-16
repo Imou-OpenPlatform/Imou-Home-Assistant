@@ -99,6 +99,15 @@ def signed_record_playback_url(hass: HomeAssistant, cache_id: str) -> str:
 
 def _remux_command(source_url: str, output: Path) -> list[str]:
     """Build the ffmpeg remux command."""
+    parsed = urlsplit(source_url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or not parsed.path.startswith("/api/imou_life/record_hls/")
+    ):
+        raise ValueError("MP4 source must be a generated local HLS proxy URL")
     cmd = [
         "ffmpeg",
         "-hide_banner",
@@ -106,10 +115,10 @@ def _remux_command(source_url: str, output: Path) -> list[str]:
         "-loglevel",
         "error",
     ]
-    if ".m3u8" in source_url.split("?", 1)[0].lower():
-        cmd.extend(["-allowed_extensions", "ALL"])
     cmd.extend(
         [
+            "-protocol_whitelist",
+            "http,https,tcp,tls,crypto",
             "-i",
             source_url,
             "-c",

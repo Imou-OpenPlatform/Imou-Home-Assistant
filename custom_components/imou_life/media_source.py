@@ -214,7 +214,7 @@ class ImouRecordMediaSource(MediaSource):
                 translation_key="record_media_not_loaded",
             )
         if kind == KIND_ALARM:
-            file_name = parts[5]
+            alarm_file_name = parts[5]
             folder = _saved_clip_folder(self.hass, entry_id)
             if folder is None:
                 raise Unresolvable(
@@ -222,7 +222,9 @@ class ImouRecordMediaSource(MediaSource):
                     translation_key="record_media_unresolved",
                 )
             try:
-                clip_path = resolve_clip_path(folder, device_id, channel_id, file_name)
+                clip_path = resolve_clip_path(
+                    folder, device_id, channel_id, alarm_file_name
+                )
             except ValueError as err:
                 raise Unresolvable(
                     translation_domain=DOMAIN,
@@ -236,7 +238,7 @@ class ImouRecordMediaSource(MediaSource):
                     translation_key="record_media_unresolved",
                 )
             return PlayMedia(
-                signed_saved_record_url(self.hass, entry_id, file_name),
+                signed_saved_record_url(self.hass, entry_id, alarm_file_name),
                 MIME_MP4,
             )
         if len(parts) not in (7, 8):
@@ -312,7 +314,18 @@ class ImouRecordMediaSource(MediaSource):
         cache_id = record_playback_cache_id(item.identifier or "")
 
         async def async_mp4_source() -> RecordHlsDescriptor:
-            return await async_record_hls_descriptor()
+            source = await async_record_hls_descriptor()
+            signed_playlist = await async_create_record_hls_proxy_playlist_url(
+                self.hass,
+                source.playlist_url,
+                refresh=async_record_hls_descriptor,
+                entry_id=entry_id,
+                expires_at=source.expires_at,
+            )
+            return RecordHlsDescriptor(
+                f"{get_url(self.hass).rstrip('/')}{signed_playlist}",
+                source.expires_at,
+            )
 
         register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)
         _LOGGER.info(
