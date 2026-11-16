@@ -24,6 +24,7 @@ from pyimouapi.push import (
     iot_property_values,
     is_alarm_msg_type,
     is_iot_non_event,
+    is_unknown_legacy_msg_type,
     is_v2_capability_event_id,
     is_v2_property_report,
     legacy_msg_type_from_v2_event,
@@ -363,9 +364,7 @@ async def _async_build_notification_message(
             )
     ai_copy = event_data.get("ai_copywriting")
     if isinstance(ai_copy, str) and ai_copy.strip():
-        message += "\n" + notif(
-            "ai_insight", "AI: {ai_text}", ai_text=ai_copy.strip()
-        )
+        message += "\n" + notif("ai_insight", "AI: {ai_text}", ai_text=ai_copy.strip())
     return title, message
 
 
@@ -562,12 +561,10 @@ def _event_push_subscription_allows(entry: ConfigEntry, msg_type: str | None) ->
         return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
     if kind == "device_status":
         return event_push_type_active(entry, EVENT_PUSH_TYPE_DEVICE_STATUS)
-    return event_push_type_active(entry, EVENT_PUSH_TYPE_DEVICE_STATUS)
+    return True
 
 
-def _v2_capability_event_allowed(
-    ha_device: ImouHaDevice | None, event_id: str
-) -> bool:
+def _v2_capability_event_allowed(ha_device: ImouHaDevice | None, event_id: str) -> bool:
     """Gate V2 eventId pushes on device.capability.list when that list is known."""
     if ha_device is None:
         return False
@@ -736,11 +733,18 @@ async def async_handle_imou_webhook(
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
     msg_type_raw = event_data.get("msg_type")
-    if msg_type_raw is not None and not push_dispatch_permitted(msg_type_raw):
+    if not push_dispatch_permitted(msg_type_raw):
         _LOGGER.debug(
             "Ignoring push with unknown msg_type=%r for %s", msg_type_raw, device_id
         )
         return web.Response(status=200, text="ok")
+    if is_unknown_legacy_msg_type(msg_type_raw):
+        _LOGGER.warning(
+            "Unknown Legacy msg_type=%r for %s; dispatching with fallback "
+            "alarm classification",
+            msg_type_raw,
+            device_id,
+        )
     if is_v2_property_report(msg_type_raw) and not isinstance(
         payload.get("properties"), dict
     ):
