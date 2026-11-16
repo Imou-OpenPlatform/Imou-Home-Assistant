@@ -15,6 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from pyimouapi.device import compose_iot_device_id
 from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
@@ -433,10 +434,20 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def _forget_v2_state_snapshots(self, devices: Iterable[ImouHaDevice]) -> None:
         """Allow a device that left to fetch a state snapshot when it returns."""
-        resolve = self._device_manager._resolve_device_id
-        remaining = {resolve(device) for device in self.devices_by_key.values()}
+        remaining = {
+            compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
+            for device in self.devices_by_key.values()
+        }
         for device in devices:
-            physical_id = resolve(device)
+            physical_id = compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
             if physical_id not in remaining:
                 self._v2_state_snapshots.discard(physical_id)
 

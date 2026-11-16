@@ -31,6 +31,8 @@ def _mock_device(device_id: str, channel_id: str | None = None) -> MagicMock:
     device.device_id = device_id
     device.channel_id = channel_id
     device.product_id = f"prod_{device_id}"
+    device.parent_device_id = None
+    device.parent_product_id = None
     return device
 
 
@@ -436,3 +438,39 @@ async def test_property_push_inactive_never_skips_iot_detail(
     await coordinator._async_update_data()
     kwargs = device_manager.async_update_devices_status.await_args.kwargs
     assert kwargs.get("skip_iot_property_ids") in (None, set())
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_removed_accessory_forgets_snapshot_before_rejoining(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A removed gateway accessory must take a fresh snapshot if it returns."""
+    device = _mock_device("sensor", "0")
+    device.parent_device_id = "gateway"
+    device.parent_product_id = "gateway-product"
+    physical_id = "sensor_gateway_gateway-product"
+    device_manager.async_update_devices_status = AsyncMock(return_value={physical_id})
+    options = {
+        PARAM_ENABLE_EVENT_PUSH: True,
+        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_IOT],
+    }
+    coordinator = await _run_update(hass, device_manager, [device], options=options)
+    assert coordinator._v2_state_snapshots == {physical_id}
+
+    coordinator._async_add_remove_devices({}, {})
+    assert coordinator._v2_state_snapshots == set()
+
+    replacement = _mock_device("sensor", "0")
+    replacement.parent_device_id = "gateway"
+    replacement.parent_product_id = "gateway-product"
+    replacement_key = imou_life_device_key(replacement)
+    coordinator._async_add_remove_devices(
+        {replacement_key: replacement}, {replacement_key: replacement}
+    )
+    coordinator._last_discovery = 1e18
+    device_manager.async_update_devices_status.reset_mock()
+    await coordinator._async_update_data()
+
+    assert device_manager.async_update_devices_status.await_args.kwargs[
+        "skip_iot_property_ids"
+    ] == set()
