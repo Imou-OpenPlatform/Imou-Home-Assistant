@@ -2054,10 +2054,11 @@ async def test_stable_resolve_failure_creates_playback_issue(
             "custom_components.imou_life.media_source.get_runtime_data",
             return_value=runtime,
         ),
-        pytest.raises(Unresolvable),
+        pytest.raises(Unresolvable) as captured,
     ):
         await ImouRecordMediaSource(hass).async_resolve_media(item)
 
+    assert captured.value.translation_placeholders is None
     assert (
         DOMAIN,
         f"{ISSUE_RECORD_PLAYBACK}_{entry.entry_id}",
@@ -2078,10 +2079,11 @@ async def test_empty_hls_resolve_creates_playback_issue(
             "custom_components.imou_life.media_source.get_runtime_data",
             return_value=_runtime_with_hls_url({"url": ""}),
         ),
-        pytest.raises(Unresolvable),
+        pytest.raises(Unresolvable) as captured,
     ):
         await ImouRecordMediaSource(hass).async_resolve_media(item)
 
+    assert captured.value.translation_placeholders is None
     assert (
         DOMAIN,
         f"{ISSUE_RECORD_PLAYBACK}_{entry.entry_id}",

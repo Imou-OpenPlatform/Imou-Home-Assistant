@@ -795,7 +795,7 @@
       "message": "该账号的 Imou 集成未加载。"
     },
     "record_playback_failed": {
-      "message": "无法开始录像播放：{error}"
+      "message": "无法开始录像播放。"
     },
     "insight_briefing_failed": {
       "message": "Imou could not load the briefing: {error}"

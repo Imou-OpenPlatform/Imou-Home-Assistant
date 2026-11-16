@@ -795,7 +795,7 @@
       "message": "Imou is not loaded for this account."
     },
     "record_playback_failed": {
-      "message": "Could not start recording playback: {error}"
+      "message": "Could not start recording playback."
     },
     "insight_briefing_failed": {
       "message": "Imou could not load the briefing: {error}"

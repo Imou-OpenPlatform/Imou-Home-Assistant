@@ -15,11 +15,13 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.media_source import (
     MEDIA_SOURCE_NAME,
     ImouRecordMediaSource,
+    _record_hls_expiry,
     _split,
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.device import ImouDeviceManager
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.local_record import LocalRecordSegment
@@ -303,3 +305,57 @@ async def test_local_day_is_empty_when_aggregate_fails(
     manager.async_list_local_record_segments.assert_awaited_once()
     assert browse.children == []
     assert browse.can_expand is False
+
+
+async def test_local_month_bitmap_forwards_product_id(
+    hass: HomeAssistant,
+) -> None:
+    """The month bitmap uses the same product identity as the recording list."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.set_product_id("pid")
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_local_record_bitmap = AsyncMock(
+        return_value={"outputData": {"bitmap": "1"}}
+    )
+
+    await source._browse_days(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+        ]
+    )
+
+    manager.async_local_record_bitmap.assert_awaited_once_with(
+        "SN1",
+        "0",
+        year=2026,
+        month=11,
+        product_id="pid",
+    )
+
+
+async def test_library_playback_expiry_reaches_media_source() -> None:
+    """Playback expiry survives the real library response instead of a mock shape."""
+    client = AsyncMock()
+    client.async_request_api.return_value = {
+        "url": "https://example.test/record.m3u8",
+        "expireTime": 1_800_000_000,
+    }
+    manager = ImouDeviceManager(client)
+
+    data = await manager.async_create_device_record_hls(
+        "SN1",
+        "0",
+        begin_time="2026-11-01 00:06:55",
+        end_time="2026-11-01 00:08:10",
+        record_type="cloudRecord",
+    )
+
+    assert _record_hls_expiry(data) == 1_800_000_000

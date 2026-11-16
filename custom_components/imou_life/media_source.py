@@ -289,13 +289,11 @@ class ImouRecordMediaSource(MediaSource):
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
-                translation_placeholders={"error": "Recording playback is unavailable"},
             ) from err
         except RecordPlaybackEmptySourceError as err:
             raise Unresolvable(
                 translation_domain=DOMAIN,
                 translation_key="record_playback_failed",
-                translation_placeholders={"error": "Recording playback is unavailable"},
             ) from err
         clip_label = f"{device_id} {begin_time}–{end_time}"
         hls_play = await _async_try_hls_playback(
@@ -568,7 +566,11 @@ class ImouRecordMediaSource(MediaSource):
                 days = parse_cloud_record_bitmap_days(bitmap, year=year, month=month)
             else:
                 data = await manager.async_local_record_bitmap(
-                    device_id, channel_id, year=year, month=month
+                    device_id,
+                    channel_id,
+                    year=year,
+                    month=month,
+                    product_id=self._camera_product_id(runtime, device_id, channel_id),
                 )
                 days = parse_local_bitmap_days(data, year=year, month=month)
         except ImouException:
@@ -687,18 +689,12 @@ class ImouRecordMediaSource(MediaSource):
                         )
                     )
             else:
-                device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
-                device = (
-                    runtime.coordinator.get_device(device_key)
-                    if device_key is not None
-                    else None
-                )
                 segments = await manager.async_list_local_record_segments(
                     device_id,
                     channel_id,
                     begin_time=begin_time,
                     end_time=end_time,
-                    product_id=device.product_id if device is not None else None,
+                    product_id=self._camera_product_id(runtime, device_id, channel_id),
                 )
                 for segment in segments:
                     play_parts = [
@@ -748,6 +744,16 @@ class ImouRecordMediaSource(MediaSource):
             can_expand=bool(children),
             children=children,
         )
+
+    @staticmethod
+    def _camera_product_id(runtime, device_id: str, channel_id: str) -> str | None:
+        device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
+        if device_key is None:
+            return None
+        device = runtime.coordinator.get_device(device_key)
+        if device is None:
+            return None
+        return device.product_id
 
     def _runtime(self, entry_id: str):
         entry = self.hass.config_entries.async_get_entry(entry_id)
