@@ -471,6 +471,9 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
     device_manager.async_update_devices_status.reset_mock()
     await coordinator._async_update_data()
 
-    assert device_manager.async_update_devices_status.await_args.kwargs[
-        "skip_iot_property_ids"
-    ] == set()
+    assert (
+        device_manager.async_update_devices_status.await_args.kwargs[
+            "skip_iot_property_ids"
+        ]
+        == set()
+    )

@@ -1573,12 +1573,8 @@ async def test_webhook_unknown_legacy_alarm_fires_generic_and_alarm(
         await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
-    assert [event.data["msg_type"] for event in generic_events] == [
-        "newAlarmFromCloud"
-    ]
-    assert [event.data["msg_type"] for event in alarm_events] == [
-        "newAlarmFromCloud"
-    ]
+    assert [event.data["msg_type"] for event in generic_events] == ["newAlarmFromCloud"]
+    assert [event.data["msg_type"] for event in alarm_events] == ["newAlarmFromCloud"]
     mock_thumbnail.assert_awaited_once()
     mock_notify.assert_awaited_once()
     mock_record.assert_awaited_once()
