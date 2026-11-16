@@ -34,16 +34,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
+    BULB_V2_PROPERTY_BY_REF,
     MODE_COLOR,
     MODE_SCENE,
     MODE_WHITE,
     REF_BRIGHTNESS,
     REF_COLOR_TEMP,
+    REF_HUE,
     REF_MODE,
+    REF_SATURATION,
     REF_SCENE,
     REF_SWITCH,
+    REF_VALUE,
     empty_bulb_state,
+    scene_effect_names,
 )
+from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -135,7 +141,7 @@ async def test_turn_off_clears_the_lamp(hass: HomeAssistant) -> None:
     )
 
 
-def _bulb_device() -> MagicMock:
+def _bulb_device(*, supported_refs: set[str] | None = None) -> MagicMock:
     device = MagicMock(spec=ImouHaDevice)
     device.device_id = "bulb1"
     device.channel_id = None
@@ -148,6 +154,16 @@ def _bulb_device() -> MagicMock:
     device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
     device.switches = {}
     device.bulb_light = empty_bulb_state()
+    device.capability_set = (
+        CapabilitySet(
+            properties={BULB_V2_PROPERTY_BY_REF[ref]: None for ref in supported_refs},  # type: ignore[dict-item]
+            services=frozenset(),
+            events=frozenset(),
+        )
+        if supported_refs is not None
+        else None
+    )
+    device.bulb_v2 = supported_refs is not None
     return device
 
 
@@ -163,13 +179,154 @@ def _bulb(hass: HomeAssistant, device: MagicMock) -> ImouBulbLight:
 def test_bulb_supports_color_temperature_color_and_scenes(
     hass: HomeAssistant,
 ) -> None:
-    """One light covers white, color, and the scene list."""
+    """A legacy bulb keeps its existing white, color, and scene behavior."""
     light = _bulb(hass, _bulb_device())
     assert light.supported_color_modes == {ColorMode.COLOR_TEMP, ColorMode.HS}
     assert light.supported_features & LightEntityFeature.EFFECT
     assert "Movie" in (light.effect_list or [])
     assert light.is_on is False
     assert light.color_mode is None
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("supported_refs", "supported_color_modes", "supported_features"),
+    [
+        ({REF_SWITCH}, {ColorMode.ONOFF}, LightEntityFeature(0)),
+        (
+            {REF_SWITCH, REF_BRIGHTNESS},
+            {ColorMode.BRIGHTNESS},
+            LightEntityFeature(0),
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP},
+            {ColorMode.COLOR_TEMP},
+            LightEntityFeature(0),
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_HUE, REF_SATURATION, REF_VALUE},
+            {ColorMode.HS},
+            LightEntityFeature(0),
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_SCENE},
+            {ColorMode.ONOFF},
+            LightEntityFeature.EFFECT,
+        ),
+        (
+            {
+                REF_SWITCH,
+                REF_MODE,
+                REF_BRIGHTNESS,
+                REF_COLOR_TEMP,
+                REF_HUE,
+                REF_SATURATION,
+                REF_VALUE,
+                REF_SCENE,
+            },
+            {ColorMode.COLOR_TEMP, ColorMode.HS},
+            LightEntityFeature.EFFECT,
+        ),
+    ],
+)
+def test_v2_bulb_attributes_follow_capability_snapshot(
+    hass: HomeAssistant,
+    supported_refs: set[str],
+    supported_color_modes: set[ColorMode],
+    supported_features: LightEntityFeature,
+) -> None:
+    """V2 controls only advertise the properties present at entity creation."""
+    device = _bulb_device(supported_refs=supported_refs)
+    device.bulb_light["on"] = True
+    light = _bulb(hass, device)
+
+    assert light.supported_color_modes == supported_color_modes
+    assert light.supported_features == supported_features
+    assert light.effect_list == (
+        scene_effect_names() if REF_SCENE in supported_refs else None
+    )
+    if REF_COLOR_TEMP in supported_refs:
+        assert light.min_color_temp_kelvin == 2700
+        assert light.max_color_temp_kelvin == 6500
+    else:
+        assert "min_color_temp_kelvin" not in light.capability_attributes
+        assert "max_color_temp_kelvin" not in light.capability_attributes
+    assert light.color_mode in supported_color_modes
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_v2_bulb_does_not_report_an_unsupported_scene(
+    hass: HomeAssistant,
+) -> None:
+    """A mode value alone must not activate an effect or an invalid ONOFF mode."""
+    device = _bulb_device(
+        supported_refs={REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP}
+    )
+    device.bulb_light["on"] = True
+    device.bulb_light["mode"] = MODE_SCENE
+    device.bulb_light["scene"] = 2
+    light = _bulb(hass, device)
+
+    assert light.effect is None
+    assert light.color_mode is ColorMode.COLOR_TEMP
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    ("supported_refs", "expected_payload"),
+    [
+        ({REF_SWITCH}, {REF_SWITCH: 1}),
+        (
+            {REF_SWITCH, REF_BRIGHTNESS},
+            {REF_SWITCH: 1, REF_BRIGHTNESS: 50},
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP},
+            {
+                REF_SWITCH: 1,
+                REF_MODE: MODE_WHITE,
+                REF_BRIGHTNESS: 50,
+                REF_COLOR_TEMP: 4000,
+            },
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_HUE, REF_SATURATION, REF_VALUE},
+            {
+                REF_SWITCH: 1,
+                REF_MODE: MODE_COLOR,
+                REF_HUE: 120,
+                REF_SATURATION: 60,
+                REF_VALUE: 50,
+            },
+        ),
+        (
+            {REF_SWITCH, REF_MODE, REF_SCENE},
+            {REF_SWITCH: 1, REF_MODE: MODE_SCENE, REF_SCENE: 2},
+        ),
+    ],
+)
+async def test_v2_bulb_service_writes_only_supported_properties(
+    hass: HomeAssistant,
+    supported_refs: set[str],
+    expected_payload: dict[str, int],
+) -> None:
+    """Optional service fields never call properties absent from capability.list."""
+    device = _bulb_device(supported_refs=supported_refs)
+    light = _bulb(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on(
+        **{
+            ATTR_BRIGHTNESS: 128,
+            ATTR_COLOR_TEMP_KELVIN: 4000,
+            ATTR_HS_COLOR: (120, 60),
+            ATTR_EFFECT: "Movie",
+        }
+    )
+
+    light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
+        device, expected_payload
+    )
 
 
 def test_iter_bulbs_skips_cameras() -> None:

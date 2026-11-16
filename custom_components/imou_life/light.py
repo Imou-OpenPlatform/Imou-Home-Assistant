@@ -18,12 +18,19 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
+    BULB_V2_PROPERTY_BY_REF,
     MAX_KELVIN,
     MIN_KELVIN,
     MODE_COLOR,
     MODE_SCENE,
+    REF_BRIGHTNESS,
+    REF_COLOR_TEMP,
+    REF_HUE,
     REF_MODE,
+    REF_SATURATION,
+    REF_SCENE,
     REF_SWITCH,
+    REF_VALUE,
     percent_to_brightness,
     properties_for_turn_off,
     properties_for_turn_on,
@@ -123,10 +130,6 @@ class ImouWhiteLight(ImouEntity, LightEntity):
 class ImouBulbLight(ImouEntity, LightEntity):
     """Color bulb: white, color, and scenes on one light."""
 
-    _attr_supported_features = LightEntityFeature.EFFECT
-    _attr_min_color_temp_kelvin = MIN_KELVIN
-    _attr_max_color_temp_kelvin = MAX_KELVIN
-
     def __init__(
         self,
         coordinator: ImouDataUpdateCoordinator,
@@ -136,8 +139,42 @@ class ImouBulbLight(ImouEntity, LightEntity):
     ) -> None:
         """Initialize color modes and the scene list."""
         super().__init__(coordinator, config_entry, entity_type, device)
-        self._attr_supported_color_modes = {ColorMode.COLOR_TEMP, ColorMode.HS}
-        self._attr_effect_list = scene_effect_names()
+        if device.bulb_v2 and device.capability_set is not None:
+            property_ids = set(device.capability_set.properties)
+            self._supported_property_refs = {
+                ref
+                for ref, property_id in BULB_V2_PROPERTY_BY_REF.items()
+                if property_id in property_ids
+            }
+        else:
+            self._supported_property_refs = set(BULB_V2_PROPERTY_BY_REF)
+
+        color_modes: set[ColorMode] = set()
+        if REF_COLOR_TEMP in self._supported_property_refs:
+            color_modes.add(ColorMode.COLOR_TEMP)
+        if {
+            REF_HUE,
+            REF_SATURATION,
+            REF_VALUE,
+        } <= self._supported_property_refs:
+            color_modes.add(ColorMode.HS)
+        if not color_modes:
+            color_modes.add(
+                ColorMode.BRIGHTNESS
+                if REF_BRIGHTNESS in self._supported_property_refs
+                else ColorMode.ONOFF
+            )
+        self._supported_color_modes = color_modes
+        self._attr_supported_color_modes = self._supported_color_modes
+
+        if REF_COLOR_TEMP in self._supported_property_refs:
+            self._attr_min_color_temp_kelvin = MIN_KELVIN
+            self._attr_max_color_temp_kelvin = MAX_KELVIN
+        if REF_SCENE in self._supported_property_refs:
+            self._attr_supported_features = LightEntityFeature.EFFECT
+            self._attr_effect_list = scene_effect_names()
+        else:
+            self._attr_supported_features = LightEntityFeature(0)
 
     @property
     def _state(self) -> dict[str, Any]:
@@ -154,7 +191,11 @@ class ImouBulbLight(ImouEntity, LightEntity):
 
     def _active_effect(self) -> str | None:
         """Scene name when this bulb is on in a known scene."""
-        if not self.is_on or self._state["mode"] != MODE_SCENE:
+        if (
+            REF_SCENE not in self._supported_property_refs
+            or not self.is_on
+            or self._state["mode"] != MODE_SCENE
+        ):
             return None
         return scene_effect_name(int(self._state["scene"]))
 
@@ -164,11 +205,12 @@ class ImouBulbLight(ImouEntity, LightEntity):
         """White brightness, or color brightness while in color mode."""
         if not self.is_on or self._active_effect() is not None:
             return None
-        level = (
-            self._state["value"]
-            if self._state["mode"] == MODE_COLOR
-            else self._state["brightness"]
-        )
+        if self.color_mode == ColorMode.HS:
+            level = self._state["value"]
+        elif REF_BRIGHTNESS in self._supported_property_refs:
+            level = self._state["brightness"]
+        else:
+            return None
         return percent_to_brightness(int(level))
 
     @property
@@ -183,9 +225,16 @@ class ImouBulbLight(ImouEntity, LightEntity):
             return None
         if self._active_effect() is not None:
             return ColorMode.ONOFF
-        if self._state["mode"] == MODE_COLOR:
+        if (
+            self._state["mode"] == MODE_COLOR
+            and ColorMode.HS in self._supported_color_modes
+        ):
             return ColorMode.HS
-        return ColorMode.COLOR_TEMP
+        if ColorMode.COLOR_TEMP in self._supported_color_modes:
+            return ColorMode.COLOR_TEMP
+        if ColorMode.HS in self._supported_color_modes:
+            return ColorMode.HS
+        return next(iter(self._supported_color_modes))
 
     @property
     @override
@@ -226,12 +275,29 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the bulb on and apply color, temperature, brightness, or a scene."""
-        raw_hs = kwargs.get(ATTR_HS_COLOR)
+        raw_hs = (
+            kwargs.get(ATTR_HS_COLOR)
+            if ColorMode.HS in self._supported_color_modes
+            else None
+        )
         hs = (float(raw_hs[0]), float(raw_hs[1])) if raw_hs is not None else None
+        color_temp_kelvin = (
+            kwargs.get(ATTR_COLOR_TEMP_KELVIN)
+            if ColorMode.COLOR_TEMP in self._supported_color_modes
+            else None
+        )
+        effect = (
+            kwargs.get(ATTR_EFFECT)
+            if REF_SCENE in self._supported_property_refs
+            else None
+        )
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        if hs is None and REF_BRIGHTNESS not in self._supported_property_refs:
+            brightness = None
         preview = (
             hs is not None
-            and kwargs.get(ATTR_COLOR_TEMP_KELVIN) is None
-            and kwargs.get(ATTR_EFFECT) is None
+            and color_temp_kelvin is None
+            and effect is None
             and self._hs_is_white_preview(hs)
         )
         try:
@@ -240,16 +306,21 @@ class ImouBulbLight(ImouEntity, LightEntity):
             else:
                 payload = properties_for_turn_on(
                     self._state,
-                    brightness=kwargs.get(ATTR_BRIGHTNESS),
-                    color_temp_kelvin=kwargs.get(ATTR_COLOR_TEMP_KELVIN),
+                    brightness=brightness,
+                    color_temp_kelvin=color_temp_kelvin,
                     hs_color=hs,
-                    effect=kwargs.get(ATTR_EFFECT),
+                    effect=effect,
                 )
         except ValueError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="unknown_bulb_effect",
             ) from err
+        payload = {
+            ref: value
+            for ref, value in payload.items()
+            if ref in self._supported_property_refs
+        }
         await self._async_write(payload)
 
     @override
