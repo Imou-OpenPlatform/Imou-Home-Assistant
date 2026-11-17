@@ -761,7 +761,7 @@
       "message": "Impossibile rimuovere il dispositivo {name}: manca l'id dispositivo Imou."
     },
     "remove_device_has_siblings": {
-      "message": "Impossibile rimuovere {name}: è un canale del dispositivo Imou {device_id}, che copre anche {siblings}. Deseleziona l'intero dispositivo in Scegli i dispositivi da interrogare per rimuoverlo, oppure disabilita le entità di questo canale per nasconderlo."
+      "message": "Impossibile rimuovere {name}: è un canale del dispositivo Imou {device_id}, che copre anche {siblings}. Deseleziona l'intero dispositivo in Interrogazione e telecamere per rimuoverlo, oppure disabilita le entità di questo canale per nasconderlo."
     },
     "remove_device_no_runtime": {
       "message": "Impossibile rimuovere il dispositivo {name}: l'integrazione non è caricata."

@@ -228,26 +228,48 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
     )
 
 
-async def _password_from_play_token(
-    runtime: ImouRuntimeData, device: Any, device_id: str
-) -> str | None:
-    """Return the device login password inside the list play token, if it opens."""
-    token = getattr(device, "play_token_v2", None) if device is not None else None
+async def async_remember_picture_passwords(
+    runtime: ImouRuntimeData, devices: Any
+) -> None:
+    """Read each device's picture password once for this process.
+
+    A later password change in the Imou app is not picked up until reload.
+    """
     client = runtime.client
-    if not isinstance(token, str) or not token.strip() or client is None:
-        return None
-    key = runtime.play_token_keys.get(device_id)
-    if not key:
+    if client is None:
+        return
+    seen: set[str] = set()
+    for device in devices:
+        device_id = getattr(device, "device_id", None)
+        if not isinstance(device_id, str) or not device_id or device_id in seen:
+            continue
+        seen.add(device_id)
+        if device_id in runtime.picture_password_ready:
+            continue
+        token = getattr(device, "play_token_v2", None)
+        if not isinstance(token, str) or not token.strip():
+            continue
+        runtime.picture_password_ready.add(device_id)
         try:
             key = await client.async_get_play_token_key(device_id)
         except Exception:
-            _LOGGER.warning("Picture key request failed for %s", device_id)
-            return None
-        if key:
-            runtime.play_token_keys[device_id] = key
-    if not key:
-        return None
-    return login_password_from_play_token(play_token=token, play_token_key=key)
+            _LOGGER.warning("Picture password was not read for %s", device_id)
+            continue
+        if not isinstance(key, str) or not key.strip():
+            continue
+        password = login_password_from_play_token(
+            play_token=token, play_token_key=key
+        )
+        if password:
+            runtime.picture_passwords[device_id] = password
+
+
+def _picture_password(runtime: ImouRuntimeData, device_id: str) -> str | None:
+    """Return the password read at load, if this device has one."""
+    password = runtime.picture_passwords.get(device_id)
+    if isinstance(password, str) and password:
+        return password
+    return None
 
 
 def _device_for_event(
@@ -596,9 +618,7 @@ async def async_maybe_decrypt_thumbnail(
     device = _device_for_event(runtime, event_data)
     device_ability = device.device_ability if device is not None else ""
     is_tcm = is_tcm_ability(device_ability)
-    device_password = await _password_from_play_token(
-        runtime, device, str(device_id)
-    )
+    device_password = _picture_password(runtime, str(device_id))
     # A recovered password is tried first. The SDK then falls back to the serial.
     encrypt_key = device_password or str(device_id)
 

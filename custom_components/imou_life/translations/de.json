@@ -761,7 +761,7 @@
       "message": "Gerät {name} kann nicht entfernt werden: Imou-Geräte-ID fehlt."
     },
     "remove_device_has_siblings": {
-      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts unter „Zu abfragende Geräte“ auf, um es zu entfernen, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
+      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts unter „Abfrage und Kameras“ auf, um es zu entfernen, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
     },
     "remove_device_no_runtime": {
       "message": "Gerät {name} kann nicht entfernt werden: die Integration ist nicht geladen."

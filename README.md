@@ -55,7 +55,7 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**.
+Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it. Which devices to poll is on **Polling and cameras**. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**.
 
 Page-by-page options, including the **Settings → System → Network** steps that alarm push and alarm pictures need, and **Record on alarm**: [Configure reference](guides/configuration.md#english).
 
@@ -77,8 +77,8 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
 ## Features
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Bind a new device** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
-  - Device selection at setup and in **Configure → Choose devices to poll**. Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account.
-  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**
+  - Device selection at setup and in **Configure → Polling and cameras**. Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account.
+  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**
   - Login aligned with Home Assistant Core: **server region** dropdown (Imou Life default, Singapore, Europe, North America, China)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 for Open Platform API access
@@ -207,9 +207,9 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置。
+在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。要轮询哪些设备在 **轮询与摄像头** 里勾选。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置。
 
-逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**，还有 **告警时录像**、**媒体浏览器**、**智见工作台**：见 [配置项参考](guides/configuration.md#zh-hans)。
+逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**，还有 **告警时录像**、**媒体浏览器**、侧边栏的 **AI 智见**：见 [配置项参考](guides/configuration.md#zh-hans)。
 
 >说明：<br>
 >本集成通过 Imou 开放平台进行云端远程访问。<br>
@@ -230,8 +230,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 * **集成与账号**
   - 在 **配置 → 绑定新设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
-  - 安装时及 **配置 → 选择要轮询的设备** 中选择设备。没勾选的不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。
-  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置
+  - 安装时及 **配置 → 轮询与摄像头** 中选择设备。没勾选的不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。
+  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置
   - 登录界面与 Home Assistant Core 对齐：**服务器区域**（Imou Life 默认、新加坡、欧洲、北美、中国）
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 访问开放平台 API

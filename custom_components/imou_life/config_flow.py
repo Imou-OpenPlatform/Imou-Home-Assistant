@@ -863,11 +863,15 @@ class ImouOptionsFlow(OptionsFlow):
         if user_input is not None:
             flat = self._flatten_general_input(user_input, self.config_entry.options)
             if PARAM_SELECTED_DEVICES in user_input:
-                self._clear_selected_from_entry_data()
-                flat[PARAM_SELECTED_DEVICES] = list(
-                    user_input.get(PARAM_SELECTED_DEVICES) or []
-                )
-                flat[PARAM_EXCLUDED_DEVICES] = []
+                selected = list(user_input.get(PARAM_SELECTED_DEVICES) or [])
+                stored = self._stored_selected_devices()
+                # No saved list means every current and future device. Saving
+                # the polling page with everything still checked must not freeze
+                # that into the devices known today.
+                if stored is not None or set(selected) != set(self._devices_map):
+                    self._clear_selected_from_entry_data()
+                    flat[PARAM_SELECTED_DEVICES] = selected
+                    flat[PARAM_EXCLUDED_DEVICES] = []
             self._save_options(**flat)
             return await self.async_step_init()
 

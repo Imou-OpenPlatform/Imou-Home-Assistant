@@ -61,7 +61,7 @@ A device page also has a **Notify on alarm** switch, so one noisy camera can be 
 
 ### Alarm pictures
 
-Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself and decrypts it on this Home Assistant, so no Open API quota is spent. Every alarm picture is decrypted; there is no switch for it.
+Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself and decrypts it on this Home Assistant, so no Open API quota is spent. Every alarm picture is decrypted; there is no switch for it. The picture password is read when Imou Life loads. If you change that password in the Imou app, reload this integration before pictures use the new one. A picture that still cannot be opened is tried with the device serial.
 
 Prerequisites:
 
@@ -128,7 +128,7 @@ The sidebar gains **AI Insight**, with **Briefing**, **Search**, and **Trial**. 
 
 | Option | What it does |
 | --- | --- |
-| **Trial or purchase link** (`Configure → AI Insight workbench`) | Optional URL or note appended when someone presses **AI Insight trial** |
+| **Trial** | The sidebar page explains that adding the official WeChat or WhatsApp starts a trial. |
 
 Alarm notifications can include an **AI:** line when your notify template uses the integration’s AI placeholder (same text as pushed alarms with AI copy).
 
@@ -142,7 +142,7 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 
 | Page | What it does |
 | --- | --- |
-| Choose devices to poll | Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account so you can check one later. |
+| Polling and cameras | Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account so you can check one later. |
 | Bind a new device | Adds a device by serial number, plus a binding code if the device requires one. |
 
 ### What depends on what
@@ -150,7 +150,7 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 | To get this | You need |
 | --- | --- |
 | Any alarm notification, picture, recording, or your own automation | **Enable event push** on, with a Callback URL the Imou cloud can reach |
-| A picture in a phone notification | Event push, **Show the picture in alarm notifications**, both `.so` files, a password for the devices the page lists, and an internet-reachable Home Assistant URL |
+| A picture in a phone notification | Event push, both `.so` files, and an internet-reachable Home Assistant URL. The picture password is read when Imou Life loads |
 | A picture in the web notification drawer | The same, plus `notify.persistent_notification` among the notification targets |
 | A clip after an alarm | Event push and the per-camera switch on. Open it under **Record on alarm** in the media browser |
 
@@ -200,7 +200,6 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 | 休眠控制重试等待 | 状态为 **休眠** 且控制失败时，再次发送同一命令前的等待秒数，5–60。 | 5 |
 | 抓图等待时间 | 向摄像头请求抓图后等待多久再去取——因为摄像头要先拍好并上传。取回的图偏旧或为空时调大。已经取到的静止画面会留 30 秒。范围 1–9。 | 3 |
 | 视频分辨率 | `HD` 或 `SD`，用于「直播」摄像头实体。 | HD |
-| 云台转动时长 | 方向键按一次转多远，以移动时间（毫秒）表示。范围 100–10000。 | 500 |
 
 直播固定使用 `https`，不提供协议选择：HA 本身跑在 HTTPS 上时，`http` 的流地址会被浏览器按混合内容拦掉。
 
@@ -218,7 +217,7 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 
 ### 告警图片
 
-告警图片是加密下发的。Home Assistant 自己下载密文再在本机解密，不消耗开放平台配额。带图的告警都会解密，没有单独的开关。
+告警图片是加密下发的。Home Assistant 自己下载密文再在本机解密，不消耗开放平台配额。带图的告警都会解密，没有单独的开关。图片密码在 Imou Life 加载时读取。在乐橙 App 里改了密码后，重新加载本集成，图片才会用新密码。仍解不开的图片会再试设备序列号。
 
 前置条件：
 
@@ -287,7 +286,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 | 选项 | 作用 |
 | --- | --- |
-| **试用或购买链接**（**配置 → 智见工作台**） | 点 **AI智见试用** 时附加的可选链接或说明 |
+| **试用** | 侧边栏这一页写明添加官方微信或 WhatsApp 即可获取试用。 |
 
 告警通知可在模板里加上 **智见：** 行（与带 AI 文案的推送一致）。
 
@@ -303,7 +302,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 | 页面 | 作用 |
 | --- | --- |
-| 选择要轮询的设备 | 没勾选的设备不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，方便以后再勾上。 |
+| 轮询与摄像头 | 没勾选的设备不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，方便以后再勾上。 |
 | 绑定新设备 | 用序列号添加设备，设备需要时再填绑定码。 |
 
 ### 依赖关系一览
@@ -311,7 +310,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 | 想要 | 需要 |
 | --- | --- |
 | 告警通知、图片、录像，或你自己写的自动化 | 开启 **启用事件推送**，且回调地址 Imou 云能访问到 |
-| 手机通知里带图 | 事件推送、**在告警通知中显示图片**、两个 `.so` 文件、页面上列出的那些设备的密码，以及一个公网可达的 Home Assistant 地址 |
+| 手机通知里带图 | 事件推送、两个 `.so` 文件，以及一个公网可达的 Home Assistant 地址。图片密码在 Imou Life 加载时读取 |
 | 网页通知栏里带图 | 同上，另外把 `notify.persistent_notification` 加进通知目标 |
 | 告警后有录像片段 | 事件推送，以及该摄像头的开关已打开。在媒体浏览器的 **告警时录像** 里查看 |
 

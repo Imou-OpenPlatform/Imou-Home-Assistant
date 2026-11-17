@@ -785,7 +785,7 @@
       "message": "Cannot remove device {name}: missing Imou device id."
     },
     "remove_device_has_siblings": {
-      "message": "Cannot remove {name}: it is one channel of Imou device {device_id}, which also covers {siblings}. Uncheck the whole device under Choose devices to poll to remove it, or disable this channel's entities to hide it."
+      "message": "Cannot remove {name}: it is one channel of Imou device {device_id}, which also covers {siblings}. Uncheck the whole device under Polling and cameras to remove it, or disable this channel's entities to hide it."
     },
     "remove_device_no_runtime": {
       "message": "Cannot remove device {name}: integration is not loaded."

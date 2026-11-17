@@ -52,8 +52,9 @@ class ImouRuntimeData:
         default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
     )
     thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
-    # Hex keys from getPlayTokenKey, keyed by device serial. Not diagnostics.
-    play_token_keys: dict[str, str] = field(default_factory=dict)
+    # Device picture passwords read once at load. Not diagnostics.
+    picture_passwords: dict[str, str] = field(default_factory=dict)
+    picture_password_ready: set[str] = field(default_factory=set)
     countdown: CountdownTracker = field(default_factory=CountdownTracker)
     workbench_device_key: str | None = None
     workbench_search_sensor: Any = None

@@ -342,8 +342,9 @@ async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) 
         ) from err
     briefing = parse_alarm_message_statistics(raw)
     chart_dir = Path(hass.config.path("www", "imou"))
+    language = hass.config.language or "en"
     summary, markdown = await hass.async_add_executor_job(
-        briefing_card, chart_dir, entry.entry_id, briefing
+        briefing_card, chart_dir, entry.entry_id, briefing, language
     )
     briefing_sensor = runtime.workbench_briefing_sensor
     if briefing_sensor is not None:

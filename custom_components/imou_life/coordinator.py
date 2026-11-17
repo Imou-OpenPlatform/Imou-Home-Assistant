@@ -40,8 +40,9 @@ from .helpers import (
     get_selected_device_ids,
     iot_property_push_active,
 )
+from .pic_thumbnail import async_remember_picture_passwords
 from .repairs import async_delete_quota_issue, async_notify_imou_api_error
-from .runtime_data import ImouRuntimeData
+from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -204,6 +205,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if first_discovery:
             await self._async_prefetch_event_maps(filtered_list)
             self._async_add_remove_devices(fresh_by_key)
+            await self._async_remember_picture_passwords()
             return
 
         new_keys = set(fresh_by_key) - set(self.devices_by_key)
@@ -213,6 +215,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             )
         self._async_add_remove_devices(fresh_by_key)
         await self._async_refresh_known_devices(fresh_by_key)
+        await self._async_remember_picture_passwords()
         await self._async_retry_event_maps()
 
     def _debug_log_capability_lists(self, devices: Iterable[ImouHaDevice]) -> None:
@@ -375,6 +378,15 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 remove_config_entry_id=self.config_entry.entry_id,
             )
 
+    async def _async_remember_picture_passwords(self) -> None:
+        """Read picture passwords for devices that do not have one yet."""
+        runtime = get_runtime_data(self.config_entry)
+        if runtime is None:
+            return
+        await async_remember_picture_passwords(
+            runtime, self.devices_by_key.values()
+        )
+
     async def _async_refresh_known_devices(
         self, fresh_by_key: dict[str, ImouHaDevice]
     ) -> None:
@@ -385,6 +397,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             current = self.devices_by_key.get(key)
             if current is None:
                 continue
+            token = fresh.play_token_v2
+            if isinstance(token, str) and token:
+                current.set_play_token_v2(token)
             if fresh.cs_status is not None:
                 current.set_cs_status(fresh.cs_status)
             if fresh.ai_insight_status is not None:

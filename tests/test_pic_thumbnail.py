@@ -668,7 +668,7 @@ async def test_maybe_decrypt_wrong_password_points_at_the_option(
 
     assert result is None
     runtime.client.async_get_token.assert_not_awaited()
-    assert "configured device password" in caplog.text
+    assert "could not be decrypted on this Home Assistant" in caplog.text
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

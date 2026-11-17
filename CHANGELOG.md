@@ -10,9 +10,8 @@
 - Entities are created only for capabilities your device reports on the Open Platform **capability list** (same gate for plugs and cameras).
 - **Media browser** — browse **cloud** and **local** recordings per camera channel under **Media**, then play clips with HLS (local tree appears when the device supports local recording file access).
 - **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; optional **AI** line in alarm notification templates when your template includes it.
-- **AI Insight workbench** (per account) — **AI Insight device** select, **AI Insight search** and **AI Insight briefing** sensors (Markdown-friendly state), **AI Insight trial** button, and services **`search_ai_alarms`** / **`refresh_ai_insight_briefing`** (default last 7 days). Optional trial link under **Configure → AI Insight workbench**. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
+- **AI Insight** (per account) — sidebar **Briefing**, **Search**, and **Trial**, plus services **`search_ai_alarms`** / **`refresh_ai_insight_briefing`** (default last 7 days). Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
 - Service **`device_snap_detect`** — cloud snapshot with person / vehicle / pet detection; optional notify targets (defaults to persistent notification and every `mobile_app_*` notify service when omitted).
-- Configure menu entry **AI Insight workbench**.
 - Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
 
 #### Changed
@@ -21,8 +20,8 @@
 - The sidebar gains **AI Insight** (**Briefing**, **Search**, **Trial**). Picking a date on Briefing refreshes that day. Search turns with **Previous** and **Next**. **Trial** explains that adding the official WeChat or WhatsApp starts a trial.
 - The briefing chart shows **person**, **vehicle**, **pet**, **package**, and the **day total**.
 - On devices that use the new capability path, **Wide dynamic** appears as a **select** (off / on / adaptive where supported), not a switch.
-- Unchecked devices under **Configure → Choose devices to poll** do not appear in the Home Assistant device list. That page still lists every device on the account. Checking one again brings it back.
-- Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has an Alarm pictures page.
+- Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account. Checking one again brings it back.
+- Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has an Alarm pictures page. The picture password is read when Imou Life loads. Change it in the Imou app, then reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
 - Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
 
 #### Fixed
@@ -373,9 +372,8 @@
 - 实体仅根据开放平台返回的 **能力列表** 创建（插座与摄像头同一套门控）。
 - **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像** 与 **本地录像**（设备支持本地录像文件能力时显示本地树），用 HLS 播放片段。
 - **智见**（摄像头通道）— 诊断用 **智见**、**云存储** 传感器；告警通知模板可选用 **智见** 文案行。
-- **智见工作台**（按账号）— **智见设备** 选择框、**智见搜索** / **智见简报** 传感器（状态适合 Markdown 卡片）、**AI智见试用** 按钮，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。可在 **配置 → 智见工作台** 填写试用链接。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- **AI 智见**（按账号）— 侧边栏的 **简报**、**搜索**、**试用**，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
 - 服务 **`device_snap_detect`** — 云端抓图并做人 / 车 / 宠检测；可指定通知目标（省略时默认持久通知与各 `mobile_app_*` 通知服务）。
-- 配置菜单新增 **智见工作台**。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
 #### 变更
@@ -384,8 +382,8 @@
 - 侧边栏会出现 **AI 智见**（**简报**、**搜索**、**试用**）。在简报里选定日期后会自动重算。搜索用 **上一页**、**下一页** 翻页。**试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
 - 简报按 **人形**、**车辆**、**宠物**、**包裹**、**全部** 显示当天数量。
 - 走新标准能力路径的设备上，**宽动态** 为 **选择框**（关 / 开 / 自适应，以设备能力为准），不再是开关。
-- **配置 → 选择要轮询的设备** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。重新勾选后，设备会再出现。
-- 告警图片只要推送里带图，就会在本机解密。**配置** 里不再有「告警图片」这一页。
+- **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。重新勾选后，设备会再出现。
+- 告警图片只要推送里带图，就会在本机解密。**配置** 里不再有「告警图片」这一页。图片密码在 Imou Life 加载时读取。在乐橙 App 里改了密码后，重新加载本集成，图片才会用新密码。仍解不开的图片会再试设备序列号。
 - **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置。各摄像头的开关仍在设备页。
 
 #### 修复

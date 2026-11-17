@@ -785,7 +785,7 @@
       "message": "无法删除设备 {name}：缺少 Imou 设备 ID。"
     },
     "remove_device_has_siblings": {
-      "message": "无法删除 {name}：它是设备 {device_id} 的其中一个通道，该设备还有 {siblings}。要整台从 Home Assistant 去掉，请在「选择要轮询的设备」里取消勾选；要只隐藏这一路，请禁用其实体。"
+      "message": "无法删除 {name}：它是设备 {device_id} 的其中一个通道，该设备还有 {siblings}。要整台从 Home Assistant 去掉，请在「轮询与摄像头」里取消勾选；要只隐藏这一路，请禁用其实体。"
     },
     "remove_device_no_runtime": {
       "message": "无法删除设备 {name}：集成未加载。"

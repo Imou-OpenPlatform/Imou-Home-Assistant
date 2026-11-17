@@ -761,7 +761,7 @@
       "message": "Impossible de supprimer l'appareil {name} : identifiant d'appareil Imou manquant."
     },
     "remove_device_has_siblings": {
-      "message": "Impossible de supprimer {name} : c'est un canal de l'appareil Imou {device_id}, qui couvre aussi {siblings}. Décochez l'appareil entier sous Choisir les appareils à interroger pour le retirer, ou désactivez les entités de ce canal pour le masquer."
+      "message": "Impossible de supprimer {name} : c'est un canal de l'appareil Imou {device_id}, qui couvre aussi {siblings}. Décochez l'appareil entier sous Interrogation et caméras pour le retirer, ou désactivez les entités de ce canal pour le masquer."
     },
     "remove_device_no_runtime": {
       "message": "Impossible de supprimer l'appareil {name} : l'intégration n'est pas chargée."
