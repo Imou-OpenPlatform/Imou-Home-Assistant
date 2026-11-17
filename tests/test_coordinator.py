@@ -67,6 +67,25 @@ async def _run_update(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_refresh_copies_the_new_play_token(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A later device list updates the play token kept on the known device."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    current = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    current.set_channel_id("0")
+    fresh = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    fresh.set_channel_id("0")
+    fresh.set_play_token_v2("token-v2")
+    key = imou_life_device_key(current)
+    coordinator.devices_by_key = {key: current}
+    await coordinator._async_refresh_known_devices({key: fresh})
+    assert current.play_token_v2 == "token-v2"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_filter_none_selects_all(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

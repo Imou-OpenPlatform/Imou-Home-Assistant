@@ -38,6 +38,34 @@ def test_briefing_card_writes_a_bar_chart(tmp_path) -> None:
     assert 'font-size="18"' in chart
 
 
+def test_english_briefing_uses_english_series_names(tmp_path) -> None:
+    """An English Home Assistant does not draw the Chinese series names."""
+    briefing = parse_alarm_message_statistics(
+        {
+            "statistics": [
+                {
+                    "date": "20261115",
+                    "totalcount": 12,
+                    "humanAlarm": 4,
+                    "carAlarm": 2,
+                    "petAlarm": 5,
+                    "packageAlarm": 1,
+                }
+            ]
+        }
+    )
+    summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing, "en")
+    assert summary == "2026-11-15 · total 12"
+    assert markdown.startswith("![AI Insight briefing](")
+    chart = next(tmp_path.glob("briefing-ENTRY1-*.svg")).read_text(encoding="utf-8")
+    assert "Person" in chart
+    assert "Vehicle" in chart
+    assert "Pet" in chart
+    assert "Package" in chart
+    assert "Total" in chart
+    assert "人形" not in chart
+
+
 def test_live_totals_include_package_and_are_not_a_quiet_day(tmp_path) -> None:
     """totalCount is the day total. A non-zero day is not labeled empty."""
     briefing = parse_alarm_message_statistics(

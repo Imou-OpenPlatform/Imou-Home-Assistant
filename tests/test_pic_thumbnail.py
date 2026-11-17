@@ -22,6 +22,7 @@ from custom_components.imou_life.pic_thumbnail import (
     _async_download_picture,
     _sync_decrypt_and_write,
     async_maybe_decrypt_thumbnail,
+    async_remember_picture_passwords,
     public_media_url,
 )
 from custom_components.imou_life.runtime_data import ImouRuntimeData
@@ -84,6 +85,130 @@ def _entry(hass: HomeAssistant, *, attach: bool = True) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
+
+
+def _sealed_play_token(password: str = "door-42") -> tuple[str, str]:
+    """Return (play token, hex key) that decrypt to ``password``."""
+    import base64
+    import json
+    import os
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = os.urandom(32)
+    nonce = b"0123456789ab"
+    body = AESGCM(key).encrypt(
+        nonce, json.dumps({"devLoginPassword": password}).encode(), None
+    )
+    token = base64.b64encode(nonce + body).decode("ascii")
+    return token, key.hex()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_is_read_once_for_the_whole_device() -> None:
+    """Two channels share one password, and a later list does not ask again."""
+    token, key_hex = _sealed_play_token()
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(return_value=key_hex)
+    channels = [
+        MagicMock(device_id="SN1", play_token_v2=token),
+        MagicMock(device_id="SN1", play_token_v2=token),
+    ]
+    await async_remember_picture_passwords(runtime, channels)
+    assert runtime.picture_passwords["SN1"] == "door-42"
+    assert runtime.client.async_get_play_token_key.await_count == 1
+
+    runtime.client.async_get_play_token_key.reset_mock()
+    channels[0].play_token_v2 = "a-newer-token"
+    await async_remember_picture_passwords(runtime, channels)
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+    assert runtime.picture_passwords["SN1"] == "door-42"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_is_not_asked_again_after_a_failure() -> None:
+    """A failed read stays failed until the integration loads again."""
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(
+        side_effect=RuntimeError("down")
+    )
+    device = MagicMock(device_id="SN1", play_token_v2="token")
+    await async_remember_picture_passwords(runtime, [device])
+    await async_remember_picture_passwords(runtime, [device])
+    assert "SN1" not in runtime.picture_passwords
+    assert runtime.client.async_get_play_token_key.await_count == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_waits_until_a_token_exists() -> None:
+    """A device with no token yet is read once the list includes one."""
+    token, key_hex = _sealed_play_token("later")
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(return_value=key_hex)
+    bare = MagicMock(device_id="SN1", play_token_v2=None)
+    await async_remember_picture_passwords(runtime, [bare])
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+    later = MagicMock(device_id="SN1", play_token_v2=token)
+    await async_remember_picture_passwords(runtime, [later])
+    assert runtime.picture_passwords["SN1"] == "later"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_decrypt_uses_the_password_read_at_load(hass: HomeAssistant) -> None:
+    """An alarm uses the stored password and does not ask for a key."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    runtime.picture_passwords["SN1"] = "door-42"
+    runtime.client.async_get_play_token_key = AsyncMock()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ) as mock_decrypt,
+    ):
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_args.args[6] == "door-42"
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_decrypt_without_a_stored_password_uses_the_serial(
+    hass: HomeAssistant,
+) -> None:
+    """No password from load means the picture is tried with the device serial."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ) as mock_decrypt,
+    ):
+        await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert mock_decrypt.call_args.args[6] == "SN1"
+    runtime.client.async_get_play_token_key.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

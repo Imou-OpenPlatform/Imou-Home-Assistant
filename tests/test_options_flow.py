@@ -751,6 +751,53 @@ async def test_options_select_poll_submits_and_saves(hass) -> None:
     assert entry.options[PARAM_UPDATE_INTERVAL] == 60
 
 
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_saving_polling_with_every_device_checked_keeps_future_devices(
+    hass,
+) -> None:
+    """Checking every device on an unfiltered account must not freeze that list."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_UPDATE_INTERVAL: 60},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_poll_devices(hass, result["flow_id"])
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_POLLING: True,
+            PARAM_UPDATE_INTERVAL: 90,
+            PARAM_SELECTED_DEVICES: ["device_1", "device_2"],
+        },
+    )
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_UPDATE_INTERVAL] == 90
+    assert PARAM_SELECTED_DEVICES not in entry.options
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
+async def test_unchecking_a_device_saves_the_remaining_list(hass) -> None:
+    """Leaving a device unchecked is a real filter and is stored."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_poll_devices(hass, result["flow_id"])
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            PARAM_ENABLE_POLLING: True,
+            PARAM_UPDATE_INTERVAL: 60,
+            PARAM_SELECTED_DEVICES: ["device_1"],
+        },
+    )
+    _assert_returned_to_menu(result)
+    assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
+
+
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_devices_empty_stays_on_polling_page(hass) -> None:
     """An empty account still opens polling settings, without a device list."""
