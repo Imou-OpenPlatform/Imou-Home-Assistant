@@ -77,7 +77,7 @@ _UNSET = object()
 
 _REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
 _REPLACED_DOORBELL_SUFFIX = "$doorbell"
-_REPLACED_MOTION_SENSOR_SUFFIX = "$motion"
+_REPLACED_MOTION_EVENT_SUFFIX = "$motion"
 
 
 def async_remove_replaced_legacy_entities(
@@ -98,9 +98,8 @@ def async_remove_replaced_legacy_entities(
         drop_doorbell = entity_entry.domain == "event" and unique_id.endswith(
             _REPLACED_DOORBELL_SUFFIX
         )
-        drop_motion_sensor = (
-            entity_entry.domain == "binary_sensor"
-            and unique_id.endswith(_REPLACED_MOTION_SENSOR_SUFFIX)
+        drop_motion_event = entity_entry.domain == "event" and unique_id.endswith(
+            _REPLACED_MOTION_EVENT_SUFFIX
         )
         if (
             drop_select
@@ -108,7 +107,7 @@ def async_remove_replaced_legacy_entities(
             or drop_text
             or drop_white_light
             or drop_doorbell
-            or drop_motion_sensor
+            or drop_motion_event
         ):
             registry.async_remove(entity_entry.entity_id)
 
@@ -135,16 +134,17 @@ def async_remove_bulb_relay_switches(hass: HomeAssistant, entry: ConfigEntry) ->
 
 
 def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop Call and Motion events this channel no longer offers.
+    """Drop Motion sensors and Call events this channel no longer offers.
 
     Only currently loaded devices are considered. A device left unchecked is
     already removed from the device list before this runs.
     """
     coordinator = entry.runtime_data.coordinator
-    from .event import _iter_call_events, _iter_motion_events
+    from .binary_sensor import _iter_motion_sensors
+    from .event import _iter_call_events
 
     allowed_motion = {
-        imou_life_device_key(device) for _, device in _iter_motion_events(coordinator)
+        imou_life_device_key(device) for _, device in _iter_motion_sensors(coordinator)
     }
     allowed_call = {
         imou_life_device_key(device) for _, device in _iter_call_events(coordinator)
@@ -156,9 +156,14 @@ def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) 
         device_key, sep, entity_type = unique_id.rpartition("$")
         if not sep or device_key not in known:
             continue
-        drop = entity_entry.domain == "event" and (
-            (entity_type == PARAM_MOTION and device_key not in allowed_motion)
-            or (entity_type == PARAM_CALL and device_key not in allowed_call)
+        drop = (
+            entity_entry.domain == "binary_sensor"
+            and entity_type == PARAM_MOTION
+            and device_key not in allowed_motion
+        ) or (
+            entity_entry.domain == "event"
+            and entity_type == PARAM_CALL
+            and device_key not in allowed_call
         )
         if drop:
             registry.async_remove(entity_entry.entity_id)

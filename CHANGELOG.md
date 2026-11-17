@@ -25,7 +25,7 @@
 - Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
 - **Sleep control retry wait** is set under **Configure → Polling and cameras → Camera defaults**.
 - **Call** replaces **Doorbell**. A channel that can receive a call shows **Call**, and an incoming call fires it. The old doorbell entity is removed on setup.
-- **Motion** is an event. It fires when the camera reports motion. The old motion sensor is removed on setup.
+- **Motion** shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears. A motion event from this version is removed on setup.
 - When the two official libraries for alarm pictures are missing, **Settings → System → Repairs** says where to put them and where to download them. A host that is not linux x86-64 gets a repair saying pictures stay encrypted.
 
 #### Fixed
@@ -391,7 +391,7 @@
 - **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置。各摄像头的开关仍在设备页。
 - **休眠控制重试等待** 改在 **配置 → 轮询与摄像头 → 摄像头默认** 里设置。
 - **呼叫** 取代门铃。能接呼叫的通道显示 **呼叫**，有来电时触发。原来的门铃实体会在加载时删除。
-- **动态侦测** 改为事件。摄像头上报移动时触发。原来的动态侦测传感器会在加载时删除。
+- **动态侦测** 在摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。这一版里的动态侦测事件会在加载时删除。
 - 告警图片缺少两个官方库时，**设置 → 系统 → 修复** 会说明放到哪里、从哪里下载。不是 linux x86-64 的机器会提示图片保持加密。
 
 #### 修复

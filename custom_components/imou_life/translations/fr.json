@@ -707,6 +707,9 @@
           "on": "Ouvert",
           "off": "Fermé"
         }
+      },
+      "motion": {
+        "name": "Mouvement"
       }
     },
     "event": {
@@ -714,12 +717,6 @@
         "name": "Appel",
         "state": {
           "call": "Appel"
-        }
-      },
-      "motion": {
-        "name": "Mouvement",
-        "state": {
-          "motion": "Détecté"
         }
       }
     },

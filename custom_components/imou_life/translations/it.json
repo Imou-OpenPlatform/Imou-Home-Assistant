@@ -707,6 +707,9 @@
           "on": "Aperto",
           "off": "Chiuso"
         }
+      },
+      "motion": {
+        "name": "Movimento"
       }
     },
     "event": {
@@ -714,12 +717,6 @@
         "name": "Chiamata",
         "state": {
           "call": "Chiamata"
-        }
-      },
-      "motion": {
-        "name": "Movimento",
-        "state": {
-          "motion": "Rilevato"
         }
       }
     },
