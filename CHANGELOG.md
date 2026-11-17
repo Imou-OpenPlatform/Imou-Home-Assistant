@@ -18,7 +18,12 @@
 #### Changed
 
 - Requires **pyimouapi 2.0.0**, installed automatically with this integration.
+- The sidebar gains **AI Insight** (**Briefing**, **Search**, **Trial**). Picking a date on Briefing refreshes that day. Search turns with **Previous** and **Next**. **Trial** explains that adding the official WeChat or WhatsApp starts a trial.
+- The briefing chart shows **person**, **vehicle**, **pet**, **package**, and the **day total**.
 - On devices that use the new capability path, **Wide dynamic** appears as a **select** (off / on / adaptive where supported), not a switch.
+- Unchecked devices under **Configure → Choose devices to poll** do not appear in the Home Assistant device list. That page still lists every device on the account. Checking one again brings it back.
+- Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has an Alarm pictures page.
+- Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
 
 #### Fixed
 
@@ -368,7 +373,7 @@
 - 实体仅根据开放平台返回的 **能力列表** 创建（插座与摄像头同一套门控）。
 - **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像** 与 **本地录像**（设备支持本地录像文件能力时显示本地树），用 HLS 播放片段。
 - **智见**（摄像头通道）— 诊断用 **智见**、**云存储** 传感器；告警通知模板可选用 **智见** 文案行。
-- **智见工作台**（按账号）— **智见设备** 选择框、**智见搜索** / **智见简报** 传感器（状态适合 Markdown 卡片）、**智见试用** 按钮，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。可在 **配置 → 智见工作台** 填写试用链接。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- **智见工作台**（按账号）— **智见设备** 选择框、**智见搜索** / **智见简报** 传感器（状态适合 Markdown 卡片）、**AI智见试用** 按钮，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。可在 **配置 → 智见工作台** 填写试用链接。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
 - 服务 **`device_snap_detect`** — 云端抓图并做人 / 车 / 宠检测；可指定通知目标（省略时默认持久通知与各 `mobile_app_*` 通知服务）。
 - 配置菜单新增 **智见工作台**。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
@@ -376,7 +381,12 @@
 #### 变更
 
 - 需要 **pyimouapi 2.0.0**，随本集成自动安装。
+- 侧边栏会出现 **AI 智见**（**简报**、**搜索**、**试用**）。在简报里选定日期后会自动重算。搜索用 **上一页**、**下一页** 翻页。**试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
+- 简报按 **人形**、**车辆**、**宠物**、**包裹**、**全部** 显示当天数量。
 - 走新标准能力路径的设备上，**宽动态** 为 **选择框**（关 / 开 / 自适应，以设备能力为准），不再是开关。
+- **配置 → 选择要轮询的设备** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。重新勾选后，设备会再出现。
+- 告警图片只要推送里带图，就会在本机解密。**配置** 里不再有「告警图片」这一页。
+- **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置。各摄像头的开关仍在设备页。
 
 #### 修复
 

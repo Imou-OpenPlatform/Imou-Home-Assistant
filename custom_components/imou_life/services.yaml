@@ -15,7 +15,7 @@ control_move_ptz:
           unit_of_measurement: ms
 device_snap_detect:
   target:
-    entity:
+    device:
       integration: imou_life
   fields:
     notify_targets:
@@ -41,6 +41,13 @@ search_ai_alarms:
           min: 1
           max: 31
           unit_of_measurement: days
+    page:
+      required: false
+      selector:
+        select:
+          options:
+            - next
+            - previous
 refresh_ai_insight_briefing:
   target:
     entity:

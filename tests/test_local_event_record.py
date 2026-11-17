@@ -1,7 +1,9 @@
-"""Local event recording: per-camera switch, shared path/duration."""
+"""Local event recording: per-camera switch and clip duration."""
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +11,6 @@ from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_LOCAL_EVENT_RECORD,
     PARAM_LOCAL_RECORD_DURATION,
-    PARAM_LOCAL_RECORD_PATH,
 )
 from custom_components.imou_life.local_record import async_maybe_record_from_alarm
 from custom_components.imou_life.webhook import async_handle_imou_webhook
@@ -20,6 +21,20 @@ from pytest_homeassistant_custom_component.common import async_mock_service
 
 from .conftest import setup_imou_runtime
 from .test_webhook import MockRequest
+
+
+@contextmanager
+def _saved_under_media(hass: HomeAssistant, *, allowed: bool = True):
+    """Pin clips to /media/imou without creating that directory."""
+    with (
+        patch(
+            "custom_components.imou_life.local_record.alarm_clip_folder",
+            return_value=Path("/media/imou"),
+        ),
+        patch("custom_components.imou_life.local_record._ensure_clip_folder"),
+        patch.object(hass.config, "is_allowed_path", return_value=allowed),
+    ):
+        yield
 
 
 def _register_camera_and_switch(
@@ -63,22 +78,21 @@ async def test_alarm_does_not_record_when_switch_is_off(hass: HomeAssistant) -> 
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 30,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 30},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=False)
 
-    with patch.object(hass.config, "is_allowed_path", return_value=True):
+    with _saved_under_media(hass):
         calls = await _alarm(hass, entry)
 
     assert calls == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_alarm_does_not_record_when_folder_is_empty(hass: HomeAssistant) -> None:
-    """A camera switch on with no shared folder must not pull a stream."""
+async def test_alarm_records_into_media_without_a_configured_folder(
+    hass: HomeAssistant,
+) -> None:
+    """A camera switch on saves a clip under Media with no folder option."""
     setup_imou_runtime(hass, selected_devices=["SN1"])
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
@@ -87,9 +101,11 @@ async def test_alarm_does_not_record_when_folder_is_empty(hass: HomeAssistant) -
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
 
-    calls = await _alarm(hass, entry)
+    with _saved_under_media(hass):
+        calls = await _alarm(hass, entry)
 
-    assert calls == []
+    assert len(calls) == 1
+    assert calls[0].data["filename"].startswith("/media/imou/")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -101,14 +117,11 @@ async def test_alarm_does_not_record_when_path_not_allowed(
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 30,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 30},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
 
-    with patch.object(hass.config, "is_allowed_path", return_value=False):
+    with _saved_under_media(hass, allowed=False):
         calls = await _alarm(hass, entry)
 
     assert calls == []
@@ -121,15 +134,12 @@ async def test_overlapping_record_is_skipped(hass: HomeAssistant) -> None:
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 30,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 30},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
 
     calls = async_mock_service(hass, "camera", "record")
-    with patch.object(hass.config, "is_allowed_path", return_value=True):
+    with _saved_under_media(hass):
         await async_maybe_record_from_alarm(
             hass,
             entry,
@@ -152,15 +162,12 @@ async def test_alarm_records_only_the_armed_camera(hass: HomeAssistant) -> None:
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 45,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 45},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
 
     calls = async_mock_service(hass, "camera", "record")
-    with patch.object(hass.config, "is_allowed_path", return_value=True):
+    with _saved_under_media(hass):
         await async_maybe_record_from_alarm(
             hass,
             entry,
@@ -191,15 +198,12 @@ async def test_first_record_is_not_skipped_while_loop_time_is_low(
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
     hass.config_entries.async_update_entry(
         entry,
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 45,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 45},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
 
     with (
-        patch.object(hass.config, "is_allowed_path", return_value=True),
+        _saved_under_media(hass),
         patch.object(hass.loop, "time", return_value=5.0),
     ):
         calls = await _alarm(hass, entry)
@@ -213,15 +217,12 @@ async def test_webhook_alarm_uses_local_record_helper(hass: HomeAssistant) -> No
     setup_imou_runtime(
         hass,
         selected_devices=["SN1"],
-        options={
-            PARAM_LOCAL_RECORD_PATH: "/media/imou",
-            PARAM_LOCAL_RECORD_DURATION: 30,
-        },
+        options={PARAM_LOCAL_RECORD_DURATION: 30},
     )
     _register_camera_and_switch(hass, device_key="SN1_0", switch_on=True)
     calls = async_mock_service(hass, "camera", "record")
 
-    with patch.object(hass.config, "is_allowed_path", return_value=True):
+    with _saved_under_media(hass):
         response = await async_handle_imou_webhook(
             hass,
             "webhook-id",

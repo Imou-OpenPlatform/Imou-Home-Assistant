@@ -44,7 +44,6 @@ Two things worth knowing:
 | Sleep control retry wait | When status is **Sleep** and a control fails, how long to wait before sending the same command once more. Range 5–60. | 5 |
 | Snapshot wait time | How long to wait after asking a camera for a snapshot, since the camera has to take and upload it first. Raise it if snapshots come back stale or empty. A still already fetched is reused for 30 seconds. Range 1–9. | 3 |
 | Video resolution | `HD` or `SD`, used by the Live camera entity. | HD |
-| PTZ rotation duration | How far one press of a direction button moves, expressed as movement time in milliseconds. Range 100–10000. | 500 |
 
 Live streams always use `https`. There is no protocol choice: on an HTTPS Home Assistant a plain `http` stream URL is blocked by browsers as mixed content.
 
@@ -56,29 +55,22 @@ Live streams always use `https`. There is no protocol choice: on an HTTPS Home A
 | Callback URL | Where the Imou cloud POSTs alarms. Prefilled from **Step 0**; must be reachable from the internet. Only change the hostname and port unless a proxy also rewrites the path. | generated |
 | Subscribe to | Which cloud message types to receive. **Device event messages** is listed first when available; turn it on for V2 capability events. Other types (device alarms, online/offline, IoT messages) only appear when your cloud callback already supports them. None are selected by default. | none selected |
 | Notification targets | Registered notify services to message on an alarm, one message per alarm. Leave empty to drive everything from automations instead. Add `notify.persistent_notification` to also get the alarm in the Home Assistant web notification drawer. | empty |
+| Clip duration (seconds) | How long **Record on alarm** keeps the cloud live stream after an alarm. Range 15–180. Uses live-stream quota. Each camera's switch is on its device page. A clip is saved only while alarm push is on. | 60 |
 
 A device page also has a **Notify on alarm** switch, so one noisy camera can be silenced without touching this page.
 
 ### Alarm pictures
 
-Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself and decrypts it locally, so no Open API quota is spent.
-
-| Option | What it does | Default |
-| --- | --- | --- |
-| Show the picture in alarm notifications | Decrypt the alarm picture and put it in notifications. Cannot be switched on while the native libraries are missing. | Off |
-| Default device password | Fallback for devices that do not have their own password. Saved values are filled back in (masked). | empty |
-| Per-device password | One field per device that needs a password, labelled with the device name and serial. Saved values are filled back in (masked). | empty |
-| Remove stored passwords | Deletes the passwords of the serials you check. | — |
+Alarm pictures arrive encrypted. Home Assistant downloads the ciphertext itself and decrypts it on this Home Assistant, so no Open API quota is spent. Every alarm picture is decrypted; there is no switch for it.
 
 Prerequisites:
 
-- **linux x86-64 only.** The integration does not ship the native libraries; download the official Demo package yourself. China: [ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt). Overseas: [HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). The download is a zip; after extracting, copy both `libLCOpenApiClient.so` and `libLCOpenSDK.so` from `Open-PicDecode/src/main/resources/linux-x86-64` into `/config/imou_life/native/`. `libLCOpenSDK.so` does the decrypting and `libLCOpenApiClient.so` supplies the OpenSSL symbols it links against, so one alone will not load. The page reports whether they were found.
-- **A password, but only for some devices.** The page lists exactly the devices that need one; anything not listed derives its key from its serial number and needs nothing from you.
+- **linux x86-64 only.** The integration does not ship the native libraries; download the official Demo package yourself. China: [ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt). Overseas: [HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). The download is a zip; after extracting, copy both `libLCOpenApiClient.so` and `libLCOpenSDK.so` from `Open-PicDecode/src/main/resources/linux-x86-64` into `/config/imou_life/native/`. `libLCOpenSDK.so` does the decrypting and `libLCOpenApiClient.so` supplies the OpenSSL symbols it links against, so one alone will not load.
 - **An internet-reachable Home Assistant URL** (Step 0), or phones off the LAN cannot load the picture.
 
 Pictures are written to `/local/imou_life/thumbs/` and served **without authentication** for roughly 24 hours, so anyone holding the URL can view them. If `/config/www` did not exist before, restart Home Assistant once after the first picture is written. Many motion pushes carry no picture URL at all; those notifications stay text-only.
 
-Each camera also gets an **Alarm picture** entity with the last still this Home Assistant decrypted. Pin it on a dashboard. It uses the same decrypt path as notifications (not a live snapshot). The entity is unavailable while event push (type **alarm**) or **Show the picture in alarm notifications** is off, and empty until a push includes a picture that decrypts.
+Each camera also gets an **Alarm picture** entity with the last still this Home Assistant decrypted. Pin it on a dashboard. It uses the same decrypt path as notifications (not a live snapshot). The entity is unavailable while event push (type **alarm**) is off, and empty until a push includes a picture that decrypts.
 
 On iOS an unexpanded notification shows a small thumbnail — long-press or pull it down to see the full-size picture. Alarm stills come from the cloud at the resolution it chose, commonly 640×480.
 
@@ -88,29 +80,15 @@ On iOS an unexpanded notification shows a small thumbnail — long-press or pull
 
 When an Imou **alarm** is pushed, cameras whose **Record on alarm** switch is on save a short MP4 from the **cloud live stream**. The integration does this itself — you do not write an automation. This is post-event recording, not an NVR. Dual-lens devices have one switch per channel. Each clip consumes **Open Platform live-view quota**.
 
-| Option | What it does | Default |
-| --- | --- | --- |
-| Save folder | Where clips are written, for example `/media/imou`. Must be listed in `allowlist_external_dirs` (creating the folder alone is not enough). Empty means no recording. | empty |
-| Clip duration | Seconds recorded after an alarm, 15–180. Uses live-stream quota. | 60 |
+Clip length is set under **Configure → Alarm push and notifications** (default 60 seconds, range 15–180). Clips are saved under Media and shown in the media browser under **Record on alarm**. On each camera device page, turn on **Record on alarm** (configuration section) for the lenses you want. Default is off so one alarm does not start pulling live streams for every device. A clip is saved only while alarm push is on.
 
-These two fields apply to every camera on this account and do not turn recording on by themselves. On each camera device page, turn on **Record on alarm** (configuration section) for the lenses you want. Default is off so one alarm does not start pulling live streams for every device.
-
-On Home Assistant OS, `/media/imou` is typical. Merge this into your existing `homeassistant:` block, then restart. Core / development installs should use an absolute path under the config folder instead.
-
-```yaml
-homeassistant:
-  allowlist_external_dirs:
-    - /media/imou
-```
-
-After a real alarm, a file like `/media/imou/<deviceId>_<channel>_<timestamp>.mp4` should appear. Wait until the camera entity is not `unavailable`.
+Wait until the camera entity is not `unavailable`.
 
 Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch back to the Imou cloud, downloading Imou **cloud** history clips, or local camera RTSP (live view is a cloud stream). Overlapping alarms on the same camera are skipped until the current clip duration elapses.
 
 | Symptom | What to do |
 | --- | --- |
-| Switch on but no file | Confirm this page has a folder; confirm event push and **alarm** type; confirm the camera switch is on. |
-| Options save refused / path not allowed | Folder is not under `allowlist_external_dirs`, directory missing, or absolute path mismatch. Fix and restart. |
+| Switch on but no file | Confirm event push and **alarm** type; confirm the camera switch is on. |
 | Camera unavailable | Wait until the camera state is not `unavailable` after restart. |
 | Empty / failed MP4 | Stream URL expired, network issue, or quota; retry; check logs around stream / ffmpeg. On Home Assistant Core, if logs say Stream is not set up, add `stream:` to `configuration.yaml` and restart. |
 
@@ -118,18 +96,19 @@ Not supported: reliable pre-roll, 24/7 NVR-style recording, writing the switch b
 
 ### Media browser (recordings)
 
-Open **Media**, pick your **Imou Life** account, then a camera channel. You get two trees:
+Open **Media**, pick your **Imou Life** account, then a camera channel. You get these trees:
 
 | Tree | When it appears |
 | --- | --- |
 | Cloud recordings | When the channel has cloud storage history |
 | Local recordings | When the device reports local recording file access |
+| Record on alarm | Clips this Home Assistant saved under Media after an alarm |
 
 Drill down by month → days with clips → individual segments. Playback uses **HLS** through the **Stream** integration. If nothing plays, confirm **Stream** is enabled and check integration logs.
 
 ### AI Insight workbench
 
-**AI Insight** (smart search and daily briefings) needs the channel on an **AI Insight** or **AI Insight cloud storage** plan. Check **AI Insight** / **Cloud storage** on the camera device page.
+**AI Insight** (smart search and daily briefings) needs the channel on an **AI Insight** or **cloud storage** plan. Check **AI Insight** / **Cloud storage** on the camera device page.
 
 Per account (integration device page):
 
@@ -142,10 +121,10 @@ Per account (integration device page):
 
 | Service | Fields | Default window |
 | --- | --- | --- |
-| `imou_life.search_ai_alarms` | `keyword` (required), `days` | 7 days |
+| `imou_life.search_ai_alarms` | `keyword` (required), `days`, `page` (`next` or `previous`) | 7 days |
 | `imou_life.refresh_ai_insight_briefing` | `days` | 7 days |
 
-Target the workbench **select** entity or any entity on the chosen camera. Example Lovelace layout: [`dashboard-ai-insight.yaml`](../guides/dashboard-ai-insight.yaml) — replace entity IDs with yours from **Developer tools → States**.
+The sidebar gains **AI Insight**, with **Briefing**, **Search**, and **Trial**. Picking a date on Briefing refreshes that day. Search shows one page at a time; **Previous** and **Next** move through the matches. **Trial** explains that adding the official WeChat or WhatsApp starts a trial.
 
 | Option | What it does |
 | --- | --- |
@@ -157,13 +136,13 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 
 | Service | What it does |
 | --- | --- |
-| `imou_life.device_snap_detect` | Grabs a cloud snapshot on the targeted camera channel, runs person / vehicle / pet detection, and optionally sends a notify message. Without `notify_targets`, uses persistent notification and each `notify.mobile_app_*` service found. |
+| `imou_life.device_snap_detect` | Grabs a cloud snapshot on the targeted camera channel, runs person / vehicle / pet detection, draws those boxes on the picture, and sends it to the notify targets. Without `notify_targets`, uses persistent notification and each `notify.mobile_app_*` service found. |
 
 ### Devices
 
 | Page | What it does |
 | --- | --- |
-| Choose devices to poll | Unselected devices stay in Home Assistant but are not refreshed. Useful for trimming cloud calls on a large account. |
+| Choose devices to poll | Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account so you can check one later. |
 | Bind a new device | Adds a device by serial number, plus a binding code if the device requires one. |
 
 ### What depends on what
@@ -173,7 +152,7 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 | Any alarm notification, picture, recording, or your own automation | **Enable event push** on, with a Callback URL the Imou cloud can reach |
 | A picture in a phone notification | Event push, **Show the picture in alarm notifications**, both `.so` files, a password for the devices the page lists, and an internet-reachable Home Assistant URL |
 | A picture in the web notification drawer | The same, plus `notify.persistent_notification` among the notification targets |
-| A clip after an alarm | Event push, an allowlisted save folder, and the per-camera switch on |
+| A clip after an alarm | Event push and the per-camera switch on. Open it under **Record on alarm** in the media browser |
 
 ### Related
 
@@ -233,29 +212,22 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 | 回调地址 | Imou 云向哪个地址推送告警。由 **第 0 步** 预填，必须公网可达。除非代理也改写了路径，否则只改主机名和端口。 | 自动生成 |
 | 订阅类型 | 要接收哪些云端消息类型。列表最上方为 **设备事件消息**（V2 能力事件）；**设备告警**、**上下线**、**IoT 消息** 仅在云端已支持对应订阅时出现。默认不勾选任何类型。 | 默认不勾选 |
 | 通知目标 | 告警时要通知的 notify 服务，每条告警发一条消息。留空则完全交给自动化。想在 Home Assistant 网页通知栏也看到告警，把 `notify.persistent_notification` 加进来。 | 空 |
+| 片段时长（秒） | **告警时录像** 在告警后从云端直播录多少秒，15–180。消耗直播配额。各摄像头的开关在设备页。只在告警推送开启时才会录。 | 60 |
 
 设备页上还有一个 **告警时通知** 开关，可以单独静音某个吵闹的摄像头，不用动这一页。
 
 ### 告警图片
 
-告警图片是加密下发的。Home Assistant 自己下载密文再在本机解密，不消耗开放平台配额。
-
-| 选项 | 作用 | 默认 |
-| --- | --- | --- |
-| 在告警通知中显示图片 | 解密告警图片并放进通知。本机缺少原生库时不允许打开。 | 关 |
-| 默认设备密码 | 没有单独填写密码的设备用这个。已存密码会回填（掩码显示）。 | 空 |
-| 各设备密码 | 每个需要密码的设备一个输入框，标签是设备名和序列号。已存密码会回填（掩码显示）。 | 空 |
-| 删除已存密码 | 删除你勾选的那些序列号的密码。 | — |
+告警图片是加密下发的。Home Assistant 自己下载密文再在本机解密，不消耗开放平台配额。带图的告警都会解密，没有单独的开关。
 
 前置条件：
 
-- **仅 linux x86-64。** 集成不附带原生库，现阶段请自行下载官方 Demo 包。国内：[ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt)。海外：[HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)。下载到的是压缩包，解压后从 `Open-PicDecode/src/main/resources/linux-x86-64` 把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都复制到 `/config/imou_life/native/`。`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，只放一个加载不起来。这一页会报告是否找到。
-- **只有部分设备需要密码。** 页面上列出来的就是需要密码的那些；没有列出的设备用自己的序列号推导密钥，不需要你填任何东西。
+- **仅 linux x86-64。** 集成不附带原生库，现阶段请自行下载官方 Demo 包。国内：[ImageDecrpt](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt)。海外：[HTTPInterfaceCallDemo](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)。下载到的是压缩包，解压后从 `Open-PicDecode/src/main/resources/linux-x86-64` 把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都复制到 `/config/imou_life/native/`。`libLCOpenSDK.so` 负责解密，`libLCOpenApiClient.so` 提供它链接的 OpenSSL 符号，只放一个加载不起来。
 - **一个公网可达的 Home Assistant 地址**（第 0 步），否则不在局域网的手机加载不出图片。
 
 图片写在 `/local/imou_life/thumbs/`，**不做身份验证**，保留约 24 小时，也就是说拿到 URL 的人都能查看。如果 `/config/www` 原先不存在，首次生成图片后需要重启一次 Home Assistant。很多移动侦测推送根本不带图片 URL，这类通知仍是纯文本。
 
-每路镜头还有一个 **告警图片** 实体，显示本机最近解密成功的那一张，可以钉在仪表盘。和通知用同一套解密，不会去拍直播快照。未开事件推送（类型 **alarm**）或未开 **在告警通知中显示图片** 时实体不可用；要等一次带图且解密成功的推送才会有画面。
+每路镜头还有一个 **告警图片** 实体，显示本机最近解密成功的那一张，可以钉在仪表盘。和通知用同一套解密，不会去拍直播快照。未开事件推送（类型 **alarm**）时实体不可用；要等一次带图且解密成功的推送才会有画面。
 
 iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是原图**。告警图由云端按它选定的清晰度下发，常见是 640×480。
 
@@ -265,29 +237,15 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 乐橙**告警**推送到 Home Assistant 后，打开了 **告警时录像** 开关的摄像头会从**云端直播流**保存一段短 MP4。集成自己完成，不用写自动化。这是事后短视频，不是 NVR。双目设备按通道各有一个开关。每次录制消耗开放平台**直播配额**。
 
-| 选项 | 作用 | 默认 |
-| --- | --- | --- |
-| 保存目录 | 片段写到哪里，例如 `/media/imou`。必须在 `allowlist_external_dirs` 中（只建文件夹不够）。留空表示不录。 | 空 |
-| 片段时长 | 告警后录制的秒数，15–180。会占用直播配额。 | 60 |
+片段时长在 **配置 → 告警推送与通知** 里设置（默认 60 秒，范围 15–180）。片段保存在媒体目录，在媒体浏览器的 **告警时录像** 里查看。在各摄像头设备页打开 **告警时录像**（配置区），只给需要的镜头打开。默认关闭，避免一次告警把账号下所有设备都拉去直播。只在告警推送开启时才会录。
 
-这两项对账号下所有摄像头共用，本身不会打开录像。在各摄像头设备页打开 **告警时录像**（配置区），只给需要的镜头打开。默认关闭，避免一次告警把账号下所有设备都拉去直播。
-
-Home Assistant OS 上常用 `/media/imou`。把下面这段**合并**进已有的 `homeassistant:`，然后重启。Core / 开发环境请用配置目录下的绝对路径。
-
-```yaml
-homeassistant:
-  allowlist_external_dirs:
-    - /media/imou
-```
-
-真实告警之后应出现类似 `/media/imou/<deviceId>_<channel>_<时间戳>.mp4` 的文件。等相机实体不是 `unavailable` 再测。
+等相机实体不是 `unavailable` 再测。
 
 不支持：可靠预录、7×24 NVR 式录像、把开关写回乐橙云、下载乐橙**云端历史**录像、局域网摄像头 RTSP（当前直播为云端拉流）。同一摄像头在当前片段时长内的重复告警会被跳过。
 
 | 现象 | 处理 |
 | --- | --- |
-| 开关已开但没有文件 | 确认本页已填目录；确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
-| 选项保存被拒 / 路径不在白名单 | 目录不在 `allowlist_external_dirs`、文件夹不存在、或绝对路径不一致。修正后重启。 |
+| 开关已开但没有文件 | 确认已启用事件推送且包含 **alarm**；确认该路镜头开关已开。 |
 | 相机不可用 | 重启后等待相机状态非 `unavailable`。 |
 | MP4 为空或失败 | 流地址过期、网络或配额问题；重试；查看 stream / ffmpeg 相关日志。Home Assistant Core 若日志说 Stream 未启用，在 `configuration.yaml` 增加 `stream:` 后重启。 |
 
@@ -295,12 +253,13 @@ homeassistant:
 
 ### 媒体浏览器（录像）
 
-打开 **媒体**，进入 **Imou Life** 账号，再选摄像头通道。会出现两棵树：
+打开 **媒体**，进入 **Imou Life** 账号，再选摄像头通道。会出现这些目录：
 
-| 树 | 何时出现 |
+| 目录 | 何时出现 |
 | --- | --- |
 | 云录像 | 该通道有云存储历史时 |
 | 本地录像 | 设备上报本地录像文件能力时 |
+| 告警时录像 | 本机在告警后保存到媒体目录的片段 |
 
 按 月 → 有录像的日期 → 片段逐级进入，用 **Stream** 以 **HLS** 播放。播不出来时确认已启用 **Stream**，并查看集成日志。
 
@@ -308,7 +267,7 @@ homeassistant:
 
 ### 智见工作台
 
-**智见**（智能搜索与每日简报）需要该通道已开通 **智见** 或 **智见云存储** 套餐。可在摄像头设备页看 **智见**、**云存储** 传感器。
+**智见**（智能搜索与每日简报）需要该通道已开通 **AI智见** 或 **云存储**。可在摄像头设备页看 **AI智见**、**云存储** 传感器。
 
 每个账号（集成设备页）：
 
@@ -317,18 +276,18 @@ homeassistant:
 | **智见设备** | 选择搜索与简报针对哪路镜头 |
 | **智见搜索** | 由 **`imou_life.search_ai_alarms`** 写入的 Markdown 文本 |
 | **智见简报** | 由 **`imou_life.refresh_ai_insight_briefing`** 写入的 Markdown 文本 |
-| **智见试用** | 弹出持久通知，说明如何人工开通（非应用内购买）；默认联系文案随登录区域（国内 / 海外）不同，**配置 → 智见工作台** 可再附自定义链接。 |
+| **AI智见试用** | 弹出持久通知，说明如何人工开通（非应用内购买）；默认联系文案随登录区域（国内 / 海外）不同，**配置 → 智见工作台** 可再附自定义链接。 |
 
 | 服务 | 字段 | 默认时间范围 |
 | --- | --- | --- |
-| `imou_life.search_ai_alarms` | `keyword`（必填）、`days` | 7 天 |
+| `imou_life.search_ai_alarms` | `keyword`（必填）、`days`、`page`（`next` 下一页或 `previous` 上一页） | 7 天 |
 | `imou_life.refresh_ai_insight_briefing` | `days` | 7 天 |
 
-可 targeting 工作台 **选择框** 实体，或所选摄像头上的任意实体。Lovelace 示例见 [`dashboard-ai-insight.yaml`](../guides/dashboard-ai-insight.yaml)，实体 ID 请在 **开发者工具 → 状态** 中改成你的。
+侧边栏会出现 **AI 智见**，分页是 **简报**、**搜索**、**试用**。在简报里选定日期后会自动重算。搜索一次显示一页，用 **上一页** 和 **下一页** 继续看。**试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
 
 | 选项 | 作用 |
 | --- | --- |
-| **试用或购买链接**（**配置 → 智见工作台**） | 点 **智见试用** 时附加的可选链接或说明 |
+| **试用或购买链接**（**配置 → 智见工作台**） | 点 **AI智见试用** 时附加的可选链接或说明 |
 
 告警通知可在模板里加上 **智见：** 行（与带 AI 文案的推送一致）。
 
@@ -338,13 +297,13 @@ homeassistant:
 
 | 服务 | 作用 |
 | --- | --- |
-| `imou_life.device_snap_detect` | 对目标摄像头通道云端抓图，做人 / 车 / 宠检测，并可发通知。未填 `notify_targets` 时默认持久通知与各 `notify.mobile_app_*` 服务。 |
+| `imou_life.device_snap_detect` | 对目标摄像头通道云端抓图，做人 / 车 / 宠检测，把检测框画到图片上，再发到通知目标。未填 `notify_targets` 时默认持久通知与各 `notify.mobile_app_*` 服务。 |
 
 ### 设备
 
 | 页面 | 作用 |
 | --- | --- |
-| 选择要轮询的设备 | 未勾选的设备仍留在 Home Assistant，但不再刷新。设备多的账号可以用它减少云端调用。 |
+| 选择要轮询的设备 | 没勾选的设备不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，方便以后再勾上。 |
 | 绑定新设备 | 用序列号添加设备，设备需要时再填绑定码。 |
 
 ### 依赖关系一览
@@ -354,7 +313,7 @@ homeassistant:
 | 告警通知、图片、录像，或你自己写的自动化 | 开启 **启用事件推送**，且回调地址 Imou 云能访问到 |
 | 手机通知里带图 | 事件推送、**在告警通知中显示图片**、两个 `.so` 文件、页面上列出的那些设备的密码，以及一个公网可达的 Home Assistant 地址 |
 | 网页通知栏里带图 | 同上，另外把 `notify.persistent_notification` 加进通知目标 |
-| 告警后有录像片段 | 事件推送、一个已加入白名单的保存目录，以及该摄像头的开关已打开 |
+| 告警后有录像片段 | 事件推送，以及该摄像头的开关已打开。在媒体浏览器的 **告警时录像** 里查看 |
 
 ### 相关文档
 

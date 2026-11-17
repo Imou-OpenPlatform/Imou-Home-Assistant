@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from aiohttp import web
 from homeassistant.components import frontend
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -15,7 +16,27 @@ _LOGGER = logging.getLogger(__name__)
 
 _TRIAL_DIALOG_FLAG = "trial_dialog_registered"
 _STATIC_URL = f"/{DOMAIN}_static"
-_MODULE_URL = f"{_STATIC_URL}/trial-dialog.js"
+_MODULE_URL = f"{_STATIC_URL}/trial-dialog.js?v=3"
+_SCRIPT_PATH = Path(__file__).parent / "www" / "trial-dialog.js"
+
+
+class ImouTrialDialogView(HomeAssistantView):
+    """Serve the trial dialog script so browsers do not keep an old copy."""
+
+    requires_auth = False
+    url = f"{_STATIC_URL}/trial-dialog.js"
+    name = "imou_life:trial_dialog"
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the current script with no-store."""
+        hass: HomeAssistant = request.app["hass"]
+        body = await hass.async_add_executor_job(_SCRIPT_PATH.read_bytes)
+        return web.Response(
+            body=body,
+            content_type="text/javascript",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
 
 
 async def async_register_insight_trial_frontend(hass: HomeAssistant) -> bool:
@@ -31,11 +52,8 @@ async def async_register_insight_trial_frontend(hass: HomeAssistant) -> bool:
         _LOGGER.debug("AI Insight dialog frontend is unavailable")
         return False
 
-    www = Path(__file__).parent / "www"
     try:
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(_STATIC_URL, str(www), False)]
-        )
+        hass.http.register_view(ImouTrialDialogView())
         frontend.add_extra_js_url(hass, _MODULE_URL)
     except (KeyError, RuntimeError):
         _LOGGER.warning("Unable to register the optional AI Insight dialog")

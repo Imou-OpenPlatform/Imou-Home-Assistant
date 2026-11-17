@@ -15,7 +15,6 @@ from custom_components.imou_life.insight_account import (
     is_china_api_entry,
 )
 from homeassistant.core import HomeAssistant
-from pyimouapi.insight.cloud import DeviceCloudService
 
 
 def _camera(device_id: str, channel_id: str = "0") -> MagicMock:
@@ -29,6 +28,7 @@ def _camera(device_id: str, channel_id: str = "0") -> MagicMock:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_trial_copy_china(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {PARAM_API_URL: CONF_API_URL_HZ}
@@ -38,6 +38,7 @@ async def test_trial_copy_china(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_trial_copy_overseas(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {PARAM_API_URL: CONF_API_URL_INTL}
@@ -49,12 +50,10 @@ async def test_trial_copy_overseas(hass: HomeAssistant) -> None:
 
 def test_ai_insight_select_filters_non_insight_cameras() -> None:
     insight = _camera("cam-insight")
+    insight.ai_insight_active = True
     other = _camera("cam-event")
-    cloud = {
-        "cam-insight_0": DeviceCloudService(True, "1", "plan", "6", 1, None, None),
-        "cam-event_0": DeviceCloudService(True, "2", "event", "2", 1, None, None),
-    }
-    filtered = ai_insight_channel_devices([insight, other], cloud)
+    other.ai_insight_active = False
+    filtered = ai_insight_channel_devices([insight, other])
     assert [d.device_id for d in filtered] == ["cam-insight"]
-    labels, _ = camera_select_options([insight, other], cloud_by_key=cloud)
+    labels, _ = camera_select_options([insight, other])
     assert labels == ["cam-insight"]

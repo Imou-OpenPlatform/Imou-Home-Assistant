@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.util import raise_if_invalid_filename
 
-from .alarm_saved_clips import CLIP_FILE_PATTERN
-from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH
+from .alarm_saved_clips import CLIP_FILE_PATTERN, alarm_clip_folder
+from .const import DOMAIN
 
 SAVED_RECORD_URL = "/api/imou_life/saved_record/{entry_id}/{filename}"
 DATA_SAVED_RECORD_VIEW = "imou_life_saved_record_view"
@@ -58,10 +57,7 @@ class ImouSavedRecordView(HomeAssistantView):
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry is None or entry.domain != DOMAIN:
             raise web.HTTPNotFound()
-        folder_raw = str(entry.options.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
-        if not folder_raw:
-            raise web.HTTPNotFound()
-        folder = Path(folder_raw)
+        folder = alarm_clip_folder(hass)
         if not hass.config.is_allowed_path(str(folder)):
             raise web.HTTPForbidden()
         if CLIP_FILE_PATTERN.match(filename) is None:

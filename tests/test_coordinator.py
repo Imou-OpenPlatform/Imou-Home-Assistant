@@ -195,13 +195,13 @@ async def test_first_discovery_keeps_registry_devices_still_on_account(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
+async def test_deselecting_a_device_removes_it_from_the_registry(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Polling filter must not remove Home Assistant device registry entries.
+    """Unchecked devices leave the Home Assistant device list.
 
-    Deselecting in options only stops polling. Names, areas, and automations
-    stay. Devices gone from the Imou account are still detached.
+    The poll picker still lists every account device. A device left unchecked
+    is removed here, together with its entities.
     """
     devices = [_mock_device("d1"), _mock_device("d2")]
     entry = MockConfigEntry(
@@ -216,10 +216,19 @@ async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
         identifiers={(DOMAIN, imou_life_device_key(devices[0]))},
         name="Still polled",
     )
+    filtered_key = imou_life_device_key(devices[1])
     filtered = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, imou_life_device_key(devices[1]))},
-        name="Stopped polling",
+        identifiers={(DOMAIN, filtered_key)},
+        name="Not selected",
+    )
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        DOMAIN,
+        "sensor",
+        f"{filtered_key}$status",
+        config_entry=entry,
+        device_id=filtered.id,
     )
 
     device_manager.async_get_devices.return_value = devices
@@ -228,7 +237,12 @@ async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
 
     assert {d.device_id for d in coordinator.devices} == {"d1"}
     assert entry.entry_id in device_registry.async_get(kept.id).config_entries
-    assert entry.entry_id in device_registry.async_get(filtered.id).config_entries
+    gone = device_registry.async_get(filtered.id)
+    assert gone is None or entry.entry_id not in gone.config_entries
+    assert (
+        entity_registry.async_get_entity_id(DOMAIN, "sensor", f"{filtered_key}$status")
+        is None
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -289,6 +303,42 @@ async def test_rediscovery_uses_single_capability_list_when_unchanged(
     await coordinator._async_update_data()
 
     device_manager.async_get_devices.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_configures_only_selected_devices(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_SELECTED_DEVICES: ["d1"]},
+    )
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    device_manager.async_get_devices.return_value = [_mock_device("d1")]
+    await coordinator._async_update_data()
+    kwargs = device_manager.async_get_devices.await_args.kwargs
+    assert kwargs.get("configure_device_ids") == {"d1"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_ability_text_change_does_not_list_devices_again(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    original = _mock_device("d1")
+    original.device_ability = "WLAN"
+    original.channel_ability = "old"
+    coordinator = await _run_update(hass, device_manager, [original])
+    changed = _mock_device("d1")
+    changed.device_ability = "WLAN"
+    changed.channel_ability = "new"
+    device_manager.async_get_devices.reset_mock()
+    device_manager.async_get_devices.return_value = [changed]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+    device_manager.async_get_devices.assert_awaited_once()
+    original.set_channel_ability.assert_called_once_with("new")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -499,16 +549,14 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
     coordinator = await _run_update(hass, device_manager, [device], options=options)
     assert coordinator._v2_state_snapshots == {physical_id}
 
-    coordinator._async_add_remove_devices({}, {})
+    coordinator._async_add_remove_devices({})
     assert coordinator._v2_state_snapshots == set()
 
     replacement = _mock_device("sensor", "0")
     replacement.parent_device_id = "gateway"
     replacement.parent_product_id = "gateway-product"
     replacement_key = imou_life_device_key(replacement)
-    coordinator._async_add_remove_devices(
-        {replacement_key: replacement}, {replacement_key: replacement}
-    )
+    coordinator._async_add_remove_devices({replacement_key: replacement})
     coordinator._last_discovery = 1e18
     device_manager.async_update_devices_status.reset_mock()
     await coordinator._async_update_data()

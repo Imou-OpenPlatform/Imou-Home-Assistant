@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from custom_components.imou_life.const import DOMAIN, PARAM_LOCAL_RECORD_PATH
+from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.media_source import KIND_ALARM, ImouRecordMediaSource
 from homeassistant.components.media_source.models import MediaSourceItem
 from homeassistant.config_entries import ConfigEntryState
@@ -24,11 +24,13 @@ async def test_browse_kinds_includes_alarm_folder(
         domain=DOMAIN,
         data=USER_INPUT,
         title="Imou test",
-        options={PARAM_LOCAL_RECORD_PATH: str(tmp_path)},
     )
     entry.add_to_hass(hass)
     object.__setattr__(entry, "state", ConfigEntryState.LOADED)
-    with patch.object(hass.config, "is_allowed_path", return_value=True):
+    with patch(
+        "custom_components.imou_life.media_source.alarm_clip_folder",
+        return_value=tmp_path,
+    ):
         source = ImouRecordMediaSource(hass)
         item = MagicMock()
         item.identifier = f"entry:{entry.entry_id}|cam:SN1:0"
@@ -42,7 +44,6 @@ async def test_resolve_saved_alarm_clip(hass: HomeAssistant, tmp_path: Path) -> 
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
-        options={PARAM_LOCAL_RECORD_PATH: str(tmp_path)},
     )
     entry.add_to_hass(hass)
     object.__setattr__(entry, "state", ConfigEntryState.LOADED)
@@ -56,6 +57,10 @@ async def test_resolve_saved_alarm_clip(hass: HomeAssistant, tmp_path: Path) -> 
         None,
     )
     with (
+        patch(
+            "custom_components.imou_life.media_source.alarm_clip_folder",
+            return_value=tmp_path,
+        ),
         patch.object(hass.config, "is_allowed_path", return_value=True),
         patch(
             "custom_components.imou_life.media_source.signed_saved_record_url",

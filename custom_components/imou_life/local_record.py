@@ -11,17 +11,21 @@ from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .alarm_saved_clips import alarm_clip_folder
 from .const import (
     DEFAULT_LOCAL_RECORD_DURATION,
     DOMAIN,
     PARAM_LOCAL_EVENT_RECORD,
     PARAM_LOCAL_RECORD_DURATION,
-    PARAM_LOCAL_RECORD_PATH,
     imou_life_device_keys_from_ids,
 )
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _ensure_clip_folder(folder: Path) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
 
 
 def _switch_is_on(hass: HomeAssistant, device_key: str) -> bool:
@@ -71,13 +75,8 @@ async def async_maybe_record_from_alarm(
     if device_key is None or not _switch_is_on(hass, device_key):
         return
 
-    folder = str(entry.options.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
-    if not folder:
-        _LOGGER.warning(
-            "Local event recording is on for %s but no save folder is configured",
-            device_key,
-        )
-        return
+    folder = alarm_clip_folder(hass)
+    await hass.async_add_executor_job(_ensure_clip_folder, folder)
 
     duration = int(
         entry.options.get(PARAM_LOCAL_RECORD_DURATION, DEFAULT_LOCAL_RECORD_DURATION)

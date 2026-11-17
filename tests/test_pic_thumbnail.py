@@ -697,6 +697,20 @@ async def test_download_picture_gives_up_after_retries(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_download_picture_can_skip_retries(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Search pictures are already stored, so a miss is not tried again."""
+    aioclient_mock.get("https://example.com/pic", status=404, content=b"missing")
+
+    assert (
+        await _async_download_picture(hass, "https://example.com/pic", retry=False)
+        is None
+    )
+    assert aioclient_mock.call_count == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_download_picture_waits_for_a_late_upload(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:

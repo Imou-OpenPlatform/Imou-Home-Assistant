@@ -50,7 +50,7 @@
       },
       "select_devices": {
         "title": "Geräte auswählen",
-        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte werden nicht abgefragt.",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte erscheinen nicht in Home Assistant.",
         "data": {
           "selected_devices": "Geräte"
         }
@@ -89,51 +89,47 @@
       "bind_device_not_listed": "Das Gerät wurde gekoppelt, erscheint aber noch nicht in der Geräteliste des Kontos. Versuche es in einem Moment erneut.",
       "callback_failed": "Callback-URL konnte nicht bei Imou registriert werden: {error}",
       "callback_url_missing": "Bei aktiviertem Ereignis-Push ist eine Callback-URL erforderlich.",
-      "decrypt_libs_missing": "Die Entschlüsselungsbibliotheken sind auf diesem Host nicht installiert, daher würde dieser Schalter nichts bewirken. Lege sie zuerst ab, oder lass ihn aus.",
-      "record_path_not_allowed": "Dieser Ordner ist nicht in allowlist_external_dirs. Füge ihn unter Home Assistant → Allowlist external directories hinzu und versuche es erneut."
+      "decrypt_libs_missing": "Die Entschlüsselungsbibliotheken sind auf diesem Host nicht installiert, daher würde dieser Schalter nichts bewirken. Lege sie zuerst ab, oder lass ihn aus."
     },
     "step": {
       "init": {
         "title": "Imou Life konfigurieren",
-        "description": "Alarm-Push: **{push_state}** · Alarmbilder: **{decrypt_state}** · Bei Alarm aufzeichnen: **{record_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder und Bei Alarm aufzeichnen wirken nur, während Alarm-Push eingeschaltet ist.",
+        "description": "Alarm-Push: **{push_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder werden auf diesem Home Assistant entschlüsselt. Die Cliplänge steht unter Alarm-Push und Benachrichtigungen. Alarmclips liegen im Medienordner und sind im Medienbrowser zu sehen.",
         "menu_options": {
           "general_settings": "Abfrage und Kameras",
           "event_push": "Alarm-Push und Benachrichtigungen",
           "alarm_image_decrypt": "Alarmbilder",
           "local_recording": "Bei Alarm aufzeichnen",
-          "select_poll_devices": "Zu abfragende Geräte wählen",
           "bind_device": "Neues Gerät koppeln",
           "finish": "Fertig"
         }
       },
       "general_settings": {
         "title": "Statusabfrage und Kamera-Standardwerte",
-        "description": "Wie oft Home Assistant den Gerätestatus aktualisiert, plus die Live-Stream- und PTZ-Standardwerte, mit denen jede Kamera dieses Kontos startet.",
+        "description": "Abfrageintervall, welche Geräte abgefragt werden, und die Live- und PTZ-Standardwerte dieses Kontos.",
         "data": {
           "enable_polling": "Statusabfrage aktivieren",
           "update_interval": "Abfrageintervall (Sekunden)",
           "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)",
-          "trial_contact_url": "Trial or purchase link"
+          "selected_devices": "Zu abfragende Geräte"
         },
         "data_description": {
           "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
           "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
           "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s.",
-          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
+          "selected_devices": "Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant. Diese Liste zeigt weiterhin jedes Gerät des Kontos."
         },
         "sections": {
           "camera_defaults": {
             "name": "Kamera-Standardwerte",
-            "description": "Live-Stream- und PTZ-Standardwerte für dieses Konto.",
+            "description": "Live-Stream-Standardwerte für dieses Konto.",
             "data": {
               "download_snap_wait_time": "Wartezeit für Schnappschuss (Sekunden)",
-              "live_resolution": "Videoauflösung",
-              "rotation_duration": "PTZ-Drehdauer (ms)"
+              "live_resolution": "Videoauflösung"
             },
             "data_description": {
               "download_snap_wait_time": "Die Kamera muss den Schnappschuss aufnehmen und hochladen, bevor Imou ihn bereitstellen kann. So lange wartet Home Assistant vor dem Abruf. Erhöhe den Wert, wenn Schnappschüsse veraltet oder leer ankommen. Standard 3 s.",
-              "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet.",
-              "rotation_duration": "Wie weit ein Druck auf eine PTZ-Richtungstaste bewegt, als Bewegungszeit. Standard 500 ms."
+              "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet."
             }
           }
         }
@@ -154,19 +150,19 @@
         "sections": {
           "notifications": {
             "name": "Bei Alarm benachrichtigen",
-            "description": "Optional. Leer lassen, um nur Automationen zu nutzen.",
+            "description": "Benachrichtigt standardmäßig das Home Assistant Web und jede angemeldete App.",
             "data": {
               "notify_services": "Benachrichtigungsziele"
             },
             "data_description": {
-              "notify_services": "Registrierte Notify-Dienste auf diesem Home Assistant. Eine Nachricht pro Alarm. Schalte **Bei Alarm benachrichtigen** auf einer Geräteseite aus, um dieses Gerät zu überspringen. Um das Alarmbild in diese Nachrichten zu legen, siehe **Alarmbilder**."
+              "notify_services": "Eine Nachricht pro Alarm."
             }
           }
         }
       },
       "alarm_image_decrypt": {
         "title": "Alarmbilder",
-        "description": "{push_hint}Alarmbilder kommen verschlüsselt an, daher muss Home Assistant eines lokal entschlüsseln, bevor es in eine Benachrichtigung kann.\n\nStatus: {native_hint}\n\nDie unten aufgeführten Geräte benötigen ihr Imou-Life-Gerätepasswort; nicht aufgeführte Geräte brauchen nichts. Gespeicherte Passwörter werden wieder eingetragen (maskiert). Zum Löschen **Gespeicherte Passwörter entfernen** verwenden. Gespeichert: {password_count} ({configured_serials}).",
+        "description": "Status: {native_hint}. Die unten gelisteten Geräte brauchen ein Gerätepasswort. Gespeichert: {password_count}.",
         "data": {
           "attach_decrypted_thumbnail": "Bild in Alarmbenachrichtigungen anzeigen",
           "default_device_password": "Standard-Gerätepasswort",
@@ -174,7 +170,7 @@
           "remove_device_passwords": "Gespeicherte Passwörter entfernen"
         },
         "data_description": {
-          "attach_decrypted_thumbnail": "Benötigt die externe URL von Home Assistant (Einstellungen → System → Netzwerk) für Telefone außerhalb des LAN. Bilder werden unauthentifiziert unter /local/imou_life/thumbs/ etwa 24 Stunden gespeichert. Passwörter bleiben auf diesem Home Assistant und dienen nur der Entschlüsselung.",
+          "attach_decrypted_thumbnail": "Alarmmeldungen enthalten das Bild. Standardmäßig an.",
           "default_device_password": "Fallback für Geräte, die unten kein eigenes Passwort haben.",
           "clear_default_device_password": "Löscht den gespeicherten Standard. Gerätebezogene Passwörter bleiben unverändert.",
           "remove_device_passwords": "Markierte Seriennummern werden gelöscht."
@@ -184,17 +180,15 @@
         "title": "Bei Alarm aufzeichnen",
         "description": "{push_hint}Zeichnet nach einem Alarm einen kurzen Clip aus dem Cloud-Stream auf. Pro-Kamera **Bei Alarm aufzeichnen** steht auf jeder Geräteseite.",
         "data": {
-          "local_record_path": "Speicherordner",
           "local_record_duration": "Cliplänge (Sekunden)"
         },
         "data_description": {
-          "local_record_path": "Beispiel: /media/imou. Leer lassen zum Überspringen. Der Ordner muss in allowlist_external_dirs stehen.",
           "local_record_duration": "Cliplänge nach dem Alarm. Standard 60 s, Bereich 15–180 s. Verbraucht Live-Stream-Kontingent."
         }
       },
       "select_poll_devices": {
         "title": "Zu abfragende Geräte wählen",
-        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte bleiben in Home Assistant, werden aber nicht abgefragt.",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant.",
         "data": {
           "selected_devices": "Geräte"
         }
@@ -258,9 +252,9 @@
     "event_push_type": {
       "options": {
         "capability_event": "Gerätefähigkeitsereignisse",
-        "alarm": "Gerätealarme (Rauch, Gas, Person, Bildänderung usw.)",
+        "alarm": "Gerätealarme",
         "device_status": "Gerät online/offline",
-        "iot": "IoT-Gerätenachrichten. Wenn dies ausgewählt und Ereignis-Push an ist, aktualisieren Thing-Modell-Geräte Schalter/Sensoren/Scharfschaltung sofort aus iotProperty und überspringen die Intervall-Eigenschaftsabfrage. Schalte Ereignis-Push aus oder entferne die Markierung, um diese Eigenschaften wieder abzufragen."
+        "iot": "IoT-Gerätenachrichten"
       }
     },
     "device_status": {
@@ -285,9 +279,9 @@
     "insight_trial_dialog": {
       "options": {
         "china_title": "智见试用",
-        "china_message": "智见为您的摄像头提供智能搜索与每日简报。套餐需在乐橙云端或渠道人工开通。\n\n有问题请添加 17799860785 官方微信联系。",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
         "intl_title": "AI Insight trial",
-        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Plans are opened manually in the Imou cloud console or through your dealer.\n\nFor questions, add official WhatsApp +86 19106884129."
+        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
       }
     },
     "alarm_type": {
@@ -503,11 +497,10 @@
       "cloud_storage_status": {
         "name": "Cloud storage",
         "state": {
-          "insight": "AI Insight plan",
-          "event": "Event plan",
-          "continuous": "Continuous plan",
-          "none": "None",
-          "unknown": "Unknown"
+          "not_opened": "Nicht aktiviert",
+          "active": "Aktiv",
+          "expired": "Abgelaufen",
+          "unknown": "Unbekannt"
         }
       },
       "storage_used": {
@@ -768,13 +761,13 @@
       "message": "Gerät {name} kann nicht entfernt werden: Imou-Geräte-ID fehlt."
     },
     "remove_device_has_siblings": {
-      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts in den Integrationsoptionen auf, um die Abfrage zu beenden, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
+      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts unter „Zu abfragende Geräte“ auf, um es zu entfernen, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
     },
     "remove_device_no_runtime": {
       "message": "Gerät {name} kann nicht entfernt werden: die Integration ist nicht geladen."
     },
     "snap_detect_entity_required": {
-      "message": "Wählen Sie eine Imou-Entität für Aufnahme und Erkennung."
+      "message": "Wählen Sie ein Imou-Gerät für diese Aufnahme und Erkennung."
     },
     "snap_detect_entity_not_found": {
       "message": "Diese Entität gehört nicht zu dieser Imou-Integration."

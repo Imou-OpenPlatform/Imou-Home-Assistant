@@ -2099,8 +2099,10 @@ async def test_webhook_companion_notify_includes_decrypted_thumb(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_thumb_option_off_skips_image(hass: HomeAssistant) -> None:
-    """When attach_decrypted_thumbnail is off, Companion data has no image."""
+async def test_webhook_thumb_is_attempted_even_if_old_switch_is_off(
+    hass: HomeAssistant,
+) -> None:
+    """Alarm pictures are decrypted even when the removed switch was off."""
     _setup_thumbnail_notify(
         hass,
         attach=False,
@@ -2108,9 +2110,19 @@ async def test_webhook_thumb_option_off_skips_image(hass: HomeAssistant) -> None
     )
     calls = async_mock_service(hass, "notify", "mobile_app_phone")
 
-    with patch(
-        "custom_components.imou_life.pic_thumbnail.LCOpenPicDecoder",
-    ) as mock_decoder_cls:
+    with (
+        patch(
+            "custom_components.imou_life.pic_thumbnail.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.pic_thumbnail.LCOpenPicDecoder",
+        ) as mock_decoder_cls,
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=None),
+        ),
+    ):
         await async_handle_imou_webhook(
             hass,
             "webhook-id",
@@ -2125,7 +2137,7 @@ async def test_webhook_thumb_option_off_skips_image(hass: HomeAssistant) -> None
         )
         await hass.async_block_till_done(wait_background_tasks=True)
 
-    mock_decoder_cls.assert_not_called()
+    mock_decoder_cls.assert_called()
     assert len(calls) == 1
     assert "image" not in calls[0].data.get("data", {})
 

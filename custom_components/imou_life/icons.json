@@ -6,6 +6,12 @@
 			}
 		},
 		"sensor": {
+			"ai_insight_status": {
+				"default": "mdi:brain"
+			},
+			"cloud_storage_status": {
+				"default": "mdi:cloud-arrow-up"
+			},
 			"storage_used": {
 				"default": "mdi:harddisk"
 			},

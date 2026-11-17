@@ -27,14 +27,11 @@ from pyimouapi.pic_decode import (
     LCOpenPicDecoder,
     PicDecodeError,
     is_tcm_ability,
-    resolve_encrypt_key,
 )
+from pyimouapi.play_token import login_password_from_play_token
 from pyimouapi.push import preferred_pic_url
 
 from .const import (
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DEFAULT_DEVICE_PASSWORD,
-    PARAM_DEVICE_PASSWORDS,
     imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
 )
@@ -231,22 +228,26 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
     )
 
 
-def _nonempty_password(value: Any) -> str | None:
-    if isinstance(value, str):
-        text = value.strip()
-        if text:
-            return text
-    return None
-
-
-def password_for_device(options: Mapping[str, Any], device_id: str) -> str | None:
-    """Resolve per-serial password from entry options."""
-    passwords = options.get(PARAM_DEVICE_PASSWORDS)
-    if isinstance(passwords, dict):
-        per_device = _nonempty_password(passwords.get(device_id))
-        if per_device:
-            return per_device
-    return _nonempty_password(options.get(PARAM_DEFAULT_DEVICE_PASSWORD))
+async def _password_from_play_token(
+    runtime: ImouRuntimeData, device: Any, device_id: str
+) -> str | None:
+    """Return the device login password inside the list play token, if it opens."""
+    token = getattr(device, "play_token_v2", None) if device is not None else None
+    client = runtime.client
+    if not isinstance(token, str) or not token.strip() or client is None:
+        return None
+    key = runtime.play_token_keys.get(device_id)
+    if not key:
+        try:
+            key = await client.async_get_play_token_key(device_id)
+        except Exception:
+            _LOGGER.warning("Picture key request failed for %s", device_id)
+            return None
+        if key:
+            runtime.play_token_keys[device_id] = key
+    if not key:
+        return None
+    return login_password_from_play_token(play_token=token, play_token_key=key)
 
 
 def _device_for_event(
@@ -478,19 +479,20 @@ async def _async_try_download_picture(
     return data
 
 
-async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | None:
-    """Download the encrypted alarm picture, waiting out a late upload.
+async def _async_download_picture(
+    hass: HomeAssistant, pic_url: str, *, retry: bool = True
+) -> bytes | None:
+    """Download the encrypted alarm picture.
 
-    The push regularly beats the picture onto the alarm CDN: the object 404s
-    for a moment, or a half-uploaded one comes back short. Both look permanent
-    on a single try, so retry briefly. The alarm notification is waiting on
-    this, which is what keeps the budget small.
+    Alarm pushes often arrive before the picture is on the CDN, so those
+    downloads retry a short 404. Search already has a stored URL and does not.
     """
     session = async_get_clientsession(hass)
     started = time.monotonic()
     attempts = 0
     last_reason = ""
-    for delay in (*_DOWNLOAD_RETRY_DELAYS, None):
+    delays = (*_DOWNLOAD_RETRY_DELAYS, None) if retry else (None,)
+    for delay in delays:
         attempts += 1
         result = await _async_try_download_picture(session, pic_url)
         if not isinstance(result, _DownloadFailure):
@@ -559,11 +561,16 @@ async def async_maybe_decrypt_thumbnail(
     entry: ConfigEntry,
     runtime: ImouRuntimeData,
     event_data: dict[str, Any],
+    *,
+    ignore_switch: bool = False,
+    retry: bool = True,
 ) -> str | None:
-    """Decrypt push image when enabled; return /local/... URL or None."""
-    if not entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
-        _LOGGER.debug("Skip decrypt: attach_decrypted_thumbnail is off")
-        return None
+    """Decrypt an alarm picture; return /local/... URL or None.
+
+    Pictures are always decrypted. ``ignore_switch`` is kept so existing
+    callers stay valid; the old per-account switch is no longer consulted.
+    """
+    del ignore_switch
     if runtime.pic_decoder_failed:
         _LOGGER.debug("Skip decrypt: native decoder previously failed to load")
         return None
@@ -589,18 +596,11 @@ async def async_maybe_decrypt_thumbnail(
     device = _device_for_event(runtime, event_data)
     device_ability = device.device_ability if device is not None else ""
     is_tcm = is_tcm_ability(device_ability)
-    device_password = password_for_device(entry.options, str(device_id))
-    encrypt_key = resolve_encrypt_key(
-        is_tcm=is_tcm,
-        device_id=str(device_id),
-        device_password=device_password,
+    device_password = await _password_from_play_token(
+        runtime, device, str(device_id)
     )
-    if encrypt_key is None:
-        _LOGGER.debug(
-            "Skipping TCM decrypt for %s: no device password configured",
-            device_id,
-        )
-        return None
+    # A recovered password is tried first. The SDK then falls back to the serial.
+    encrypt_key = device_password or str(device_id)
 
     # Keyed per channel, not per serial: the lenses of one camera alarm
     # independently, and each alarm carries its own picture. Same-lens
@@ -618,6 +618,7 @@ async def async_maybe_decrypt_thumbnail(
             is_tcm,
             encrypt_key,
             bool(device_password),
+            retry,
         )
 
 
@@ -630,6 +631,7 @@ async def _async_decrypt_thumbnail_locked(
     is_tcm: bool,
     encrypt_key: str,
     used_password: bool,
+    retry: bool = True,
 ) -> str | None:
     """Download and decrypt after the per-device in-flight lock is held."""
     # Load before downloading: a host without the libraries can never use the
@@ -646,7 +648,7 @@ async def _async_decrypt_thumbnail_locked(
         _redact_picture_url(pic_url),
     )
 
-    data = await _async_download_picture(hass, pic_url)
+    data = await _async_download_picture(hass, pic_url, retry=retry)
     if not data:
         return None
 
@@ -675,9 +677,7 @@ async def _async_decrypt_thumbnail_locked(
 
     if result is None and code == _SDK_CODE_WRONG_KEY:
         _LOGGER.warning(
-            "Alarm picture decrypt for %s rejected the %s; check Configure → "
-            "Alarm pictures",
+            "Alarm picture for %s could not be decrypted on this Home Assistant",
             device_id,
-            "configured device password" if used_password else "serial key",
         )
     return result

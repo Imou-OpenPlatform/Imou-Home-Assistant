@@ -35,7 +35,6 @@ from .const import (
     PARAM_INSIGHT_BRIEFING,
     PARAM_INSIGHT_SEARCH_RESULT,
     PARAM_STATUS,
-    imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
@@ -178,10 +177,6 @@ async def async_setup_entry(
     )
 
 
-_DEFAULT_SEARCH_MARKDOWN = "Run **Search AI alarms** to see matches here."
-_DEFAULT_BRIEFING_MARKDOWN = "Run **Refresh AI Insight briefing** to load the report."
-
-
 class ImouInsightSearchSensor(ImouAccountEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -191,14 +186,14 @@ class ImouInsightSearchSensor(ImouAccountEntity, SensorEntity):
         config_entry: ImouConfigEntry,
     ) -> None:
         super().__init__(coordinator, config_entry, PARAM_INSIGHT_SEARCH_RESULT)
-        self._attr_native_value = _DEFAULT_SEARCH_MARKDOWN
         runtime = get_runtime_data(config_entry)
         if runtime is not None:
             runtime.workbench_search_sensor = self
 
     @callback
-    def set_markdown(self, text: str) -> None:
-        self._attr_native_value = text
+    def set_markdown(self, summary: str, markdown: str) -> None:
+        self._attr_native_value = summary[:255]
+        self._attr_extra_state_attributes = {"markdown": markdown}
         self.async_write_ha_state()
 
 
@@ -211,14 +206,14 @@ class ImouInsightBriefingSensor(ImouAccountEntity, SensorEntity):
         config_entry: ImouConfigEntry,
     ) -> None:
         super().__init__(coordinator, config_entry, PARAM_INSIGHT_BRIEFING)
-        self._attr_native_value = _DEFAULT_BRIEFING_MARKDOWN
         runtime = get_runtime_data(config_entry)
         if runtime is not None:
             runtime.workbench_briefing_sensor = self
 
     @callback
-    def set_markdown(self, text: str) -> None:
-        self._attr_native_value = text
+    def set_briefing(self, summary: str, markdown: str) -> None:
+        self._attr_native_value = summary[:255]
+        self._attr_extra_state_attributes = {"markdown": markdown}
         self.async_write_ha_state()
 
 
@@ -260,27 +255,17 @@ class ImouSensor(ImouEntity, SensorEntity):
             return self._ai_insight_state()
         if self._entity_type == PARAM_CLOUD_STORAGE_STATUS:
             return self._cloud_storage_state()
-        value = self.device.sensors[self._entity_type][PARAM_STATE]
+        value = self.device.sensors[self._entity_type].get(PARAM_STATE)
+        if value is None:
+            return None
         if self.entity_description.device_class == SensorDeviceClass.ENUM:
             return value
         if not self._is_numeric_variant:
             return None
         return value
 
-    def _cloud_snapshot(self):
-        runtime = get_runtime_data(self.coordinator.config_entry)
-        if runtime is None:
-            return None
-        return runtime.cloud_service_by_key.get(imou_life_device_key(self.device))
-
     def _ai_insight_state(self) -> str:
-        snapshot = self._cloud_snapshot()
-        if snapshot is None:
-            return "unavailable"
-        return "active" if snapshot.ai_insight_active else "inactive"
+        return self.device.ai_insight_label
 
     def _cloud_storage_state(self) -> str:
-        snapshot = self._cloud_snapshot()
-        if snapshot is None:
-            return "unknown"
-        return snapshot.cloud_storage_label
+        return self.device.cloud_storage_label

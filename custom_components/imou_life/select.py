@@ -6,7 +6,7 @@ from typing import override
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from pyimouapi.const import (
@@ -77,8 +77,22 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou select entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSelect, _iter_selects)
-    async_add_entities(
-        [ImouInsightWorkbenchSelect(entry.runtime_data.coordinator, entry)]
+    added = False
+
+    @callback
+    def _add_workbench() -> None:
+        nonlocal added
+        if added:
+            return
+        entity = ImouInsightWorkbenchSelect(entry.runtime_data.coordinator, entry)
+        if not entity.options:
+            return
+        added = True
+        async_add_entities([entity])
+
+    _add_workbench()
+    entry.async_on_unload(
+        entry.runtime_data.coordinator.async_add_listener(_add_workbench)
     )
 
 
@@ -97,11 +111,7 @@ class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        runtime = get_runtime_data(self._config_entry)
-        cloud_by_key = runtime.cloud_service_by_key if runtime is not None else {}
-        labels, mapping = camera_select_options(
-            self.coordinator.devices, cloud_by_key=cloud_by_key
-        )
+        labels, mapping = camera_select_options(self.coordinator.devices)
         self._label_to_key = mapping
         self._attr_options = labels
         runtime = get_runtime_data(self._config_entry)

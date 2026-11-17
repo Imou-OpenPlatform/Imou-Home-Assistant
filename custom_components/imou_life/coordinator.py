@@ -163,9 +163,15 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         """
         _LOGGER.debug("Listing Imou devices")
         first_discovery = not self._devices_initialized
+        selected = get_selected_device_ids(self.config_entry)
+        excluded = get_excluded_device_ids(self.config_entry)
+        configure_ids = None if selected is None else set(selected) - excluded
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
-                fresh_devices = await self._device_manager.async_get_devices()
+                fresh_devices = await self._device_manager.async_get_devices(
+                    configure_device_ids=configure_ids,
+                    skip_device_ids=excluded,
+                )
         except TimeoutError as err:
             if first_discovery:
                 raise UpdateFailed(f"Timeout while fetching data: {err}") from err
@@ -191,13 +197,13 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
 
         self._last_discovery = monotonic()
-        account_by_key = {imou_life_device_key(d): d for d in fresh_devices}
+        self._debug_log_capability_lists(fresh_devices)
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
 
         if first_discovery:
             await self._async_prefetch_event_maps(filtered_list)
-            self._async_add_remove_devices(fresh_by_key, account_by_key)
+            self._async_add_remove_devices(fresh_by_key)
             return
 
         new_keys = set(fresh_by_key) - set(self.devices_by_key)
@@ -205,9 +211,42 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             await self._async_prefetch_event_maps(
                 [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
             )
-        self._async_add_remove_devices(fresh_by_key, account_by_key)
+        self._async_add_remove_devices(fresh_by_key)
         await self._async_refresh_known_devices(fresh_by_key)
         await self._async_retry_event_maps()
+
+    def _debug_log_capability_lists(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Log each channel's capability.list result on the integration logger.
+
+        The library logs the same call on ``pyimouapi``. Home Assistant only
+        shows that when that logger is set to debug, so the device page is
+        hard to compare with the list that actually came back.
+        """
+        for device in devices:
+            name = device.channel_name or device.device_name
+            capability = device.capability_set
+            if not isinstance(capability, CapabilitySet):
+                _LOGGER.debug(
+                    "device.capability.list missing %s ch%s (%s) ability=%s",
+                    device.device_id,
+                    device.channel_id,
+                    name,
+                    device.channel_ability,
+                )
+                continue
+            _LOGGER.debug(
+                "device.capability.list %s ch%s (%s) properties=%s services=%s "
+                "events=%s switches=%s buttons=%s ability=%s",
+                device.device_id,
+                device.channel_id,
+                name,
+                sorted(capability.properties),
+                sorted(capability.services),
+                sorted(capability.events),
+                sorted(device.switches),
+                sorted(device.buttons),
+                device.channel_ability,
+            )
 
     async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
         """Fetch product-model events so doorbell / motion can be gated at setup."""
@@ -271,38 +310,26 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             runtime = getattr(self.config_entry, "runtime_data", None)
             if runtime is not None:
                 runtime.countdown.sync_all(self.hass, self)
-                from .insight_cloud import async_refresh_cloud_service_snapshots
 
-                await async_refresh_cloud_service_snapshots(
-                    self._device_manager.delegate,
-                    devices_to_update,
-                    runtime.cloud_service_by_key,
-                )
+    def _async_add_remove_devices(self, fresh_by_key: dict[str, ImouHaDevice]) -> None:
+        """Add devices selected for polling and drop the rest.
 
-    def _async_add_remove_devices(
-        self,
-        fresh_by_key: dict[str, ImouHaDevice],
-        account_by_key: dict[str, ImouHaDevice],
-    ) -> None:
-        """Add new devices and drop ones no longer selected for polling.
-
-        Registry detach uses the unfiltered account list: deselecting a device
-        only stops polling. Devices deleted in the Imou app are still removed.
+        The picker still lists every account device. Anything not in this map
+        leaves the Home Assistant device list, including a device deleted in
+        the Imou app and one the user left unchecked.
         """
         if not self._devices_initialized:
             self.devices_by_key = fresh_by_key
             self._devices_initialized = True
-            # Unload leaves registry entries in place by design. After reload the
-            # coordinator starts empty, so the first discovery must still detach
-            # devices that are no longer on the account.
-            self._async_detach_registry_devices_missing_from(account_by_key)
+            # Unload leaves registry entries in place. After reload the
+            # coordinator starts empty, so the first discovery must still
+            # detach devices that are not being polled.
+            self._async_detach_registry_devices_missing_from(fresh_by_key)
             return
 
         current_keys = set(fresh_by_key)
         known_keys = set(self.devices_by_key)
-        # A device that is not being polled can still leave the account. The
-        # polling set does not change, so this has to run even when the keys match.
-        self._async_detach_registry_devices_missing_from(account_by_key)
+        self._async_detach_registry_devices_missing_from(fresh_by_key)
 
         if current_keys == known_keys:
             return
@@ -326,13 +353,13 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 callback(new_devices)
 
     def _async_detach_registry_devices_missing_from(
-        self, account_by_key: dict[str, ImouHaDevice]
+        self, kept_by_key: dict[str, ImouHaDevice]
     ) -> None:
-        """Detach config-entry devices whose Imou keys are not on the account."""
+        """Detach config-entry devices that are not being polled."""
         device_registry = dr.async_get(self.hass)
         # A multi-channel device also has a row of its own, keyed by the bare
         # account device id rather than by one of its channels.
-        account_device_ids = {device.device_id for device in account_by_key.values()}
+        kept_device_ids = {device.device_id for device in kept_by_key.values()}
         for device in dr.async_entries_for_config_entry(
             device_registry, self.config_entry.entry_id
         ):
@@ -341,9 +368,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             if not imou_keys:
                 continue
-            if any(
-                key in account_by_key or key in account_device_ids for key in imou_keys
-            ):
+            if any(key in kept_by_key or key in kept_device_ids for key in imou_keys):
                 continue
             device_registry.async_update_device(
                 device_id=device.id,
@@ -355,12 +380,15 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     ) -> None:
         """Update identity and merge complete capability snapshots."""
         identity_changed: list[ImouHaDevice] = []
-        ability_ids: set[str] = set()
         refreshed: dict[str, ImouHaDevice] = {}
         for key, fresh in fresh_by_key.items():
             current = self.devices_by_key.get(key)
             if current is None:
                 continue
+            if fresh.cs_status is not None:
+                current.set_cs_status(fresh.cs_status)
+            if fresh.ai_insight_status is not None:
+                current.set_ai_insight_status(fresh.ai_insight_status)
             current_identity = _device_identity(current)
             fresh_identity = _device_identity(fresh)
             if (
@@ -377,7 +405,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 and fresh_ability is not None
                 and current_ability != fresh_ability
             ):
-                ability_ids.add(fresh.device_id)
+                current.set_device_ability(fresh.device_ability)
+                if isinstance(fresh.channel_ability, str):
+                    current.set_channel_ability(fresh.channel_ability)
             if (
                 isinstance(fresh.capability_set, CapabilitySet)
                 and current.capability_snapshot != fresh.capability_snapshot
@@ -387,35 +417,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 refreshed[key] = current
         if identity_changed:
             async_register_imou_devices(self.hass, self.config_entry, identity_changed)
-        if ability_ids:
-            try:
-                async with asyncio.timeout(UPDATE_TIMEOUT):
-                    detailed = await self._device_manager.async_get_devices()
-            except InvalidAppIdOrSecretException as err:
-                raise ConfigEntryAuthFailed(
-                    translation_domain=DOMAIN,
-                    translation_key="invalid_auth",
-                ) from err
-            except (TimeoutError, ImouException) as err:
-                _LOGGER.warning(
-                    "Could not refresh changed Imou device abilities: %s", err
-                )
-            else:
-                for device in self._filter_devices(detailed):
-                    if device.device_id not in ability_ids or not isinstance(
-                        device.capability_set, CapabilitySet
-                    ):
-                        continue
-                    key = imou_life_device_key(device)
-                    current = self.devices_by_key.get(key)
-                    if (
-                        current is None
-                        or current.capability_snapshot == device.capability_snapshot
-                    ):
-                        continue
-                    removed = current.replace_capabilities(device)
-                    self._async_remove_entity_suffixes(key, removed)
-                    refreshed[key] = current
         if refreshed:
             ready = list(refreshed.values())
             for callback in self.new_device_callbacks:

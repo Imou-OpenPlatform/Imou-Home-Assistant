@@ -47,7 +47,7 @@ Register on [open.imoulife.com](https://open.imoulife.com/), then open **My App*
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life login — App ID, App Secret, and server region">
 
-Then select which devices to add. Unselected devices stay in Home Assistant but are not polled (saves API quota).
+Then select which devices to add. Unchecked devices do not appear in Home Assistant. The list still shows every device on the account so you can check one later.
 
 ### 4. Done
 
@@ -55,7 +55,7 @@ Devices under your Imou account should appear in Home Assistant.
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life integration entry and entities">
 
-Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it.
+Use **Configure** on the integration entry. The menu is **Polling and cameras**, **Alarm push and notifications**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**. Each page saves and returns to the menu; **Done** closes it. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**.
 
 Page-by-page options, including the **Settings → System → Network** steps that alarm push and alarm pictures need, and **Record on alarm**: [Configure reference](guides/configuration.md#english).
 
@@ -77,8 +77,8 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
 ## Features
 * **Integration & account**
   - Bind devices to your open-platform account from **Configure → Bind a new device** (device serial + binding code); setup no longer aborts when the account has no devices yet (bind now or finish with an empty selection)
-  - Device selection at setup and in **Configure → Choose devices to poll** (poll only chosen devices)
-  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **Alarm pictures**, **Record on alarm**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on
+  - Device selection at setup and in **Configure → Choose devices to poll**. Unchecked devices do not appear in the Home Assistant device list. The page still lists every device on the account.
+  - **Configure** menu: **Polling and cameras**, **Alarm push and notifications**, **AI Insight workbench**, **Choose devices to poll**, and **Bind a new device**; each section saves independently and hands you back to the menu, which shows what is currently on. Alarm pictures are decrypted on this Home Assistant. Clip length for **Record on alarm** is on **Alarm push and notifications**
   - Login aligned with Home Assistant Core: **server region** dropdown (Imou Life default, Singapore, Europe, North America, China)
   - UI available in English, Simplified Chinese, German, French, and Italian (follows Home Assistant language)
   - Built on [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 for Open Platform API access
@@ -87,7 +87,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications**. Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
-  - Optional **Show the picture in alarm notifications** (default off, **linux x86-64 only**): Home Assistant downloads the encrypted push still and decrypts it locally. [Download the official libraries](#obtain-the-official-decrypt-libraries), then **Configure → Alarm pictures**. Many motion pushes have no picture URL; those stay text-only. Full setup: [Configure reference](guides/configuration.md#english)
+  - Alarm pictures are decrypted on this Home Assistant (**linux x86-64 only**). [Download the official libraries](#obtain-the-official-decrypt-libraries) and place both `.so` files in `/config/imou_life/native/`. Many motion pushes have no picture URL; those stay text-only. Full setup: [Configure reference](guides/configuration.md#english)
   - Choose push message types—including IoT device messages so thing-model switches, sensors, and arming update from property push instead of interval polling; messages are also synced to the Imou Life app
   - **Record on alarm** — built-in: per-camera switch (default off), shared folder and duration under **Configure → Record on alarm**. No YAML automation. Setup: [Configure reference](guides/configuration.md#record-on-alarm)
 * **Camera**
@@ -135,14 +135,14 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification). A push that does not match a Home Assistant device is discarded (still HTTP 200).
   - Confirm event push is enabled in **Configure** and push types include **alarm**.
   - If you do not see **Doorbell**: that camera does not support calling. If the entity is **unavailable**: turn on event push and include type **alarm**. Picture-change / human detection is a different entity (**Motion**).
-  - If you do not see **Alarm picture**: that device is not a camera. If the entity is **unavailable**: turn on event push with type **alarm**, and **Configure → Alarm pictures → Show the picture in alarm notifications**. If it is available but empty: the last alarm had no picture, or decrypt did not succeed. The entity does not take a live snapshot.
+  - If you do not see **Alarm picture**: that device is not a camera. If the entity is **unavailable**: turn on event push with type **alarm**. If it is available but empty: the last alarm had no picture, or decrypt did not succeed. The entity does not take a live snapshot.
   - If you do not see **Motion**: that camera does not support picture-change or human detection. If the entity is **unavailable**: turn on event push and include type **alarm**. If it is available but never turns on: download **Diagnostics** and check `event_push.recent_msg_type_counts`. Newer IoT PTZ cameras often push `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection` rather than `human` / `videoMotion` — those now drive this entity. Vehicle / pet still do not. The sensor does not poll the cloud.
   - If thing-model switches or sensors freeze after a reload: event push must be on and types must include **IoT device messages**. Download **Diagnostics** and check `event_push.recent_msg_type_counts` for `iotProperty`. Uncheck that type to resume property polling.
 - **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`. v1.4.1 replaces `text.set_value` on plug countdown and max power with `number.set_value`, and `switch.turn_on` / `turn_off` on camera white light with `light.turn_on` / `light.turn_off`. Leftover `select.*_mode`, siren button, `text`, and white-light `switch` registry rows are removed on setup.
 - **Multi-lens cameras, NVRs, and gateway accessories** — each lens or NVR channel is its own device, shown under a page for the whole device; that page carries no entities of its own. An accessory is shown under the gateway it is paired to. Deleting the whole device's page stops polling it; deleting a single channel is refused, since exclusion only works per device. On Home Assistant **2026.9** or later, after you update this integration to **1.4.2** or newer, reload the integration if a lens is missing **Live** or **Alarm picture**.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
-- **Record on alarm — no file** — confirm event push, the per-camera switch, and an allowlisted save folder: [Configure reference](guides/configuration.md#record-on-alarm).
+- **Record on alarm — no file** — confirm event push and the per-camera switch. Clips are under **Record on alarm** in the media browser: [Configure reference](guides/configuration.md#record-on-alarm).
 
 ## Contributing
 
@@ -199,7 +199,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 <img src="assets/images/login_new.png" width="70%" alt="Imou Life 登录 — App ID、App Secret 与服务器区域">
 
-然后选择要添加的设备。未勾选的设备仍留在 Home Assistant，但不会被轮询（可节省 API 配额）。
+然后选择要添加的设备。没勾选的不会出现在 Home Assistant 里。这一页仍列出账号下的全部设备，方便以后再勾上。
 
 ### 4. 完成
 
@@ -207,7 +207,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 <img src="assets/images/integration_overview.png" width="70%" alt="Imou Life 集成条目与实体">
 
-在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。
+在集成条目上点 **配置**。菜单是 **轮询与摄像头**、**告警推送与通知**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**。每一页提交即保存并回到菜单；点 **完成** 关闭。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置。
 
 逐页说明，以及告警推送和告警图片都要用的 **设置 → 系统 → 网络**，还有 **告警时录像**、**媒体浏览器**、**智见工作台**：见 [配置项参考](guides/configuration.md#zh-hans)。
 
@@ -230,8 +230,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
 
 * **集成与账号**
   - 在 **配置 → 绑定新设备** 中将设备绑定到开放平台账号（设备序列号 + 绑定码）；账号下尚无设备时安装流程不再中止（可立即绑定或暂不选择设备完成配置）
-  - 安装时及 **配置 → 选择要轮询的设备** 中可选择设备（仅轮询已选设备）
-  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**告警图片**、**告警时录像**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启
+  - 安装时及 **配置 → 选择要轮询的设备** 中选择设备。没勾选的不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。
+  - **配置** 菜单：**轮询与摄像头**、**告警推送与通知**、**智见工作台**、**选择要轮询的设备**、**绑定新设备**；每一项可独立保存并回到菜单，菜单会显示当前哪些已开启。告警图片在本机解密。**告警时录像** 的时长在 **告警推送与通知** 里设置
   - 登录界面与 Home Assistant Core 对齐：**服务器区域**（Imou Life 默认、新加坡、欧洲、北美、中国）
   - 界面支持英语、简体中文、德语、法语、意大利语（跟随 Home Assistant 语言设置）
   - 基于 [pyimouapi](https://pypi.org/project/pyimouapi/) 2.0.0 访问开放平台 API
@@ -240,13 +240,13 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
   - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
-  - 可选 **在告警通知中显示图片**（默认关，**仅 linux x86-64**）：由 Home Assistant 下载密文并在本机解密。[自行下载官方库](#获取官方解密库)，再打开 **配置 → 告警图片**。许多移动侦测推送没有图片 URL，此时仍为纯文本。完整步骤：[配置项参考](guides/configuration.md#zh-hans)
+  - 告警图片在本机解密（**仅 linux x86-64**）。[自行下载官方库](#获取官方解密库)，把两个 `.so` 放到 `/config/imou_life/native/`。许多移动侦测推送没有图片 URL，此时仍为纯文本。完整步骤：[配置项参考](guides/configuration.md#zh-hans)
   - 可选择推送消息类型——含物模型设备消息时，物模型开关 / 传感器 / 布防靠属性推送即时更新，不再跟间隔轮询走；消息也会同步到乐橙 App
-  - **告警时录像** — 内置：每路镜头一个开关（默认关），保存目录和时长在 **配置 → 告警时录像**。不用写 YAML 自动化。完整步骤：[配置项参考](guides/configuration.md#record-on-alarm-zh)
+  - **告警时录像** — 内置：每路镜头一个开关（默认关），时长在 **配置 → 告警推送与通知**。片段保存在媒体目录，在媒体浏览器查看。不用写 YAML 自动化。完整步骤：[配置项参考](guides/configuration.md#record-on-alarm-zh)
 * **摄像头**
   - 状态（名称、在线、存储、电量等）
   - 直播
-  - 云台（方向按钮；时长在 **配置 → 轮询与摄像头 → 摄像头默认** 中设置）
+  - 云台（方向按钮，按一次转动 500 毫秒）
   - **收藏点** — `select.collection_point`（**转到收藏点**）列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
   - 检测：画面变化、人形、宠物、PIR
   - **PIR 检测** — 支持 PIR 的摄像头在配置区提供开关，与乐橙 App 中的 PIR 检测一致
@@ -260,8 +260,8 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
   - 音频录制、设备提示音、异常音告警
   - 重启设备
-  - **媒体浏览器** — 在 **媒体** 中按通道浏览云 / 本地录像（[说明](guides/configuration.md#media-browser-zh)）
-  - **智见** — **智见** / **云存储** 传感器、告警可选 AI 文案、账号工作台（搜索、简报、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
+  - **媒体浏览器** — 在 **媒体** 中按通道浏览云录像、本地录像和告警时录像（[说明](guides/configuration.md#media-browser-zh)）
+  - **智见** — **AI智见** / **云存储** 传感器、告警可选 AI 文案、账号工作台（搜索、简报、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
 * **告警传感器**
   - 状态（名称、在线、电量等）
   - 布防 — `alarm_control_panel`（在家 / 离家 / 撤防）
@@ -288,14 +288,14 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。对不上 Home Assistant 设备的推送会被丢弃（仍返回 HTTP 200）。
   - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
   - **门铃** 没有实体：这台摄像头不支持呼叫。实体在但是不可用：打开事件推送且类型含 **alarm**。画面变化 / 人形是另一实体（**动态侦测**）。
-  - **告警图片** 没有实体：那不是摄像头。实体在但是不可用：打开事件推送且类型含 **alarm**，并在 **配置 → 告警图片** 打开 **在告警通知中显示图片**。实体可用但没有画面：上次告警没有图，或解密没成功。该实体不会去拍直播快照。
+  - **告警图片** 没有实体：那不是摄像头。实体在但是不可用：打开事件推送且类型含 **alarm**。实体可用但没有画面：上次告警没有图，或解密没成功。该实体不会去拍直播快照。
   - **动态侦测** 没有实体：这台摄像头不支持画面变化或人形检测。实体在但是不可用：打开事件推送且类型含 **alarm**。实体可用但不亮：下载**诊断**查看 `event_push.recent_msg_type_counts`。较新的物模型云台常推 `e_multiVideoAiPerArea` / `e_smartMixDetect` / `e_areaDetect` / `crossLineDetection`，而不是 `human` / `videoMotion`——这些现在会驱动该实体。车辆 / 宠物仍不会。该实体不轮询云端。
   - 物模型开关 / 传感器重载后停住：确认已开事件推送且类型含 **物模型设备消息**；下载**诊断**看 `event_push.recent_msg_type_counts` 有没有 `iotProperty`。取消勾选该类型即恢复属性轮询。
 - **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。v1.4.1 起插座倒计时和最大功率的 `text.set_value` 改为 `number.set_value`，摄像头白光灯的 `switch.turn_on` / `turn_off` 改为 `light.turn_on` / `light.turn_off`。遗留的 `select.*_mode`、警号 button、`text` 和白光灯 `switch` 注册行会在加载时删除。
 - **多目摄像头、NVR 与网关配件** — 每路镜头或 NVR 通道都是独立设备，挂在整台设备的页面下；那个页面本身不带实体。配件挂在它配对的网关下。删除整台设备的页面即停止轮询这台设备；单独删除一路通道会被拒绝，因为排除只能按设备来。Home Assistant **2026.9** 及以上、集成已更新到 **1.4.2** 或更新版本后，若某路镜头缺少 **直播** 或 **告警图片**，请重新加载集成。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。
-- **告警时录像没有文件** — 确认已开事件推送、该路镜头开关，以及保存目录已加入白名单：见 [配置项参考](guides/configuration.md#record-on-alarm-zh)。
+- **告警时录像没有文件** — 确认已开事件推送和该路镜头开关。片段在媒体浏览器的 **告警时录像** 里：见 [配置项参考](guides/configuration.md#record-on-alarm-zh)。
 
 ## 贡献
 

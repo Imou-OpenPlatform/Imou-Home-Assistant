@@ -24,7 +24,6 @@ from .const import (
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DOORBELL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
@@ -43,13 +42,22 @@ from .const import (
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .devices import async_register_imou_devices, is_account_device_row
+from .devices import (
+    async_register_imou_devices,
+    async_remove_account_placeholder_device,
+    is_account_device_row,
+)
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import (
+    alarm_pictures_enabled,
     dormant_write_retry_wait_seconds,
     get_excluded_device_ids,
     get_selected_device_ids,
     notify_services_from_entry_options,
+)
+from .insight_dashboard import (
+    async_setup_insight_dashboard,
+    async_unload_insight_dashboard,
 )
 from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
@@ -109,8 +117,8 @@ def async_remove_bulb_relay_switches(hass: HomeAssistant, entry: ConfigEntry) ->
 def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Drop 1.4.0 Motion (and ungated Doorbell) rows this camera no longer offers.
 
-    Only currently loaded devices are considered, so a deselected camera keeps
-    its registry row until it is selected again.
+    Only currently loaded devices are considered. A device left unchecked is
+    already removed from the device list before this runs.
     """
     coordinator = entry.runtime_data.coordinator
     from .binary_sensor import _iter_motion_sensors
@@ -240,6 +248,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(_async_drop_register_callback)
     async_register_imou_devices(hass, entry, coordinator.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    async_remove_account_placeholder_device(hass, entry)
     runtime.push_ready = True
     from .webhook import async_flush_pending_alarms
 
@@ -254,6 +263,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(runtime.countdown.async_unload)
     async_register_snap_detect_service(hass)
     async_register_insight_workbench_services(hass)
+    await async_setup_insight_dashboard(hass, entry)
     return True
 
 
@@ -270,6 +280,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
             hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    await async_unload_insight_dashboard(hass, entry)
     await async_remove_record_playback_sources(hass, entry.entry_id)
     await async_remove_record_hls_proxy_sessions(hass, entry.entry_id)
 
@@ -331,7 +342,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
         )
         # Soft path never rebuilds the decoder. Clearing the sticky failure
         # flag lets a later alarm retry after the user drops the .so files in.
-        if entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+        if alarm_pictures_enabled(entry.options):
             runtime.pic_decoder_failed = False
             runtime.pic_decoder = None
         _LOGGER.debug(

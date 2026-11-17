@@ -18,7 +18,10 @@ from custom_components.imou_life.const import (
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
 )
-from custom_components.imou_life.devices import registry_row_for_key
+from custom_components.imou_life.devices import (
+    async_remove_account_placeholder_device,
+    registry_row_for_key,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
@@ -230,3 +233,17 @@ async def test_removing_one_channel_still_refuses(hass: HomeAssistant) -> None:
     assert "Gate lens 2" in str(err.value)
     assert "Cam" not in str(err.value)
     assert entry.options[PARAM_SELECTED_DEVICES] == ["dev0"]
+
+
+def test_account_placeholder_device_is_removed(hass: HomeAssistant) -> None:
+    """The integration account is not a device in the device list."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    registry = dr.async_get(hass)
+    created = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="Imou Life",
+    )
+    async_remove_account_placeholder_device(hass, entry)
+    assert registry.async_get(created.id) is None

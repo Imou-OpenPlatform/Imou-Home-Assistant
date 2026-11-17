@@ -7,6 +7,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from homeassistant.core import HomeAssistant
+
+
+def alarm_clip_folder(hass: HomeAssistant) -> Path:
+    """Folder under Media where alarm clips are saved."""
+    media_dirs = hass.config.media_dirs
+    if "local" in media_dirs:
+        base = media_dirs["local"]
+    elif media_dirs:
+        base = next(iter(media_dirs.values()))
+    else:
+        base = hass.config.path("media")
+    return Path(base) / "imou"
+
+
 CLIP_FILE_PATTERN = re.compile(
     r"^(?P<device>[^/\\]+)_(?P<channel>[^_]+)_(?P<stamp>\d{8}_\d{6})\.mp4$"
 )

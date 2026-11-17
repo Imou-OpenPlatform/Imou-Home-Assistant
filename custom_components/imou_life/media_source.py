@@ -41,8 +41,13 @@ from pyimouapi.playback.hls import (
     is_hls_playback_url,
 )
 
-from .alarm_saved_clips import clips_on_day, days_with_clips, resolve_clip_path
-from .const import DOMAIN, PARAM_LOCAL_RECORD_PATH, imou_life_device_key_from_ids
+from .alarm_saved_clips import (
+    alarm_clip_folder,
+    clips_on_day,
+    days_with_clips,
+    resolve_clip_path,
+)
+from .const import DOMAIN, imou_life_device_key_from_ids
 from .record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
@@ -146,14 +151,8 @@ def _record_hls_expiry(data: object) -> float | None:
     return None
 
 
-def _saved_clip_folder(hass: HomeAssistant, entry_id: str) -> Path | None:
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if entry is None:
-        return None
-    folder_raw = str(entry.options.get(PARAM_LOCAL_RECORD_PATH) or "").strip()
-    if not folder_raw or not hass.config.is_allowed_path(folder_raw):
-        return None
-    return Path(folder_raw)
+def _saved_clip_folder(hass: HomeAssistant) -> Path:
+    return alarm_clip_folder(hass)
 
 
 def _split(identifier: str | None) -> list[str]:
@@ -215,12 +214,7 @@ class ImouRecordMediaSource(MediaSource):
             )
         if kind == KIND_ALARM:
             alarm_file_name = parts[5]
-            folder = _saved_clip_folder(self.hass, entry_id)
-            if folder is None:
-                raise Unresolvable(
-                    translation_domain=DOMAIN,
-                    translation_key="record_media_unresolved",
-                )
+            folder = _saved_clip_folder(self.hass)
             try:
                 clip_path = resolve_clip_path(
                     folder, device_id, channel_id, alarm_file_name
@@ -471,18 +465,17 @@ class ImouRecordMediaSource(MediaSource):
                     can_expand=True,
                 )
             )
-        if _saved_clip_folder(self.hass, entry_id) is not None:
-            children.append(
-                BrowseMediaSource(
-                    domain=DOMAIN,
-                    identifier="|".join([*parts, KIND_ALARM]),
-                    media_class=MediaClass.DIRECTORY,
-                    media_content_type=MediaType.VIDEO,
-                    title=await _alarm_folder_title(self.hass),
-                    can_play=False,
-                    can_expand=True,
-                )
+        children.append(
+            BrowseMediaSource(
+                domain=DOMAIN,
+                identifier="|".join([*parts, KIND_ALARM]),
+                media_class=MediaClass.DIRECTORY,
+                media_content_type=MediaType.VIDEO,
+                title=await _alarm_folder_title(self.hass),
+                can_play=False,
+                can_expand=True,
             )
+        )
         return BrowseMediaSource(
             domain=DOMAIN,
             identifier="|".join(parts),
@@ -548,16 +541,15 @@ class ImouRecordMediaSource(MediaSource):
         days: list[int] = []
         try:
             if kind == KIND_ALARM:
-                folder = _saved_clip_folder(self.hass, entry_id)
-                if folder is not None:
-                    days = await self.hass.async_add_executor_job(
-                        days_with_clips,
-                        folder,
-                        device_id,
-                        channel_id,
-                        year,
-                        month,
-                    )
+                folder = _saved_clip_folder(self.hass)
+                days = await self.hass.async_add_executor_job(
+                    days_with_clips,
+                    folder,
+                    device_id,
+                    channel_id,
+                    year,
+                    month,
+                )
             elif kind == KIND_CLOUD:
                 data = await manager.async_query_cloud_record_bitmap(
                     device_id, channel_id, year=year, month=month
@@ -622,40 +614,39 @@ class ImouRecordMediaSource(MediaSource):
         children: list[BrowseMediaSource] = []
         try:
             if kind == KIND_ALARM:
-                folder = _saved_clip_folder(self.hass, entry_id)
-                if folder is not None:
-                    day_clips = await self.hass.async_add_executor_job(
-                        clips_on_day,
-                        folder,
-                        device_id,
-                        channel_id,
-                        year,
-                        month,
-                        day,
+                folder = _saved_clip_folder(self.hass)
+                day_clips = await self.hass.async_add_executor_job(
+                    clips_on_day,
+                    folder,
+                    device_id,
+                    channel_id,
+                    year,
+                    month,
+                    day,
+                )
+                for clip in day_clips:
+                    play_id = "|".join(
+                        [
+                            PREFIX_PLAY,
+                            kind,
+                            entry_id,
+                            device_id,
+                            channel_id,
+                            clip.file_name,
+                        ]
                     )
-                    for clip in day_clips:
-                        play_id = "|".join(
-                            [
-                                PREFIX_PLAY,
-                                kind,
-                                entry_id,
-                                device_id,
-                                channel_id,
-                                clip.file_name,
-                            ]
+                    title = clip.recorded_at.strftime("%H:%M:%S")
+                    children.append(
+                        BrowseMediaSource(
+                            domain=DOMAIN,
+                            identifier=play_id,
+                            media_class=MediaClass.VIDEO,
+                            media_content_type=MediaType.VIDEO,
+                            title=title,
+                            can_play=True,
+                            can_expand=False,
                         )
-                        title = clip.recorded_at.strftime("%H:%M:%S")
-                        children.append(
-                            BrowseMediaSource(
-                                domain=DOMAIN,
-                                identifier=play_id,
-                                media_class=MediaClass.VIDEO,
-                                media_content_type=MediaType.VIDEO,
-                                title=title,
-                                can_play=True,
-                                can_expand=False,
-                            )
-                        )
+                    )
             elif kind == KIND_CLOUD:
                 segments = await manager.async_list_cloud_record_segments(
                     device_id,

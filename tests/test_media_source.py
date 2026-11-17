@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
-    PARAM_LOCAL_RECORD_PATH,
     imou_life_device_key,
 )
 from custom_components.imou_life.media_source import (
@@ -125,7 +123,35 @@ async def test_local_folder_hidden_without_both_record_capabilities(
         hass, [_record_device("SN1", "0", services)]
     )
 
-    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
+
+
+async def test_local_bitmap_failure_lists_no_days(hass: HomeAssistant) -> None:
+    """A failed local bitmap leaves the month empty."""
+    from pyimouapi.exceptions import ImouException
+
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_local_record_bitmap = AsyncMock(side_effect=ImouException("down"))
+
+    browse = await source._browse_days(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+        ]
+    )
+
+    assert browse.children == []
 
 
 async def test_local_folder_hidden_when_device_is_missing(
@@ -134,7 +160,10 @@ async def test_local_folder_hidden_when_device_is_missing(
     """A missing coordinator device does not expose local recordings."""
     source, entry, _ = _record_browse_source(hass, [])
 
-    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
 
 
 async def test_local_folder_shown_with_both_record_services(
@@ -155,6 +184,7 @@ async def test_local_folder_shown_with_both_record_services(
     assert await _browse_record_kinds(source, entry) == [
         "Cloud recordings",
         "Local recordings",
+        "Record on alarm",
     ]
 
 
@@ -208,25 +238,20 @@ async def test_cloud_folder_stays_visible_without_record_data(
         RuntimeError("query unavailable")
     )
 
-    assert await _browse_record_kinds(source, entry) == ["Cloud recordings"]
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
     coordinator.device_manager.delegate.async_query_cloud_record_bitmap.assert_not_called()
 
 
-@pytest.mark.parametrize(("configured", "expected"), [(False, False), (True, True)])
-async def test_alarm_folder_follows_save_directory_configuration(
+async def test_alarm_folder_is_always_in_the_media_browser(
     hass: HomeAssistant,
-    tmp_path: Path,
-    configured: bool,
-    expected: bool,
 ) -> None:
-    """Alarm recordings remain conditional on a configured save directory."""
-    options = {PARAM_LOCAL_RECORD_PATH: str(tmp_path)} if configured else {}
-    source, entry, _ = _record_browse_source(hass, [], options=options)
-
-    with patch.object(hass.config, "is_allowed_path", return_value=configured):
-        titles = await _browse_record_kinds(source, entry)
-
-    assert ("Record on alarm" in titles) is expected
+    """Alarm clips live under Media, so the folder does not need a saved path."""
+    source, entry, _ = _record_browse_source(hass, [])
+    titles = await _browse_record_kinds(source, entry)
+    assert "Record on alarm" in titles
 
 
 async def test_local_day_uses_aggregate_record_list(

@@ -9,6 +9,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import SelectOptionDict
 from pyimouapi.const import SWITCH_TYPE_ABILITY
@@ -21,7 +22,6 @@ from .const import (
     DOMAIN,
     EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_IOT,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -90,11 +90,15 @@ def alarm_push_active(entry: ConfigEntry) -> bool:
     return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
 
 
+def alarm_pictures_enabled(options: Mapping[str, Any]) -> bool:
+    """Alarm pictures are always decrypted on this Home Assistant."""
+    del options
+    return True
+
+
 def decrypt_pictures_active(entry: ConfigEntry) -> bool:
     """Return True when this entry can decrypt alarm stills onto the host."""
-    return alarm_push_active(entry) and bool(
-        entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
-    )
+    return alarm_push_active(entry) and alarm_pictures_enabled(entry.options)
 
 
 def camera_channel_devices(devices: Iterable[ImouHaDevice]) -> list[ImouHaDevice]:
@@ -200,6 +204,40 @@ def format_device_label(hass: HomeAssistant, summary: ImouDeviceSummary) -> str:
     return label
 
 
+def _enabled_notify_entities(hass: HomeAssistant) -> list[er.RegistryEntry]:
+    """Enabled notify entities, which are the current notification targets."""
+    registry = er.async_get(hass)
+    return [
+        entry
+        for entry in registry.entities.values()
+        if entry.domain == "notify" and entry.disabled_by is None
+    ]
+
+
+def _notify_entity_label(hass: HomeAssistant, entry: er.RegistryEntry) -> str:
+    state = hass.states.get(entry.entity_id)
+    if state is not None and state.name and state.name != entry.entity_id:
+        return state.name
+    if entry.original_name:
+        return entry.original_name
+    return entry.entity_id
+
+
+def notify_entity_target(hass: HomeAssistant, target: str) -> str | None:
+    """Return a notify entity id when this target is not also a notify service.
+
+    A same-named service keeps the service path, which can carry the alarm
+    picture. An entity is delivered with ``notify.send_message``.
+    """
+    entry = er.async_get(hass).async_get(target)
+    if entry is None or entry.domain != "notify" or entry.disabled_by is not None:
+        return None
+    parts = _split_notify_target(target)
+    if parts is not None and hass.services.has_service(*parts):
+        return None
+    return entry.entity_id
+
+
 def default_notify_service_targets(hass: HomeAssistant) -> list[str]:
     """Default alarm/detect notify targets: web drawer + mobile companion apps."""
     targets = ["notify.persistent_notification"]
@@ -207,6 +245,9 @@ def default_notify_service_targets(hass: HomeAssistant) -> list[str]:
     for name in notify:
         if name.startswith("mobile_app_"):
             targets.append(f"notify.{name}")
+    for entry in _enabled_notify_entities(hass):
+        if entry.platform == "mobile_app":
+            targets.append(entry.entity_id)
     return sorted(set(targets))
 
 
@@ -232,6 +273,14 @@ async def async_deliver_message_to_targets(
                 "notify",
                 "persistent_notification",
                 {"message": message, "title": title},
+                blocking=False,
+            )
+            continue
+        if entity_id := notify_entity_target(hass, svc):
+            await hass.services.async_call(
+                "notify",
+                "send_message",
+                {"entity_id": entity_id, "message": message, "title": title},
                 blocking=False,
             )
             continue
@@ -283,15 +332,17 @@ def notify_service_selector_options(
     omitted unless the user already saved it.
     """
     notify = hass.services.async_services().get("notify", {})
-    values: list[str] = []
+    labels: dict[str, str] = {}
     for name in notify:
         if name in _NOTIFY_SERVICES_NOT_TARGETS:
             continue
-        values.append(f"notify.{name}")
+        service_id = f"notify.{name}"
+        labels[service_id] = service_id
+    for entry in _enabled_notify_entities(hass):
+        labels.setdefault(entry.entity_id, _notify_entity_label(hass, entry))
     for extra in stored:
-        if extra not in values:
-            values.append(extra)
-    return [SelectOptionDict(value=item, label=item) for item in sorted(values)]
+        labels.setdefault(extra, extra)
+    return [SelectOptionDict(value=item, label=labels[item]) for item in sorted(labels)]
 
 
 async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, str]:

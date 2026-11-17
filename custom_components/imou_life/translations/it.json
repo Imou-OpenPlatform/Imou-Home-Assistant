@@ -50,7 +50,7 @@
       },
       "select_devices": {
         "title": "Seleziona i dispositivi",
-        "description": "Trovati {device_count} dispositivo/i. I dispositivi non selezionati non vengono interrogati.",
+        "description": "Trovati {device_count} dispositivo/i. I dispositivi non selezionati non compaiono in Home Assistant.",
         "data": {
           "selected_devices": "Dispositivi"
         }
@@ -89,51 +89,47 @@
       "bind_device_not_listed": "Il dispositivo è stato associato ma non compare ancora nell'elenco dispositivi dell'account. Riprova tra un momento.",
       "callback_failed": "Impossibile registrare l'URL di callback con Imou: {error}",
       "callback_url_missing": "Un URL di callback è obbligatorio quando il push eventi è attivo.",
-      "decrypt_libs_missing": "Le librerie di decifratura non sono installate su questo host, quindi questo interruttore non farebbe nulla. Aggiungile prima, oppure lascialo spento.",
-      "record_path_not_allowed": "Questa cartella non è in allowlist_external_dirs. Aggiungila in Home Assistant → Allowlist external directories, poi riprova."
+      "decrypt_libs_missing": "Le librerie di decifratura non sono installate su questo host, quindi questo interruttore non farebbe nulla. Aggiungile prima, oppure lascialo spento."
     },
     "step": {
       "init": {
         "title": "Configura Imou Life",
-        "description": "Push allarmi: **{push_state}** · Immagini di allarme: **{decrypt_state}** · Registra in caso di allarme: **{record_state}** · Interrogazione stato: **{polling_state}**\n\nOgni pagina salva all'invio e torna qui. Immagini di allarme e Registra in caso di allarme hanno effetto solo mentre il push allarmi è attivo.",
+        "description": "Push allarmi: **{push_state}** · Interrogazione stato: **{polling_state}**\n\nOgni pagina salva all'invio e torna qui. Le immagini di allarme vengono decifrate su questo Home Assistant. La durata del clip si imposta in Push allarmi e notifiche. I filmati sono salvati in Media e visibili nel browser multimediale.",
         "menu_options": {
           "general_settings": "Interrogazione e telecamere",
           "event_push": "Push allarmi e notifiche",
           "alarm_image_decrypt": "Immagini di allarme",
           "local_recording": "Registra in caso di allarme",
-          "select_poll_devices": "Scegli i dispositivi da interrogare",
           "bind_device": "Associa un nuovo dispositivo",
           "finish": "Fine"
         }
       },
       "general_settings": {
         "title": "Interrogazione stato e predefiniti telecamera",
-        "description": "Quanto spesso Home Assistant aggiorna lo stato dei dispositivi, più i predefiniti di streaming live e PTZ da cui parte ogni telecamera di questo account.",
+        "description": "Intervallo di interrogazione, dispositivi da interrogare e valori predefiniti di live e PTZ di questo account.",
         "data": {
           "enable_polling": "Abilita interrogazione stato",
           "update_interval": "Intervallo di interrogazione (secondi)",
           "dormant_write_retry_wait_seconds": "Attesa prima del nuovo tentativo in sospensione (secondi)",
-          "trial_contact_url": "Trial or purchase link"
+          "selected_devices": "Dispositivi da interrogare"
         },
         "data_description": {
           "enable_polling": "Disattiva per saltare gli aggiornamenti periodici dal cloud. Gli stati delle entità possono diventare obsoleti. Installazione e ricaricamento recuperano comunque l'elenco dispositivi una volta. Quando il push eventi è attivo e i tipi di sottoscrizione includono i messaggi dei dispositivi IoT, le *proprietà* dei dispositivi thing-model non vengono aggiornate a questo intervallo (installazione e ricaricamento fanno comunque uno snapshot). Stato online, capacità PaaS ed entità basate su servizi continuano a essere interrogati.",
           "update_interval": "Predefinito 300 s (5 minuti), intervallo 30–900 s. Ignorato quando l'interrogazione è disattivata.",
           "dormant_write_retry_wait_seconds": "Quando lo stato del dispositivo è Sospensione e un comando fallisce, Home Assistant attende questo tempo prima di inviare di nuovo lo stesso comando una volta. Predefinito 5 s, intervallo 5–60 s.",
-          "trial_contact_url": "A URL or short note with contact details. AI Insight plans are opened manually; Home Assistant does not purchase them for you."
+          "selected_devices": "I dispositivi non selezionati non compaiono nell'elenco dispositivi di Home Assistant. Questo elenco mostra ancora tutti i dispositivi dell'account."
         },
         "sections": {
           "camera_defaults": {
             "name": "Predefiniti telecamera",
-            "description": "Predefiniti di streaming live e PTZ per questo account.",
+            "description": "Predefiniti di streaming live per questo account.",
             "data": {
               "download_snap_wait_time": "Attesa istantanea (secondi)",
-              "live_resolution": "Risoluzione video",
-              "rotation_duration": "Durata rotazione PTZ (ms)"
+              "live_resolution": "Risoluzione video"
             },
             "data_description": {
               "download_snap_wait_time": "La telecamera deve scattare l'istantanea e caricarla prima che Imou possa servirla. È quanto Home Assistant attende prima di recuperarla. Aumentalo se le istantanee tornano vecchie o vuote. Predefinito 3 s.",
-              "live_resolution": "HD = alta definizione, SD = standard. Usato per l'entità telecamera Live.",
-              "rotation_duration": "Quanto si muove una pressione di un pulsante di direzione PTZ, come tempo di movimento. Predefinito 500 ms."
+              "live_resolution": "HD = alta definizione, SD = standard. Usato per l'entità telecamera Live."
             }
           }
         }
@@ -154,19 +150,19 @@
         "sections": {
           "notifications": {
             "name": "Notifica in caso di allarme",
-            "description": "Facoltativo. Lascia vuoto per usare solo le automazioni.",
+            "description": "Per impostazione predefinita avvisa il web di Home Assistant e ogni app connessa.",
             "data": {
               "notify_services": "Destinazioni di notifica"
             },
             "data_description": {
-              "notify_services": "Servizi notify registrati su questo Home Assistant. Un messaggio per allarme. Disattiva **Notifica in caso di allarme** nella pagina di un dispositivo per saltarlo. Per mettere l'immagine di allarme in questi messaggi, vedi **Immagini di allarme**."
+              "notify_services": "Un messaggio per ogni allarme."
             }
           }
         }
       },
       "alarm_image_decrypt": {
         "title": "Immagini di allarme",
-        "description": "{push_hint}Le immagini di allarme arrivano crittografate, quindi Home Assistant deve decifrarne una in locale prima di poterla mettere in una notifica.\n\nStato: {native_hint}\n\nI dispositivi elencati sotto necessitano della password dispositivo Imou Life; quelli non elencati non richiedono nulla. Le password salvate vengono reinserite (mascherate). Per eliminarne una, usa **Rimuovi password memorizzate**. Memorizzate: {password_count} ({configured_serials}).",
+        "description": "Stato: {native_hint}. I dispositivi elencati sotto richiedono una password. Salvate: {password_count}.",
         "data": {
           "attach_decrypted_thumbnail": "Mostra l'immagine nelle notifiche di allarme",
           "default_device_password": "Password dispositivo predefinita",
@@ -174,7 +170,7 @@
           "remove_device_passwords": "Rimuovi password memorizzate"
         },
         "data_description": {
-          "attach_decrypted_thumbnail": "Richiede l'URL esterno di Home Assistant (Impostazioni → Sistema → Rete) per i telefoni fuori dalla LAN. Le immagini vengono salvate senza autenticazione in /local/imou_life/thumbs/ per circa 24 ore. Le password restano su questo Home Assistant e servono solo a decifrare.",
+          "attach_decrypted_thumbnail": "Le notifiche di allarme includono l'immagine. Attivo per impostazione predefinita.",
           "default_device_password": "Ripiego per i dispositivi che non hanno una password propria sotto.",
           "clear_default_device_password": "Elimina il predefinito memorizzato. Le password per dispositivo restano invariate.",
           "remove_device_passwords": "I numeri di serie selezionati vengono eliminati."
@@ -184,17 +180,15 @@
         "title": "Registra in caso di allarme",
         "description": "{push_hint}Registra un breve clip dallo stream cloud dopo un allarme. **Registra in caso di allarme** per telecamera è in ogni pagina dispositivo.",
         "data": {
-          "local_record_path": "Cartella di salvataggio",
           "local_record_duration": "Durata clip (secondi)"
         },
         "data_description": {
-          "local_record_path": "Esempio: /media/imou. Lascia vuoto per saltare. La cartella deve essere in allowlist_external_dirs.",
           "local_record_duration": "Durata del clip dopo l'allarme. Predefinito 60 s, intervallo 15–180 s. Consuma quota di streaming live."
         }
       },
       "select_poll_devices": {
         "title": "Scegli i dispositivi da interrogare",
-        "description": "Trovati {device_count} dispositivo/i. I dispositivi non selezionati restano in Home Assistant ma non vengono interrogati.",
+        "description": "Trovati {device_count} dispositivo/i. I dispositivi non selezionati non compaiono nell'elenco dispositivi di Home Assistant.",
         "data": {
           "selected_devices": "Dispositivi"
         }
@@ -257,10 +251,10 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "Allarmi dispositivo (fumo, gas, persona, cambio immagine, ecc.)",
+        "alarm": "Allarmi del dispositivo",
         "device_status": "Dispositivo online/offline",
-        "iot": "Messaggi dispositivi IoT. Quando è selezionato e il push eventi è attivo, i dispositivi thing-model aggiornano interruttori/sensori/armamento da iotProperty subito e saltano l'interrogazione periodica delle proprietà. Disattiva il push eventi o deseleziona questa voce per interrogare di nuovo quelle proprietà.",
-        "capability_event": "Eventi capacità dispositivo"
+        "iot": "Messaggi dispositivo IoT",
+        "capability_event": "Eventi di capacità del dispositivo"
       }
     },
     "device_status": {
@@ -285,9 +279,9 @@
     "insight_trial_dialog": {
       "options": {
         "china_title": "智见试用",
-        "china_message": "智见为您的摄像头提供智能搜索与每日简报。套餐需在乐橙云端或渠道人工开通。\n\n有问题请添加 17799860785 官方微信联系。",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
         "intl_title": "AI Insight trial",
-        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Plans are opened manually in the Imou cloud console or through your dealer.\n\nFor questions, add official WhatsApp +86 19106884129."
+        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
       }
     },
     "alarm_type": {
@@ -503,11 +497,10 @@
       "cloud_storage_status": {
         "name": "Cloud storage",
         "state": {
-          "insight": "AI Insight plan",
-          "event": "Event plan",
-          "continuous": "Continuous plan",
-          "none": "None",
-          "unknown": "Unknown"
+          "not_opened": "Non attivato",
+          "active": "Attivo",
+          "expired": "Scaduto",
+          "unknown": "Sconosciuto"
         }
       },
       "storage_used": {
@@ -768,13 +761,13 @@
       "message": "Impossibile rimuovere il dispositivo {name}: manca l'id dispositivo Imou."
     },
     "remove_device_has_siblings": {
-      "message": "Impossibile rimuovere {name}: è un canale del dispositivo Imou {device_id}, che copre anche {siblings}. Deseleziona l'intero dispositivo nelle opzioni dell'integrazione per smettere di interrogarlo, oppure disabilita le entità di questo canale per nasconderlo."
+      "message": "Impossibile rimuovere {name}: è un canale del dispositivo Imou {device_id}, che copre anche {siblings}. Deseleziona l'intero dispositivo in Scegli i dispositivi da interrogare per rimuoverlo, oppure disabilita le entità di questo canale per nasconderlo."
     },
     "remove_device_no_runtime": {
       "message": "Impossibile rimuovere il dispositivo {name}: l'integrazione non è caricata."
     },
     "snap_detect_entity_required": {
-      "message": "Scegli un'entità Imou per cattura e rilevamento."
+      "message": "Scegli un dispositivo Imou per questa acquisizione e rilevazione."
     },
     "snap_detect_entity_not_found": {
       "message": "Questa entità non appartiene a questa integrazione Imou."

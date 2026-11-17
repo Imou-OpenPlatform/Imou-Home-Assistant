@@ -16,7 +16,7 @@ _MANIFEST = _ROOT / "custom_components/imou_life/manifest.json"
     ("marker", "module"),
     [
         ("P1_media", "custom_components.imou_life.media_source"),
-        ("P2_insight", "custom_components.imou_life.insight_cloud"),
+        ("P2_insight", "custom_components.imou_life.insight_account"),
         ("P2_diag", "custom_components.imou_life.sensor"),
         ("P3_workbench", "custom_components.imou_life.insight_workbench"),
         ("P3_services", "services.yaml"),
@@ -40,7 +40,7 @@ def test_manifest_platforms_for_v2() -> None:
 
 
 def test_zh_cloud_storage_sensor_label() -> None:
-    """User-facing 智见云存储 label is wired in zh-Hans."""
+    """User-facing 云存储 label is wired in zh-Hans."""
     zh = json.loads(
         (
             Path(__file__).resolve().parents[1]
@@ -48,7 +48,7 @@ def test_zh_cloud_storage_sensor_label() -> None:
         ).read_text(encoding="utf-8")
     )
     name = zh["entity"]["sensor"]["cloud_storage_status"]["name"]
-    assert name == "智见云存储"
+    assert name == "云存储"
 
 
 def test_login_region_options_intl_and_china_only() -> None:

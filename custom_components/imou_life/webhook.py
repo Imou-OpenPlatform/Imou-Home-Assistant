@@ -56,6 +56,7 @@ from .helpers import (
     fill_template,
     get_excluded_device_ids,
     get_selected_device_ids,
+    notify_entity_target,
     resolve_ha_device_entry,
     resolve_ha_device_key,
     resolve_ha_device_name,
@@ -467,6 +468,18 @@ async def _async_send_notifications(
                 svc_domain,
                 svc_name,
             )
+            continue
+        if entity_id := notify_entity_target(hass, svc):
+            try:
+                await hass.services.async_call(
+                    "notify",
+                    "send_message",
+                    {"entity_id": entity_id, "message": message, "title": title},
+                    blocking=False,
+                )
+                _LOGGER.debug("Sent alarm notification via %s", entity_id)
+            except Exception:
+                _LOGGER.exception("Failed to send alarm notification via %s", entity_id)
             continue
         service_data: dict[str, Any] = {"message": message, "title": title}
         if _is_companion_notify(svc_domain, svc_name):

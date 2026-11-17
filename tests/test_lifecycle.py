@@ -69,7 +69,7 @@ async def test_trial_frontend_registers_once(hass: HomeAssistant) -> None:
     hass.config.components.add("frontend")
 
     with (
-        patch.object(hass.http, "async_register_static_paths", AsyncMock()) as register,
+        patch.object(hass.http, "register_view") as register,
         patch(
             "custom_components.imou_life.insight_frontend.frontend.add_extra_js_url"
         ) as add_js,
@@ -77,8 +77,9 @@ async def test_trial_frontend_registers_once(hass: HomeAssistant) -> None:
         assert await async_register_insight_trial_frontend(hass) is True
         assert await async_register_insight_trial_frontend(hass) is True
 
-    register.assert_awaited_once()
+    register.assert_called_once()
     add_js.assert_called_once()
+    assert add_js.call_args.args[1].endswith("trial-dialog.js?v=3")
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

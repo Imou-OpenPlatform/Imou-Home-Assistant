@@ -1,4 +1,5 @@
 const EVENT_TRIAL = "imou_life_ai_insight_trial";
+const ROOT_ID = "imou-life-trial-dialog";
 
 function escapeHtml(text) {
   return String(text)
@@ -13,25 +14,30 @@ function formatMessage(message) {
 }
 
 function showTrialDialog(title, message) {
-  const dialog = document.createElement("dialog");
-  dialog.setAttribute("open", "");
-  dialog.style.cssText =
-    "max-width: min(28rem, 92vw); border: none; border-radius: var(--ha-card-border-radius, 12px); padding: 1.25rem 1.5rem; box-shadow: var(--ha-card-box-shadow, 0 4px 20px rgba(0,0,0,.25));";
-  dialog.innerHTML = `
+  let root = document.getElementById(ROOT_ID);
+  if (!root) {
+    root = document.createElement("div");
+    root.id = ROOT_ID;
+    root.style.cssText =
+      "position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);";
+    root.addEventListener("click", (event) => {
+      if (event.target === root) {
+        root.remove();
+      }
+    });
+    document.body.appendChild(root);
+  }
+  const card = document.createElement("div");
+  card.style.cssText =
+    "max-width:min(28rem,92vw);margin:1rem;background:var(--card-background-color,#fff);color:var(--primary-text-color,#212121);border-radius:var(--ha-card-border-radius,12px);padding:1.25rem 1.5rem;box-shadow:var(--ha-card-box-shadow,0 4px 20px rgba(0,0,0,.25));";
+  card.innerHTML = `
     <h2 style="margin:0 0 .75rem;font-size:1.25rem;font-weight:500;">${escapeHtml(title)}</h2>
-    <div style="margin:0 0 1.25rem;line-height:1.5;white-space:normal;">${formatMessage(message)}</div>
-    <form method="dialog" style="margin:0;text-align:right;">
-      <button type="submit" style="cursor:pointer;padding:.5rem 1.25rem;">OK</button>
-    </form>`;
-  const backdrop = () => {
-    document.body.style.overflow = "";
-    dialog.remove();
-  };
-  dialog.addEventListener("close", backdrop);
-  dialog.addEventListener("cancel", backdrop);
-  document.body.appendChild(dialog);
-  document.body.style.overflow = "hidden";
-  dialog.showModal();
+    <div style="margin:0 0 1.25rem;line-height:1.5;">${formatMessage(message)}</div>
+    <div style="text-align:right;">
+      <button type="button" style="cursor:pointer;padding:.5rem 1.25rem;">确定</button>
+    </div>`;
+  card.querySelector("button").addEventListener("click", () => root.remove());
+  root.replaceChildren(card);
 }
 
 function whenHassReady(callback) {
@@ -50,9 +56,12 @@ function whenHassReady(callback) {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-whenHassReady((hass) => {
-  hass.connection.subscribeEvents((ev) => {
-    const data = ev?.data ?? {};
-    showTrialDialog(data.title ?? "AI Insight", data.message ?? "");
-  }, EVENT_TRIAL);
-});
+if (!window.__imouLifeTrialBound) {
+  window.__imouLifeTrialBound = true;
+  whenHassReady((hass) => {
+    hass.connection.subscribeEvents((ev) => {
+      const data = ev?.data ?? {};
+      showTrialDialog(data.title ?? "AI智见试用", data.message ?? "");
+    }, EVENT_TRIAL);
+  });
+}

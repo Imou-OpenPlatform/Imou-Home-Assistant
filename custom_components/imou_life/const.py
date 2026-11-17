@@ -151,7 +151,6 @@ PARAM_ATTACH_DECRYPTED_THUMBNAIL = "attach_decrypted_thumbnail"
 PARAM_DEFAULT_DEVICE_PASSWORD = "default_device_password"
 PARAM_DEVICE_PASSWORDS = "device_passwords"
 PARAM_LOCAL_EVENT_RECORD = "local_event_record"
-PARAM_LOCAL_RECORD_PATH = "local_record_path"
 PARAM_LOCAL_RECORD_DURATION = "local_record_duration"
 DEFAULT_LOCAL_RECORD_DURATION = 60
 # Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
@@ -168,10 +167,9 @@ PARAM_AI_INSIGHT_STATUS = "ai_insight_status"
 PARAM_CLOUD_STORAGE_STATUS = "cloud_storage_status"
 AI_INSIGHT_STATUS_OPTIONS = ("active", "inactive", "unavailable")
 CLOUD_STORAGE_STATUS_OPTIONS = (
-    "insight",
-    "event",
-    "continuous",
-    "none",
+    "not_opened",
+    "active",
+    "expired",
     "unknown",
 )
 PARAM_STORAGE_USED = "storage_used"
@@ -207,7 +205,6 @@ DORMANT_WRITE_RETRY_WAIT_MIN = 5
 DORMANT_WRITE_RETRY_WAIT_MAX = 60
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
-PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
 COUNT_DOWN_MAX_MINUTES = 1440

@@ -139,6 +139,18 @@ def is_account_device_row(entry: DeviceEntry) -> bool:
 
 
 @callback
+def async_remove_account_placeholder_device(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Drop the old account row that only held integration-level entities."""
+    registry = dr.async_get(hass)
+    device = registry_row_for_key_on_entry(registry, entry.entry_id, entry.entry_id)
+    if device is None:
+        return
+    registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+
+
+@callback
 def async_register_imou_devices(
     hass: HomeAssistant, entry: ConfigEntry, devices: Sequence[ImouHaDevice]
 ) -> None:

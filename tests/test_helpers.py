@@ -24,6 +24,7 @@ from custom_components.imou_life.const import (
 from custom_components.imou_life.helpers import (
     alarm_push_active,
     alarm_type_option_key,
+    async_deliver_message_to_targets,
     camera_channel_devices,
     decrypt_pictures_active,
     default_notify_service_targets,
@@ -38,6 +39,7 @@ from custom_components.imou_life.helpers import (
 )
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
@@ -173,6 +175,60 @@ async def test_notify_selector_options_keep_stored_send_message(
     hass.services.async_register("notify", "send_message", _notify)
     options = notify_service_selector_options(hass, ["notify.send_message"])
     assert options == [{"value": "notify.send_message", "label": "notify.send_message"}]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_notify_selector_lists_notify_entities(hass: HomeAssistant) -> None:
+    """Logged-in apps are notify entities, so the picker lists those."""
+    registry = er.async_get(hass)
+    phone = registry.async_get_or_create(
+        "notify",
+        "mobile_app",
+        "phone-1",
+        suggested_object_id="pixel",
+        original_name="Pixel",
+    )
+    hass.states.async_set(phone.entity_id, "unknown", {"friendly_name": "Pixel"})
+    other = registry.async_get_or_create(
+        "notify",
+        "telegram",
+        "bot",
+        suggested_object_id="telegram",
+        original_name="Telegram",
+    )
+
+    options = notify_service_selector_options(hass, [])
+    by_value = {item["value"]: item["label"] for item in options}
+    assert by_value[phone.entity_id] == "Pixel"
+    assert by_value[other.entity_id] == "Telegram"
+    assert default_notify_service_targets(hass) == sorted(
+        {"notify.persistent_notification", phone.entity_id}
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_deliver_message_uses_notify_entity(
+    hass: HomeAssistant,
+) -> None:
+    """A notify entity is sent through notify.send_message."""
+    registry = er.async_get(hass)
+    phone = registry.async_get_or_create(
+        "notify",
+        "mobile_app",
+        "phone-2",
+        suggested_object_id="pixel_2",
+    )
+    calls = []
+
+    async def _send(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", "send_message", _send)
+    await async_deliver_message_to_targets(hass, "Alarm", "Motion", [phone.entity_id])
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == phone.entity_id
+    assert calls[0].data["message"] == "Motion"
+    assert calls[0].data["title"] == "Alarm"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -369,8 +425,8 @@ def test_alarm_push_active_needs_push_and_alarm_type() -> None:
     assert alarm_push_active(no_alarm) is False
 
 
-def test_decrypt_pictures_active_needs_push_and_switch() -> None:
-    """Alarm stills need alarm push and the decrypt option."""
+def test_decrypt_pictures_active_needs_alarm_push() -> None:
+    """Alarm stills are decrypted whenever alarm push is on."""
     on = MockConfigEntry(
         domain=DOMAIN,
         data={},
@@ -391,7 +447,7 @@ def test_decrypt_pictures_active_needs_push_and_switch() -> None:
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: False,
         },
     )
-    assert decrypt_pictures_active(decrypt_off) is False
+    assert decrypt_pictures_active(decrypt_off) is True
 
     push_off = MockConfigEntry(
         domain=DOMAIN,

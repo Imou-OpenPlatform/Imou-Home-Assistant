@@ -21,7 +21,6 @@ from .const import (
     PARAM_AI_INSIGHT_TRIAL,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
-    PARAM_ROTATION_DURATION,
     PARAM_TRIAL_CONTACT_URL,
     SERVICE_CONTROL_MOVE_PTZ,
 )
@@ -97,9 +96,7 @@ class ImouButton(ImouEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        await self._async_do_press(
-            self._config_entry.options.get(PARAM_ROTATION_DURATION, 500)
-        )
+        await self._async_do_press(500)
 
     @property
     def device_class(self) -> ButtonDeviceClass | None:
