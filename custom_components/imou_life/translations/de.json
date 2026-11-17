@@ -110,25 +110,25 @@
         "data": {
           "enable_polling": "Statusabfrage aktivieren",
           "update_interval": "Abfrageintervall (Sekunden)",
-          "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)",
           "selected_devices": "Zu abfragende Geräte"
         },
         "data_description": {
           "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
           "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
-          "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s.",
           "selected_devices": "Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant. Diese Liste zeigt weiterhin jedes Gerät des Kontos."
         },
         "sections": {
           "camera_defaults": {
             "name": "Kamera-Standardwerte",
-            "description": "Live-Stream-Standardwerte für dieses Konto.",
+            "description": "Standardwerte für Livestream, Schnappschuss und Steuerung im Ruhezustand für dieses Konto.",
             "data": {
               "download_snap_wait_time": "Wartezeit für Schnappschuss (Sekunden)",
+              "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)",
               "live_resolution": "Videoauflösung"
             },
             "data_description": {
               "download_snap_wait_time": "Die Kamera muss den Schnappschuss aufnehmen und hochladen, bevor Imou ihn bereitstellen kann. So lange wartet Home Assistant vor dem Abruf. Erhöhe den Wert, wenn Schnappschüsse veraltet oder leer ankommen. Standard 3 s.",
+              "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s.",
               "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet."
             }
           }

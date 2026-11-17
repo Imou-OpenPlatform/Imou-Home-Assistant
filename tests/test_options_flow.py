@@ -18,6 +18,7 @@ from custom_components.imou_life.const import (
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DEFAULT_DEVICE_PASSWORD,
     PARAM_DEVICE_PASSWORDS,
+    PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
@@ -205,12 +206,14 @@ async def test_options_general_settings_saves_without_devices(hass) -> None:
             PARAM_UPDATE_INTERVAL: 120,
             SECTION_CAMERA_DEFAULTS: {
                 PARAM_DOWNLOAD_SNAP_WAIT_TIME: 3,
+                PARAM_DORMANT_WRITE_RETRY_WAIT: 12,
                 PARAM_LIVE_RESOLUTION: CONF_HD,
             },
         },
     )
     _assert_returned_to_menu(result)
     assert entry.options[PARAM_UPDATE_INTERVAL] == 120
+    assert entry.options[PARAM_DORMANT_WRITE_RETRY_WAIT] == 12
     assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
     assert entry.options[PARAM_SELECTED_DEVICES] == ["device_1"]
 
@@ -223,6 +226,7 @@ async def test_options_general_omitting_camera_defaults_keeps_stored(hass) -> No
         data=USER_INPUT,
         options={
             PARAM_LIVE_RESOLUTION: CONF_SD,
+            PARAM_DORMANT_WRITE_RETRY_WAIT: 20,
         },
     )
     entry.add_to_hass(hass)
@@ -242,6 +246,7 @@ async def test_options_general_omitting_camera_defaults_keeps_stored(hass) -> No
     _assert_returned_to_menu(result)
     assert entry.options[PARAM_UPDATE_INTERVAL] == 180
     assert entry.options[PARAM_LIVE_RESOLUTION] == CONF_SD
+    assert entry.options[PARAM_DORMANT_WRITE_RETRY_WAIT] == 20
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")

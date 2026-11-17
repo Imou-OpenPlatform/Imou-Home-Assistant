@@ -483,22 +483,22 @@ class ImouOptionsFlow(OptionsFlow):
                 vol.Required(
                     PARAM_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=900)),
-                vol.Required(
-                    PARAM_DORMANT_WRITE_RETRY_WAIT,
-                    default=DEFAULT_DORMANT_WRITE_RETRY_WAIT,
-                ): vol.All(
-                    vol.Coerce(int),
-                    vol.Range(
-                        min=DORMANT_WRITE_RETRY_WAIT_MIN,
-                        max=DORMANT_WRITE_RETRY_WAIT_MAX,
-                    ),
-                ),
                 vol.Optional(SECTION_CAMERA_DEFAULTS): section(
                     vol.Schema(
                         {
                             vol.Required(
                                 PARAM_DOWNLOAD_SNAP_WAIT_TIME, default=3
                             ): vol.All(vol.Coerce(int), vol.Range(min=1, max=9)),
+                            vol.Required(
+                                PARAM_DORMANT_WRITE_RETRY_WAIT,
+                                default=DEFAULT_DORMANT_WRITE_RETRY_WAIT,
+                            ): vol.All(
+                                vol.Coerce(int),
+                                vol.Range(
+                                    min=DORMANT_WRITE_RETRY_WAIT_MIN,
+                                    max=DORMANT_WRITE_RETRY_WAIT_MAX,
+                                ),
+                            ),
                             vol.Required(
                                 PARAM_LIVE_RESOLUTION, default=CONF_HD
                             ): vol.In([CONF_HD, CONF_SD]),
@@ -531,12 +531,12 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_UPDATE_INTERVAL: flat.get(
                 PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
             ),
-            PARAM_DORMANT_WRITE_RETRY_WAIT: flat.get(
-                PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
-            ),
             SECTION_CAMERA_DEFAULTS: {
                 PARAM_DOWNLOAD_SNAP_WAIT_TIME: flat.get(
                     PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3
+                ),
+                PARAM_DORMANT_WRITE_RETRY_WAIT: flat.get(
+                    PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
                 ),
                 PARAM_LIVE_RESOLUTION: flat.get(PARAM_LIVE_RESOLUTION, CONF_HD),
             },
@@ -552,17 +552,16 @@ class ImouOptionsFlow(OptionsFlow):
             PARAM_UPDATE_INTERVAL: user_input.get(
                 PARAM_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
             ),
-            PARAM_DORMANT_WRITE_RETRY_WAIT: user_input.get(
-                PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT
-            ),
         }
-        if SECTION_CAMERA_DEFAULTS in user_input:
-            flat.update(user_input[SECTION_CAMERA_DEFAULTS])
-        else:
-            for key, default in (
-                (PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
-                (PARAM_LIVE_RESOLUTION, CONF_HD),
-            ):
+        section = user_input.get(SECTION_CAMERA_DEFAULTS)
+        if isinstance(section, Mapping):
+            flat.update(section)
+        for key, default in (
+            (PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
+            (PARAM_LIVE_RESOLUTION, CONF_HD),
+            (PARAM_DORMANT_WRITE_RETRY_WAIT, DEFAULT_DORMANT_WRITE_RETRY_WAIT),
+        ):
+            if key not in flat:
                 flat[key] = stored_options.get(key, default)
         return flat
 

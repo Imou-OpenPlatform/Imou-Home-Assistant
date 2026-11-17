@@ -23,6 +23,7 @@
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account. Checking one again brings it back.
 - Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has an Alarm pictures page. The picture password is read when Imou Life loads. Change it in the Imou app, then reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
 - Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
+- **Sleep control retry wait** is set under **Configure → Polling and cameras → Camera defaults**.
 
 #### Fixed
 
@@ -385,6 +386,7 @@
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。重新勾选后，设备会再出现。
 - 告警图片只要推送里带图，就会在本机解密。**配置** 里不再有「告警图片」这一页。图片密码在 Imou Life 加载时读取。在乐橙 App 里改了密码后，重新加载本集成，图片才会用新密码。仍解不开的图片会再试设备序列号。
 - **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置。各摄像头的开关仍在设备页。
+- **休眠控制重试等待** 改在 **配置 → 轮询与摄像头 → 摄像头默认** 里设置。
 
 #### 修复
 

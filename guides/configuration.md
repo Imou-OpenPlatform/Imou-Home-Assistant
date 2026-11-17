@@ -41,6 +41,11 @@ Two things worth knowing:
 | --- | --- | --- |
 | Enable status polling | Periodically refresh device state from the cloud. Off means entity states can go stale; setup and reload still fetch the device list once. | On |
 | Polling interval | Seconds between refreshes, 30–900. Ignored while polling is off. | 300 |
+
+**Camera defaults** on the same page:
+
+| Option | What it does | Default |
+| --- | --- | --- |
 | Sleep control retry wait | When status is **Sleep** and a control fails, how long to wait before sending the same command once more. Range 5–60. | 5 |
 | Snapshot wait time | How long to wait after asking a camera for a snapshot, since the camera has to take and upload it first. Raise it if snapshots come back stale or empty. A still already fetched is reused for 30 seconds. Range 1–9. | 3 |
 | Video resolution | `HD` or `SD`, used by the Live camera entity. | HD |
@@ -197,6 +202,11 @@ Alarm notifications can include an **AI:** line when your notify template uses t
 | --- | --- | --- |
 | 启用状态轮询 | 定期从云端刷新设备状态。关闭后实体状态可能过期；但初始化和重新加载仍会拉取一次设备列表。 | 开 |
 | 轮询间隔 | 两次刷新之间的秒数，30–900。轮询关闭时此项无效。 | 300 |
+
+同一页里的 **摄像头默认**：
+
+| 选项 | 作用 | 默认 |
+| --- | --- | --- |
 | 休眠控制重试等待 | 状态为 **休眠** 且控制失败时，再次发送同一命令前的等待秒数，5–60。 | 5 |
 | 抓图等待时间 | 向摄像头请求抓图后等待多久再去取——因为摄像头要先拍好并上传。取回的图偏旧或为空时调大。已经取到的静止画面会留 30 秒。范围 1–9。 | 3 |
 | 视频分辨率 | `HD` 或 `SD`，用于「直播」摄像头实体。 | HD |
