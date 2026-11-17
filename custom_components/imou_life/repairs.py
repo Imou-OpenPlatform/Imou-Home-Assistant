@@ -18,11 +18,19 @@ from pyimouapi.exceptions import (
 )
 
 from .const import DOMAIN, PARAM_API_URL, api_url_region_from_value
+from .pic_thumbnail import (
+    native_lib_dir,
+    native_libs_found,
+    native_platform_label,
+    native_platform_supported,
+)
 
 ISSUE_EVENT_PUSH_NO_URL = "event_push_no_external_url"
 ISSUE_EVENT_PUSH_CALLBACK = "event_push_callback_failed"
 ISSUE_OPEN_API_QUOTA = "open_api_quota_exceeded"
 ISSUE_RECORD_PLAYBACK = "record_playback"
+ISSUE_DECRYPT_LIBS_MISSING = "decrypt_libs_missing"
+ISSUE_DECRYPT_LIBS_UNSUPPORTED = "decrypt_libs_unsupported"
 
 _RECORD_PLAYBACK_API_CODES = frozenset(
     {
@@ -150,3 +158,43 @@ def async_create_record_playback_issue(
 def async_delete_record_playback_issue(hass: HomeAssistant, entry_id: str) -> None:
     """Clear the recording playback issue after playback succeeds."""
     ir.async_delete_issue(hass, DOMAIN, _issue_id(ISSUE_RECORD_PLAYBACK, entry_id))
+
+
+@callback
+def async_delete_decrypt_library_issues(hass: HomeAssistant) -> None:
+    """Clear both decrypt-library repairs. They belong to this Home Assistant."""
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DECRYPT_LIBS_MISSING)
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED)
+
+
+async def async_refresh_decrypt_library_issues(hass: HomeAssistant) -> None:
+    """Show where the official libraries go, or that this host cannot use them."""
+    if not native_platform_supported():
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_DECRYPT_LIBS_MISSING)
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            ISSUE_DECRYPT_LIBS_UNSUPPORTED,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_DECRYPT_LIBS_UNSUPPORTED,
+            translation_placeholders={"arch": native_platform_label()},
+        )
+        return
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED)
+    found = await hass.async_add_executor_job(native_libs_found, hass)
+    if found == 2:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_DECRYPT_LIBS_MISSING)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        ISSUE_DECRYPT_LIBS_MISSING,
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_DECRYPT_LIBS_MISSING,
+        translation_placeholders={
+            "native_dir": str(native_lib_dir(hass)),
+            "found": str(found),
+        },
+    )

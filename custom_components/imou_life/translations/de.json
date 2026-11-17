@@ -80,6 +80,14 @@
     "record_playback": {
       "title": "Aufnahmen können nicht wiedergegeben werden",
       "description": "Dieses Imou-Konto kann derzeit keine Aufnahmen wiedergeben. Versuche es erneut mit dem primären Imou-Konto."
+    },
+    "decrypt_libs_missing": {
+      "title": "Alarmbilder brauchen die offiziellen Bibliotheken",
+      "description": "Alarmbilder werden auf diesem Home Assistant entschlüsselt. Kopiere `libLCOpenApiClient.so` und `libLCOpenSDK.so` nach `{native_dir}` ({found} von 2 gefunden). Offizielles Paket: [China](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) oder [Ausland](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). Lade Imou Life neu, wenn beide Dateien liegen."
+    },
+    "decrypt_libs_unsupported": {
+      "title": "Dieses Home Assistant kann Alarmbilder nicht entschlüsseln",
+      "description": "Die offiziellen Bibliotheken laufen nur auf linux x86-64. Dieser Host ist {arch}, daher bleiben Alarmbilder verschlüsselt."
     }
   },
   "options": {
@@ -94,7 +102,7 @@
     "step": {
       "init": {
         "title": "Imou Life konfigurieren",
-        "description": "Alarm-Push: **{push_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder werden auf diesem Home Assistant entschlüsselt. Die Cliplänge steht unter Alarm-Push und Benachrichtigungen. Alarmclips liegen im Medienordner und sind im Medienbrowser zu sehen.",
+        "description": "Alarm-Push: **{push_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder werden auf diesem Home Assistant entschlüsselt und brauchen die beiden offiziellen Bibliotheken. **Einstellungen → System → Reparaturen** sagt, wohin sie gehören, wenn sie fehlen. Die Cliplänge steht unter Alarm-Push und Benachrichtigungen. Alarmclips liegen im Medienordner und sind im Medienbrowser zu sehen.",
         "menu_options": {
           "general_settings": "Abfrage und Kameras",
           "event_push": "Alarm-Push und Benachrichtigungen",
@@ -699,14 +707,20 @@
           "on": "Offen",
           "off": "Geschlossen"
         }
-      },
-      "motion": {
-        "name": "Bewegung"
       }
     },
     "event": {
-      "doorbell": {
-        "name": "Türklingel"
+      "call": {
+        "name": "Anruf",
+        "state": {
+          "call": "Anruf"
+        }
+      },
+      "motion": {
+        "name": "Bewegung",
+        "state": {
+          "motion": "Erkannt"
+        }
       }
     },
     "image": {

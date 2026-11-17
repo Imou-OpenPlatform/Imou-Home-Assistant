@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.repairs import (
+    ISSUE_DECRYPT_LIBS_MISSING,
+    ISSUE_DECRYPT_LIBS_UNSUPPORTED,
     ISSUE_EVENT_PUSH_NO_URL,
     ISSUE_OPEN_API_QUOTA,
     ISSUE_RECORD_PLAYBACK,
@@ -15,6 +19,7 @@ from custom_components.imou_life.repairs import (
     async_delete_quota_issue,
     async_delete_record_playback_issue,
     async_notify_imou_api_error,
+    async_refresh_decrypt_library_issues,
     is_quota_exceeded,
 )
 from homeassistant.helpers import issue_registry as ir
@@ -233,3 +238,81 @@ async def test_record_playback_transient_failures_do_not_create_issue(
         DOMAIN,
         f"{ISSUE_RECORD_PLAYBACK}_entry-a",
     ) not in ir.async_get(hass).issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_missing_decrypt_libraries_open_one_repair(hass) -> None:
+    """A linux x86-64 host without both libraries gets the download repair."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=1,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_lib_dir",
+            return_value="/config/imou_life/native",
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, ISSUE_DECRYPT_LIBS_MISSING)]
+    assert issue.translation_placeholders["found"] == "1"
+    assert issue.translation_placeholders["native_dir"] == "/config/imou_life/native"
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED) not in issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_present_decrypt_libraries_clear_the_repair(hass) -> None:
+    """Both libraries in place remove the repair."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=0,
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=2,
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_MISSING) not in issues
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED) not in issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_unsupported_host_does_not_ask_for_libraries(hass) -> None:
+    """A host that cannot run the libraries is told that, not where to download."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=False,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_platform_label",
+            return_value="linux aarch64",
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED)]
+    assert issue.translation_placeholders["arch"] == "linux aarch64"
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_MISSING) not in issues

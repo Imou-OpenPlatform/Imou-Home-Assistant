@@ -123,6 +123,11 @@
 				"default": "mdi:bullhorn-outline"
 			}
 		},
+		"event": {
+			"call": {
+				"default": "mdi:phone-incoming"
+			}
+		},
 		"camera": {
 			"camera": {
 				"default": "mdi:video"

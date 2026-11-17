@@ -1,40 +1,34 @@
-"""Webhook motion / human / PIR as a camera binary_sensor."""
+"""Webhook motion / human / PIR as a camera event."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
-from custom_components.imou_life.binary_sensor import (
-    ImouMotionBinarySensor,
-    _iter_motion_sensors,
-    motion_binary_state,
-)
 from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_PUSH_TYPE_IOT,
     EVENT_PUSH_TYPES_ALL,
-    MOTION_OFF_DELAY,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_MOTION,
     PARAM_STATUS,
 )
+from custom_components.imou_life.event import (
+    ImouMotionEvent,
+    _iter_motion_events,
+    motion_push,
+)
 from custom_components.imou_life.webhook import async_handle_imou_webhook
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components.event import EventDeviceClass
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 from pyimouapi.const import BINARY_SENSOR_TYPE_REF, PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
 from .conftest import setup_imou_runtime
@@ -79,7 +73,7 @@ def _online_motion(
     *,
     push: bool,
     types: list[str] | None = None,
-) -> ImouMotionBinarySensor:
+) -> ImouMotionEvent:
     """Motion entity for an online camera with the given push options."""
     coordinator = _coordinator([device])
     coordinator.last_update_success = True
@@ -90,7 +84,7 @@ def _online_motion(
         options[PARAM_EVENT_PUSH_TYPES] = types
     elif push:
         options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
-    return ImouMotionBinarySensor(
+    return ImouMotionEvent(
         coordinator,
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),
         PARAM_MOTION,
@@ -100,11 +94,11 @@ def _online_motion(
 
 @asynccontextmanager
 async def _listening_motion(
-    hass: HomeAssistant, entity: ImouMotionBinarySensor
-) -> AsyncIterator[ImouMotionBinarySensor]:
+    hass: HomeAssistant, entity: ImouMotionEvent
+) -> AsyncIterator[ImouMotionEvent]:
     """Subscribe the entity, then drop its bus listener and auto-off timer."""
     entity.hass = hass
-    entity.entity_id = "binary_sensor.front_motion"
+    entity.entity_id = "event.front_motion"
     await entity.async_added_to_hass()
     try:
         yield entity
@@ -138,17 +132,17 @@ async def _listening_motion(
         ("e_multiVideoDetectAlarm", True),
         ("e_clearAlarmPIR", False),
         ("pir_cleared", False),
-        ("smokeAlarm", None),
-        ("gasAlarm", None),
-        ("abAlarmSound", None),
-        ("e_pet", None),
-        ("e_aiVehArea", None),
-        (None, None),
+        ("smokeAlarm", False),
+        ("gasAlarm", False),
+        ("abAlarmSound", False),
+        ("e_pet", False),
+        ("e_aiVehArea", False),
+        (None, False),
     ],
 )
-def test_motion_binary_state(msg_type: str | None, expected: bool | None) -> None:
-    """Picture / human / PIR / person-in-area / line-crossing drive motion."""
-    assert motion_binary_state(msg_type) is expected
+def test_motion_push(msg_type: str | None, expected: bool) -> None:
+    """Picture / human / PIR / person-in-area / line-crossing fire motion."""
+    assert motion_push(msg_type) is expected
 
 
 def _capability(*property_ids: str) -> MagicMock:
@@ -159,7 +153,7 @@ def _capability(*property_ids: str) -> MagicMock:
     return capability
 
 
-def test_iter_motion_sensors_follows_v2_detect_properties() -> None:
+def test_iter_motion_events_follows_v2_detect_properties() -> None:
     """Motion follows picture-change / person detect, not every camera."""
     camera = _device(channel_id="0")
     camera.capability_set = _capability("detection.motion.enabled")
@@ -167,24 +161,24 @@ def test_iter_motion_sensors_follows_v2_detect_properties() -> None:
     plug.capability_set = _capability("detection.motion.enabled")
     no_detect = _device(channel_id="0", device_id="IPC2")
     no_detect.capability_set = _capability("call.session.ringVolume")
-    pairs = _iter_motion_sensors(_coordinator([camera, plug, no_detect]))
+    pairs = _iter_motion_events(_coordinator([camera, plug, no_detect]))
     assert [(key, device.device_id) for key, device in pairs] == [(PARAM_MOTION, "SN1")]
 
 
-def test_iter_motion_sensors_ignores_legacy_ability_strings() -> None:
+def test_iter_motion_events_ignores_legacy_ability_strings() -> None:
     """Old ability names do not create Motion once the capability list is known."""
     camera = _device(channel_id="0")
     camera.device_ability = "WLAN,MobileDetect"
     camera.channel_ability = "WLAN,HeaderDetect"
-    assert _iter_motion_sensors(_coordinator([camera])) == []
+    assert _iter_motion_events(_coordinator([camera])) == []
 
 
-def test_iter_motion_sensors_channel_without_detect_is_skipped() -> None:
+def test_iter_motion_events_channel_without_detect_is_skipped() -> None:
     """A channel whose capability list has no detect property is skipped."""
     camera = _device(channel_id="1")
     camera.is_ipc = False
     camera.capability_set = _capability("detection.sound.enabled")
-    assert _iter_motion_sensors(_coordinator([camera])) == []
+    assert _iter_motion_events(_coordinator([camera])) == []
 
 
 @pytest.mark.parametrize(
@@ -196,41 +190,41 @@ def test_iter_motion_sensors_channel_without_detect_is_skipped() -> None:
         "detection.intrusion.personFilter",
     ],
 )
-def test_iter_motion_sensors_accepts_v2_detect_properties(property_id: str) -> None:
+def test_iter_motion_events_accepts_v2_detect_properties(property_id: str) -> None:
     """Picture-change and person detect, including fallbacks, create Motion."""
     camera = _device(channel_id="0")
     camera.capability_set = _capability(property_id)
-    assert _iter_motion_sensors(_coordinator([camera])) == [(PARAM_MOTION, camera)]
+    assert _iter_motion_events(_coordinator([camera])) == [(PARAM_MOTION, camera)]
 
 
 @pytest.mark.parametrize(
     "property_id",
     ["detection.sound.enabled", "detection.pet.enabled", "detection.motion.plan"],
 )
-def test_iter_motion_sensors_ignores_unrelated_v2_properties(property_id: str) -> None:
+def test_iter_motion_events_ignores_unrelated_v2_properties(property_id: str) -> None:
     """Sound, pet, and the motion schedule are not the Motion sensor."""
     camera = _device(channel_id="0")
     camera.capability_set = _capability(property_id)
-    assert _iter_motion_sensors(_coordinator([camera])) == []
+    assert _iter_motion_events(_coordinator([camera])) == []
 
 
-def test_iter_motion_sensors_iot_uses_the_same_v2_properties() -> None:
+def test_iter_motion_events_iot_uses_the_same_v2_properties() -> None:
     """A product id does not change the capability check."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
     camera.capability_set = _capability("detection.person.enabled")
-    pairs = _iter_motion_sensors(
+    pairs = _iter_motion_events(
         _coordinator([camera], event_map={"311000": "e_callEventCall"})
     )
     assert pairs == [(PARAM_MOTION, camera)]
 
 
-def test_iter_motion_sensors_iot_event_refs_are_not_enough() -> None:
+def test_iter_motion_events_iot_event_refs_are_not_enough() -> None:
     """Old product-model refs do not create Motion without the v2 property."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
     camera.channel_ability = "WLAN,MobileDetect"
-    pairs = _iter_motion_sensors(
+    pairs = _iter_motion_events(
         _coordinator([camera], event_map={"33000": "e_videoMotion"})
     )
     assert pairs == []
@@ -241,17 +235,18 @@ def test_motion_unique_id_does_not_collide_with_library_binary_sensors() -> None
     assert PARAM_MOTION not in BINARY_SENSOR_TYPE_REF
 
 
-def test_motion_entity_is_a_motion_class() -> None:
-    """Dashboards and HomeKit treat this as a motion sensor."""
+def test_motion_entity_is_a_motion_event() -> None:
+    """Dashboards and automations treat this as a motion event."""
     device = _device(channel_id="0")
-    entity = ImouMotionBinarySensor(
+    entity = ImouMotionEvent(
         _coordinator([device]),
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
         PARAM_MOTION,
         device,
     )
-    assert entity.device_class is BinarySensorDeviceClass.MOTION
-    assert entity.is_on is False
+    assert entity.device_class is EventDeviceClass.MOTION
+    assert entity.event_types == ["motion"]
+    assert entity.state is None
 
 
 def test_motion_unavailable_when_alarm_push_is_off() -> None:
@@ -274,109 +269,79 @@ def test_motion_available_when_alarm_push_is_on() -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_alarm_event_turns_motion_on(hass: HomeAssistant) -> None:
-    """A human-detect alarm for this camera turns the sensor on."""
+async def test_alarm_event_fires_motion(hass: HomeAssistant) -> None:
+    """A human-detect alarm for this camera fires the motion event."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
             {"device_id": "SN1", "channel_id": "0", "msg_type": "human"},
         )
         await hass.async_block_till_done()
-        assert entity.is_on is True
+        assert entity.state_attributes["event_type"] == "motion"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_other_camera_does_not_turn_motion_on(hass: HomeAssistant) -> None:
-    """A push for another channel must not flip this sensor."""
+async def test_other_camera_does_not_fire_motion(hass: HomeAssistant) -> None:
+    """A push for another channel must not fire this event."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
             {"device_id": "SN1", "channel_id": "1", "msg_type": "human"},
         )
         await hass.async_block_till_done()
-        assert entity.is_on is False
+        assert entity.state is None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_motion_auto_off(hass: HomeAssistant) -> None:
-    """Motion returns to off after the hold time when the cloud sends no clear."""
+async def test_repeat_motion_fires_again(hass: HomeAssistant) -> None:
+    """Each detection fires again. The event does not stay on."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
-    async with _listening_motion(hass, entity):
-        hass.bus.async_fire(
-            EVENT_IMOU_ALARM,
-            {"device_id": "SN1", "channel_id": "0", "msg_type": "videoMotion"},
-        )
-        await hass.async_block_till_done()
-        assert entity.is_on is True
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(seconds=MOTION_OFF_DELAY)
-        )
-        await hass.async_block_till_done()
-        assert entity.is_on is False
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_repeat_motion_resets_auto_off(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    """A second motion push must not flash off; it restarts the 15s hold."""
-    device = _device(channel_id="0")
-    coordinator = _coordinator([device])
-    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
-    entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         payload = {"device_id": "SN1", "channel_id": "0", "msg_type": "human"}
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        freezer.tick(timedelta(seconds=7))
+        first = entity.state
         hass.bus.async_fire(EVENT_IMOU_ALARM, payload)
         await hass.async_block_till_done()
-        freezer.tick(timedelta(seconds=9))
-        async_fire_time_changed(hass)
-        await hass.async_block_till_done()
-        assert entity.is_on is True
-        freezer.tick(timedelta(seconds=7))
-        async_fire_time_changed(hass)
-        await hass.async_block_till_done()
-        assert entity.is_on is False
+        assert entity.state != first
+        assert entity.state_attributes["event_type"] == "motion"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_pir_clear_turns_motion_off_immediately(hass: HomeAssistant) -> None:
-    """A PIR-clear push must not wait for the auto-off timer."""
+async def test_pir_clear_does_not_fire_motion(hass: HomeAssistant) -> None:
+    """A clear is not a detection, so it does not fire motion."""
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
             {"device_id": "SN1", "channel_id": "0", "msg_type": "alarmPIR"},
         )
         await hass.async_block_till_done()
-        assert entity.is_on is True
+        fired = entity.state
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
             {"device_id": "SN1", "channel_id": "0", "msg_type": "clearAlarmPIR"},
         )
         await hass.async_block_till_done()
-        assert entity.is_on is False
+        assert entity.state == fired
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -386,14 +351,14 @@ async def test_smoke_alarm_does_not_touch_motion(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
             {"device_id": "SN1", "channel_id": "0", "msg_type": "smokeAlarm"},
         )
         await hass.async_block_till_done()
-        assert entity.is_on is False
+        assert entity.state is None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -403,7 +368,7 @@ async def test_iot_person_area_turns_motion_on(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
@@ -414,7 +379,7 @@ async def test_iot_person_area_turns_motion_on(hass: HomeAssistant) -> None:
             },
         )
         await hass.async_block_till_done()
-        assert entity.is_on is True
+        assert entity.state_attributes["event_type"] == "motion"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -424,7 +389,7 @@ async def test_webhook_human_turns_motion_on(hass: HomeAssistant) -> None:
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         await async_handle_imou_webhook(
             hass,
@@ -432,7 +397,7 @@ async def test_webhook_human_turns_motion_on(hass: HomeAssistant) -> None:
             MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
         )
         await hass.async_block_till_done(wait_background_tasks=True)
-        assert entity.is_on is True
+        assert entity.state_attributes["event_type"] == "motion"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -442,7 +407,7 @@ async def test_removed_listener_ignores_later_alarms(hass: HomeAssistant) -> Non
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouMotionBinarySensor(coordinator, entry, PARAM_MOTION, device)
+    entity = ImouMotionEvent(coordinator, entry, PARAM_MOTION, device)
     async with _listening_motion(hass, entity):
         pass
     hass.bus.async_fire(
@@ -450,4 +415,4 @@ async def test_removed_listener_ignores_later_alarms(hass: HomeAssistant) -> Non
         {"device_id": "SN1", "channel_id": "0", "msg_type": "human"},
     )
     await hass.async_block_till_done()
-    assert entity.is_on is False
+    assert entity.state is None

@@ -80,6 +80,14 @@
     "record_playback": {
       "title": "Recording playback is unavailable",
       "description": "This Imou account cannot currently play recordings. Try again with the primary Imou account."
+    },
+    "decrypt_libs_missing": {
+      "title": "Alarm pictures need the official libraries",
+      "description": "Alarm pictures are decrypted on this Home Assistant. Copy both `libLCOpenApiClient.so` and `libLCOpenSDK.so` into `{native_dir}` ({found} of 2 found). Download the official package for [China](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) or [overseas](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). Reload Imou Life after both files are in place."
+    },
+    "decrypt_libs_unsupported": {
+      "title": "This Home Assistant cannot decrypt alarm pictures",
+      "description": "The official libraries only run on linux x86-64. This host is {arch}, so alarm pictures stay encrypted."
     }
   },
   "options": {
@@ -94,7 +102,7 @@
     "step": {
       "init": {
         "title": "Configure Imou Life",
-        "description": "Alarm push: **{push_state}** · Status polling: **{polling_state}**\n\nEach page saves on submit and comes back here. Alarm pictures are decrypted on this Home Assistant. Clip length for Record on alarm is set on Alarm push and notifications, and a clip is saved only while alarm push is on. Clips are saved under Media and shown in the media browser.",
+        "description": "Alarm push: **{push_state}** · Status polling: **{polling_state}**\n\nEach page saves on submit and comes back here. Alarm pictures are decrypted on this Home Assistant and need the two official libraries. **Settings → System → Repairs** says where to put them when they are missing. Clip length for Record on alarm is set on Alarm push and notifications, and a clip is saved only while alarm push is on. Clips are saved under Media and shown in the media browser.",
         "menu_options": {
           "general_settings": "Polling and cameras",
           "event_push": "Alarm push and notifications",
@@ -699,14 +707,20 @@
           "on": "Open",
           "off": "Closed"
         }
-      },
-      "motion": {
-        "name": "Motion"
       }
     },
     "event": {
-      "doorbell": {
-        "name": "Doorbell"
+      "call": {
+        "name": "Call",
+        "state": {
+          "call": "Call"
+        }
+      },
+      "motion": {
+        "name": "Motion",
+        "state": {
+          "motion": "Detected"
+        }
       }
     },
     "image": {

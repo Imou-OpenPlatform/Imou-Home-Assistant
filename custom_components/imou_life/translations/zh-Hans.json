@@ -80,6 +80,14 @@
     "record_playback": {
       "title": "录像暂时无法播放",
       "description": "当前 Imou 账号无法播放录像。请改用主账号后重试。"
+    },
+    "decrypt_libs_missing": {
+      "title": "告警图片需要官方库",
+      "description": "告警图片在本机解密。请把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都复制到 `{native_dir}`（已找到 {found}/2）。官方包：[国内](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt)、[海外](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)。两个文件都放好后，重新加载 Imou Life。"
+    },
+    "decrypt_libs_unsupported": {
+      "title": "这台 Home Assistant 解不了告警图片",
+      "description": "官方库只能在 linux x86-64 上运行。这台机器是 {arch}，告警图片会保持加密。"
     }
   },
   "options": {
@@ -94,7 +102,7 @@
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "告警推送：**{push_state}** · 状态轮询：**{polling_state}**\n\n每一页提交后即保存并回到这里。告警图片在本机解密。告警时录像的时长在「告警推送与通知」里设置，只在告警推送开启时才会录。片段保存在媒体目录，在媒体浏览器里查看。",
+        "description": "告警推送：**{push_state}** · 状态轮询：**{polling_state}**\n\n每一页提交后即保存并回到这里。告警图片在本机解密，需要两个官方库。缺文件时，**设置 → 系统 → 修复** 会说明放到哪里。告警时录像的时长在「告警推送与通知」里设置，只在告警推送开启时才会录。片段保存在媒体目录，在媒体浏览器里查看。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
@@ -699,14 +707,20 @@
           "on": "打开",
           "off": "关闭"
         }
-      },
-      "motion": {
-        "name": "动态侦测"
       }
     },
     "event": {
-      "doorbell": {
-        "name": "门铃"
+      "call": {
+        "name": "呼叫",
+        "state": {
+          "call": "呼叫"
+        }
+      },
+      "motion": {
+        "name": "动态侦测",
+        "state": {
+          "motion": "检测到"
+        }
       }
     },
     "image": {

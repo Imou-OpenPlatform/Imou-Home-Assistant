@@ -114,6 +114,27 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
         config_entry=entry,
         device_id=device_entry.id,
     )
+    old_doorbell = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "cam_0$doorbell",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    old_motion = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        "cam_0$motion",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    motion_event = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "cam_0$motion",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
 
     async_remove_replaced_legacy_entities(hass, entry)
 
@@ -126,6 +147,9 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
     assert registry.async_get(night.entity_id) is not None
     assert registry.async_get(panel.entity_id) is not None
     assert registry.async_get(plug_switch.entity_id) is not None
+    assert registry.async_get(old_doorbell.entity_id) is None
+    assert registry.async_get(old_motion.entity_id) is None
+    assert registry.async_get(motion_event.entity_id) is not None
 
 
 def _paas_camera(device_id: str, *, properties: tuple[str, ...] = ()) -> MagicMock:
@@ -144,7 +168,7 @@ def _paas_camera(device_id: str, *, properties: tuple[str, ...] = ()) -> MagicMo
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
-    """1.4.0 created Motion on every camera; ungated leftovers must be removed."""
+    """Call and Motion events stay only on channels that still offer them."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
     entry.add_to_hass(hass)
     keep = _paas_camera("keep", properties=("detection.motion.enabled",))
@@ -173,28 +197,28 @@ async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
     )
     registry = er.async_get(hass)
     keep_motion = registry.async_get_or_create(
-        "binary_sensor",
+        "event",
         DOMAIN,
         "keep_0$motion",
         config_entry=entry,
         device_id=keep_device.id,
     )
     drop_motion = registry.async_get_or_create(
-        "binary_sensor",
+        "event",
         DOMAIN,
         "drop_0$motion",
         config_entry=entry,
         device_id=drop_device.id,
     )
-    drop_doorbell = registry.async_get_or_create(
+    drop_call = registry.async_get_or_create(
         "event",
         DOMAIN,
-        "drop_0$doorbell",
+        "drop_0$call",
         config_entry=entry,
         device_id=drop_device.id,
     )
     gone_motion = registry.async_get_or_create(
-        "binary_sensor",
+        "event",
         DOMAIN,
         "gone_0$motion",
         config_entry=entry,
@@ -205,7 +229,7 @@ async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
 
     assert registry.async_get(keep_motion.entity_id) is not None
     assert registry.async_get(drop_motion.entity_id) is None
-    assert registry.async_get(drop_doorbell.entity_id) is None
+    assert registry.async_get(drop_call.entity_id) is None
     assert registry.async_get(gone_motion.entity_id) is not None
 
 
