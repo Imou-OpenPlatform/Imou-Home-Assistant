@@ -42,6 +42,7 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     device.is_ipc = True
     device.device_ability = "WLAN"
     device.channel_ability = "WLAN"
+    device.capability_set = None
     device.device_name = "Front"
     device.channel_name = "Front"
     device.manufacturer = "Imou"
@@ -132,57 +133,74 @@ def test_is_doorbell_call_msg_type(msg_type: str | None, expected: bool) -> None
     assert is_doorbell_call_msg_type(msg_type) is expected
 
 
-def test_iter_doorbell_events_paas_needs_call_ability() -> None:
-    """PaaS doorbell follows CallAbility, not every camera channel."""
+def _capability(
+    *,
+    events: tuple[str, ...] = (),
+    services: tuple[str, ...] = (),
+) -> MagicMock:
+    capability = MagicMock()
+    capability.properties = {}
+    capability.services = frozenset(services)
+    capability.events = frozenset(events)
+    return capability
+
+
+def test_iter_doorbell_events_follows_v2_call() -> None:
+    """Doorbell follows an incoming call, not every camera."""
     camera = _device(channel_id="0")
-    camera.channel_ability = "WLAN,CallAbility"
+    camera.capability_set = _capability(events=("call.session.called",))
     plug = _device(channel_id=None, device_id="PLUG")
+    plug.capability_set = _capability(events=("call.session.called",))
     no_call = _device(channel_id="0", device_id="IPC2")
-    no_call.channel_ability = "WLAN,MobileDetect"
+    no_call.capability_set = _capability(services=("ptz.aim.step",))
     pairs = _iter_doorbell_events(_coordinator([camera, plug, no_call]))
     assert [(key, device.device_id) for key, device in pairs] == [
         (PARAM_DOORBELL, "SN1")
     ]
 
 
-def test_iter_doorbell_events_ipc_uses_device_ability_on_channel_0() -> None:
-    """An IPC often lists CallAbility on the device, not the channel."""
+def test_iter_doorbell_events_accepts_call_controls() -> None:
+    """Answer, hang up, and refuse are the call feature when the event is absent."""
+    camera = _device(channel_id="0")
+    camera.capability_set = _capability(services=("call.session.answer",))
+    assert _iter_doorbell_events(_coordinator([camera])) == [(PARAM_DOORBELL, camera)]
+
+
+def test_iter_doorbell_events_ignores_legacy_call_ability() -> None:
+    """The old call ability name does not create a doorbell."""
     camera = _device(channel_id="0")
     camera.device_ability = "WLAN,CallAbility"
-    camera.channel_ability = "WLAN"
-    pairs = _iter_doorbell_events(_coordinator([camera]))
-    assert pairs == [(PARAM_DOORBELL, camera)]
-
-
-def test_iter_doorbell_events_nvr_channel_ignores_device_ability() -> None:
-    """An NVR channel only gets doorbell when that channel reports the ability."""
-    camera = _device(channel_id="1")
-    camera.is_ipc = False
-    camera.device_ability = "CallAbility"
-    camera.channel_ability = "WLAN"
+    camera.channel_ability = "WLAN,CallAbility"
     assert _iter_doorbell_events(_coordinator([camera])) == []
 
 
-def test_iter_doorbell_events_iot_uses_product_model_events() -> None:
-    """IoT doorbell follows thing-model call events, not PaaS abilities."""
+def test_iter_doorbell_events_channel_without_call_is_skipped() -> None:
+    """A channel whose capability list has no call feature is skipped."""
+    camera = _device(channel_id="1")
+    camera.is_ipc = False
+    camera.capability_set = _capability(services=("call.session.deviceTalk",))
+    assert _iter_doorbell_events(_coordinator([camera])) == []
+
+
+def test_iter_doorbell_events_iot_uses_the_same_v2_call() -> None:
+    """A product id does not change the capability check."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
-    camera.channel_ability = "WLAN"
-    pairs = _iter_doorbell_events(
-        _coordinator([camera], event_map={"311000": "e_callEventCall"})
-    )
-    assert pairs == [(PARAM_DOORBELL, camera)]
+    camera.capability_set = _capability(events=("call.session.called",))
+    assert _iter_doorbell_events(_coordinator([camera])) == [(PARAM_DOORBELL, camera)]
 
 
-def test_iter_doorbell_events_iot_without_call_events_skipped() -> None:
-    """An IoT camera with CallAbility but no call events must not get doorbell."""
+def test_iter_doorbell_events_iot_event_refs_are_not_enough() -> None:
+    """Old product-model call refs do not create a doorbell."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
     camera.channel_ability = "WLAN,CallAbility"
-    pairs = _iter_doorbell_events(
-        _coordinator([camera], event_map={"33000": "e_videoMotion"})
+    assert (
+        _iter_doorbell_events(
+            _coordinator([camera], event_map={"311000": "e_callEventCall"})
+        )
+        == []
     )
-    assert pairs == []
 
 
 def test_doorbell_entity_is_a_doorbell_class() -> None:

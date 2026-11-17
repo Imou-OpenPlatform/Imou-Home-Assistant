@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from homeassistant.components import persistent_notification
@@ -12,9 +12,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
 from homeassistant.helpers.selector import SelectOptionDict
-from pyimouapi.const import SWITCH_TYPE_ABILITY
 from pyimouapi.device import ImouDeviceSummary
-from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     DEFAULT_DORMANT_WRITE_RETRY_WAIT,
@@ -32,13 +31,6 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .devices import registry_row_for_key
-
-PAAS_CALL_ABILITY = "CallAbility"
-PAAS_MOTION_ABILITIES = frozenset(
-    item["ability"]
-    for switch_type in ("motion_detect", "header_detect")
-    for item in SWITCH_TYPE_ABILITY[switch_type]
-)
 
 
 def dormant_write_retry_wait_seconds(entry: ConfigEntry) -> int:
@@ -152,6 +144,48 @@ def resolve_ui_language(language: str | None) -> str:
     if language.lower().startswith("zh"):
         return "zh-Hans"
     return language
+
+
+def display_language(system: str | None, user: str | None) -> str:
+    """Prefer the signed-in user's language, then the system language."""
+    if isinstance(user, str) and user.strip():
+        return resolve_ui_language(user)
+    return resolve_ui_language(system)
+
+
+def translated_name_override(original: str | None, translated: str) -> str | None:
+    """Registry override for a name, or None when the original already matches."""
+    if original == translated:
+        return None
+    return translated
+
+
+async def async_display_language(hass: HomeAssistant) -> str:
+    """Language for dashboards and names: the owner's profile, else the system."""
+    return display_language(hass.config.language, await _owner_ui_language(hass))
+
+
+async def _owner_ui_language(hass: HomeAssistant) -> str | None:
+    """Return the owner's frontend language, if a profile has one."""
+    try:
+        owner = await hass.auth.async_get_owner()
+    except Exception:
+        return None
+    if owner is None:
+        return None
+    try:
+        from homeassistant.components.frontend.storage import async_user_store
+
+        store = await async_user_store(hass, owner.id)
+    except Exception:
+        return None
+    raw = store.data.get("language")
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get("language")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
 
 
 def fill_template(template: str, fallback: str, **values: str) -> str:
@@ -352,40 +386,3 @@ async def async_build_device_map(hass: HomeAssistant, api_client) -> dict[str, s
     manager = ImouDeviceManager(api_client)
     summaries = await manager.async_get_device_summaries()
     return {s.device_id: format_device_label(hass, s) for s in summaries}
-
-
-def device_has_paas_ability(device: ImouHaDevice, ability: str) -> bool:
-    """Return True when a PaaS channel (or IPC device) reports this ability."""
-    return ImouHaDeviceManager.entity_need_add_to_device(
-        ability,
-        (device.channel_ability or "").split(","),
-        (device.device_ability or "").split(","),
-        bool(device.is_ipc),
-        device.channel_id,
-        "_probe",
-        {},
-    )
-
-
-def device_iot_event_map(coordinator: Any, device: ImouHaDevice) -> dict[str, str]:
-    """Return cached product-model events for an IoT device, or {}."""
-    product_id = device.product_id
-    if not product_id:
-        return {}
-    delegate = getattr(getattr(coordinator, "device_manager", None), "delegate", None)
-    cached = getattr(delegate, "cached_event_map", None)
-    if cached is None:
-        return {}
-    return cached(product_id) or {}
-
-
-def device_iot_events_match(
-    coordinator: Any,
-    device: ImouHaDevice,
-    pred: Callable[[str | None], bool],
-) -> bool:
-    """Return True when any cached event ref or identifier matches pred."""
-    for ref, identifier in device_iot_event_map(coordinator, device).items():
-        if pred(identifier) or pred(ref):
-            return True
-    return False

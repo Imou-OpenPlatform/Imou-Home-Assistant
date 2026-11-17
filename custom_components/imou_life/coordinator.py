@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 from collections.abc import Callable, Iterable
 from datetime import timedelta
@@ -203,20 +202,13 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
 
         if first_discovery:
-            await self._async_prefetch_event_maps(filtered_list)
             self._async_add_remove_devices(fresh_by_key)
             await self._async_remember_picture_passwords()
             return
 
-        new_keys = set(fresh_by_key) - set(self.devices_by_key)
-        if new_keys:
-            await self._async_prefetch_event_maps(
-                [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
-            )
         self._async_add_remove_devices(fresh_by_key)
         await self._async_refresh_known_devices(fresh_by_key)
         await self._async_remember_picture_passwords()
-        await self._async_retry_event_maps()
 
     def _debug_log_capability_lists(self, devices: Iterable[ImouHaDevice]) -> None:
         """Log each channel's capability.list result on the integration logger.
@@ -250,16 +242,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 sorted(device.buttons),
                 device.channel_ability,
             )
-
-    async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
-        """Fetch product-model events so doorbell / motion can be gated at setup."""
-        seen: set[str] = set()
-        for device in devices:
-            product_id = device.product_id
-            if not product_id or product_id in seen:
-                continue
-            seen.add(product_id)
-            await self._device_manager.delegate.async_ensure_event_map(product_id)
 
     async def _async_update_data(self) -> None:
         """Fetch latest device status from Imou cloud."""
@@ -436,35 +418,6 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ready = list(refreshed.values())
             for callback in self.new_device_callbacks:
                 callback(ready)
-
-    async def _async_retry_event_maps(self) -> None:
-        """Retry product-model events that failed earlier, then add entities."""
-        delegate = self._device_manager.delegate
-        ensure = getattr(delegate, "async_ensure_event_map", None)
-        cached = getattr(delegate, "cached_event_map", None)
-        if not inspect.iscoroutinefunction(ensure) or not callable(cached):
-            return
-        gained: set[str] = set()
-        seen: set[str] = set()
-        for device in self.devices_by_key.values():
-            product_id = device.product_id
-            if not product_id or product_id in seen:
-                continue
-            seen.add(product_id)
-            if cached(product_id):
-                continue
-            await ensure(product_id)
-            if cached(product_id):
-                gained.add(product_id)
-        if not gained:
-            return
-        ready = [
-            device
-            for device in self.devices_by_key.values()
-            if device.product_id in gained
-        ]
-        for callback in self.new_device_callbacks:
-            callback(ready)
 
     def _forget_v2_state_snapshots(self, devices: Iterable[ImouHaDevice]) -> None:
         """Allow a device that left to fetch a state snapshot when it returns."""

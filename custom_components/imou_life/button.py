@@ -33,6 +33,8 @@ _LOGGER = logging.getLogger(__package__)
 PARALLEL_UPDATES = 1
 
 _SIREN_BUTTONS = frozenset({PARAM_SIREN_START, PARAM_SIREN_STOP})
+_WHITE_LIGHT_BUTTONS = frozenset({"white_light_start", "white_light_stop"})
+_HIDDEN_BUTTONS = _SIREN_BUTTONS | _WHITE_LIGHT_BUTTONS
 
 
 def _iter_buttons(
@@ -43,7 +45,7 @@ def _iter_buttons(
         (button_type, device)
         for device in coordinator.devices
         for button_type in device.buttons
-        if button_type not in _SIREN_BUTTONS
+        if button_type not in _HIDDEN_BUTTONS
     ]
 
 

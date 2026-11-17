@@ -55,7 +55,7 @@
 				"default": "mdi:radar"
 			},
 			"motion_detect": {
-				"default": "mdi:motion-sensor"
+				"default": "mdi:picture-in-picture-bottom-right"
 			},
 			"pet_detect": {
 				"default": "mdi:paw"

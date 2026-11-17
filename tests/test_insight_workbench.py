@@ -3,9 +3,9 @@
 import pytest
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.insight_workbench import (
-    _page_target,
     _resolve_config_entry,
-    _SearchSession,
+    search_card,
+)
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
@@ -95,7 +95,7 @@ def test_search_card_lists_a_hit() -> None:
     )
     assert summary == "有人经过"
     assert "🚶 **有人经过**" in markdown
-    assert "第 1 页" in markdown
+    assert "Page 1" in markdown
     assert "🚗 **一辆车经过**" in markdown
     assert "![有人经过](/local/imou/thumbs/1.jpg)" in markdown
     assert "风险" not in markdown
@@ -106,5 +106,4 @@ def test_search_card_empty() -> None:
     """An empty result says nothing matched."""
     summary, markdown = search_card("猫", [])
     assert summary == markdown
-    assert "没有找到" in summary
-    assert "猫" in summary
+    assert 'No alarms match "猫".' in summary

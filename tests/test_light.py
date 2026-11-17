@@ -6,6 +6,7 @@ on or off; this camera has no brightness to set.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,6 +15,7 @@ from custom_components.imou_life.const import (
     PARAM_BULB,
     PARAM_STATUS,
     PARAM_WHITE_LIGHT,
+    WHITE_LIGHT_OFF_DELAY,
     imou_life_device_key,
 )
 from custom_components.imou_life.light import (
@@ -32,6 +34,7 @@ from homeassistant.components.light import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util import dt as dt_util
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
     BULB_V2_PROPERTY_BY_REF,
@@ -52,7 +55,10 @@ from pyimouapi.bulb_light import (
 from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from . import USER_INPUT
 
@@ -69,6 +75,7 @@ def _device(*, has_light: bool = True, on: bool = False) -> MagicMock:
     device.swversion = "1.0"
     device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
     device.switches = {}
+    device.buttons = {}
     if has_light:
         device.switches[PARAM_WHITE_LIGHT] = {PARAM_STATE: on}
     return device
@@ -77,10 +84,17 @@ def _device(*, has_light: bool = True, on: bool = False) -> MagicMock:
 def _coordinator(device: MagicMock) -> MagicMock:
     coordinator = MagicMock()
     key = imou_life_device_key(device)
+
+    async def _apply_switch(_device: MagicMock, switch_type: str, enable: bool) -> None:
+        _device.switches[switch_type][PARAM_STATE] = enable
+
     coordinator.devices = [device]
     coordinator.devices_by_key = {key: device}
     coordinator.last_update_success = True
-    coordinator.device_manager.async_switch_operation = AsyncMock()
+    coordinator.device_manager.async_switch_operation = AsyncMock(
+        side_effect=_apply_switch
+    )
+    coordinator.device_manager.async_press_button = AsyncMock()
     return coordinator
 
 
@@ -88,7 +102,9 @@ def _light(hass: HomeAssistant, device: MagicMock) -> ImouWhiteLight:
     coordinator = _coordinator(device)
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    return ImouWhiteLight(coordinator, entry, PARAM_WHITE_LIGHT, device)
+    light = ImouWhiteLight(coordinator, entry, PARAM_WHITE_LIGHT, device)
+    light.hass = hass
+    return light
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -124,6 +140,8 @@ async def test_turn_on_writes_the_same_switch_the_cloud_uses(
         device, PARAM_WHITE_LIGHT, True
     )
     light.async_write_ha_state.assert_called_once()
+    assert light.is_on is True
+    light._cancel_off_timer()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -139,6 +157,70 @@ async def test_turn_off_clears_the_lamp(hass: HomeAssistant) -> None:
     light.coordinator.device_manager.async_switch_operation.assert_awaited_once_with(
         device, PARAM_WHITE_LIGHT, False
     )
+    assert light.is_on is False
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_white_light_turns_off_after_thirty_seconds(hass: HomeAssistant) -> None:
+    """The lamp switches itself off after the same kind of hold the siren uses."""
+    device = _device(on=False)
+    light = _light(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on()
+    assert light.is_on is True
+
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=WHITE_LIGHT_OFF_DELAY)
+    )
+    await hass.async_block_till_done()
+
+    assert light.is_on is False
+    light.coordinator.device_manager.async_switch_operation.assert_awaited_with(
+        device, PARAM_WHITE_LIGHT, False
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_white_light_turn_off_cancels_the_hold(hass: HomeAssistant) -> None:
+    """Turning the lamp off by hand does not write off again when the hold ends."""
+    device = _device(on=False)
+    light = _light(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on()
+    await light.async_turn_off()
+    assert light.is_on is False
+
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=WHITE_LIGHT_OFF_DELAY)
+    )
+    await hass.async_block_till_done()
+
+    assert light.coordinator.device_manager.async_switch_operation.await_count == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_countdown_light_uses_start_and_stop(hass: HomeAssistant) -> None:
+    """Countdown lamps use the start and stop services, not the steady switch."""
+    device = _device(on=False)
+    device.buttons = {"white_light_start": {}, "white_light_stop": {}}
+    light = _light(hass, device)
+    light.async_write_ha_state = MagicMock()
+
+    await light.async_turn_on()
+    assert light.is_on is True
+    light.coordinator.device_manager.async_press_button.assert_awaited_once_with(
+        device, "white_light_start", 0
+    )
+    light.coordinator.device_manager.async_switch_operation.assert_not_awaited()
+
+    await light.async_turn_off()
+    assert light.is_on is False
+    light.coordinator.device_manager.async_press_button.assert_awaited_with(
+        device, "white_light_stop", 0
+    )
+    light.coordinator.device_manager.async_switch_operation.assert_not_awaited()
 
 
 def _bulb_device(*, supported_refs: set[str] | None = None) -> MagicMock:

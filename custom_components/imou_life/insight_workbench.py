@@ -11,6 +11,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import translation
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.insight.search import InsightAlarmHit, parse_search_ai_alarms
@@ -24,6 +25,7 @@ from .const import (
     SERVICE_SEARCH_AI_ALARMS,
 )
 from .coordinator import ImouConfigEntry
+from .helpers import async_display_language, fill_template, selector_option_label
 from .insight_account import camera_select_options
 from .insight_briefing_view import briefing_card
 from .insight_dashboard import keyword_entity_id
@@ -245,8 +247,10 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
         ) from err
     next_index, hits = parse_search_ai_alarms(raw)
     alarm_ids = tuple(hit.alarm_id or "" for hit in hits)
-    if direction == "next" and session is not None and (
-        not hits or alarm_ids == session.alarm_ids
+    if (
+        direction == "next"
+        and session is not None
+        and (not hits or alarm_ids == session.alarm_ids)
     ):
         session.next_index = None
         raise ServiceValidationError(
@@ -254,7 +258,8 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
             translation_key="insight_search_last_page",
         )
     shown = [(hit, None) for hit in hits[:_SEARCH_PAGE_SIZE]]
-    summary, markdown = search_card(keyword, shown, page=page)
+    labels = await _search_labels(hass)
+    summary, markdown = search_card(keyword, shown, page=page, labels=labels)
     search_sensor = runtime.workbench_search_sensor
     if search_sensor is not None:
         search_sensor.set_markdown(summary, markdown)
@@ -342,7 +347,7 @@ async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) 
         ) from err
     briefing = parse_alarm_message_statistics(raw)
     chart_dir = Path(hass.config.path("www", "imou"))
-    language = hass.config.language or "en"
+    language = await async_display_language(hass)
     summary, markdown = await hass.async_add_executor_job(
         briefing_card, chart_dir, entry.entry_id, briefing, language
     )
@@ -403,7 +408,8 @@ async def _attach_search_pictures(
         updated.append((hit, image))
     if not any_image or runtime.search_revision != revision:
         return
-    summary, markdown = search_card(keyword, updated, page=page)
+    labels = await _search_labels(hass)
+    summary, markdown = search_card(keyword, updated, page=page, labels=labels)
     search_sensor = runtime.workbench_search_sensor
     if search_sensor is not None and runtime.search_revision == revision:
         search_sensor.set_markdown(summary, markdown)
@@ -445,12 +451,17 @@ def search_card(
     rows: list[tuple[InsightAlarmHit, str | None]],
     *,
     page: int = 1,
+    labels: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Return (entity summary, card markdown) for one search page."""
+    copy = labels or {}
+    empty = copy.get("empty") or 'No alarms match "{keyword}".'
+    page_label = copy.get("page") or "Page {page}"
+    count_label = copy.get("count") or "{count} alarms"
     if not rows:
-        text = f"没有找到和「{keyword}」相关的告警。"
+        text = fill_template(empty, 'No alarms match "{keyword}".', keyword=keyword)
         return text, text
-    blocks: list[str] = [f"第 {page} 页"]
+    blocks: list[str] = [fill_template(page_label, "Page {page}", page=str(page))]
     for hit, image in rows[:_SEARCH_PAGE_SIZE]:
         title = hit.ai_copywriting or hit.begin_time or ""
         parts = [f"{_message_icon(hit)} **{_md(title)}**"]
@@ -459,8 +470,33 @@ def search_card(
         if hit.begin_time and hit.begin_time != title:
             parts.append(hit.begin_time)
         blocks.append("\n\n".join(parts))
-    summary = rows[0][0].ai_copywriting or f"{len(rows)} 条"
+    summary = rows[0][0].ai_copywriting or fill_template(
+        count_label, "{count} alarms", count=str(len(rows))
+    )
     return summary[:255], "\n\n---\n\n".join(blocks)
+
+
+async def _search_labels(hass: HomeAssistant) -> dict[str, str]:
+    """Search-card sentences in the owner's language."""
+    language = await async_display_language(hass)
+    await translation.async_get_translations(
+        hass, language, "selector", integrations={DOMAIN}
+    )
+    return {
+        "empty": selector_option_label(
+            hass,
+            language,
+            "insight_dashboard",
+            "search_empty",
+            'No alarms match "{keyword}".',
+        ),
+        "page": selector_option_label(
+            hass, language, "insight_dashboard", "search_page", "Page {page}"
+        ),
+        "count": selector_option_label(
+            hass, language, "insight_dashboard", "search_count", "{count} alarms"
+        ),
+    }
 
 
 def _resolve_config_entry(hass: HomeAssistant, call: ServiceCall) -> ImouConfigEntry:

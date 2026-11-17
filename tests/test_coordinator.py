@@ -419,38 +419,22 @@ async def test_rediscovery_retries_and_merges_complete_v2_snapshot(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_first_discovery_prefetches_iot_event_maps(
+async def test_discovery_does_not_fetch_product_event_maps(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Doorbell / motion gating needs product-model events before entities exist."""
+    """Call and motion entities follow the capability list, not product events."""
     d1 = _mock_device("d1")
     d2 = _mock_device("d2")
     d2.product_id = "prod_d1"
     await _run_update(hass, device_manager, [d1, d2])
-    pids = [
-        call.args[0]
-        for call in device_manager.delegate.async_ensure_event_map.await_args_list
-    ]
-    assert set(pids) == {"prod_d1"}
-    assert device_manager.delegate.async_ensure_event_map.await_count == 1
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_paas_discovery_skips_event_map_prefetch(
-    hass: HomeAssistant, device_manager: MagicMock
-) -> None:
-    """PaaS cameras have no product model; abilities are already on the device."""
-    device = _mock_device("d1")
-    device.product_id = None
-    await _run_update(hass, device_manager, [device])
     device_manager.delegate.async_ensure_event_map.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_new_iot_device_prefetches_event_map(
+async def test_new_device_does_not_fetch_product_event_maps(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A camera added later still needs its event map before entities are created."""
+    """A camera added later is registered from its capability list."""
     first = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, first)
     device_manager.delegate.async_ensure_event_map.reset_mock()
@@ -460,7 +444,7 @@ async def test_new_iot_device_prefetches_event_map(
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    device_manager.delegate.async_ensure_event_map.assert_awaited_once_with("prod_d2")
+    device_manager.delegate.async_ensure_event_map.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

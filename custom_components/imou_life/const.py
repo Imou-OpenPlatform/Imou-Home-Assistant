@@ -162,16 +162,12 @@ PARAM_DOORBELL = "doorbell"
 PARAM_ALARM_PICTURE = "alarm_picture"
 PARAM_SIREN = "siren"
 SIREN_OFF_DELAY = 15
+WHITE_LIGHT_OFF_DELAY = 30
 PARAM_STATUS = "status"
 PARAM_AI_INSIGHT_STATUS = "ai_insight_status"
 PARAM_CLOUD_STORAGE_STATUS = "cloud_storage_status"
 AI_INSIGHT_STATUS_OPTIONS = ("active", "inactive", "unavailable")
-CLOUD_STORAGE_STATUS_OPTIONS = (
-    "not_opened",
-    "active",
-    "expired",
-    "unknown",
-)
+CLOUD_STORAGE_STATUS_OPTIONS = AI_INSIGHT_STATUS_OPTIONS
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
 PARAM_ALARM_PIR = "alarm_pir"

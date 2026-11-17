@@ -128,14 +128,17 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
     assert registry.async_get(plug_switch.entity_id) is not None
 
 
-def _paas_camera(device_id: str, *, channel_ability: str) -> MagicMock:
+def _paas_camera(device_id: str, *, properties: tuple[str, ...] = ()) -> MagicMock:
     device = MagicMock()
     device.device_id = device_id
     device.channel_id = "0"
     device.product_id = None
     device.is_ipc = True
-    device.device_ability = "WLAN"
-    device.channel_ability = channel_ability
+    capability = MagicMock()
+    capability.properties = {property_id: object() for property_id in properties}
+    capability.services = frozenset()
+    capability.events = frozenset()
+    device.capability_set = capability
     return device
 
 
@@ -144,8 +147,8 @@ async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
     """1.4.0 created Motion on every camera; ungated leftovers must be removed."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
     entry.add_to_hass(hass)
-    keep = _paas_camera("keep", channel_ability="WLAN,MobileDetect")
-    drop = _paas_camera("drop", channel_ability="WLAN")
+    keep = _paas_camera("keep", properties=("detection.motion.enabled",))
+    drop = _paas_camera("drop")
     coordinator = MagicMock()
     coordinator.devices = [keep, drop]
     coordinator.devices_by_key = {"keep_0": keep, "drop_0": drop}

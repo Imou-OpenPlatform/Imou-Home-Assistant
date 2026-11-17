@@ -140,12 +140,14 @@
         "data": {
           "enable_event_push": "Abilita push eventi",
           "webhook_url": "URL di callback",
-          "event_push_types": "Iscriviti a"
+          "event_push_types": "Iscriviti a",
+          "local_record_duration": "Durata della clip (secondi)"
         },
         "data_description": {
           "enable_event_push": "Il cloud Imou invia gli allarmi in POST a questo webhook di Home Assistant. Gli allarmi vengono anche sincronizzati con l'app Imou Life.",
           "webhook_url": "Obbligatorio quando il push eventi è attivo. Deve essere raggiungibile da Internet; se l'indirizzo suggerito non lo è, cambia solo hostname e porta.",
-          "event_push_types": "Quali messaggi cloud Home Assistant deve ricevere."
+          "event_push_types": "Quali messaggi cloud Home Assistant deve ricevere.",
+          "local_record_duration": "Per quanto tempo registrare dopo un allarme. Predefinito 60 secondi, da 15 a 180. Usa la quota del live. L'interruttore di ogni telecamera è sulla sua pagina."
         },
         "sections": {
           "notifications": {
@@ -280,8 +282,39 @@
       "options": {
         "china_title": "智见试用",
         "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
-        "intl_title": "AI Insight trial",
-        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
+        "intl_title": "Prova di AI Insight",
+        "intl_message": "AI Insight aggiunge la ricerca intelligente e un riepilogo giornaliero per le tue telecamere. Aggiungi il WhatsApp ufficiale +86 19106884129 per iniziare una prova."
+      }
+    },
+    "insight_dashboard": {
+      "options": {
+        "title": "AI Insight",
+        "view_briefing": "Riepilogo",
+        "view_search": "Ricerca",
+        "view_trial": "Prova",
+        "device": "Telecamera",
+        "date": "Data",
+        "keyword": "Testo di ricerca",
+        "search_empty": "Nessun allarme corrisponde a «{keyword}».",
+        "search_page": "Pagina {page}",
+        "search_count": "{count} allarmi",
+        "date_name": "Data del riepilogo",
+        "keyword_name": "Testo di ricerca",
+        "search_alarms": "Cerca allarmi",
+        "refresh_briefing": "Aggiorna il riepilogo",
+        "morning_refresh": "Aggiorna il riepilogo ogni mattina",
+        "search": "Cerca",
+        "previous": "Indietro",
+        "next": "Avanti",
+        "briefing": "Riepilogo del giorno",
+        "results": "Risultati",
+        "trial_button": "Prova di AI Insight",
+        "empty": "Nessuna telecamera usa ancora AI Insight.",
+        "trial_intro": "AI Insight aggiunge la ricerca intelligente e un riepilogo giornaliero. Aggiungi il WeChat o il WhatsApp ufficiale qui sotto per iniziare una prova.",
+        "wechat": "17799860785",
+        "wechat_label": "WeChat",
+        "whatsapp": "+86 19106884129",
+        "trial_markdown": "## ✨ AI Insight racconta cosa hanno visto le telecamere\n\n🌅 **Un riepilogo per il giorno che scegli**\nScegli una data. Persone, veicoli, animali, pacchi e il totale del giorno stanno in un unico grafico.\n\n🔍 **Trova un allarme in una frase**\nScrivi ciò che ricordi. Gli allarmi corrispondenti compaiono con l'ora e l'immagine.\n\n🚶 🚗 🐾 **Ogni tipo di momento ha la sua icona**\nPersona, veicolo, animale e pacco hanno ciascuno un segno. Il titolo è la frase salvata con quell'allarme."
       }
     },
     "alarm_type": {
@@ -489,18 +522,17 @@
       "ai_insight_status": {
         "name": "AI Insight",
         "state": {
-          "active": "Active",
-          "inactive": "Inactive",
-          "unavailable": "Unavailable"
+          "active": "Attivo",
+          "inactive": "Non attivo",
+          "unavailable": "Non disponibile"
         }
       },
       "cloud_storage_status": {
         "name": "Cloud storage",
         "state": {
-          "not_opened": "Non attivato",
           "active": "Attivo",
-          "expired": "Scaduto",
-          "unknown": "Sconosciuto"
+          "inactive": "Non attivo",
+          "unavailable": "Non disponibile"
         }
       },
       "storage_used": {
@@ -516,10 +548,10 @@
         "name": "Durata utilizzo"
       },
       "insight_briefing": {
-        "name": "AI Insight briefing"
+        "name": "Riepilogo AI Insight"
       },
       "insight_search_result": {
-        "name": "AI Insight search"
+        "name": "Ricerca AI Insight"
       }
     },
     "select": {
@@ -559,7 +591,7 @@
         }
       },
       "insight_workbench_device": {
-        "name": "AI Insight device"
+        "name": "Telecamera AI Insight"
       }
     },
     "light": {
@@ -652,7 +684,7 @@
         "name": "Ferma sirena"
       },
       "ai_insight_trial": {
-        "name": "AI Insight trial"
+        "name": "Prova di AI Insight"
       }
     },
     "camera": {
@@ -791,25 +823,34 @@
       "message": "Could not start recording playback."
     },
     "insight_briefing_failed": {
-      "message": "Imou could not load the briefing: {error}"
+      "message": "Imou non ha potuto caricare il riepilogo: {error}"
     },
     "insight_search_failed": {
-      "message": "Imou could not search alarms: {error}"
+      "message": "Imou non ha potuto cercare gli allarmi: {error}"
     },
     "insight_search_keyword_required": {
-      "message": "Enter a search keyword."
+      "message": "Scrivi che cosa cercare."
+    },
+    "insight_search_page_unavailable": {
+      "message": "Cerca prima, poi cambia pagina."
+    },
+    "insight_search_first_page": {
+      "message": "Questa è la prima pagina."
+    },
+    "insight_search_last_page": {
+      "message": "Non ci sono altri risultati."
     },
     "insight_workbench_entry_required": {
-      "message": "Target an Imou entity when more than one Imou account is loaded."
+      "message": "Se è configurato più di un account Imou, indica quale."
     },
     "insight_workbench_no_device": {
-      "message": "Choose a camera on the AI Insight workbench first."
+      "message": "Scegli prima una telecamera in AI Insight."
     },
     "insight_workbench_not_ready": {
-      "message": "Imou is still starting. Try again in a moment."
+      "message": "Imou si sta ancora avviando. Riprova tra un momento."
     },
     "insight_workbench_unknown_device": {
-      "message": "That camera is not on the AI Insight workbench list."
+      "message": "Questa telecamera non è nell'elenco di AI Insight."
     }
   }
 }

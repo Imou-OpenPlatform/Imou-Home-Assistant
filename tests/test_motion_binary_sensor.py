@@ -49,6 +49,7 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     device.is_ipc = True
     device.device_ability = "WLAN"
     device.channel_ability = "WLAN"
+    device.capability_set = None
     device.device_name = "Front"
     device.channel_name = "Front"
     device.manufacturer = "Imou"
@@ -150,76 +151,87 @@ def test_motion_binary_state(msg_type: str | None, expected: bool | None) -> Non
     assert motion_binary_state(msg_type) is expected
 
 
-def test_iter_motion_sensors_paas_needs_detect_ability() -> None:
-    """PaaS motion follows picture-change / human abilities, not every camera."""
+def _capability(*property_ids: str) -> MagicMock:
+    capability = MagicMock()
+    capability.properties = {property_id: object() for property_id in property_ids}
+    capability.services = frozenset()
+    capability.events = frozenset()
+    return capability
+
+
+def test_iter_motion_sensors_follows_v2_detect_properties() -> None:
+    """Motion follows picture-change / person detect, not every camera."""
     camera = _device(channel_id="0")
-    camera.channel_ability = "WLAN,MobileDetect"
+    camera.capability_set = _capability("detection.motion.enabled")
     plug = _device(channel_id=None, device_id="PLUG")
+    plug.capability_set = _capability("detection.motion.enabled")
     no_detect = _device(channel_id="0", device_id="IPC2")
-    no_detect.channel_ability = "WLAN,CallAbility"
+    no_detect.capability_set = _capability("call.session.ringVolume")
     pairs = _iter_motion_sensors(_coordinator([camera, plug, no_detect]))
     assert [(key, device.device_id) for key, device in pairs] == [(PARAM_MOTION, "SN1")]
 
 
-def test_iter_motion_sensors_ipc_uses_device_ability_on_channel_0() -> None:
-    """An IPC often lists picture-change on the device, not the channel."""
+def test_iter_motion_sensors_ignores_legacy_ability_strings() -> None:
+    """Old ability names do not create Motion once the capability list is known."""
     camera = _device(channel_id="0")
     camera.device_ability = "WLAN,MobileDetect"
-    camera.channel_ability = "WLAN"
-    assert _iter_motion_sensors(_coordinator([camera])) == [(PARAM_MOTION, camera)]
+    camera.channel_ability = "WLAN,HeaderDetect"
+    assert _iter_motion_sensors(_coordinator([camera])) == []
 
 
-def test_iter_motion_sensors_nvr_channel_ignores_device_ability() -> None:
-    """An NVR channel only gets motion when that channel reports the ability."""
+def test_iter_motion_sensors_channel_without_detect_is_skipped() -> None:
+    """A channel whose capability list has no detect property is skipped."""
     camera = _device(channel_id="1")
     camera.is_ipc = False
-    camera.device_ability = "MobileDetect"
-    camera.channel_ability = "WLAN"
+    camera.capability_set = _capability("detection.sound.enabled")
     assert _iter_motion_sensors(_coordinator([camera])) == []
 
 
 @pytest.mark.parametrize(
-    "ability",
-    ["MobileDetect", "AlarmMD", "CRMD", "HeaderDetect", "AiHuman", "SMDH"],
+    "property_id",
+    [
+        "detection.motion.enabled",
+        "detection.intrusion.enabled",
+        "detection.person.enabled",
+        "detection.intrusion.personFilter",
+    ],
 )
-def test_iter_motion_sensors_paas_accepts_detect_abilities(ability: str) -> None:
-    """Picture-change and human-detect abilities each create the motion sensor."""
+def test_iter_motion_sensors_accepts_v2_detect_properties(property_id: str) -> None:
+    """Picture-change and person detect, including fallbacks, create Motion."""
     camera = _device(channel_id="0")
-    camera.channel_ability = f"WLAN,{ability}"
+    camera.capability_set = _capability(property_id)
     assert _iter_motion_sensors(_coordinator([camera])) == [(PARAM_MOTION, camera)]
 
 
-def test_iter_motion_sensors_iot_uses_product_model_events() -> None:
-    """IoT motion follows thing-model motion events, not detect-switch refs."""
+@pytest.mark.parametrize(
+    "property_id",
+    ["detection.sound.enabled", "detection.pet.enabled", "detection.motion.plan"],
+)
+def test_iter_motion_sensors_ignores_unrelated_v2_properties(property_id: str) -> None:
+    """Sound, pet, and the motion schedule are not the Motion sensor."""
+    camera = _device(channel_id="0")
+    camera.capability_set = _capability(property_id)
+    assert _iter_motion_sensors(_coordinator([camera])) == []
+
+
+def test_iter_motion_sensors_iot_uses_the_same_v2_properties() -> None:
+    """A product id does not change the capability check."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
-    camera.channel_ability = "WLAN"
+    camera.capability_set = _capability("detection.person.enabled")
     pairs = _iter_motion_sensors(
-        _coordinator([camera], event_map={"33000": "e_videoMotion"})
+        _coordinator([camera], event_map={"311000": "e_callEventCall"})
     )
     assert pairs == [(PARAM_MOTION, camera)]
 
 
-def test_iter_motion_sensors_iot_switch_refs_are_not_events() -> None:
-    """Property refs for the detect switch must not create a motion sensor."""
-    camera = _device(channel_id="0")
-    camera.product_id = "pidA"
-    pairs = _iter_motion_sensors(
-        _coordinator(
-            [camera],
-            event_map={"14800": "mdEnable", "108800": "mdEnable2"},
-        )
-    )
-    assert pairs == []
-
-
-def test_iter_motion_sensors_iot_without_motion_events_skipped() -> None:
-    """An IoT camera with only call events must not get a motion sensor."""
+def test_iter_motion_sensors_iot_event_refs_are_not_enough() -> None:
+    """Old product-model refs do not create Motion without the v2 property."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
     camera.channel_ability = "WLAN,MobileDetect"
     pairs = _iter_motion_sensors(
-        _coordinator([camera], event_map={"311000": "e_callEventCall"})
+        _coordinator([camera], event_map={"33000": "e_videoMotion"})
     )
     assert pairs == []
 

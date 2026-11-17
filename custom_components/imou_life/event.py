@@ -15,12 +15,7 @@ from .const import (
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
-from .helpers import (
-    PAAS_CALL_ABILITY,
-    alarm_push_active,
-    device_has_paas_ability,
-    device_iot_events_match,
-)
+from .helpers import alarm_push_active
 
 PARALLEL_UPDATES = 0
 
@@ -48,6 +43,16 @@ def is_doorbell_call_msg_type(msg_type: str | None) -> bool:
     return key in _DOORBELL_CALL
 
 
+_CALL_SESSION_EVENT = "call.session.called"
+_CALL_SESSION_SERVICES = frozenset(
+    {
+        "call.session.answer",
+        "call.session.hangup",
+        "call.session.refuse",
+    }
+)
+
+
 def _iter_doorbell_events(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
@@ -55,19 +60,20 @@ def _iter_doorbell_events(
     return [
         (PARAM_DOORBELL, device)
         for device in coordinator.devices
-        if _device_offers_doorbell(coordinator, device)
+        if _device_offers_doorbell(device)
     ]
 
 
-def _device_offers_doorbell(
-    coordinator: ImouDataUpdateCoordinator, device: ImouHaDevice
-) -> bool:
-    """PaaS: CallAbility. IoT: product-model call events, not every camera."""
+def _device_offers_doorbell(device: ImouHaDevice) -> bool:
+    """True when this channel lists an incoming-call event or call controls."""
     if device.channel_id is None:
         return False
-    if device.product_id:
-        return device_iot_events_match(coordinator, device, is_doorbell_call_msg_type)
-    return device_has_paas_ability(device, PAAS_CALL_ABILITY)
+    capability = device.capability_set
+    if capability is None:
+        return False
+    if _CALL_SESSION_EVENT in capability.events:
+        return True
+    return bool(_CALL_SESSION_SERVICES.intersection(capability.services))
 
 
 async def async_setup_entry(

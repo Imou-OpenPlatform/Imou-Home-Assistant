@@ -141,13 +141,13 @@
           "enable_event_push": "Enable event push",
           "webhook_url": "Callback URL",
           "event_push_types": "Subscribe to",
-          "local_record_duration": "Clip duration (seconds)"
+          "local_record_duration": "Clip length (seconds)"
         },
         "data_description": {
           "enable_event_push": "Imou cloud POSTs alarms to this Home Assistant webhook. Alarms also sync to the Imou Life app.",
           "webhook_url": "Required when event push is on. Must be reachable from the internet; if the suggested address is not, change only the hostname and port.",
           "event_push_types": "Which cloud messages Home Assistant should receive.",
-          "local_record_duration": "Seconds recorded after an alarm. Default 60, range 15–180. Uses live-stream quota. Each camera's switch is on its device page."
+          "local_record_duration": "How long to record after an alarm. Default 60 seconds, from 15 to 180. This uses live-stream quota. The switch for each camera is on its device page."
         },
         "sections": {
           "notifications": {
@@ -182,10 +182,10 @@
         "title": "Record on alarm",
         "description": "{push_hint}Records a short clip from the cloud stream after an alarm and saves it under Media. Open it in the media browser under Record on alarm. The switch for each camera is on the device page.",
         "data": {
-          "local_record_duration": "Clip duration (seconds)"
+          "local_record_duration": "Clip length (seconds)"
         },
         "data_description": {
-          "local_record_duration": "Post-alarm clip length. Default 60s, range 15–180s. Uses live-stream quota."
+          "local_record_duration": "How long to record after an alarm. Default 60 seconds, from 15 to 180. This uses live-stream quota."
         }
       },
       "select_poll_devices": {
@@ -283,7 +283,7 @@
         "china_title": "智见试用",
         "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
         "intl_title": "AI Insight trial",
-        "intl_message": "AI Insight adds smart search and daily safety briefings for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
+        "intl_message": "AI Insight adds smart search and a daily briefing for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
       }
     },
     "insight_dashboard": {
@@ -294,18 +294,27 @@
         "view_trial": "Trial",
         "device": "Camera",
         "date": "Date",
-        "keyword": "Keyword",
+        "keyword": "Search text",
+        "search_empty": "No alarms match \"{keyword}\".",
+        "search_page": "Page {page}",
+        "search_count": "{count} alarms",
+        "date_name": "Briefing date",
+        "keyword_name": "Search text",
+        "search_alarms": "Search alarms",
+        "refresh_briefing": "Refresh the briefing",
+        "morning_refresh": "Refresh the briefing each morning",
         "search": "Search",
         "previous": "Previous",
         "next": "Next",
         "briefing": "Daily briefing",
         "results": "Results",
         "trial_button": "AI Insight trial",
-        "empty": "No camera on AI Insight yet.",
+        "empty": "No camera is using AI Insight yet.",
         "trial_intro": "AI Insight adds smart search and a daily briefing. Add the official WeChat or WhatsApp below to start a trial.",
         "wechat": "17799860785",
+        "wechat_label": "WeChat",
         "whatsapp": "+86 19106884129",
-        "trial_markdown": "## ✨ AI Insight tells you what the cameras saw\n\n🌅 **A briefing for the day you pick**\nChoose a date. People, vehicles, pets, packages, and the day total line up on one chart, so the busy kind of moment stands out.\n\n🔍 **Find an alarm in one sentence**\nNo need to scrub the timeline. Type what you remember. Matching alarms show up with their time and picture.\n\n🚶 🚗 🐾 **A different icon for each kind of moment**\nA person, a vehicle, and a pet each get their own mark. The title is the sentence saved with that alarm."
+        "trial_markdown": "## ✨ AI Insight tells you what the cameras saw\n\n🌅 **A briefing for the day you pick**\nChoose a date. People, vehicles, pets, packages, and the day's total appear on one chart.\n\n🔍 **Find an alarm in one sentence**\nType what you remember. Matching alarms show up with their time and picture.\n\n🚶 🚗 🐾 **Each kind of moment has its own icon**\nA person, a vehicle, a pet, and a package each get a mark. The title is the sentence saved with that alarm."
       }
     },
     "alarm_type": {
@@ -521,10 +530,9 @@
       "cloud_storage_status": {
         "name": "Cloud storage",
         "state": {
-          "not_opened": "Not opened",
           "active": "Active",
-          "expired": "Expired",
-          "unknown": "Unknown"
+          "inactive": "Inactive",
+          "unavailable": "Unavailable"
         }
       },
       "storage_used": {
@@ -815,22 +823,22 @@
       "message": "Could not start recording playback."
     },
     "insight_workbench_unknown_device": {
-      "message": "That camera is not on the AI Insight workbench list."
+      "message": "That camera is not in the AI Insight list."
     },
     "insight_workbench_not_ready": {
       "message": "Imou is still starting. Try again in a moment."
     },
     "insight_workbench_no_device": {
-      "message": "Choose a camera on the AI Insight workbench first."
+      "message": "Choose a camera in AI Insight first."
     },
     "insight_workbench_entry_required": {
-      "message": "Target an Imou entity when more than one Imou account is loaded."
+      "message": "When more than one Imou account is set up, choose which one."
     },
     "insight_search_keyword_required": {
-      "message": "Enter a search keyword."
+      "message": "Enter what to search for."
     },
     "insight_search_page_unavailable": {
-      "message": "Search first, then turn the page."
+      "message": "Search first, then change the page."
     },
     "insight_search_first_page": {
       "message": "This is the first page."

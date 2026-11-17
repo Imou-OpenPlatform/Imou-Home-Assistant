@@ -147,7 +147,7 @@
           "enable_event_push": "Imou 云向本实例的 Webhook 推送告警，同时会同步到乐橙 App。",
           "webhook_url": "开启推送时必填，须公网可达。建议地址不可达时，只改主机名和端口，路径不要改。",
           "event_push_types": "选择要接收的云端消息类型。",
-          "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。各摄像头的开关在设备页。"
+          "local_record_duration": "告警后录制的秒数。默认 60，范围 15–180。会占用直播额度。每台摄像头的开关在设备页。"
         },
         "sections": {
           "notifications": {
@@ -185,7 +185,7 @@
           "local_record_duration": "片段时长（秒）"
         },
         "data_description": {
-          "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
+          "local_record_duration": "告警后录制的秒数。默认 60，范围 15–180。会占用直播额度。"
         }
       },
       "select_poll_devices": {
@@ -283,7 +283,7 @@
         "china_title": "智见试用",
         "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
         "intl_title": "AI 智见试用",
-        "intl_message": "AI 智见为摄像头提供智能搜索与每日简报。添加官方 WhatsApp +86 19106884129，即可获取试用。"
+        "intl_message": "AI 智见为摄像头提供智能搜索和每日简报。添加官方 WhatsApp +86 19106884129，即可开始试用。"
       }
     },
     "insight_dashboard": {
@@ -292,20 +292,29 @@
         "view_briefing": "简报",
         "view_search": "搜索",
         "view_trial": "试用",
-        "device": "智见设备",
-        "date": "统计日期",
+        "device": "摄像头",
+        "date": "日期",
         "keyword": "搜索词",
+        "search_empty": "没有找到和「{keyword}」相关的告警。",
+        "search_page": "第 {page} 页",
+        "search_count": "{count} 条",
+        "date_name": "智见简报日期",
+        "keyword_name": "智见搜索词",
+        "search_alarms": "搜索智见告警",
+        "refresh_briefing": "刷新智见简报",
+        "morning_refresh": "每天早上刷新智见简报",
         "search": "搜索",
         "previous": "上一页",
         "next": "下一页",
         "briefing": "智见简报",
         "results": "搜索结果",
-        "trial_button": "AI智见试用",
+        "trial_button": "AI 智见试用",
         "empty": "还没有开通智见的摄像头。",
-        "trial_intro": "智见为摄像头提供智能搜索与每日简报。添加下面的官方微信或 WhatsApp，即可获取试用。",
+        "trial_intro": "智见为摄像头提供智能搜索和每日简报。添加下面的官方微信或 WhatsApp，即可开始试用。",
         "wechat": "17799860785",
+        "wechat_label": "微信",
         "whatsapp": "+86 19106884129",
-        "trial_markdown": "## ✨ AI 智见，让摄像头讲今天发生了什么\n\n🌅 **选个日期，一份简报就出来了**\n人形、车辆、宠物、包裹和全部排成一张图。哪一类最多，一眼就能看出来。\n\n🔍 **一句话，找出那段告警**\n不用来回拖时间轴。写下你记得的画面，相关告警会带着时间和图片排出来。\n\n🚶 🚗 🐾 **不同的事，不同的图标**\n有人经过、车辆、宠物各看各的。标题就是告警发生时云端写下的那句话。"
+        "trial_markdown": "## ✨ AI 智见，看摄像头今天记下了什么\n\n🌅 **选一个日期，得到当天的简报**\n人形、车辆、宠物、包裹和全部排在一张图上，哪一类最多一眼就能看出来。\n\n🔍 **用一句话找出那段告警**\n写下你记得的画面。对上的告警会带着时间和图片列出来。\n\n🚶 🚗 🐾 **不同的事，不同的图标**\n有人经过、车辆、宠物、包裹各有标记。标题就是这条告警自带的那句话。"
       }
     },
     "alarm_type": {
@@ -511,7 +520,7 @@
         }
       },
       "ai_insight_status": {
-        "name": "AI智见",
+        "name": "AI 智见",
         "state": {
           "active": "已开通",
           "inactive": "未开通",
@@ -521,10 +530,9 @@
       "cloud_storage_status": {
         "name": "云存储",
         "state": {
-          "not_opened": "未开通",
           "active": "已开通",
-          "expired": "已过期",
-          "unknown": "未知"
+          "inactive": "未开通",
+          "unavailable": "未知"
         }
       },
       "storage_used": {
@@ -676,7 +684,7 @@
         "name": "关闭警笛"
       },
       "ai_insight_trial": {
-        "name": "AI智见试用"
+        "name": "AI 智见试用"
       }
     },
     "camera": {

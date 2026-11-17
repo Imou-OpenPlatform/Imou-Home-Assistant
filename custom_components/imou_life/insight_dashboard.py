@@ -34,7 +34,11 @@ from .const import (
     SERVICE_REFRESH_AI_INSIGHT_BRIEFING,
 )
 from .coordinator import ImouConfigEntry
-from .helpers import resolve_ui_language, selector_option_label
+from .helpers import (
+    async_display_language,
+    selector_option_label,
+    translated_name_override,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +47,7 @@ DASHBOARD_ICON = "mdi:creation"
 DATE_ENTITY_ID = "input_datetime.imou_insight_briefing_end"
 KEYWORD_ENTITY_ID = "input_text.imou_insight_search_keyword"
 _LISTENER_FLAG = "insight_dashboard_listener"
+_LANGUAGE_FLAG = "insight_dashboard_language"
 _DATE_ENTITY_KEY = "insight_dashboard_date_entity"
 _KEYWORD_ENTITY_KEY = "insight_dashboard_keyword_entity"
 
@@ -53,24 +58,29 @@ _COPY_DEFAULTS = {
     "view_trial": "Trial",
     "device": "Camera",
     "date": "Date",
-    "keyword": "Keyword",
+    "keyword": "Search text",
+    "date_name": "Briefing date",
+    "keyword_name": "Search text",
+    "search_alarms": "Search alarms",
+    "refresh_briefing": "Refresh the briefing",
+    "morning_refresh": "Refresh the briefing each morning",
     "search": "Search",
     "previous": "Previous",
     "next": "Next",
     "briefing": "Daily briefing",
     "results": "Results",
     "trial_button": "AI Insight trial",
-    "empty": "No camera on AI Insight yet.",
+    "empty": "No camera is using AI Insight yet.",
     "trial_markdown": (
         "## ✨ AI Insight tells you what the cameras saw\n\n"
         "🌅 **A briefing for the day you pick**\n"
-        "Choose a date. People, vehicles, pets, packages, and the day total line up "
-        "on one chart, so the busy kind of moment stands out.\n\n"
+        "Choose a date. People, vehicles, pets, packages, and the day's total "
+        "appear on one chart.\n\n"
         "🔍 **Find an alarm in one sentence**\n"
-        "No need to scrub the timeline. Type what you remember. Matching "
-        "alarms show up with their time and picture.\n\n"
-        "🚶 🚗 🐾 **A different icon for each kind of moment**\n"
-        "A person, a vehicle, and a pet each get their own mark. The title "
+        "Type what you remember. Matching alarms show up with their time and "
+        "picture.\n\n"
+        "🚶 🚗 🐾 **Each kind of moment has its own icon**\n"
+        "A person, a vehicle, a pet, and a package each get a mark. The title "
         "is the sentence saved with that alarm."
     ),
     "trial_intro": (
@@ -78,6 +88,7 @@ _COPY_DEFAULTS = {
         "Add the official WeChat or WhatsApp below to start a trial."
     ),
     "wechat": "17799860785",
+    "wechat_label": "WeChat",
     "whatsapp": "+86 19106884129",
 }
 
@@ -201,8 +212,9 @@ def build_insight_dashboard(
 
     trial_markdown = copy["trial_markdown"].rstrip()
     intro = copy.get("trial_intro", "").strip()
+    wechat_label = copy.get("wechat_label", "WeChat")
     contacts = (
-        f"💬 **微信** {copy.get('wechat', '17799860785')}\n\n"
+        f"💬 **{wechat_label}** {copy.get('wechat', '17799860785')}\n\n"
         f"📱 **WhatsApp** {copy.get('whatsapp', '+86 19106884129')}"
     )
     extra = [note for note in trial_notes if note not in contacts]
@@ -240,6 +252,7 @@ async def async_setup_insight_dashboard(
     """Create the sidebar dashboard and refresh a briefing when the date changes."""
     try:
         await _ensure_listener(hass)
+        await _watch_language(hass)
         date_entity, keyword_entity = await _ensure_helpers(hass)
         await _publish(hass, date_entity, keyword_entity)
         if _date_value(hass, date_entity):
@@ -280,6 +293,9 @@ async def async_unload_insight_dashboard(
         unsub = data.pop(_LISTENER_FLAG, None)
         if unsub is not None:
             unsub()
+        language_unsub = data.pop(_LANGUAGE_FLAG, None)
+        if language_unsub is not None:
+            language_unsub()
     except Exception:
         _LOGGER.exception("Unable to update the AI Insight dashboard")
 
@@ -386,8 +402,17 @@ def _entity_id(
     return registry.async_get_entity_id(domain, DOMAIN, f"{entry_id}${entity_type}")
 
 
+_LANGUAGE_ENTITIES = (
+    (DATE_ENTITY_ID, "date_name"),
+    (KEYWORD_ENTITY_ID, "keyword_name"),
+    ("script.imou_search_insight_alarms", "search_alarms"),
+    ("script.imou_refresh_insight_briefing", "refresh_briefing"),
+)
+_MORNING_AUTOMATION_ID = "imou_daily_insight_briefing"
+
+
 async def _copy(hass: HomeAssistant) -> dict[str, str]:
-    language = resolve_ui_language(hass.config.language)
+    language = await async_display_language(hass)
     await translation.async_get_translations(
         hass, language, "selector", integrations={DOMAIN}
     )
@@ -435,6 +460,60 @@ async def _ensure_listener(hass: HomeAssistant) -> None:
     data[_LISTENER_FLAG] = hass.bus.async_listen(EVENT_STATE_CHANGED, _on_state)
 
 
+async def _watch_language(hass: HomeAssistant) -> None:
+    """Republish the dashboard when the owner changes profile language."""
+    data = hass.data.setdefault(DOMAIN, {})
+    if data.get(_LANGUAGE_FLAG):
+        return
+    try:
+        owner = await hass.auth.async_get_owner()
+    except Exception:
+        return
+    if owner is None:
+        return
+    from homeassistant.components.frontend.storage import async_user_store
+
+    try:
+        store = await async_user_store(hass, owner.id)
+    except Exception:
+        return
+
+    @callback
+    def _changed() -> None:
+        hass.async_create_task(_republish_current(hass), eager_start=True)
+
+    data[_LANGUAGE_FLAG] = store.async_subscribe("language", _changed)
+
+
+async def _republish_current(hass: HomeAssistant) -> None:
+    data = hass.data.get(DOMAIN) or {}
+    await _publish(
+        hass,
+        _stored_entity(data, _DATE_ENTITY_KEY, DATE_ENTITY_ID),
+        _stored_entity(data, _KEYWORD_ENTITY_KEY, KEYWORD_ENTITY_ID),
+    )
+
+
+def _apply_language_names(hass: HomeAssistant, copy: Mapping[str, str]) -> None:
+    """Point helper and script names at the current user or system language."""
+    registry = er.async_get(hass)
+    pairs = list(_LANGUAGE_ENTITIES)
+    automation = registry.async_get_entity_id(
+        "automation", "automation", _MORNING_AUTOMATION_ID
+    )
+    if automation is not None:
+        pairs.append((automation, "morning_refresh"))
+    for entity_id, key in pairs:
+        entry = registry.async_get(entity_id)
+        translated = copy.get(key)
+        if entry is None or not translated:
+            continue
+        desired = translated_name_override(entry.original_name, translated)
+        if entry.name == desired:
+            continue
+        registry.async_update_entity(entity_id, name=desired)
+
+
 async def _ensure_helpers(hass: HomeAssistant) -> tuple[str, str]:
     await async_setup_component(hass, "input_datetime", {})
     await async_setup_component(hass, "input_text", {})
@@ -452,11 +531,21 @@ async def _ensure_date_helper(hass: HomeAssistant) -> str:
     collection = _storage_collection(hass, "input_datetime/create")
     if collection is None:
         return DATE_ENTITY_ID
+    copy = await _copy(hass)
     for item in collection.async_items():
-        if item.get(CONF_NAME) in ("智见简报日期", "imou_insight_briefing_end"):
+        if item.get(CONF_NAME) in (
+            "智见简报日期",
+            "Briefing date",
+            "imou_insight_briefing_end",
+            copy["date_name"],
+        ):
             return f"input_datetime.{item[CONF_ID]}"
     item = await collection.async_create_item(
-        {"name": "智见简报日期", "has_date": True, "has_time": False}
+        {
+            "name": copy["date_name"],
+            "has_date": True,
+            "has_time": False,
+        }
     )
     return f"input_datetime.{item[CONF_ID]}"
 
@@ -467,22 +556,33 @@ async def _ensure_keyword_helper(hass: HomeAssistant) -> str:
     collection = _storage_collection(hass, "input_text/create")
     if collection is None:
         return KEYWORD_ENTITY_ID
+    copy = await _copy(hass)
     for item in collection.async_items():
-        if item.get(CONF_NAME) in ("智见搜索词", "imou_insight_search_keyword"):
+        if item.get(CONF_NAME) in (
+            "智见搜索词",
+            "Search keyword",
+            "imou_insight_search_keyword",
+            copy["keyword_name"],
+        ):
             return f"input_text.{item[CONF_ID]}"
     item = await collection.async_create_item(
-        {"name": "智见搜索词", "min": 0, "max": 64}
+        {
+            "name": copy["keyword_name"],
+            "min": 0,
+            "max": 64,
+        }
     )
     return f"input_text.{item[CONF_ID]}"
 
 
 async def _publish(hass: HomeAssistant, date_entity: str, keyword_entity: str) -> None:
+    copy = await _copy(hass)
+    _apply_language_names(hass, copy)
     await async_setup_component(hass, "lovelace", {})
     collection = _storage_collection(hass, "lovelace/dashboards/create")
     if collection is None:
         _LOGGER.debug("Lovelace dashboards are not ready")
         return
-    copy = await _copy(hass)
     config = build_insight_dashboard(
         await _dashboard_accounts(hass),
         date_entity=date_entity,

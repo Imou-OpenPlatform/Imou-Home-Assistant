@@ -28,6 +28,7 @@ from custom_components.imou_life.helpers import (
     camera_channel_devices,
     decrypt_pictures_active,
     default_notify_service_targets,
+    display_language,
     fill_template,
     iot_property_push_active,
     notify_service_selector_options,
@@ -36,6 +37,7 @@ from custom_components.imou_life.helpers import (
     resolve_ha_device_entry,
     resolve_ha_device_name,
     resolve_ui_language,
+    translated_name_override,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
@@ -476,6 +478,16 @@ def test_resolve_ui_language_maps_zh_and_defaults() -> None:
     assert resolve_ui_language(None) == "en"
     assert resolve_ui_language("") == "en"
     assert resolve_ui_language("   ") == "en"
+
+
+def test_display_language_prefers_the_user_then_the_system() -> None:
+    """A profile language wins. With none set, the system language is used."""
+    assert display_language("en", "zh-Hans") == "zh-Hans"
+    assert display_language("zh-Hans", None) == "zh-Hans"
+    assert display_language("zh-Hans", "   ") == "zh-Hans"
+    assert display_language(None, None) == "en"
+    assert translated_name_override("Briefing date", "Briefing date") is None
+    assert translated_name_override("Briefing date", "智见简报日期") == "智见简报日期"
 
 
 def test_fill_template_falls_back_when_placeholders_break() -> None:

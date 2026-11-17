@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any, override
 
 from homeassistant.components.light import (
@@ -13,9 +15,10 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
     BULB_V2_PROPERTY_BY_REF,
@@ -41,11 +44,14 @@ from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import DOMAIN, PARAM_BULB, PARAM_WHITE_LIGHT
+from .const import DOMAIN, PARAM_BULB, PARAM_WHITE_LIGHT, WHITE_LIGHT_OFF_DELAY
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 1
+
+_COUNTDOWN_START = "white_light_start"
+_COUNTDOWN_STOP = "white_light_stop"
 
 
 def _iter_white_lights(
@@ -55,8 +61,18 @@ def _iter_white_lights(
     return [
         (PARAM_WHITE_LIGHT, device)
         for device in coordinator.devices
-        if PARAM_WHITE_LIGHT in device.switches
+        if _device_has_white_light(device)
     ]
+
+
+def _device_has_white_light(device: ImouHaDevice) -> bool:
+    """Countdown start/stop, or the steady lamp switch."""
+    buttons = device.buttons or {}
+    return (
+        PARAM_WHITE_LIGHT in device.switches
+        or _COUNTDOWN_START in buttons
+        or _COUNTDOWN_STOP in buttons
+    )
 
 
 def _iter_bulbs(
@@ -83,7 +99,7 @@ async def async_setup_entry(
 
 
 class ImouWhiteLight(ImouEntity, LightEntity):
-    """Camera floodlight: on or off, the same write as the old switch."""
+    """Camera floodlight. On for 30 seconds, or until it is turned off."""
 
     _attr_color_mode = ColorMode.ONOFF
 
@@ -97,22 +113,90 @@ class ImouWhiteLight(ImouEntity, LightEntity):
         """Initialize the white-light entity."""
         super().__init__(coordinator, config_entry, entity_type, device)
         self._attr_supported_color_modes = {ColorMode.ONOFF}
+        self._held_on = False
+        self._unsub_off: Callable[[], None] | None = None
+
+    def _uses_countdown(self) -> bool:
+        """True when this camera has the countdown start/stop services."""
+        buttons = self.device.buttons or {}
+        return _COUNTDOWN_START in buttons or _COUNTDOWN_STOP in buttons
+
+    @property
+    @override
+    def assumed_state(self) -> bool:
+        """The countdown lamp does not report on/off through the steady switch."""
+        return self._uses_countdown()
+
+    async def async_added_to_hass(self) -> None:
+        """Cancel a pending auto-off when the entity is removed."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_off_timer)
+
+    @callback
+    def _cancel_off_timer(self) -> None:
+        """Drop a pending auto-off, if any."""
+        if self._unsub_off is not None:
+            self._unsub_off()
+            self._unsub_off = None
+
+    def _schedule_off(self) -> None:
+        """Turn the lamp off after the hold, restarting if it was already on."""
+        self._cancel_off_timer()
+        self._unsub_off = async_call_later(
+            self.hass, WHITE_LIGHT_OFF_DELAY, self._async_auto_off
+        )
+
+    async def _async_auto_off(self, _now: datetime) -> None:
+        """Turn the lamp off when the hold ends."""
+        self._unsub_off = None
+        await self.async_turn_off()
 
     @property
     @override
     def is_on(self) -> bool | None:
         """Return True when the lamp is on."""
-        return self.device.switches[PARAM_WHITE_LIGHT][PARAM_STATE]
+        if self._uses_countdown():
+            return self._held_on
+        switch = self.device.switches.get(PARAM_WHITE_LIGHT)
+        if not isinstance(switch, dict):
+            return None
+        return switch.get(PARAM_STATE)
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the lamp on."""
+        """Start the countdown lamp, or the steady lamp, for 30 seconds."""
+        if self._uses_countdown():
+            await self._press(_COUNTDOWN_START)
+            self._held_on = True
+            self._schedule_off()
+            self.async_write_ha_state()
+            return
         await self._async_set(True)
+        self._schedule_off()
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the lamp off."""
+        """Stop the countdown lamp, or clear the steady lamp."""
+        self._cancel_off_timer()
+        if self._uses_countdown():
+            await self._press(_COUNTDOWN_STOP)
+            self._held_on = False
+            self.async_write_ha_state()
+            return
         await self._async_set(False)
+
+    async def _press(self, button_type: str) -> None:
+        """Invoke the countdown start or stop service."""
+        if button_type not in (self.device.buttons or {}):
+            return
+        try:
+            await self.coordinator.device_manager.async_press_button(
+                self.device,
+                button_type,
+                0,
+            )
+        except ImouException as err:
+            self._raise_imou_ha_error(err, "button_press_failed")
 
     async def _async_set(self, enable: bool) -> None:
         """Write the white-light switch through the vendor library."""
