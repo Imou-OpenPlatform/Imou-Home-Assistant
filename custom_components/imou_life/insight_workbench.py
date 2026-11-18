@@ -338,6 +338,7 @@ async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) 
             end_day=end_day,
             product_id=device.product_id,
             ai_statistics_analysis_enable=True,
+            multi_view=device.view_count,
         )
     except ImouException as err:
         raise HomeAssistantError(

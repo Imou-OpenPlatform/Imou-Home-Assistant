@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyimouapi.insight.statistics import DailyAlarmRollup, InsightBriefing
+from pyimouapi.insight.statistics import (
+    DailyAlarmRollup,
+    IdentifiedEvent,
+    InsightBriefing,
+    LabelTiming,
+    detection_totals,
+)
 
 _SERIES_ZH = (
     ("人形", "human", "#3b82c4"),
@@ -20,6 +26,78 @@ _SERIES_EN = (
     ("Package", "package", "#7c6bb0"),
     ("Total", "total", "#4c5d73"),
 )
+_EVENT_ZH = {
+    "ELDERLY_APPEAR": "老人出现",
+    "PACKAGE_APPEAR": "包裹出现",
+    "PET_ACTIVITY": "宠物活动",
+    "PET_APPEAR": "宠物出现",
+    "CHILD_ARRIVE": "儿童到家或离开",
+    "CHILD_LEAVE": "儿童到家或离开",
+    "CHILD_HOME": "儿童到家或离开",
+    "UNUSUAL_BEHAVIOR": "异常行为",
+    "ABNORMAL_BEHAVIOR": "异常行为",
+    "ENTRANCE_RISK": "门口有风险",
+}
+_EVENT_EN = {
+    "ELDERLY_APPEAR": "Elderly person",
+    "PACKAGE_APPEAR": "Package",
+    "PET_ACTIVITY": "Pet activity",
+    "PET_APPEAR": "Pet",
+    "CHILD_ARRIVE": "Child arriving or leaving",
+    "CHILD_LEAVE": "Child arriving or leaving",
+    "CHILD_HOME": "Child arriving or leaving",
+    "UNUSUAL_BEHAVIOR": "Unusual behavior",
+    "ABNORMAL_BEHAVIOR": "Unusual behavior",
+    "ENTRANCE_RISK": "Risk at the entrance",
+}
+_EVENT_PREFIX_ZH = (
+    ("ELDERLY", "老人出现"),
+    ("PACKAGE", "包裹出现"),
+    ("PARCEL", "包裹出现"),
+    ("CHILD", "儿童到家或离开"),
+    ("PET", "宠物活动"),
+    ("UNUSUAL", "异常行为"),
+    ("ABNORMAL", "异常行为"),
+    ("ENTRANCE", "门口有风险"),
+    ("DOOR", "门口有风险"),
+)
+_EVENT_PREFIX_EN = (
+    ("ELDERLY", "Elderly person"),
+    ("PACKAGE", "Package"),
+    ("PARCEL", "Package"),
+    ("CHILD", "Child arriving or leaving"),
+    ("PET", "Pet activity"),
+    ("UNUSUAL", "Unusual behavior"),
+    ("ABNORMAL", "Unusual behavior"),
+    ("ENTRANCE", "Risk at the entrance"),
+    ("DOOR", "Risk at the entrance"),
+)
+_DETECTION_ZH = (
+    ("elderly", "老人"),
+    ("package", "包裹"),
+    ("child", "儿童"),
+    ("pet", "宠物"),
+    ("doorway", "门口安全"),
+)
+_DETECTION_EN = (
+    ("elderly", "Elderly"),
+    ("package", "Package"),
+    ("child", "Child"),
+    ("pet", "Pet"),
+    ("doorway", "Doorway"),
+)
+_TIMING_ZH = {
+    "humanAlarm": "人",
+    "carAlarm": "车",
+    "petAlarm": "宠物",
+    "packageAlarm": "包裹",
+}
+_TIMING_EN = {
+    "humanAlarm": "Person",
+    "carAlarm": "Vehicle",
+    "petAlarm": "Pet",
+    "packageAlarm": "Package",
+}
 _ROW_H = 56
 _BAR_X = 132
 _BAR_W = 480
@@ -42,17 +120,115 @@ def briefing_card(
         text = "这段时间没有简报。" if chinese else "No briefing for this period."
         return text, text
 
-    lines: list[str] = []
+    lines = _briefing_lines(briefing, chinese)
     title = "智见简报" if chinese else "AI Insight briefing"
     if briefing.daily:
         url = _write_chart(folder, entry_id, briefing.daily, language)
+        if lines:
+            lines.append("")
         lines.append(f"![{title}]({url})")
-    if briefing.risk_notes:
-        lines.append("")
-        lines.append("**风险提示**" if chinese else "**Notes**")
-        lines.extend(f"- {note}" for note in briefing.risk_notes[:20])
     markdown = "\n".join(lines).strip()
     return _summary(briefing, chinese), markdown
+
+
+def _briefing_lines(briefing: InsightBriefing, chinese: bool) -> list[str]:
+    """The daily sentence, detection counts, events, and risk periods."""
+    if not briefing.daily:
+        return []
+    sentences = [risk.text for row in briefing.daily for risk in row.risks if risk.text]
+    if chinese:
+        headline = sentences[0] if sentences else "今天没有异常情况。"
+        detected = "检测"
+        events_title = "识别事件"
+        times_word = "次"
+        risk_title = "风险"
+        period_label = "时段"
+        count_label = "次数"
+        empty_period = "—"
+        hours_title = "各时段"
+        colon = ": "
+    else:
+        headline = sentences[0] if sentences else "Nothing unusual today."
+        detected = "Detections"
+        events_title = "Identified events"
+        times_word = " times"
+        risk_title = "Risk"
+        period_label = "Periods"
+        count_label = "Count"
+        empty_period = "—"
+        hours_title = "Through the day"
+        colon = ": "
+    names = _DETECTION_ZH if chinese else _DETECTION_EN
+    lines = [headline, "", f"**{detected}**"]
+    for row in briefing.daily:
+        when = _display_date(row.date)
+        prefix = f"{when} " if len(briefing.daily) > 1 else ""
+        totals = detection_totals(row.events)
+        lines.append(
+            prefix + " · ".join(f"{label} {totals[key]}" for key, label in names)
+        )
+    event_lines = [
+        f"- {_event_name(event, chinese)} {event.count}{times_word}"
+        for row in briefing.daily
+        for event in row.events
+    ]
+    if event_lines:
+        lines.extend(["", f"**{events_title}**", *event_lines])
+    periods = [
+        f"{risk.start_hour}:00-{risk.end_hour}:00"
+        for row in briefing.daily
+        for risk in row.risks
+        if risk.start_hour and risk.end_hour and risk.count
+    ]
+    risk_count = sum(risk.count for row in briefing.daily for risk in row.risks)
+    lines.extend(
+        [
+            "",
+            f"**{risk_title}**",
+            f"{period_label}{colon}{'、'.join(periods) if periods else empty_period}",
+            f"{count_label}{colon}{risk_count}",
+        ]
+    )
+    hour_lines = [
+        line
+        for row in briefing.daily
+        for timing in row.timings
+        if (line := _timing_line(timing, chinese))
+    ]
+    if hour_lines:
+        lines.extend(["", f"**{hours_title}**", *hour_lines])
+    return lines
+
+
+def _event_name(event: IdentifiedEvent, chinese: bool) -> str:
+    key = event.code.strip().upper().replace("-", "_")
+    table = _EVENT_ZH if chinese else _EVENT_EN
+    if key in table:
+        return table[key]
+    prefixes = _EVENT_PREFIX_ZH if chinese else _EVENT_PREFIX_EN
+    for prefix, name in prefixes:
+        if key.startswith(prefix):
+            return name
+    words = key.replace("_", " ").lower()
+    return words[:1].upper() + words[1:] if words else event.code
+
+
+def _timing_line(timing: LabelTiming, chinese: bool) -> str | None:
+    names = _TIMING_ZH if chinese else _TIMING_EN
+    label = names.get(
+        timing.label, _event_name(IdentifiedEvent(timing.label, 0), chinese)
+    )
+    parts = [
+        f"{index * 2:02d}:00-{(index + 1) * 2:02d}:00 {count}"
+        for index, count in enumerate(timing.buckets)
+        if count
+    ]
+    if not parts and timing.times:
+        parts = list(timing.times[:3])
+    if not parts:
+        return None
+    colon = ": "
+    return f"- {label}{colon}" + "、".join(parts)
 
 
 def _summary(briefing: InsightBriefing, chinese: bool) -> str:
