@@ -4,6 +4,7 @@ from custom_components.imou_life.insight_briefing_view import briefing_card
 from pyimouapi.insight.statistics import (
     DailyAlarmRollup,
     InsightBriefing,
+    LabelTiming,
     parse_alarm_message_statistics,
 )
 
@@ -25,11 +26,12 @@ def test_briefing_card_writes_a_bar_chart(tmp_path) -> None:
     )
     summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing)
     assert summary == "2026-11-15 · 全部 12"
-    assert "今天没有异常情况" in markdown
-    assert "老人 0" in markdown
-    assert "门口安全 0" in markdown
-    assert "![智见简报](/local/imou/briefing-ENTRY1-" in markdown
+    assert markdown.startswith("![智见简报](/local/imou/briefing-ENTRY1-")
     chart = next(tmp_path.glob("briefing-ENTRY1-*.svg")).read_text(encoding="utf-8")
+    assert "今天没有异常情况" in chart
+    assert "老人" not in chart
+    assert "门口安全" not in chart
+    assert "检测" not in chart
     assert "2026-11-15" in chart
     assert "人形" in chart
     assert "包裹" in chart
@@ -38,7 +40,7 @@ def test_briefing_card_writes_a_bar_chart(tmp_path) -> None:
     assert ">4<" in chart
     assert ">5<" in chart
     assert 'height="32"' in chart
-    assert 'font-size="18"' in chart
+    assert 'font-size="20"' in chart
 
 
 def test_english_briefing_uses_english_series_names(tmp_path) -> None:
@@ -59,9 +61,9 @@ def test_english_briefing_uses_english_series_names(tmp_path) -> None:
     )
     summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing, "en")
     assert summary == "2026-11-15 · total 12"
-    assert "Nothing unusual today." in markdown
-    assert "![AI Insight briefing](" in markdown
+    assert markdown.startswith("![AI Insight briefing](")
     chart = next(tmp_path.glob("briefing-ENTRY1-*.svg")).read_text(encoding="utf-8")
+    assert "Nothing unusual today." in chart
     assert "Person" in chart
     assert "Vehicle" in chart
     assert "Pet" in chart
@@ -108,8 +110,8 @@ def test_quiet_day_still_draws_the_chart(tmp_path) -> None:
     _summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing)
     chart = next(tmp_path.glob("*.svg")).read_text(encoding="utf-8")
     assert "这一天没有告警" in chart
-    assert "今天没有异常情况" in markdown
-    assert "![智见简报](" in markdown
+    assert "今天没有异常情况" in chart
+    assert markdown.startswith("![智见简报](")
 
 
 def test_briefing_names_detected_events_and_risk(tmp_path) -> None:
@@ -141,13 +143,13 @@ def test_briefing_names_detected_events_and_risk(tmp_path) -> None:
         }
     )
     _summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing)
-    assert markdown.startswith("有人在门口停留")
-    assert "老人 2" in markdown
-    assert "包裹 1" in markdown
-    assert "老人出现 2次" in markdown
-    assert "包裹出现 1次" in markdown
-    assert "时段: 18:00-20:00" in markdown
-    assert "次数: 3" in markdown
+    chart = next(tmp_path.glob("*.svg")).read_text(encoding="utf-8")
+    assert markdown.startswith("![智见简报](")
+    assert "有人在门口停留" in chart
+    assert "老人出现 2次" in chart
+    assert "包裹出现 1次" in chart
+    assert "18:00-20:00" in chart
+    assert ">3<" in chart
 
 
 def test_refresh_replaces_the_previous_chart(tmp_path) -> None:
@@ -164,3 +166,39 @@ def test_refresh_replaces_the_previous_chart(tmp_path) -> None:
     charts = list(tmp_path.glob("briefing-ENTRY1-*.svg"))
     assert len(charts) == 1
     assert ">3<" in charts[0].read_text(encoding="utf-8")
+
+
+def test_hourly_counts_are_cells_instead_of_a_wrapped_sentence(tmp_path) -> None:
+    """Two-hour counts sit in a grid, not one line that wraps mid-range."""
+    briefing = InsightBriefing(
+        daily=(
+            DailyAlarmRollup(
+                date="20261118",
+                total=21,
+                human=20,
+                vehicle=0,
+                pet=0,
+                package=1,
+                timings=(
+                    LabelTiming(
+                        "humanAlarm",
+                        (),
+                        (0, 0, 0, 13, 12, 3, 1, 0, 0, 0, 3, 20),
+                    ),
+                    LabelTiming(
+                        "packageAlarm",
+                        (),
+                        (0, 0, 0, 4, 7, 1, 0, 0, 0, 0, 3, 6),
+                    ),
+                ),
+            ),
+        ),
+        risk_notes=(),
+    )
+    _summary, _markdown = briefing_card(tmp_path, "ENTRY1", briefing, "en")
+    chart = next(tmp_path.glob("*.svg")).read_text(encoding="utf-8")
+    assert "06:00-08:00" not in chart
+    assert ">13<" in chart
+    assert ">20<" in chart
+    assert "Person" in chart
+    assert "Package" in chart
