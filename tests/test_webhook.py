@@ -415,6 +415,7 @@ async def test_webhook_category_options_dispatch_matrix(
             services=frozenset(),
             events=frozenset({"detection.motion.detected"}),
         )
+        device.capability_ids = frozenset({"detection.motion.detected"})
         runtime.coordinator.devices_by_key = {imou_life_device_key(device): device}
         runtime.coordinator.devices = [device]
 
@@ -813,6 +814,95 @@ async def test_webhook_capability_event_id_is_not_rewritten(
     assert events[0].data["msg_type"] == "detection.motion.detected"
     assert len(alarms) == 1
     assert alarms[0].data["msg_type"] == "detection.motion.detected"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_capability_ids_allow_event_missing_from_detail(
+    hass: HomeAssistant,
+) -> None:
+    """Page capability ids accept an event the capability list did not return."""
+    from pyimouapi.capability.catalog import CapabilitySet
+    from pyimouapi.ha_device import ImouHaDevice
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["dev1"],
+        options={"event_push_types": ["capability_event"]},
+    )
+    device = ImouHaDevice("dev1", "Camera", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_capability_ids({"detection.motion.detected"})
+    device.set_capability_set(
+        CapabilitySet(properties={}, services=frozenset(), events=frozenset())
+    )
+    runtime.coordinator.devices = [device]
+    runtime.coordinator.devices_by_key = {f"{device.device_id}_0": device}
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "detection.motion.detected",
+                "did": "dev1",
+                "cid": "0",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == "detection.motion.detected"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_capability_ids_drop_detail_only_event(
+    hass: HomeAssistant,
+) -> None:
+    """An event only present in the capability list is not delivered."""
+    from pyimouapi.capability.catalog import CapabilitySet
+    from pyimouapi.ha_device import ImouHaDevice
+
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_IMOU_EVENT, events.append)
+    runtime = setup_imou_runtime(
+        hass,
+        push_enabled=True,
+        selected_devices=["dev1"],
+        options={"event_push_types": ["capability_event"]},
+    )
+    device = ImouHaDevice("dev1", "Camera", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_capability_ids(frozenset())
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset(),
+            events=frozenset({"detection.motion.detected"}),
+        )
+    )
+    runtime.coordinator.devices = [device]
+    runtime.coordinator.devices_by_key = {f"{device.device_id}_0": device}
+
+    response = await async_handle_imou_webhook(
+        hass,
+        "webhook-id",
+        MockRequest(
+            {
+                "msgType": "detection.motion.detected",
+                "did": "dev1",
+                "cid": "0",
+            }
+        ),
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert response.status == 200
+    assert events == []
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -2195,6 +2285,7 @@ async def test_webhook_v2_capability_push_gated_by_device_events(
         services=frozenset(),
         events=frozenset({"detection.person.detected"}),
     )
+    device.capability_ids = frozenset({"detection.person.detected"})
     key = imou_life_device_key(device)
     runtime.coordinator.devices_by_key = {key: device}
     runtime.coordinator.devices = [device]
@@ -2247,6 +2338,7 @@ async def test_webhook_v2_motion_maps_to_legacy_msg_type(
         services=frozenset(),
         events=frozenset({"detection.motion.detected"}),
     )
+    device.capability_ids = frozenset({"detection.motion.detected"})
     key = imou_life_device_key(device)
     runtime.coordinator.devices_by_key = {key: device}
     runtime.coordinator.devices = [device]
