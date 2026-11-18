@@ -25,7 +25,9 @@ _MOTION_CAPABILITY_KEYS = frozenset({"motion_detect", "header_detect"})
 _MOTION_ON = frozenset(
     {
         "videomotion",
+        "detection.motion.detected",
         "human",
+        "detection.person.detected",
         "mobiledetect",
         "motiondetect",
         "alarmpir",

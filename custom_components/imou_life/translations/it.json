@@ -106,8 +106,6 @@
         "menu_options": {
           "general_settings": "Interrogazione e telecamere",
           "event_push": "Push allarmi e notifiche",
-          "alarm_image_decrypt": "Immagini di allarme",
-          "local_recording": "Registra in caso di allarme",
           "bind_device": "Associa un nuovo dispositivo",
           "finish": "Fine"
         }
@@ -121,7 +119,7 @@
           "selected_devices": "Dispositivi da interrogare"
         },
         "data_description": {
-          "enable_polling": "Disattiva per saltare gli aggiornamenti periodici dal cloud. Gli stati delle entità possono diventare obsoleti. Installazione e ricaricamento recuperano comunque l'elenco dispositivi una volta. Quando il push eventi è attivo e i tipi di sottoscrizione includono i messaggi dei dispositivi IoT, le *proprietà* dei dispositivi thing-model non vengono aggiornate a questo intervallo (installazione e ricaricamento fanno comunque uno snapshot). Stato online, capacità PaaS ed entità basate su servizi continuano a essere interrogati.",
+          "enable_polling": "Disattiva per saltare gli aggiornamenti periodici dal cloud. Gli stati delle entità possono diventare obsoleti. Installazione e ricaricamento recuperano comunque l'elenco dispositivi una volta. Quando il push eventi è attivo e la sottoscrizione include i messaggi dei dispositivi, le proprietà non vengono aggiornate a questo intervallo (installazione e ricaricamento fanno comunque uno snapshot). Lo stato online continua a essere aggiornato a questo intervallo.",
           "update_interval": "Predefinito 300 s (5 minuti), intervallo 30–900 s. Ignorato quando l'interrogazione è disattivata.",
           "selected_devices": "I dispositivi non selezionati non compaiono nell'elenco dispositivi di Home Assistant. Questo elenco mostra ancora tutti i dispositivi dell'account."
         },
@@ -168,32 +166,6 @@
               "notify_services": "Un messaggio per ogni allarme."
             }
           }
-        }
-      },
-      "alarm_image_decrypt": {
-        "title": "Immagini di allarme",
-        "description": "Stato: {native_hint}. I dispositivi elencati sotto richiedono una password. Salvate: {password_count}.",
-        "data": {
-          "attach_decrypted_thumbnail": "Mostra l'immagine nelle notifiche di allarme",
-          "default_device_password": "Password dispositivo predefinita",
-          "clear_default_device_password": "Cancella password dispositivo predefinita",
-          "remove_device_passwords": "Rimuovi password memorizzate"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "Le notifiche di allarme includono l'immagine. Attivo per impostazione predefinita.",
-          "default_device_password": "Ripiego per i dispositivi che non hanno una password propria sotto.",
-          "clear_default_device_password": "Elimina il predefinito memorizzato. Le password per dispositivo restano invariate.",
-          "remove_device_passwords": "I numeri di serie selezionati vengono eliminati."
-        }
-      },
-      "local_recording": {
-        "title": "Registra in caso di allarme",
-        "description": "{push_hint}Registra un breve clip dallo stream cloud dopo un allarme. **Registra in caso di allarme** per telecamera è in ogni pagina dispositivo.",
-        "data": {
-          "local_record_duration": "Durata clip (secondi)"
-        },
-        "data_description": {
-          "local_record_duration": "Durata del clip dopo l'allarme. Predefinito 60 s, intervallo 15–180 s. Consuma quota di streaming live."
         }
       },
       "select_poll_devices": {
@@ -261,9 +233,7 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "Allarmi del dispositivo",
         "device_status": "Dispositivo online/offline",
-        "iot": "Messaggi dispositivo IoT",
         "capability_event": "Eventi di capacità del dispositivo"
       }
     },
@@ -544,7 +514,25 @@
         }
       },
       "storage_used": {
-        "name": "Archiviazione usata"
+        "name": "Archiviazione usata",
+        "state": {
+          "abnormal": "Errore di archiviazione",
+          "checking": "Controllo",
+          "init_failed": "Inizializzazione non riuscita",
+          "initializing": "Inizializzazione",
+          "mount_failed": "Montaggio non riuscito",
+          "needs_format": "Formattazione necessaria",
+          "needs_init": "Inizializzazione necessaria",
+          "no_card": "Nessuna scheda di memoria",
+          "partition_error": "Errore di partizione",
+          "read_error": "Errore di lettura",
+          "read_only": "Sola lettura",
+          "restarting": "Riavvio",
+          "uninitialized": "Non inizializzata",
+          "unsupported": "Formato non supportato",
+          "worn_out": "Fine vita",
+          "write_error": "Errore di scrittura"
+        }
       },
       "switch_cnt": {
         "name": "Cicli interruttore oggi"

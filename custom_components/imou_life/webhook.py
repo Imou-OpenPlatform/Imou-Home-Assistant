@@ -20,17 +20,9 @@ from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers import translation
 from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.push import (
-    event_ref_lookup_key,
-    iot_property_values,
-    is_alarm_msg_type,
-    is_iot_non_event,
-    is_unknown_legacy_msg_type,
     is_v2_capability_event_id,
     is_v2_property_report,
-    legacy_msg_type_from_v2_event,
     normalize_push_payload,
-    push_dispatch_permitted,
-    push_subscription_kind,
     v2_capability_event_permitted,
     v2_property_report_values,
 )
@@ -39,12 +31,9 @@ from .const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     EVENT_IMOU_EVENT,
-    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
-    PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_ON_ALARM,
     PARAM_WEBHOOK_ID,
     imou_life_device_key,
@@ -268,35 +257,6 @@ def _format_notification_time(raw_time: Any, tz: tzinfo) -> str:
         return _format_wall_datetime(parsed, tz)
 
     return text
-
-
-async def _async_apply_event_identifier(
-    runtime: ImouRuntimeData, event_data: dict[str, Any]
-) -> None:
-    """Rewrite outbound msg_type to identifier when resolvable."""
-    product_id = event_data.get("product_id")
-    raw = event_data.get("raw")
-    if not product_id or not isinstance(raw, dict):
-        return
-    lookup_key = event_ref_lookup_key(event_data.get("msg_type"), raw)
-    if not lookup_key:
-        return
-    try:
-        delegate = runtime.coordinator.device_manager.delegate
-        identifier = await delegate.async_resolve_event_identifier(
-            product_id, lookup_key
-        )
-    except Exception:
-        _LOGGER.warning(
-            "Failed to resolve event identifier for product_id=%s key=%s",
-            product_id,
-            lookup_key,
-            exc_info=True,
-        )
-        return
-    if identifier:
-        event_data["msg_type"] = identifier
-        event_data["msg_type_name"] = identifier
 
 
 async def _async_build_notification_message(
@@ -558,32 +518,33 @@ def _resolve_imou_ha_device_for_push(
         device = devices_by_key.get(key)
         if device is not None:
             return device
+    for device in devices_by_key.values():
+        if device.device_id == event_data.get("device_id"):
+            return device
     return None
 
 
-def _event_push_subscription_allows(entry: ConfigEntry, msg_type: str | None) -> bool:
-    """Require the matching Configure subscription for this push category."""
-    if msg_type is None or PARAM_EVENT_PUSH_TYPES not in entry.options:
-        return True
-    kind = push_subscription_kind(msg_type)
-    if kind == "iot":
-        return event_push_type_active(entry, EVENT_PUSH_TYPE_IOT)
-    if kind == "capability":
+def _accepted_push(entry: ConfigEntry, msg_type: str | None) -> bool:
+    """Accept only v2 capability events / property reports and online/offline."""
+    if is_v2_property_report(msg_type) or is_v2_capability_event_id(msg_type):
         return event_push_type_active(entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT)
-    if kind == "alarm":
-        return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
-    if kind == "device_status":
+    if msg_type in ("online", "offline"):
         return event_push_type_active(entry, EVENT_PUSH_TYPE_DEVICE_STATUS)
-    return True
+    return False
+
+
+def _is_security_alarm(msg_type: str | None) -> bool:
+    """A capability event is an alarm unless it is a property report or status."""
+    if not is_v2_capability_event_id(msg_type):
+        return False
+    return msg_type not in ("online", "offline", "device.property.report")
 
 
 def _v2_capability_event_allowed(ha_device: ImouHaDevice | None, event_id: str) -> bool:
     """Gate V2 eventId pushes on device.capability.list when that list is known."""
-    if ha_device is None:
-        return False
-    cap = ha_device.capability_set
-    events = cap.events if cap is not None else None
-    return v2_capability_event_permitted(events, event_id)
+    if ha_device is None or ha_device.capability_set is None:
+        return True
+    return v2_capability_event_permitted(ha_device.capability_set.events, event_id)
 
 
 def _apply_property_push_values(
@@ -606,15 +567,6 @@ def _apply_property_push_values(
     coordinator = runtime.coordinator
     if coordinator.device_manager.apply_property_values(device, values):
         coordinator.async_update_listeners()
-
-
-def _apply_iot_property_push(
-    runtime: ImouRuntimeData, event_data: dict[str, Any]
-) -> None:
-    """Write iotProperty refs onto the matching device."""
-    raw = event_data.get("raw")
-    values = iot_property_values(raw if isinstance(raw, dict) else {})
-    _apply_property_push_values(runtime, event_data, values, "iotProperty")
 
 
 def _apply_v2_property_report_push(
@@ -669,18 +621,12 @@ async def _async_dispatch_imou_push(
     runtime: ImouRuntimeData,
     event_data: dict[str, Any],
 ) -> None:
-    """Resolve identifiers, classify, fire events, and notify after webhook ACK."""
+    """Classify, update entities, fire events, and notify after webhook ACK."""
     try:
         msg_type = event_data.get("msg_type")
-        if is_v2_capability_event_id(msg_type):
-            legacy = legacy_msg_type_from_v2_event(msg_type)
-            if legacy != msg_type:
-                event_data["msg_type"] = legacy
-                event_data["msg_type_name"] = legacy
-        await _async_apply_event_identifier(runtime, event_data)
-        runtime.record_push_msg(event_data.get("msg_type"))
+        runtime.record_push_msg(msg_type)
         thumbnail_local = None
-        is_alarm = is_alarm_msg_type(event_data.get("msg_type"))
+        is_alarm = _is_security_alarm(msg_type)
         if is_alarm:
             thumbnail_local = await async_maybe_decrypt_thumbnail(
                 hass, entry, runtime, event_data
@@ -692,11 +638,15 @@ async def _async_dispatch_imou_push(
                 event_data.get("device_id"),
                 thumbnail_local or "none",
             )
-        msg_type = event_data.get("msg_type")
-        if msg_type == "iotProperty":
-            _apply_iot_property_push(runtime, event_data)
-        elif is_v2_property_report(msg_type):
+        if is_v2_property_report(msg_type):
             _apply_v2_property_report_push(runtime, event_data)
+        elif msg_type in ("online", "offline"):
+            device = _resolve_imou_ha_device_for_push(runtime, event_data)
+            if device is not None:
+                runtime.coordinator.device_manager.apply_online_status(
+                    device, msg_type == "online"
+                )
+                runtime.coordinator.async_update_listeners()
         hass.bus.async_fire(EVENT_IMOU_EVENT, event_data)
         if is_alarm:
             _async_publish_alarm(hass, runtime, event_data)
@@ -746,19 +696,6 @@ async def async_handle_imou_webhook(
     event_data = normalize_push_payload(payload)
     device_id = event_data.get("device_id")
     msg_type_raw = event_data.get("msg_type")
-    msg_type_missing = "msgType" not in payload
-    if not msg_type_missing and not push_dispatch_permitted(msg_type_raw):
-        _LOGGER.debug(
-            "Ignoring push with unknown msg_type=%r for %s", msg_type_raw, device_id
-        )
-        return web.Response(status=200, text="ok")
-    if is_unknown_legacy_msg_type(msg_type_raw):
-        _LOGGER.warning(
-            "Unknown Legacy msg_type=%r for %s; dispatching with fallback "
-            "alarm classification",
-            msg_type_raw,
-            device_id,
-        )
     if is_v2_property_report(msg_type_raw) and not isinstance(
         payload.get("properties"), dict
     ):
@@ -779,21 +716,10 @@ async def async_handle_imou_webhook(
         _LOGGER.debug("Push is disabled, ignoring event")
         return web.Response(status=200, text="ok")
 
-    if not _event_push_subscription_allows(entry, msg_type_raw):
+    if not _accepted_push(entry, msg_type_raw):
         _LOGGER.debug(
-            "Ignoring push %r (subscription does not include this category)",
+            "Ignoring push %r (not an accepted v2 capability event or device status)",
             msg_type_raw,
-        )
-        return web.Response(status=200, text="ok")
-
-    # IoT devices (product id present) only accept iotEvent or iotProperty envelopes.
-    if not msg_type_missing and is_iot_non_event(
-        event_data.get("product_id"), event_data.get("msg_type")
-    ):
-        _LOGGER.debug(
-            "Ignoring non-iotEvent/iotProperty push for IoT device %s (msg_type=%s)",
-            device_id,
-            event_data.get("msg_type"),
         )
         return web.Response(status=200, text="ok")
 
@@ -815,12 +741,25 @@ async def async_handle_imou_webhook(
         )
         return web.Response(status=200, text="ok")
 
+    msg_type = event_data.get("msg_type")
+    if msg_type in ("online", "offline"):
+        # Online / offline update device state and do not need a lens row.
+        entry.async_create_background_task(
+            hass,
+            _async_dispatch_imou_push_bound(hass, entry, runtime, event_data),
+            name=f"{DOMAIN}_webhook_dispatch_{webhook_id}",
+        )
+        return web.Response(status=200, text="ok")
+
     ha_device_name = resolve_ha_device_name(
         hass,
         event_data.get("device_id"),
         channel_id=event_data.get("channel_id"),
         product_id=event_data.get("product_id"),
     )
+    if not ha_device_name:
+        ha_device = _resolve_imou_ha_device_for_push(runtime, event_data)
+        ha_device_name = getattr(ha_device, "device_name", None)
     if not ha_device_name:
         _LOGGER.debug(
             "Ignoring push with no Home Assistant device for %s (msg_type=%s)",
@@ -831,7 +770,6 @@ async def async_handle_imou_webhook(
 
     event_data["device_name"] = ha_device_name
 
-    msg_type = event_data.get("msg_type")
     if is_v2_capability_event_id(msg_type):
         ha_device = _resolve_imou_ha_device_for_push(runtime, event_data)
         if not _v2_capability_event_allowed(ha_device, str(msg_type)):

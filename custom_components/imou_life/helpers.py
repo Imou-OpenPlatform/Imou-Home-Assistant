@@ -19,8 +19,7 @@ from .const import (
     DEFAULT_DORMANT_WRITE_RETRY_WAIT,
     DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
-    EVENT_PUSH_TYPE_ALARM,
-    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     PARAM_DORMANT_WRITE_RETRY_WAIT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -73,13 +72,14 @@ def event_push_type_active(entry: ConfigEntry, push_type: str) -> bool:
 
 
 def iot_property_push_active(entry: ConfigEntry) -> bool:
-    """Return True when IoT devices should take state from iotProperty pushes."""
-    return event_push_type_active(entry, EVENT_PUSH_TYPE_IOT)
+    """Legacy helper: always False now that v1 iotProperty is dropped."""
+    del entry
+    return False
 
 
 def alarm_push_active(entry: ConfigEntry) -> bool:
-    """Return True when alarm-driven entities can listen to alarm pushes."""
-    return event_push_type_active(entry, EVENT_PUSH_TYPE_ALARM)
+    """Return True when capability events are active so alarm entities listen."""
+    return event_push_type_active(entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT)
 
 
 def alarm_pictures_enabled(options: Mapping[str, Any]) -> bool:

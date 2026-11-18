@@ -4,13 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 from custom_components.imou_life.const import (
-    CALLBACK_FLAG_ALARM,
-    CALLBACK_FLAG_IOT,
     DOMAIN,
-    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
     EVENT_PUSH_TYPE_NUMBERSTAT,
     EVENT_PUSH_TYPES_ALL,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
@@ -367,9 +363,9 @@ async def test_resolve_ha_device_name_missing_returns_none(
     assert resolve_ha_device_name(hass, "missing", channel_id="0") is None
 
 
-def test_iot_property_push_active_needs_push_and_iot_type() -> None:
-    """Property-push mode is event push plus the iot subscribe type."""
-    on = MockConfigEntry(
+def test_iot_property_push_active_is_always_false() -> None:
+    """iotProperty is dropped in 2.0; the helper always returns False."""
+    entry = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options={
@@ -377,34 +373,17 @@ def test_iot_property_push_active_needs_push_and_iot_type() -> None:
             PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
         },
     )
-    assert iot_property_push_active(on) is True
-
-    push_off = MockConfigEntry(
-        domain=DOMAIN,
-        data={},
-        options={PARAM_ENABLE_EVENT_PUSH: False},
-    )
-    assert iot_property_push_active(push_off) is False
-
-    no_iot = MockConfigEntry(
-        domain=DOMAIN,
-        data={},
-        options={
-            PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_ALARM],
-        },
-    )
-    assert iot_property_push_active(no_iot) is False
+    assert iot_property_push_active(entry) is False
 
 
-def test_alarm_push_active_needs_push_and_alarm_type() -> None:
-    """Motion / doorbell listen only when event push includes alarm."""
+def test_alarm_push_active_follows_capability_event() -> None:
+    """Motion / doorbell / stills listen when capability events are active."""
     on = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
+            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
         },
     )
     assert alarm_push_active(on) is True
@@ -416,25 +395,25 @@ def test_alarm_push_active_needs_push_and_alarm_type() -> None:
     )
     assert alarm_push_active(push_off) is False
 
-    no_alarm = MockConfigEntry(
+    status_only = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_IOT],
+            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_DEVICE_STATUS],
         },
     )
-    assert alarm_push_active(no_alarm) is False
+    assert alarm_push_active(status_only) is False
 
 
 def test_decrypt_pictures_active_needs_alarm_push() -> None:
-    """Alarm stills are decrypted whenever alarm push is on."""
+    """Alarm stills are decrypted whenever capability event push is on."""
     on = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
+            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
         },
     )
@@ -445,7 +424,7 @@ def test_decrypt_pictures_active_needs_alarm_push() -> None:
         data={},
         options={
             PARAM_ENABLE_EVENT_PUSH: True,
-            PARAM_EVENT_PUSH_TYPES: list(EVENT_PUSH_TYPES_ALL),
+            PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
             PARAM_ATTACH_DECRYPTED_THUMBNAIL: False,
         },
     )
@@ -496,33 +475,71 @@ def test_fill_template_falls_back_when_placeholders_break() -> None:
     assert fill_template("Hi {broken", "plain", name="Ada") == "plain"
 
 
-def test_event_push_selector_options_degrades_to_always() -> None:
-    """API failure uses an empty flag set — no alarm/iot choices."""
+def test_selector_offers_only_the_two_ha_flags() -> None:
+    from custom_components.imou_life.const import (
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+    )
+
+    assert event_push_selector_options({"alarm", "iot"}) == [
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+    ]
     assert event_push_selector_options(set()) == [
         EVENT_PUSH_TYPE_CAPABILITY_EVENT,
         EVENT_PUSH_TYPE_DEVICE_STATUS,
     ]
 
 
-def test_event_push_selector_options_entitled_flags() -> None:
-    """Alarm and iot appear only when getMessageCallback lists them."""
-    assert event_push_selector_options({CALLBACK_FLAG_ALARM}) == [
+def test_disabled_push_checks_both_boxes() -> None:
+    from custom_components.imou_life.const import (
         EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-        EVENT_PUSH_TYPE_ALARM,
+        EVENT_PUSH_TYPE_DEVICE_STATUS,
+        checked_ha_push_types,
+    )
+
+    assert checked_ha_push_types(push_enabled=False, account_flags=set()) == [
+        EVENT_PUSH_TYPE_CAPABILITY_EVENT,
         EVENT_PUSH_TYPE_DEVICE_STATUS,
     ]
-    assert event_push_selector_options({CALLBACK_FLAG_IOT}) == [
+
+
+def test_enabled_push_checks_only_flags_present_on_the_account() -> None:
+    from custom_components.imou_life.const import (
         EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-        EVENT_PUSH_TYPE_IOT,
-        EVENT_PUSH_TYPE_DEVICE_STATUS,
-    ]
+        checked_ha_push_types,
+    )
+
+    assert checked_ha_push_types(
+        push_enabled=True, account_flags={"capabilityEvent", "alarm"}
+    ) == [EVENT_PUSH_TYPE_CAPABILITY_EVENT]
+
+
+def test_merge_keeps_unrelated_flags_and_applies_the_two_boxes() -> None:
+    from custom_components.imou_life.const import merge_callback_flags
+
+    merged = merge_callback_flags(
+        {"alarm", "iot"},
+        ["capability_event", "device_status"],
+    )
+    assert merged == {"alarm", "iot", "capabilityEvent", "deviceStatus"}
+
+
+def test_merge_drops_an_unchecked_ha_flag() -> None:
+    from custom_components.imou_life.const import merge_callback_flags
+
+    merged = merge_callback_flags(
+        {"alarm", "iot", "capabilityEvent", "deviceStatus"},
+        ["capability_event"],
+    )
+    assert merged == {"alarm", "iot", "capabilityEvent"}
 
 
 def test_sanitize_event_push_types_drops_legacy() -> None:
-    """客流/人脸 keys are stripped from stored options."""
+    """客流/人脸 keys and removed v1 types are stripped from stored options."""
     assert sanitize_event_push_types(
         ["alarm", EVENT_PUSH_TYPE_NUMBERSTAT, "device_status", "face_analysis"]
-    ) == ["alarm", "device_status"]
+    ) == ["device_status"]
 
 
 def test_alarm_type_option_key_is_hassfest_safe() -> None:

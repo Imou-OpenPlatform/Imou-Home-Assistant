@@ -37,18 +37,17 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
-    BULB_V2_PROPERTY_BY_REF,
+    BULB_PROP_BRIGHTNESS,
+    BULB_PROP_COLOR_TEMP,
+    BULB_PROP_HUE,
+    BULB_PROP_MODE,
+    BULB_PROP_SATURATION,
+    BULB_PROP_SCENE,
+    BULB_PROP_SWITCH,
+    BULB_PROP_VALUE,
     MODE_COLOR,
     MODE_SCENE,
     MODE_WHITE,
-    REF_BRIGHTNESS,
-    REF_COLOR_TEMP,
-    REF_HUE,
-    REF_MODE,
-    REF_SATURATION,
-    REF_SCENE,
-    REF_SWITCH,
-    REF_VALUE,
     empty_bulb_state,
     scene_effect_names,
 )
@@ -238,7 +237,7 @@ def _bulb_device(*, supported_refs: set[str] | None = None) -> MagicMock:
     device.bulb_light = empty_bulb_state()
     device.capability_set = (
         CapabilitySet(
-            properties={BULB_V2_PROPERTY_BY_REF[ref]: None for ref in supported_refs},  # type: ignore[dict-item]
+            properties=dict.fromkeys(supported_refs),  # type: ignore[dict-item]
             services=frozenset(),
             events=frozenset(),
         )
@@ -255,7 +254,7 @@ def _set_bulb_capabilities(
 ) -> None:
     """Replace the public capability snapshot used by an existing entity."""
     device.capability_set = CapabilitySet(
-        properties={BULB_V2_PROPERTY_BY_REF[ref]: None for ref in supported_refs},  # type: ignore[dict-item]
+        properties=dict.fromkeys(supported_refs),  # type: ignore[dict-item]
         services=frozenset(),
         events=frozenset(),
     )
@@ -286,42 +285,53 @@ def test_bulb_supports_color_temperature_color_and_scenes(
 @pytest.mark.parametrize(
     ("supported_refs", "supported_color_modes", "supported_features"),
     [
-        ({REF_SWITCH}, {ColorMode.ONOFF}, LightEntityFeature(0)),
+        ({BULB_PROP_SWITCH}, {ColorMode.ONOFF}, LightEntityFeature(0)),
         (
-            {REF_SWITCH, REF_BRIGHTNESS},
+            {BULB_PROP_SWITCH, BULB_PROP_BRIGHTNESS},
             {ColorMode.BRIGHTNESS},
             LightEntityFeature(0),
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP},
+            {
+                BULB_PROP_SWITCH,
+                BULB_PROP_MODE,
+                BULB_PROP_BRIGHTNESS,
+                BULB_PROP_COLOR_TEMP,
+            },
             {ColorMode.COLOR_TEMP},
             LightEntityFeature(0),
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_COLOR_TEMP},
+            {BULB_PROP_SWITCH, BULB_PROP_MODE, BULB_PROP_COLOR_TEMP},
             {ColorMode.ONOFF},
             LightEntityFeature(0),
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_HUE, REF_SATURATION, REF_VALUE},
+            {
+                BULB_PROP_SWITCH,
+                BULB_PROP_MODE,
+                BULB_PROP_HUE,
+                BULB_PROP_SATURATION,
+                BULB_PROP_VALUE,
+            },
             {ColorMode.HS},
             LightEntityFeature(0),
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_SCENE},
+            {BULB_PROP_SWITCH, BULB_PROP_MODE, BULB_PROP_SCENE},
             {ColorMode.ONOFF},
             LightEntityFeature.EFFECT,
         ),
         (
             {
-                REF_SWITCH,
-                REF_MODE,
-                REF_BRIGHTNESS,
-                REF_COLOR_TEMP,
-                REF_HUE,
-                REF_SATURATION,
-                REF_VALUE,
-                REF_SCENE,
+                BULB_PROP_SWITCH,
+                BULB_PROP_MODE,
+                BULB_PROP_BRIGHTNESS,
+                BULB_PROP_COLOR_TEMP,
+                BULB_PROP_HUE,
+                BULB_PROP_SATURATION,
+                BULB_PROP_VALUE,
+                BULB_PROP_SCENE,
             },
             {ColorMode.COLOR_TEMP, ColorMode.HS},
             LightEntityFeature.EFFECT,
@@ -342,9 +352,9 @@ def test_v2_bulb_attributes_follow_capability_snapshot(
     assert light.supported_color_modes == supported_color_modes
     assert light.supported_features == supported_features
     assert light.effect_list == (
-        scene_effect_names() if REF_SCENE in supported_refs else None
+        scene_effect_names() if BULB_PROP_SCENE in supported_refs else None
     )
-    if {REF_BRIGHTNESS, REF_COLOR_TEMP} <= supported_refs:
+    if {BULB_PROP_BRIGHTNESS, BULB_PROP_COLOR_TEMP} <= supported_refs:
         assert light.min_color_temp_kelvin == 2700
         assert light.max_color_temp_kelvin == 6500
     else:
@@ -358,7 +368,7 @@ async def test_v2_bulb_live_entity_tracks_capability_rediscovery(
     hass: HomeAssistant,
 ) -> None:
     """One live entity immediately follows an expanded and reduced snapshot."""
-    device = _bulb_device(supported_refs={REF_SWITCH})
+    device = _bulb_device(supported_refs={BULB_PROP_SWITCH})
     device.bulb_light["on"] = True
     light = _bulb(hass, device)
     light.async_write_ha_state = MagicMock()
@@ -368,14 +378,14 @@ async def test_v2_bulb_live_entity_tracks_capability_rediscovery(
     assert light.effect_list is None
 
     all_refs = {
-        REF_SWITCH,
-        REF_MODE,
-        REF_BRIGHTNESS,
-        REF_COLOR_TEMP,
-        REF_HUE,
-        REF_SATURATION,
-        REF_VALUE,
-        REF_SCENE,
+        BULB_PROP_SWITCH,
+        BULB_PROP_MODE,
+        BULB_PROP_BRIGHTNESS,
+        BULB_PROP_COLOR_TEMP,
+        BULB_PROP_HUE,
+        BULB_PROP_SATURATION,
+        BULB_PROP_VALUE,
+        BULB_PROP_SCENE,
     }
     _set_bulb_capabilities(device, all_refs)
 
@@ -390,15 +400,15 @@ async def test_v2_bulb_live_entity_tracks_capability_rediscovery(
     light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
         device,
         {
-            REF_SWITCH: 1,
-            REF_MODE: MODE_WHITE,
-            REF_BRIGHTNESS: 50,
-            REF_COLOR_TEMP: 4000,
+            BULB_PROP_SWITCH: 1,
+            BULB_PROP_MODE: MODE_WHITE,
+            BULB_PROP_BRIGHTNESS: 50,
+            BULB_PROP_COLOR_TEMP: 4000,
         },
     )
 
     light.coordinator.device_manager.async_set_bulb_light.reset_mock()
-    _set_bulb_capabilities(device, {REF_SWITCH})
+    _set_bulb_capabilities(device, {BULB_PROP_SWITCH})
 
     assert light.supported_color_modes == {ColorMode.ONOFF}
     assert light.color_mode is ColorMode.ONOFF
@@ -419,7 +429,7 @@ async def test_v2_bulb_live_entity_tracks_capability_rediscovery(
         }
     )
     light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
-        device, {REF_SWITCH: 1}
+        device, {BULB_PROP_SWITCH: 1}
     )
     assert [candidate for _, candidate in _iter_bulbs(light.coordinator)] == [device]
 
@@ -429,7 +439,9 @@ async def test_v2_bulb_color_temperature_requires_white_level(
     hass: HomeAssistant,
 ) -> None:
     """CT without white brightness remains ONOFF and rejects CT service fields."""
-    device = _bulb_device(supported_refs={REF_SWITCH, REF_MODE, REF_COLOR_TEMP})
+    device = _bulb_device(
+        supported_refs={BULB_PROP_SWITCH, BULB_PROP_MODE, BULB_PROP_COLOR_TEMP}
+    )
     device.bulb_light["on"] = True
     light = _bulb(hass, device)
     light.async_write_ha_state = MagicMock()
@@ -441,7 +453,7 @@ async def test_v2_bulb_color_temperature_requires_white_level(
 
     await light.async_turn_on(**{ATTR_BRIGHTNESS: 128, ATTR_COLOR_TEMP_KELVIN: 4000})
     light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
-        device, {REF_SWITCH: 1}
+        device, {BULB_PROP_SWITCH: 1}
     )
 
 
@@ -451,7 +463,12 @@ def test_v2_bulb_does_not_report_an_unsupported_scene(
 ) -> None:
     """A mode value alone must not activate an effect or an invalid ONOFF mode."""
     device = _bulb_device(
-        supported_refs={REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP}
+        supported_refs={
+            BULB_PROP_SWITCH,
+            BULB_PROP_MODE,
+            BULB_PROP_BRIGHTNESS,
+            BULB_PROP_COLOR_TEMP,
+        }
     )
     device.bulb_light["on"] = True
     device.bulb_light["mode"] = MODE_SCENE
@@ -466,33 +483,44 @@ def test_v2_bulb_does_not_report_an_unsupported_scene(
 @pytest.mark.parametrize(
     ("supported_refs", "expected_payload"),
     [
-        ({REF_SWITCH}, {REF_SWITCH: 1}),
+        ({BULB_PROP_SWITCH}, {BULB_PROP_SWITCH: 1}),
         (
-            {REF_SWITCH, REF_BRIGHTNESS},
-            {REF_SWITCH: 1, REF_BRIGHTNESS: 50},
+            {BULB_PROP_SWITCH, BULB_PROP_BRIGHTNESS},
+            {BULB_PROP_SWITCH: 1, BULB_PROP_BRIGHTNESS: 50},
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_BRIGHTNESS, REF_COLOR_TEMP},
             {
-                REF_SWITCH: 1,
-                REF_MODE: MODE_WHITE,
-                REF_BRIGHTNESS: 50,
-                REF_COLOR_TEMP: 4000,
+                BULB_PROP_SWITCH,
+                BULB_PROP_MODE,
+                BULB_PROP_BRIGHTNESS,
+                BULB_PROP_COLOR_TEMP,
+            },
+            {
+                BULB_PROP_SWITCH: 1,
+                BULB_PROP_MODE: MODE_WHITE,
+                BULB_PROP_BRIGHTNESS: 50,
+                BULB_PROP_COLOR_TEMP: 4000,
             },
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_HUE, REF_SATURATION, REF_VALUE},
             {
-                REF_SWITCH: 1,
-                REF_MODE: MODE_COLOR,
-                REF_HUE: 120,
-                REF_SATURATION: 60,
-                REF_VALUE: 50,
+                BULB_PROP_SWITCH,
+                BULB_PROP_MODE,
+                BULB_PROP_HUE,
+                BULB_PROP_SATURATION,
+                BULB_PROP_VALUE,
+            },
+            {
+                BULB_PROP_SWITCH: 1,
+                BULB_PROP_MODE: MODE_COLOR,
+                BULB_PROP_HUE: 120,
+                BULB_PROP_SATURATION: 60,
+                BULB_PROP_VALUE: 50,
             },
         ),
         (
-            {REF_SWITCH, REF_MODE, REF_SCENE},
-            {REF_SWITCH: 1, REF_MODE: MODE_SCENE, REF_SCENE: 2},
+            {BULB_PROP_SWITCH, BULB_PROP_MODE, BULB_PROP_SCENE},
+            {BULB_PROP_SWITCH: 1, BULB_PROP_MODE: MODE_SCENE, BULB_PROP_SCENE: 2},
         ),
     ],
 )
@@ -540,7 +568,7 @@ async def test_bulb_scene_is_one_property_write(hass: HomeAssistant) -> None:
 
     light.coordinator.device_manager.async_set_bulb_light.assert_awaited_once_with(
         device,
-        {REF_SWITCH: 1, REF_MODE: MODE_SCENE, REF_SCENE: 2},
+        {BULB_PROP_SWITCH: 1, BULB_PROP_MODE: MODE_SCENE, BULB_PROP_SCENE: 2},
     )
 
 
@@ -585,9 +613,9 @@ async def test_brightness_during_a_scene_selects_white(hass: HomeAssistant) -> N
     await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
 
     payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
-    assert payload[REF_MODE] == MODE_WHITE
-    assert REF_BRIGHTNESS in payload
-    assert REF_SCENE not in payload
+    assert payload[BULB_PROP_MODE] == MODE_WHITE
+    assert BULB_PROP_BRIGHTNESS in payload
+    assert BULB_PROP_SCENE not in payload
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -607,7 +635,11 @@ async def test_color_temperature_does_not_change_brightness(
     await light.async_turn_on(**{ATTR_COLOR_TEMP_KELVIN: 4000})
 
     payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
-    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_WHITE, REF_COLOR_TEMP: 4000}
+    assert payload == {
+        BULB_PROP_SWITCH: 1,
+        BULB_PROP_MODE: MODE_WHITE,
+        BULB_PROP_COLOR_TEMP: 4000,
+    }
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -626,7 +658,7 @@ async def test_white_preview_opens_the_saved_color(hass: HomeAssistant) -> None:
     await light.async_turn_on(**{ATTR_HS_COLOR: color_temperature_to_hs(4000)})
 
     payload = light.coordinator.device_manager.async_set_bulb_light.await_args.args[1]
-    assert payload == {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+    assert payload == {BULB_PROP_SWITCH: 1, BULB_PROP_MODE: MODE_COLOR}
     assert "132100" not in payload
     assert "132300" not in payload
 

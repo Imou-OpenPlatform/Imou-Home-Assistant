@@ -16,7 +16,7 @@ from custom_components.imou_life.binary_sensor import (
 from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
-    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
     EVENT_PUSH_TYPES_ALL,
     MOTION_OFF_DELAY,
     PARAM_ENABLE_EVENT_PUSH,
@@ -29,7 +29,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pyimouapi.const import BINARY_SENSOR_TYPE_REF, PARAM_STATE
+from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -236,11 +236,6 @@ def test_iter_motion_sensors_iot_event_refs_are_not_enough() -> None:
     assert pairs == []
 
 
-def test_motion_unique_id_does_not_collide_with_library_binary_sensors() -> None:
-    """HA-only motion must not share a type key with a polled library sensor."""
-    assert PARAM_MOTION not in BINARY_SENSOR_TYPE_REF
-
-
 def test_motion_entity_is_a_motion_class() -> None:
     """Dashboards and HomeKit treat this as a motion sensor."""
     device = _device(channel_id="0")
@@ -261,9 +256,9 @@ def test_motion_unavailable_when_alarm_push_is_off() -> None:
 
 
 def test_motion_unavailable_when_alarm_type_not_subscribed() -> None:
-    """iotProperty push does not carry motion / doorbell alarms."""
+    """Device status push does not carry motion / doorbell alarms."""
     device = _device(channel_id="0")
-    entity = _online_motion(device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    entity = _online_motion(device, push=True, types=[EVENT_PUSH_TYPE_DEVICE_STATUS])
     assert entity.available is False
 
 
@@ -429,7 +424,13 @@ async def test_webhook_human_turns_motion_on(hass: HomeAssistant) -> None:
         await async_handle_imou_webhook(
             hass,
             "webhook-id",
-            MockRequest({"msgType": "human", "deviceId": "SN1", "channelId": "0"}),
+            MockRequest(
+                {
+                    "msgType": "detection.person.detected",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                }
+            ),
         )
         await hass.async_block_till_done(wait_background_tasks=True)
         assert entity.is_on is True

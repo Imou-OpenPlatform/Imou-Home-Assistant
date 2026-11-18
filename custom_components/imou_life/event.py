@@ -19,6 +19,7 @@ PARALLEL_UPDATES = 0
 _DOORBELL_CALL = frozenset(
     {
         "callbellevent",
+        "call.session.called",
         "callevent",
         "callquickevent",
         "callsupplyevent",

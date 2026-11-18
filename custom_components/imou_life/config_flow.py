@@ -66,9 +66,9 @@ from .const import (
     PARAM_WEBHOOK_URL,
     api_url_from_region,
     api_url_region_from_value,
-    callback_flags_to_event_push_types,
+    checked_ha_push_types,
     event_push_selector_options,
-    event_push_types_to_callback_flags,
+    merge_callback_flags,
     sanitize_event_push_types,
 )
 from .helpers import (
@@ -626,21 +626,11 @@ class ImouOptionsFlow(OptionsFlow):
     def _checked_event_push_types(
         self, options: Mapping[str, Any], account_flags: set[str] | None
     ) -> list[str]:
-        """Check the types already saved, or the flags just read from the account."""
-        stored = options.get(PARAM_EVENT_PUSH_TYPES, DEFAULT_EVENT_PUSH_TYPES)
-        checked: list[str] = []
-        if isinstance(stored, list) and stored:
-            checked = sanitize_event_push_types(
-                callback_flags_to_event_push_types(stored)
-            )
-        if not checked and account_flags:
-            checked = sanitize_event_push_types(
-                callback_flags_to_event_push_types(sorted(account_flags))
-            )
-        if account_flags is not None:
-            allowed = set(event_push_selector_options(account_flags))
-            checked = [item for item in checked if item in allowed]
-        return checked
+        """Check the two HA boxes based on enable state and the account flags."""
+        enable_push = bool(options.get(PARAM_ENABLE_EVENT_PUSH, False))
+        return checked_ha_push_types(
+            push_enabled=enable_push, account_flags=account_flags or set()
+        )
 
     def _nested_event_push_suggestions(
         self,
@@ -885,8 +875,10 @@ class ImouOptionsFlow(OptionsFlow):
             ),
         )
 
-    async def _async_account_callback_flags(self) -> set[str] | None:
-        """Query Open Platform for callbackFlag; None means degrade to always-only."""
+    async def _async_load_callback_snapshot(self) -> None:
+        """Query Open Platform for callback settings once per options session."""
+        if hasattr(self, "_callback_read_ok"):
+            return
         runtime = get_runtime_data(self.config_entry)
         client = runtime.client if runtime is not None else None
         owned = False
@@ -902,16 +894,22 @@ class ImouOptionsFlow(OptionsFlow):
             callback_flag = data.get("callbackFlag")
             if callback_flag is None and isinstance(data.get("callbackFlags"), str):
                 callback_flag = data.get("callbackFlags")
-            flags = parse_callback_flag(callback_flag)
-            _LOGGER.debug("getMessageCallback callbackFlag=%s", sorted(flags))
-            return flags
+            self._callback_flags = set(parse_callback_flag(callback_flag))
+            self._callback_url_on_cloud = str(data.get("callbackUrl") or "")
+            self._callback_read_ok = True
+            _LOGGER.debug(
+                "getMessageCallback snapshot flags=%s url=%s",
+                sorted(self._callback_flags),
+                self._callback_url_on_cloud,
+            )
         except Exception:
             _LOGGER.warning(
-                "getMessageCallback failed; event push types limited to "
-                "capability_event and device_status",
+                "getMessageCallback failed; event push options cannot be saved",
                 exc_info=True,
             )
-            return set()
+            self._callback_flags = set()
+            self._callback_url_on_cloud = ""
+            self._callback_read_ok = False
         finally:
             if owned:
                 await client.async_close()
@@ -920,21 +918,25 @@ class ImouOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage options — event push and notification targets."""
-        account_callback_flags = await self._async_account_callback_flags()
+        await self._async_load_callback_snapshot()
         stored = dict(self.config_entry.options)
         errors: dict[str, Any] = {}
         error_detail = ""
         suggested_source: Mapping[str, Any] = stored
         if user_input is not None:
             flat = self._flatten_event_push_input(user_input, stored)
-            if flat[PARAM_ENABLE_EVENT_PUSH]:
+            if not self._callback_read_ok:
+                errors["base"] = "callback_failed"
+            else:
+                enable_push = bool(flat[PARAM_ENABLE_EVENT_PUSH])
                 callback_url = str(flat.get(PARAM_WEBHOOK_URL) or "").strip()
-                if not callback_url:
+                if enable_push and not callback_url:
                     errors[PARAM_WEBHOOK_URL] = "callback_url_missing"
                 else:
-                    error_key = await self._async_register_message_callback(
-                        callback_url,
-                        list(flat.get(PARAM_EVENT_PUSH_TYPES) or []),
+                    error_key = await self._async_sync_message_callback(
+                        enable_push=enable_push,
+                        callback_url=callback_url,
+                        selected_types=list(flat.get(PARAM_EVENT_PUSH_TYPES) or []),
                     )
                     if error_key:
                         errors["base"] = error_key
@@ -951,19 +953,25 @@ class ImouOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="event_push",
             data_schema=self.add_suggested_values_to_schema(
-                self._event_push_schema(account_callback_flags),
+                self._event_push_schema(self._callback_flags),
                 self._nested_event_push_suggestions(
-                    suggested_source, account_callback_flags
+                    suggested_source, self._callback_flags
                 ),
             ),
             errors=errors,
             description_placeholders=placeholders,
         )
 
-    async def _async_register_message_callback(
-        self, callback_url: str, event_push_types: list[str]
+    async def _async_sync_message_callback(
+        self,
+        *,
+        enable_push: bool,
+        callback_url: str,
+        selected_types: list[str],
     ) -> str | None:
-        """Register the Imou callback. Return an options error key, or None."""
+        """Merge the two HA flags into the open snapshot and write to the cloud."""
+        selected_types_to_merge = selected_types if enable_push else []
+        merged = merge_callback_flags(self._callback_flags, selected_types_to_merge)
         runtime = get_runtime_data(self.config_entry)
         client = runtime.client if runtime is not None else None
         owned = False
@@ -976,13 +984,25 @@ class ImouOptionsFlow(OptionsFlow):
             owned = True
         try:
             try:
-                await client.async_set_message_callback(
-                    status="on",
-                    callback_url=callback_url,
-                    callback_flag=event_push_types_to_callback_flags(event_push_types)
-                    or None,
-                    base_push=BASE_PUSH_ALWAYS,
-                )
+                if enable_push:
+                    await client.async_set_message_callback(
+                        status="on",
+                        callback_url=callback_url,
+                        callback_flag=sorted(merged) or None,
+                        base_push=BASE_PUSH_ALWAYS,
+                    )
+                elif merged:
+                    effective_url = self._callback_url_on_cloud or callback_url
+                    await client.async_set_message_callback(
+                        status="on",
+                        callback_url=effective_url or None,
+                        callback_flag=sorted(merged),
+                        base_push=BASE_PUSH_ALWAYS,
+                    )
+                else:
+                    await client.async_set_message_callback(
+                        status="off", base_push=BASE_PUSH_ALWAYS
+                    )
             except ImouException as exception:
                 self._callback_error = _api_error_placeholder(exception)
                 return "callback_failed"

@@ -35,6 +35,7 @@ from .const import (
     PARAM_INSIGHT_BRIEFING,
     PARAM_INSIGHT_SEARCH_RESULT,
     PARAM_STATUS,
+    PARAM_STORAGE_USED,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
@@ -243,20 +244,51 @@ class ImouSensor(ImouEntity, SensorEntity):
             == STATE_VARIANT_NUMERIC
         )
 
+    def _storage_status_text(self) -> bool:
+        """A card fault is text. A used percentage stays a measurement."""
+        if self._entity_type != PARAM_STORAGE_USED:
+            return False
+        value = self.device.sensors[self._entity_type].get(PARAM_STATE)
+        return isinstance(value, str)
+
+    @property
+    @override
+    def native_unit_of_measurement(self) -> str | None:
+        # Home Assistant rejects a text state on a sensor that still has a unit.
+        if self._storage_status_text():
+            return None
+        return self.entity_description.native_unit_of_measurement
+
+    @property
+    @override
+    def state_class(self) -> SensorStateClass | None:
+        if self._storage_status_text():
+            return None
+        return self.entity_description.state_class
+
+    @property
+    @override
+    def suggested_display_precision(self) -> int | None:
+        if self._storage_status_text():
+            return None
+        return self.entity_description.suggested_display_precision
+
     @property
     @override
     def native_value(self) -> StateType:
-        """Return the sensor value.
-
-        Numeric sensors only expose numeric values; error codes such as
-        storage_used e1/e2 become None (unknown) instead of mixing enum states.
-        """
+        """Return the sensor value."""
         if self._entity_type == PARAM_AI_INSIGHT_STATUS:
             return self._ai_insight_state()
         if self._entity_type == PARAM_CLOUD_STORAGE_STATUS:
             return self._cloud_storage_state()
         value = self.device.sensors[self._entity_type].get(PARAM_STATE)
         if value is None:
+            return None
+        if self._entity_type == PARAM_STORAGE_USED:
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return value
             return None
         if self.entity_description.device_class == SensorDeviceClass.ENUM:
             return value

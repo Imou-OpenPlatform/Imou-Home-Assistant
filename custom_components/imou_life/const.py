@@ -207,8 +207,6 @@ COUNT_DOWN_MAX_MINUTES = 1440
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
 OVERCHARGE_MIN_WATTS = 5
 OVERCHARGE_MAX_WATTS_DEFAULT = 2500
-OVERCHARGE_MAX_WATTS_HIGH = 3680
-OVERCHARGE_HIGH_REF = "128900"
 
 # event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
 EVENT_PUSH_TYPE_CAPABILITY_EVENT = "capability_event"
@@ -219,22 +217,21 @@ EVENT_PUSH_TYPE_IOT = "iot"
 EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
 EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
 
-EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (EVENT_PUSH_TYPE_CAPABILITY_EVENT,)
-
-EVENT_PUSH_TYPE_OPTIONS_ENTITLED = (
-    EVENT_PUSH_TYPE_ALARM,
-    EVENT_PUSH_TYPE_IOT,
+EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
 )
 
-# Full list for hassfest / tests that need every key
-EVENT_PUSH_TYPE_OPTIONS = (
-    EVENT_PUSH_TYPE_OPTIONS_ALWAYS
-    + EVENT_PUSH_TYPE_OPTIONS_ENTITLED
-    + (EVENT_PUSH_TYPE_DEVICE_STATUS,)
-)
+# Selector in options UI offers only the two types managed by this integration.
+EVENT_PUSH_TYPE_OPTIONS = EVENT_PUSH_TYPE_OPTIONS_ALWAYS
 
 LEGACY_EVENT_PUSH_TYPES_DROP = frozenset(
-    {EVENT_PUSH_TYPE_NUMBERSTAT, EVENT_PUSH_TYPE_FACE_ANALYSIS}
+    {
+        EVENT_PUSH_TYPE_NUMBERSTAT,
+        EVENT_PUSH_TYPE_FACE_ANALYSIS,
+        EVENT_PUSH_TYPE_ALARM,
+        EVENT_PUSH_TYPE_IOT,
+    }
 )
 
 CALLBACK_FLAG_CAPABILITY_EVENT = "capabilityEvent"
@@ -243,6 +240,10 @@ CALLBACK_FLAG_DEVICE_STATUS = "deviceStatus"
 CALLBACK_FLAG_IOT = "iot"
 CALLBACK_FLAG_NUMBERSTAT = "numberstat"
 CALLBACK_FLAG_FACE_ANALYSIS = "faceAnalysis"
+
+HA_CALLBACK_FLAGS = frozenset(
+    {CALLBACK_FLAG_CAPABILITY_EVENT, CALLBACK_FLAG_DEVICE_STATUS}
+)
 
 EVENT_PUSH_TYPE_TO_CALLBACK_FLAG: dict[str, str] = {
     EVENT_PUSH_TYPE_CAPABILITY_EVENT: CALLBACK_FLAG_CAPABILITY_EVENT,
@@ -260,12 +261,9 @@ CALLBACK_FLAG_TO_EVENT_PUSH_TYPE: dict[str, str] = {
 # Configure UI: multi-select starts with nothing checked; user chooses explicitly.
 DEFAULT_EVENT_PUSH_TYPES: list[str] = []
 
-# Every selectable type (fixtures / tests only; not a Configure default).
 EVENT_PUSH_TYPES_ALL = (
     EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-    EVENT_PUSH_TYPE_ALARM,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
 )
 
 
@@ -273,14 +271,11 @@ def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
     """Map config option values to Imou API callbackFlag strings."""
     flags: list[str] = []
     for value in types:
-        if value in LEGACY_EVENT_PUSH_TYPES_DROP:
+        if value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
             continue
         if value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
             flags.append(EVENT_PUSH_TYPE_TO_CALLBACK_FLAG[value])
-        elif value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
-            continue
         else:
-            # Legacy v1.2.10 options stored API flag strings directly
             flags.append(value)
     return flags
 
@@ -288,46 +283,44 @@ def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
 def event_push_selector_options(
     account_callback_flags: set[str] | None = None,
 ) -> list[str]:
-    """Build Configure selector keys; alarm/iot only when account has the flag.
+    """Build Configure selector keys: only the two Home Assistant flags."""
+    del account_callback_flags
+    return list(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
 
-    ``None`` shows every key (unit tests). An empty set is the API-failure degrade path
-    (only capability_event + device_status).
-    """
-    options = list(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
-    if account_callback_flags is None:
-        options.extend(EVENT_PUSH_TYPE_OPTIONS_ENTITLED)
-    else:
-        if CALLBACK_FLAG_ALARM in account_callback_flags:
-            options.append(EVENT_PUSH_TYPE_ALARM)
-        if CALLBACK_FLAG_IOT in account_callback_flags:
-            options.append(EVENT_PUSH_TYPE_IOT)
-    options.append(EVENT_PUSH_TYPE_DEVICE_STATUS)
-    return options
+
+def checked_ha_push_types(*, push_enabled: bool, account_flags: set[str]) -> list[str]:
+    """Boxes to show. A disabled push offers both. An enabled push shows the cloud."""
+    if not push_enabled:
+        return [EVENT_PUSH_TYPE_CAPABILITY_EVENT, EVENT_PUSH_TYPE_DEVICE_STATUS]
+    checked: list[str] = []
+    if CALLBACK_FLAG_CAPABILITY_EVENT in account_flags:
+        checked.append(EVENT_PUSH_TYPE_CAPABILITY_EVENT)
+    if CALLBACK_FLAG_DEVICE_STATUS in account_flags:
+        checked.append(EVENT_PUSH_TYPE_DEVICE_STATUS)
+    return checked
+
+
+def merge_callback_flags(existing: set[str], selected_types: list[str]) -> set[str]:
+    """Replace only the two Home Assistant flags inside an account flag set."""
+    selected = (
+        set(event_push_types_to_callback_flags(selected_types)) & HA_CALLBACK_FLAGS
+    )
+    return (set(existing) - HA_CALLBACK_FLAGS) | selected
 
 
 def sanitize_event_push_types(types: list[str]) -> list[str]:
     """Drop legacy UI keys and unknown strings that map only to removed flags."""
-    cleaned: list[str] = []
-    for value in types:
-        if value in LEGACY_EVENT_PUSH_TYPES_DROP:
-            continue
-        if value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
-            continue
-        cleaned.append(value)
-    return cleaned
+    allowed = set(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
+    return [value for value in types if value in allowed]
 
 
 def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
     """Map stored values to hassfest-safe selector option keys."""
     types: list[str] = []
     for value in flags:
-        if value in CALLBACK_FLAG_TO_EVENT_PUSH_TYPE:
-            mapped = CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value]
-            if mapped not in LEGACY_EVENT_PUSH_TYPES_DROP:
-                types.append(mapped)
-        elif value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
-            if value not in LEGACY_EVENT_PUSH_TYPES_DROP:
-                types.append(value)
+        mapped = CALLBACK_FLAG_TO_EVENT_PUSH_TYPE.get(value, value)
+        if mapped in EVENT_PUSH_TYPE_OPTIONS_ALWAYS:
+            types.append(mapped)
     return types
 
 

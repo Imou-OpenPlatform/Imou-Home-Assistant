@@ -21,19 +21,19 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
-    BULB_V2_PROPERTY_BY_REF,
+    BULB_PROP_BRIGHTNESS,
+    BULB_PROP_COLOR_TEMP,
+    BULB_PROP_HUE,
+    BULB_PROP_MODE,
+    BULB_PROP_SATURATION,
+    BULB_PROP_SCENE,
+    BULB_PROP_SWITCH,
+    BULB_PROP_VALUE,
+    BULB_V2_PROPERTY_IDS,
     MAX_KELVIN,
     MIN_KELVIN,
     MODE_COLOR,
     MODE_SCENE,
-    REF_BRIGHTNESS,
-    REF_COLOR_TEMP,
-    REF_HUE,
-    REF_MODE,
-    REF_SATURATION,
-    REF_SCENE,
-    REF_SWITCH,
-    REF_VALUE,
     percent_to_brightness,
     properties_for_turn_off,
     properties_for_turn_on,
@@ -225,34 +225,33 @@ class ImouBulbLight(ImouEntity, LightEntity):
         super().__init__(coordinator, config_entry, entity_type, device)
 
     @property
-    def _supported_property_refs(self) -> set[str]:
-        """Return property refs from the device's current capability snapshot."""
+    def _supported_property_ids(self) -> set[str]:
+        """Return bulb property ids from the device's current capability snapshot."""
         if self.device.bulb_v2 and self.device.capability_set is not None:
-            property_ids = set(self.device.capability_set.properties)
             return {
-                ref
-                for ref, property_id in BULB_V2_PROPERTY_BY_REF.items()
-                if property_id in property_ids
+                property_id
+                for property_id in BULB_V2_PROPERTY_IDS
+                if property_id in self.device.capability_set.properties
             }
-        return set(BULB_V2_PROPERTY_BY_REF)
+        return set(BULB_V2_PROPERTY_IDS)
 
     @property
     def _supported_color_modes(self) -> set[ColorMode]:
         """Return modes valid for the device's current property subset."""
-        supported_property_refs = self._supported_property_refs
+        supported_property_ids = self._supported_property_ids
         color_modes: set[ColorMode] = set()
-        if {REF_BRIGHTNESS, REF_COLOR_TEMP} <= supported_property_refs:
+        if {BULB_PROP_BRIGHTNESS, BULB_PROP_COLOR_TEMP} <= supported_property_ids:
             color_modes.add(ColorMode.COLOR_TEMP)
         if {
-            REF_HUE,
-            REF_SATURATION,
-            REF_VALUE,
-        } <= supported_property_refs:
+            BULB_PROP_HUE,
+            BULB_PROP_SATURATION,
+            BULB_PROP_VALUE,
+        } <= supported_property_ids:
             color_modes.add(ColorMode.HS)
         if not color_modes:
             color_modes.add(
                 ColorMode.BRIGHTNESS
-                if REF_BRIGHTNESS in supported_property_refs
+                if BULB_PROP_BRIGHTNESS in supported_property_ids
                 else ColorMode.ONOFF
             )
         return color_modes
@@ -267,7 +266,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @override
     def supported_features(self) -> LightEntityFeature:
         """Return scene support from the current capability snapshot."""
-        if REF_SCENE in self._supported_property_refs:
+        if BULB_PROP_SCENE in self._supported_property_ids:
             return LightEntityFeature.EFFECT
         return LightEntityFeature(0)
 
@@ -275,7 +274,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @override
     def effect_list(self) -> list[str] | None:
         """Return scenes only while the scene property is supported."""
-        if REF_SCENE in self._supported_property_refs:
+        if BULB_PROP_SCENE in self._supported_property_ids:
             return scene_effect_names()
         return None
 
@@ -307,7 +306,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
     def _active_effect(self) -> str | None:
         """Scene name when this bulb is on in a known scene."""
         if (
-            REF_SCENE not in self._supported_property_refs
+            BULB_PROP_SCENE not in self._supported_property_ids
             or not self.is_on
             or self._state["mode"] != MODE_SCENE
         ):
@@ -322,7 +321,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
             return None
         if self.color_mode == ColorMode.HS:
             level = self._state["value"]
-        elif REF_BRIGHTNESS in self._supported_property_refs:
+        elif BULB_PROP_BRIGHTNESS in self._supported_property_ids:
             level = self._state["brightness"]
         else:
             return None
@@ -403,11 +402,11 @@ class ImouBulbLight(ImouEntity, LightEntity):
         )
         effect = (
             kwargs.get(ATTR_EFFECT)
-            if REF_SCENE in self._supported_property_refs
+            if BULB_PROP_SCENE in self._supported_property_ids
             else None
         )
         brightness = kwargs.get(ATTR_BRIGHTNESS)
-        if hs is None and REF_BRIGHTNESS not in self._supported_property_refs:
+        if hs is None and BULB_PROP_BRIGHTNESS not in self._supported_property_ids:
             brightness = None
         preview = (
             hs is not None
@@ -417,7 +416,7 @@ class ImouBulbLight(ImouEntity, LightEntity):
         )
         try:
             if preview:
-                payload = {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+                payload = {BULB_PROP_SWITCH: 1, BULB_PROP_MODE: MODE_COLOR}
             else:
                 payload = properties_for_turn_on(
                     self._state,
@@ -432,9 +431,9 @@ class ImouBulbLight(ImouEntity, LightEntity):
                 translation_key="unknown_bulb_effect",
             ) from err
         payload = {
-            ref: value
-            for ref, value in payload.items()
-            if ref in self._supported_property_refs
+            property_id: value
+            for property_id, value in payload.items()
+            if property_id in self._supported_property_ids
         }
         await self._async_write(payload)
 

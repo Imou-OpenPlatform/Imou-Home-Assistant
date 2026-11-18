@@ -16,7 +16,6 @@ import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DEVICE_PASSWORDS,
 )
 from custom_components.imou_life.pic_thumbnail import (
     _async_download_picture,
@@ -663,7 +662,7 @@ async def test_maybe_decrypt_uses_pic_url_list(hass: HomeAssistant) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_maybe_decrypt_prefers_thumb_url(hass: HomeAssistant) -> None:
-    """thumbUrl is used before picUrlArray / picUrlArr / picUrl."""
+    """picUrlArray[0] is the alarm picture when that array is present."""
     entry = _entry(hass)
     runtime = _runtime_with_access_token()
     event_data = {
@@ -691,7 +690,7 @@ async def test_maybe_decrypt_prefers_thumb_url(hass: HomeAssistant) -> None:
         result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
 
     assert result == "/local/imou_life/thumbs/a1.jpg"
-    assert mock_download.await_args.args[1] == "https://example.com/thumb.jpg"
+    assert mock_download.await_args.args[1] == "https://example.com/big.jpg"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -760,13 +759,11 @@ async def test_maybe_decrypt_wrong_password_points_at_the_option(
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
-        options={
-            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
-            PARAM_DEVICE_PASSWORDS: {"SN1": "wrong"},
-        },
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
     )
     entry.add_to_hass(hass)
     runtime = _runtime_with_access_token()
+    runtime.picture_passwords["SN1"] = "wrong"
     device = MagicMock()
     device.device_id = "SN1"
     device.device_ability = "WLAN,TCM"

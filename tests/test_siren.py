@@ -242,7 +242,13 @@ async def test_webhook_siren_on_turns_entity_on(hass: HomeAssistant) -> None:
         await async_handle_imou_webhook(
             hass,
             "webhook-id",
-            MockRequest({"msgType": "sirenOn", "deviceId": "SN1", "channelId": "0"}),
+            MockRequest(
+                {
+                    "msgType": "detection.siren.start",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                }
+            ),
         )
         await hass.async_block_till_done(wait_background_tasks=True)
 

@@ -29,7 +29,7 @@ from pyimouapi.pic_decode import (
     is_tcm_ability,
 )
 from pyimouapi.play_token import login_password_from_play_token
-from pyimouapi.push import preferred_pic_url
+from pyimouapi.push import alarm_picture_url
 
 from .const import (
     imou_life_device_key_from_ids,
@@ -293,22 +293,9 @@ def _device_for_event(
     return None
 
 
-def _field_pic_urls(value: Any) -> list[str]:
-    """Return non-empty URL strings from a list or a single string."""
-    if isinstance(value, str) and value:
-        return [value]
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, str) and item]
-
-
 def _preferred_push_pic_url(raw: dict[str, Any]) -> str | None:
-    """Prefer thumbUrl, then picUrlArray / picUrlArr / picUrl."""
-    for key in ("thumbUrl", "picUrlArray", "picUrlArr", "picUrl"):
-        picked = preferred_pic_url(_field_pic_urls(raw.get(key)))
-        if picked:
-            return picked
-    return None
+    """Use picUrlArray[0], then older thumb and url fields."""
+    return alarm_picture_url(raw)
 
 
 def _thumb_filename(alarm_id: str | None, pic_url: str) -> str:
@@ -619,6 +606,13 @@ async def async_maybe_decrypt_thumbnail(
     device_ability = device.device_ability if device is not None else ""
     is_tcm = is_tcm_ability(device_ability)
     device_password = _picture_password(runtime, str(device_id))
+    if is_tcm and not device_password:
+        _LOGGER.debug(
+            "Skip decrypt for TCM device %s: configure a picture password or reload "
+            "after signing in",
+            device_id,
+        )
+        return None
     # A recovered password is tried first. The SDK then falls back to the serial.
     encrypt_key = device_password or str(device_id)
 

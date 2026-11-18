@@ -17,7 +17,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.device import compose_iot_device_id
 from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
-from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.ha_device import (
+    ImouHaDevice,
+    ImouHaDeviceManager,
+    device_access_is_iot,
+)
 
 from .const import (
     DEFAULT_UPDATE_INTERVAL,
@@ -37,7 +41,6 @@ from .helpers import (
     event_push_type_active,
     get_excluded_device_ids,
     get_selected_device_ids,
-    iot_property_push_active,
 )
 from .pic_thumbnail import async_remember_picture_passwords
 from .repairs import async_delete_quota_issue, async_notify_imou_api_error
@@ -158,8 +161,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _async_discover_devices(self) -> None:
         """Refresh which devices the account holds.
 
-        Entity registration uses ``device.capability.list`` in pyimouapi 2.x;
-        listing does not fetch legacy IoT ability refs.
+        Entity registration uses ``device.capability.list``.
         """
         _LOGGER.debug("Listing Imou devices")
         first_discovery = not self._devices_initialized
@@ -262,10 +264,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if not devices_to_update:
             return
 
-        property_push = iot_property_push_active(
-            self.config_entry
-        ) or event_push_type_active(self.config_entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT)
-        skip_ids = set(self._v2_state_snapshots) if property_push else None
+        property_push = event_push_type_active(
+            self.config_entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT
+        )
+        skip_ids = (
+            set(self._v2_state_snapshots) & self._iot_physical_ids()
+            if property_push
+            else None
+        )
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fetched = await self._device_manager.async_update_devices_status(
@@ -451,6 +457,18 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         ):
             if entity.unique_id in wanted:
                 registry.async_remove(entity.entity_id)
+
+    def _iot_physical_ids(self) -> set[str]:
+        """Physical ids whose entity values arrive on capability pushes."""
+        return {
+            compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
+            for device in self.devices_by_key.values()
+            if device_access_is_iot(device)
+        }
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""

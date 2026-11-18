@@ -73,7 +73,7 @@ def _event_push_input(**overrides) -> dict:
     """Required alarm-page fields; optional overrides for top-level keys."""
     payload = {
         PARAM_ENABLE_EVENT_PUSH: False,
-        PARAM_EVENT_PUSH_TYPES: ["alarm"],
+        PARAM_EVENT_PUSH_TYPES: ["capability_event", "device_status"],
         SECTION_EVENT_PUSH_NOTIFICATIONS: {
             PARAM_NOTIFY_SERVICES: [],
         },
@@ -359,7 +359,10 @@ async def test_options_flow_event_push_flattens_sections(hass) -> None:
     _assert_returned_to_menu(result)
     assert entry.options[PARAM_ENABLE_EVENT_PUSH] is True
     assert entry.options[PARAM_WEBHOOK_URL] == "https://example.test/hook"
-    assert entry.options[PARAM_EVENT_PUSH_TYPES] == ["alarm"]
+    assert entry.options[PARAM_EVENT_PUSH_TYPES] == [
+        "capability_event",
+        "device_status",
+    ]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -704,6 +707,164 @@ async def test_options_event_push_does_not_flag_a_public_callback_url(hass) -> N
     )
 
     assert result["description_placeholders"]["lan_hint"] == ""
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_event_push_save_merges_the_open_snapshot(
+    hass, imou_config_flow_with_devices
+) -> None:
+    """Save keeps unrelated account flags (alarm, iot) and applies the two HA flags."""
+    client = imou_config_flow_with_devices.return_value
+    client.async_get_message_callback = AsyncMock(
+        return_value={
+            "callbackFlag": "alarm,iot",
+            "callbackUrl": "https://cloud.example/hook",
+        }
+    )
+    client.async_set_message_callback = AsyncMock()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_EVENT_PUSH: False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert client.async_get_message_callback.await_count == 1
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
+                PARAM_EVENT_PUSH_TYPES: ["capability_event", "device_status"],
+            }
+        ),
+    )
+    _assert_returned_to_menu(result)
+    assert client.async_get_message_callback.await_count == 1
+    client.async_set_message_callback.assert_awaited_once_with(
+        status="on",
+        callback_url="https://example.test/hook",
+        callback_flag=["alarm", "capabilityEvent", "deviceStatus", "iot"],
+        base_push="1",
+    )
+    assert entry.options[PARAM_EVENT_PUSH_TYPES] == [
+        "capability_event",
+        "device_status",
+    ]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_event_push_save_off_keeps_unrelated_flags(
+    hass, imou_config_flow_with_devices
+) -> None:
+    """Disabling push strips only the two HA flags and stays on if other flags exist."""
+    client = imou_config_flow_with_devices.return_value
+    client.async_get_message_callback = AsyncMock(
+        return_value={
+            "callbackFlag": "alarm,deviceStatus",
+            "callbackUrl": "https://cloud.example/hook",
+        }
+    )
+    client.async_set_message_callback = AsyncMock()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_EVENT_PUSH: True},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(**{PARAM_ENABLE_EVENT_PUSH: False}),
+    )
+    _assert_returned_to_menu(result)
+    client.async_set_message_callback.assert_awaited_once_with(
+        status="on",
+        callback_url="https://cloud.example/hook",
+        callback_flag=["alarm"],
+        base_push="1",
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_event_push_save_off_turns_off_when_no_flags_remain(
+    hass, imou_config_flow_with_devices
+) -> None:
+    """Disabling push turns callback off when only HA flags existed."""
+    client = imou_config_flow_with_devices.return_value
+    client.async_get_message_callback = AsyncMock(
+        return_value={
+            "callbackFlag": "capabilityEvent,deviceStatus",
+            "callbackUrl": "https://cloud.example/hook",
+        }
+    )
+    client.async_set_message_callback = AsyncMock()
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_ENABLE_EVENT_PUSH: True},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(**{PARAM_ENABLE_EVENT_PUSH: False}),
+    )
+    _assert_returned_to_menu(result)
+    client.async_set_message_callback.assert_awaited_once_with(
+        status="off",
+        base_push="1",
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_event_push_save_fails_if_open_snapshot_failed(
+    hass, imou_config_flow_with_devices
+) -> None:
+    """If getMessageCallback failed on form open, submit refuses to overwrite."""
+    client = imou_config_flow_with_devices.return_value
+    client.async_get_message_callback = AsyncMock(
+        side_effect=RequestFailedException("network down")
+    )
+    client.async_set_message_callback = AsyncMock()
+
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "event_push"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _event_push_input(
+            **{
+                PARAM_ENABLE_EVENT_PUSH: True,
+                PARAM_WEBHOOK_URL: "https://example.test/hook",
+            }
+        ),
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"]["base"] == "callback_failed"
+    client.async_set_message_callback.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

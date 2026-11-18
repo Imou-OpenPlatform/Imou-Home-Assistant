@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from functools import partial
-from typing import Literal
 from urllib.parse import urlparse, urlunparse
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,23 +11,14 @@ from homeassistant.core import HomeAssistant
 from pyimouapi.openapi import ImouOpenApiClient
 
 from .const import (
-    BASE_PUSH_ALWAYS,
     PARAM_ENABLE_EVENT_PUSH,
-    PARAM_EVENT_PUSH_TYPES,
     PARAM_WEBHOOK_ID,
-    PARAM_WEBHOOK_URL,
-    event_push_types_to_callback_flags,
 )
 from .helpers import (
     get_selected_device_ids,
     notify_services_from_entry_options,
 )
-from .repairs import (
-    async_create_event_push_callback_failed_issue,
-    async_create_event_push_no_url_issue,
-    async_delete_event_push_issues,
-    async_notify_imou_api_error,
-)
+from .repairs import async_delete_event_push_issues
 from .runtime_data import ImouRuntimeData
 from .webhook import (
     async_register_imou_webhook,
@@ -77,11 +67,7 @@ async def async_setup_event_push(
     generated_url = async_register_imou_webhook(hass, webhook_id)
     entry.async_on_unload(partial(async_unregister_imou_webhook, hass, webhook_id))
 
-    if entry.options.get(PARAM_ENABLE_EVENT_PUSH):
-        await _async_set_message_callback(hass, entry, imou_client, "on", generated_url)
-    else:
-        async_delete_event_push_issues(hass, entry)
-
+    async_delete_event_push_issues(hass, entry)
     runtime.notify_services = notify_services_from_entry_options(hass, entry.options)
 
     return webhook_id, generated_url
@@ -92,67 +78,9 @@ async def async_teardown_event_push(
     entry: ConfigEntry,
     imou_client: ImouOpenApiClient | None = None,
 ) -> None:
-    """Disable Imou message callback and unregister webhook.
-
-    A client is passed only when the callback was actually enabled, so its
-    presence is the signal to tell the cloud to stop pushing.
-    """
+    """Unregister webhook without touching cloud subscription."""
+    del imou_client
     async_delete_event_push_issues(hass, entry)
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
-    if webhook_id and imou_client:
-        await _async_set_message_callback(hass, entry, imou_client, "off")
     if webhook_id:
         async_unregister_imou_webhook(hass, webhook_id)
-
-
-async def _async_set_message_callback(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    imou_client: ImouOpenApiClient,
-    status: Literal["on", "off"],
-    generated_webhook_url: str | None = None,
-) -> None:
-    """Register or unregister Imou Open Platform message callback."""
-    callback_url = entry.options.get(PARAM_WEBHOOK_URL) or generated_webhook_url
-    callback_flags = event_push_types_to_callback_flags(
-        entry.options.get(PARAM_EVENT_PUSH_TYPES, [])
-    )
-    if status == "on":
-        if not callback_url:
-            _LOGGER.error(
-                "Cannot enable Imou event push: no webhook URL available. "
-                "Please set webhook_url in integration options or configure HA "
-                "external URL."
-            )
-            async_create_event_push_no_url_issue(hass, entry)
-            return
-        try:
-            await imou_client.async_set_message_callback(
-                status="on",
-                callback_url=callback_url,
-                callback_flag=callback_flags if callback_flags else None,
-                base_push=BASE_PUSH_ALWAYS,
-            )
-            _LOGGER.info(
-                "Imou message callback set to %s (url=%s)",
-                status,
-                _redact_callback_url(callback_url),
-            )
-            async_delete_event_push_issues(hass, entry)
-        except Exception as err:
-            _LOGGER.exception("Failed to set Imou message callback")
-            async_notify_imou_api_error(hass, entry, err)
-            async_create_event_push_callback_failed_issue(hass, entry)
-    else:
-        try:
-            await imou_client.async_set_message_callback(
-                status="off",
-                base_push=BASE_PUSH_ALWAYS,
-            )
-            _LOGGER.info(
-                "Imou message callback set to %s (url=%s)",
-                status,
-                _redact_callback_url(callback_url) if callback_url else "N/A",
-            )
-        except Exception:
-            _LOGGER.exception("Failed to set Imou message callback")

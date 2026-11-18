@@ -61,8 +61,8 @@ def test_iter_sensors_ignores_unknown_keys() -> None:
     assert pairs[0][0].key == PARAM_BATTERY
 
 
-def test_storage_used_error_code_returns_none() -> None:
-    """Storage error codes do not mix into the numeric storage_used state."""
+def test_storage_used_status_is_text_without_a_unit() -> None:
+    """A card fault is shown as text, not as an unknown percentage."""
     device = _mock_device(
         {
             PARAM_STATUS: {
@@ -70,7 +70,7 @@ def test_storage_used_error_code_returns_none() -> None:
                 PARAM_STATE_VARIANT: STATE_VARIANT_ENUM,
             },
             PARAM_STORAGE_USED: {
-                PARAM_STATE: "e1",
+                PARAM_STATE: "mount_failed",
                 PARAM_STATE_VARIANT: STATE_VARIANT_ENUM,
             },
         }
@@ -84,7 +84,10 @@ def test_storage_used_error_code_returns_none() -> None:
         SENSOR_DESCRIPTIONS[PARAM_STORAGE_USED],
         device,
     )
-    assert sensor.native_value is None
+    assert sensor.native_value == "mount_failed"
+    assert sensor.native_unit_of_measurement is None
+    assert sensor.state_class is None
+    assert sensor.suggested_display_precision is None
 
 
 def test_storage_used_numeric_value() -> None:
@@ -111,6 +114,8 @@ def test_storage_used_numeric_value() -> None:
         device,
     )
     assert sensor.native_value == 42
+    assert sensor.native_unit_of_measurement == "%"
+    assert sensor.state_class is not None
 
 
 @pytest.mark.parametrize(

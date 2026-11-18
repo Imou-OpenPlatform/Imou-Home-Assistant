@@ -106,8 +106,6 @@
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
-          "alarm_image_decrypt": "告警图片",
-          "local_recording": "告警时录像",
           "bind_device": "绑定新设备",
           "finish": "完成"
         }
@@ -121,7 +119,7 @@
           "selected_devices": "要轮询的设备"
         },
         "data_description": {
-          "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了物模型设备消息时，那些设备的**属性**不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态、PaaS 能力和靠 Service 读的实体仍按间隔刷新。",
+          "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了设备消息时，设备属性不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态仍按间隔刷新。",
           "update_interval": "默认 300 秒，范围 30–900 秒。关闭轮询时不生效。",
           "selected_devices": "没勾选的设备不会出现在 Home Assistant 的设备列表里。这里仍列出账号下的全部设备，方便以后再勾上。"
         },
@@ -168,32 +166,6 @@
               "notify_services": "每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。"
             }
           }
-        }
-      },
-      "alarm_image_decrypt": {
-        "title": "告警图片",
-        "description": "状态：{native_hint}。下面列出的设备需要填写设备密码。已存 {password_count} 个。",
-        "data": {
-          "attach_decrypted_thumbnail": "在告警通知中显示图片",
-          "default_device_password": "默认设备密码",
-          "clear_default_device_password": "清除默认设备密码",
-          "remove_device_passwords": "删除已存密码"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "告警通知默认带上图片。",
-          "default_device_password": "没有单独填写密码的设备用这个。",
-          "clear_default_device_password": "删除已存的默认密码；各设备单独密码不变。",
-          "remove_device_passwords": "勾选的序列号会删除密码。"
-        }
-      },
-      "local_recording": {
-        "title": "告警时录像",
-        "description": "{push_hint}收到告警后从云端直播录一小段，保存在媒体目录，在媒体浏览器的「告警时录像」里查看。各摄像头的开关在设备页。",
-        "data": {
-          "local_record_duration": "片段时长（秒）"
-        },
-        "data_description": {
-          "local_record_duration": "告警后录制的秒数。默认 60，范围 15–180。会占用直播额度。"
         }
       },
       "select_poll_devices": {
@@ -262,9 +234,7 @@
     "event_push_type": {
       "options": {
         "capability_event": "设备能力事件",
-        "alarm": "设备告警",
-        "device_status": "设备上下线",
-        "iot": "物模型设备消息"
+        "device_status": "设备上下线"
       }
     },
     "device_status": {
@@ -544,7 +514,25 @@
         }
       },
       "storage_used": {
-        "name": "存储使用率"
+        "name": "存储使用率",
+        "state": {
+          "abnormal": "存储异常",
+          "checking": "正在检查",
+          "init_failed": "初始化失败",
+          "initializing": "正在初始化",
+          "mount_failed": "挂载失败",
+          "needs_format": "需要格式化",
+          "needs_init": "需要初始化",
+          "no_card": "没有存储卡",
+          "partition_error": "分区错误",
+          "read_error": "读取错误",
+          "read_only": "只读",
+          "restarting": "正在重启",
+          "uninitialized": "未初始化",
+          "unsupported": "格式不支持",
+          "worn_out": "寿命已尽",
+          "write_error": "写入错误"
+        }
       },
       "switch_cnt": {
         "name": "今日开关次数"

@@ -17,7 +17,7 @@ from .entity import ImouAlarmPushEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 1
 
-_SIREN_ON = frozenset({"sirenon"})
+_SIREN_ON = frozenset({"sirenon", "detection.siren.start"})
 _SIREN_OFF = frozenset({"sirenoff", "siren_alarm_cleared"})
 
 

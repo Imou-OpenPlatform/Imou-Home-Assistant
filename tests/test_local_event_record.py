@@ -228,7 +228,7 @@ async def test_webhook_alarm_uses_local_record_helper(hass: HomeAssistant) -> No
             "webhook-id",
             MockRequest(
                 {
-                    "msgType": "human",
+                    "msgType": "detection.person.detected",
                     "deviceId": "SN1",
                     "channelId": "0",
                 }

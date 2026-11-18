@@ -7,7 +7,6 @@ from custom_components.imou_life.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EVENT_PUSH_TYPE_CAPABILITY_EVENT,
-    EVENT_PUSH_TYPE_IOT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -488,14 +487,13 @@ async def test_status_poll_uses_shared_device_update(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-@pytest.mark.parametrize(
-    "push_type", [EVENT_PUSH_TYPE_CAPABILITY_EVENT, EVENT_PUSH_TYPE_IOT]
-)
+@pytest.mark.parametrize("push_type", [EVENT_PUSH_TYPE_CAPABILITY_EVENT])
 async def test_property_push_skips_v2_state_after_first_snapshot(
     hass: HomeAssistant, device_manager: MagicMock, push_type: str
 ) -> None:
     """First status update snapshots; the next interval skips those ids."""
     device = _mock_device("d1", "0")
+    device.access_type = "IoT"
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
@@ -515,6 +513,28 @@ async def test_property_push_skips_v2_state_after_first_snapshot(
         "skip_iot_property_ids"
     ]
     assert "d1" in skipped
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_capability_push_still_polls_paas_entity_values(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """PaaS devices keep entity polling when capability events are subscribed."""
+    device = _mock_device("d1", "0")
+    device.access_type = "PaaS"
+    device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
+    options = {
+        PARAM_ENABLE_EVENT_PUSH: True,
+        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
+    }
+    coordinator = await _run_update(hass, device_manager, [device], options=options)
+    device_manager.async_update_devices_status.reset_mock()
+    device_manager.async_update_devices_status.return_value = set()
+    await coordinator._async_update_data()
+    skipped = device_manager.async_update_devices_status.await_args.kwargs[
+        "skip_iot_property_ids"
+    ]
+    assert "d1" not in skipped
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -541,13 +561,14 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
 ) -> None:
     """A removed gateway accessory must take a fresh snapshot if it returns."""
     device = _mock_device("sensor", "0")
+    device.access_type = "IoT"
     device.parent_device_id = "gateway"
     device.parent_product_id = "gateway-product"
     physical_id = "sensor_gateway_gateway-product"
     device_manager.async_update_devices_status = AsyncMock(return_value={physical_id})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
-        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_IOT],
+        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
     }
     coordinator = await _run_update(hass, device_manager, [device], options=options)
     assert coordinator._v2_state_snapshots == {physical_id}
@@ -556,6 +577,7 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
     assert coordinator._v2_state_snapshots == set()
 
     replacement = _mock_device("sensor", "0")
+    replacement.access_type = "IoT"
     replacement.parent_device_id = "gateway"
     replacement.parent_product_id = "gateway-product"
     replacement_key = imou_life_device_key(replacement)

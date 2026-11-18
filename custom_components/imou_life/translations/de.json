@@ -106,8 +106,6 @@
         "menu_options": {
           "general_settings": "Abfrage und Kameras",
           "event_push": "Alarm-Push und Benachrichtigungen",
-          "alarm_image_decrypt": "Alarmbilder",
-          "local_recording": "Bei Alarm aufzeichnen",
           "bind_device": "Neues Gerät koppeln",
           "finish": "Fertig"
         }
@@ -121,7 +119,7 @@
           "selected_devices": "Zu abfragende Geräte"
         },
         "data_description": {
-          "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
+          "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und das Abonnement Gerätenachrichten enthält, werden Eigenschaften in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Der Online-Status wird weiterhin in diesem Intervall aktualisiert.",
           "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
           "selected_devices": "Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant. Diese Liste zeigt weiterhin jedes Gerät des Kontos."
         },
@@ -168,32 +166,6 @@
               "notify_services": "Eine Nachricht pro Alarm."
             }
           }
-        }
-      },
-      "alarm_image_decrypt": {
-        "title": "Alarmbilder",
-        "description": "Status: {native_hint}. Die unten gelisteten Geräte brauchen ein Gerätepasswort. Gespeichert: {password_count}.",
-        "data": {
-          "attach_decrypted_thumbnail": "Bild in Alarmbenachrichtigungen anzeigen",
-          "default_device_password": "Standard-Gerätepasswort",
-          "clear_default_device_password": "Standard-Gerätepasswort löschen",
-          "remove_device_passwords": "Gespeicherte Passwörter entfernen"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "Alarmmeldungen enthalten das Bild. Standardmäßig an.",
-          "default_device_password": "Fallback für Geräte, die unten kein eigenes Passwort haben.",
-          "clear_default_device_password": "Löscht den gespeicherten Standard. Gerätebezogene Passwörter bleiben unverändert.",
-          "remove_device_passwords": "Markierte Seriennummern werden gelöscht."
-        }
-      },
-      "local_recording": {
-        "title": "Bei Alarm aufzeichnen",
-        "description": "{push_hint}Zeichnet nach einem Alarm einen kurzen Clip aus dem Cloud-Stream auf. Pro-Kamera **Bei Alarm aufzeichnen** steht auf jeder Geräteseite.",
-        "data": {
-          "local_record_duration": "Cliplänge (Sekunden)"
-        },
-        "data_description": {
-          "local_record_duration": "Cliplänge nach dem Alarm. Standard 60 s, Bereich 15–180 s. Verbraucht Live-Stream-Kontingent."
         }
       },
       "select_poll_devices": {
@@ -262,9 +234,7 @@
     "event_push_type": {
       "options": {
         "capability_event": "Gerätefähigkeitsereignisse",
-        "alarm": "Gerätealarme",
-        "device_status": "Gerät online/offline",
-        "iot": "IoT-Gerätenachrichten"
+        "device_status": "Gerät online/offline"
       }
     },
     "device_status": {
@@ -544,7 +514,25 @@
         }
       },
       "storage_used": {
-        "name": "Speicher belegt"
+        "name": "Speicher belegt",
+        "state": {
+          "abnormal": "Speicherfehler",
+          "checking": "Wird geprüft",
+          "init_failed": "Initialisierung fehlgeschlagen",
+          "initializing": "Wird initialisiert",
+          "mount_failed": "Einbindung fehlgeschlagen",
+          "needs_format": "Formatierung nötig",
+          "needs_init": "Initialisierung nötig",
+          "no_card": "Keine Speicherkarte",
+          "partition_error": "Partitionsfehler",
+          "read_error": "Lesefehler",
+          "read_only": "Nur lesen",
+          "restarting": "Wird neu gestartet",
+          "uninitialized": "Nicht initialisiert",
+          "unsupported": "Format nicht unterstützt",
+          "worn_out": "Lebensdauer erreicht",
+          "write_error": "Schreibfehler"
+        }
       },
       "switch_cnt": {
         "name": "Schaltzyklen heute"

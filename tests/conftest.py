@@ -132,7 +132,10 @@ def setup_imou_runtime(
     )
 
     entry_options = {PARAM_ENABLE_EVENT_PUSH: push_enabled, **(options or {})}
-    if push_enabled and options is None and PARAM_EVENT_PUSH_TYPES not in entry_options:
+    if (
+        entry_options.get(PARAM_ENABLE_EVENT_PUSH)
+        and PARAM_EVENT_PUSH_TYPES not in entry_options
+    ):
         entry_options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
     # Webhook filters by entry.options; keep the helper argument as the source
     # of truth unless the caller already set selected_devices in options.

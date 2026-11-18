@@ -106,8 +106,6 @@
         "menu_options": {
           "general_settings": "Interrogation et caméras",
           "event_push": "Push d'alarme et notifications",
-          "alarm_image_decrypt": "Images d'alarme",
-          "local_recording": "Enregistrer lors d'une alarme",
           "bind_device": "Lier un nouvel appareil",
           "finish": "Terminé"
         }
@@ -121,7 +119,7 @@
           "selected_devices": "Appareils à interroger"
         },
         "data_description": {
-          "enable_polling": "Désactivez pour ignorer les actualisations périodiques du cloud. Les états des entités peuvent devenir obsolètes. L'installation et le rechargement récupèrent toujours la liste des appareils une fois. Lorsque le push d'événements est activé et que les types d'abonnement incluent les messages d'appareils IoT, les *propriétés* des appareils à modèle d'objet ne sont pas actualisées à cet intervalle (l'installation et le rechargement prennent toujours un instantané). L'état en ligne, les capacités PaaS et les entités s'appuyant sur des services continuent d'être interrogés.",
+          "enable_polling": "Désactivez pour ignorer les actualisations périodiques du cloud. Les états des entités peuvent devenir obsolètes. L'installation et le rechargement récupèrent toujours la liste des appareils une fois. Lorsque le push d'événements est activé et que l'abonnement inclut les messages d'appareils, les propriétés ne sont pas actualisées à cet intervalle (l'installation et le rechargement prennent toujours un instantané). L'état en ligne continue d'être actualisé à cet intervalle.",
           "update_interval": "Par défaut 300 s (5 minutes), plage 30–900 s. Ignoré lorsque l'interrogation est désactivée.",
           "selected_devices": "Les appareils non cochés n'apparaissent pas dans la liste des appareils Home Assistant. Cette liste affiche toujours tous les appareils du compte."
         },
@@ -168,32 +166,6 @@
               "notify_services": "Un message par alarme."
             }
           }
-        }
-      },
-      "alarm_image_decrypt": {
-        "title": "Images d'alarme",
-        "description": "État : {native_hint}. Les appareils listés ci-dessous ont besoin d'un mot de passe. Enregistrés : {password_count}.",
-        "data": {
-          "attach_decrypted_thumbnail": "Afficher l'image dans les notifications d'alarme",
-          "default_device_password": "Mot de passe d'appareil par défaut",
-          "clear_default_device_password": "Effacer le mot de passe d'appareil par défaut",
-          "remove_device_passwords": "Supprimer les mots de passe enregistrés"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "Les notifications d'alarme incluent l'image. Activé par défaut.",
-          "default_device_password": "Secours pour les appareils qui n'ont pas leur propre mot de passe ci-dessous.",
-          "clear_default_device_password": "Supprime le défaut enregistré. Les mots de passe par appareil sont inchangés.",
-          "remove_device_passwords": "Les numéros de série cochés sont supprimés."
-        }
-      },
-      "local_recording": {
-        "title": "Enregistrer lors d'une alarme",
-        "description": "{push_hint}Enregistre un court clip depuis le flux cloud après une alarme. **Enregistrer lors d'une alarme** par caméra se trouve sur chaque page d'appareil.",
-        "data": {
-          "local_record_duration": "Durée du clip (secondes)"
-        },
-        "data_description": {
-          "local_record_duration": "Durée du clip après l'alarme. Par défaut 60 s, plage 15–180 s. Consomme le quota de flux en direct."
         }
       },
       "select_poll_devices": {
@@ -261,9 +233,7 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "Alarmes de l'appareil",
         "device_status": "Appareil en ligne/hors ligne",
-        "iot": "Messages d'appareil IoT",
         "capability_event": "Événements de capacité"
       }
     },
@@ -544,7 +514,25 @@
         }
       },
       "storage_used": {
-        "name": "Stockage utilisé"
+        "name": "Stockage utilisé",
+        "state": {
+          "abnormal": "Erreur de stockage",
+          "checking": "Vérification",
+          "init_failed": "Échec de l'initialisation",
+          "initializing": "Initialisation",
+          "mount_failed": "Échec du montage",
+          "needs_format": "Formatage requis",
+          "needs_init": "Initialisation requise",
+          "no_card": "Aucune carte mémoire",
+          "partition_error": "Erreur de partition",
+          "read_error": "Erreur de lecture",
+          "read_only": "Lecture seule",
+          "restarting": "Redémarrage",
+          "uninitialized": "Non initialisée",
+          "unsupported": "Format non pris en charge",
+          "worn_out": "En fin de vie",
+          "write_error": "Erreur d'écriture"
+        }
       },
       "switch_cnt": {
         "name": "Cycles d'interrupteur aujourd'hui"

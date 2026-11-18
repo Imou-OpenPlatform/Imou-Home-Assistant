@@ -10,7 +10,7 @@ import pytest
 from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
-    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
     EVENT_PUSH_TYPES_ALL,
     PARAM_CALL,
     PARAM_ENABLE_EVENT_PUSH,
@@ -223,9 +223,9 @@ def test_doorbell_unavailable_when_alarm_push_is_off() -> None:
 
 
 def test_doorbell_unavailable_when_alarm_type_not_subscribed() -> None:
-    """iotProperty push does not carry call / doorbell alarms."""
+    """Device status push does not carry call / doorbell alarms."""
     device = _device(channel_id="0")
-    entity = _online_doorbell(device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    entity = _online_doorbell(device, push=True, types=[EVENT_PUSH_TYPE_DEVICE_STATUS])
     assert entity.available is False
 
 
@@ -343,11 +343,17 @@ async def test_webhook_call_event_rings(hass: HomeAssistant) -> None:
         await async_handle_imou_webhook(
             hass,
             "webhook-id",
-            MockRequest({"msgType": "callEvent", "deviceId": "SN1", "channelId": "0"}),
+            MockRequest(
+                {
+                    "msgType": "call.session.called",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                }
+            ),
         )
         await hass.async_block_till_done(wait_background_tasks=True)
         assert entity.state is not None
-        assert entity.state_attributes["msg_type"] == "callEvent"
+        assert entity.state_attributes["msg_type"] == "call.session.called"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
