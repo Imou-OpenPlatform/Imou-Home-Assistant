@@ -493,7 +493,6 @@ async def test_property_push_skips_v2_state_after_first_snapshot(
 ) -> None:
     """First status update snapshots; the next interval skips those ids."""
     device = _mock_device("d1", "0")
-    device.access_type = "IoT"
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
@@ -521,7 +520,7 @@ async def test_capability_push_still_polls_paas_entity_values(
 ) -> None:
     """PaaS devices keep entity polling when capability events are subscribed."""
     device = _mock_device("d1", "0")
-    device.access_type = "PaaS"
+    device.product_id = None
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
@@ -561,7 +560,6 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
 ) -> None:
     """A removed gateway accessory must take a fresh snapshot if it returns."""
     device = _mock_device("sensor", "0")
-    device.access_type = "IoT"
     device.parent_device_id = "gateway"
     device.parent_product_id = "gateway-product"
     physical_id = "sensor_gateway_gateway-product"
@@ -577,7 +575,6 @@ async def test_removed_accessory_forgets_snapshot_before_rejoining(
     assert coordinator._v2_state_snapshots == set()
 
     replacement = _mock_device("sensor", "0")
-    replacement.access_type = "IoT"
     replacement.parent_device_id = "gateway"
     replacement.parent_product_id = "gateway-product"
     replacement_key = imou_life_device_key(replacement)

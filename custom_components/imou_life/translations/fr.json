@@ -251,7 +251,12 @@
         "labels": "Étiquettes : {labels}",
         "time": "Heure : {time_str}",
         "details": "Détails : {desc_type}",
-        "ai_insight": "AI: {ai_text}",
+        "detected": "Détecté : {targets}",
+        "detected_person": "Personne",
+        "detected_vehicle": "Véhicule",
+        "detected_pet": "Animal",
+        "detected_package": "Colis",
+        "picture": "Description : {description}",
         "unknown_device": "Appareil inconnu",
         "unknown_alarm": "Alarme"
       }

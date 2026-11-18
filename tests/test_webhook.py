@@ -828,6 +828,25 @@ async def test_webhook_notification_uses_translations(hass: HomeAssistant) -> No
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_webhook_notification_shows_detected_and_picture(
+    hass: HomeAssistant,
+) -> None:
+    """Detected categories and the picture sentence are separate lines."""
+    _title, message = await _async_build_notification_message(
+        hass,
+        {
+            "msg_type": "human",
+            "device_name": "Front Door",
+            "ai_tags": ["vehicle", "human", "package"],
+            "ai_copywriting": "A person left a box",
+        },
+    )
+    assert "Detected: Person / Vehicle / Package" in message
+    assert "Picture: A person left a box" in message
+    assert "AI:" not in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_webhook_iot_and_paas_motion_are_scene_change(
     hass: HomeAssistant,
 ) -> None:
@@ -2061,12 +2080,12 @@ async def test_webhook_bounds_concurrent_dispatch(hass: HomeAssistant) -> None:
                 hass,
                 "webhook-id",
                 MockRequest(
-            {
-                "msgType": "detection.person.detected",
-                "deviceId": "SN1",
-                "channelId": "0",
-            }
-        ),
+                    {
+                        "msgType": "detection.person.detected",
+                        "deviceId": "SN1",
+                        "channelId": "0",
+                    }
+                ),
             )
             for _ in range(20):
                 await asyncio.sleep(0)

@@ -251,7 +251,12 @@
         "labels": "标签：{labels}",
         "time": "时间：{time_str}",
         "details": "详情：{desc_type}",
-        "ai_insight": "智见：{ai_text}",
+        "detected": "检测到：{targets}",
+        "detected_person": "人",
+        "detected_vehicle": "车",
+        "detected_pet": "宠物",
+        "detected_package": "包裹",
+        "picture": "画面描述：{description}",
         "unknown_device": "未知设备",
         "unknown_alarm": "告警"
       }

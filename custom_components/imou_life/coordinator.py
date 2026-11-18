@@ -20,7 +20,7 @@ from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
 from pyimouapi.ha_device import (
     ImouHaDevice,
     ImouHaDeviceManager,
-    device_access_is_iot,
+    device_is_iot,
 )
 
 from .const import (
@@ -467,7 +467,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 device.parent_product_id,
             )
             for device in self.devices_by_key.values()
-            if device_access_is_iot(device)
+            if device_is_iot(device)
         }
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
