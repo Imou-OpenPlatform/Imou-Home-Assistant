@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ from .coordinator import ImouConfigEntry
 from .helpers import async_display_language, fill_template, selector_option_label
 from .insight_account import camera_select_options
 from .insight_briefing_view import briefing_card
-from .insight_dashboard import keyword_entity_id
+from .insight_dashboard import keyword_entity_id, search_date_entity_ids
 from .pic_thumbnail import async_maybe_decrypt_thumbnail
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -129,15 +129,56 @@ def _search_keyword(hass: HomeAssistant, call: ServiceCall) -> str:
     return value
 
 
-def _time_window(days: int) -> tuple[str, str, str, str]:
-    days = max(1, min(days, 31))
-    end = datetime.now(UTC).replace(tzinfo=None)
-    begin = end - timedelta(days=days)
-    search_begin = begin.strftime("%Y-%m-%d %H:%M:%S")
-    search_end = end.strftime("%Y-%m-%d %H:%M:%S")
-    stat_start = begin.strftime("%Y%m%d")
-    stat_end = end.strftime("%Y%m%d")
-    return search_begin, search_end, stat_start, stat_end
+def _parse_calendar_day(raw: str) -> datetime:
+    text = str(raw or "").strip()
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d")
+    except ValueError as err:
+        msg = f"Invalid date: {raw!r}"
+        raise ServiceValidationError(msg) from err
+
+
+def _clock_window(start: datetime, end: datetime) -> tuple[str, str]:
+    """00:00:00 on the start date through 23:59:59 on the end date."""
+    if end < start:
+        start, end = end, start
+    return (
+        start.strftime("%Y-%m-%d 00:00:00"),
+        end.strftime("%Y-%m-%d 23:59:59"),
+    )
+
+
+def _helper_date(hass: HomeAssistant, entity_id: str) -> str:
+    state = hass.states.get(entity_id)
+    if state is None:
+        return ""
+    value = state.state.strip()
+    if value in {"unknown", "unavailable", ""}:
+        return ""
+    return value[:10]
+
+
+def _search_window(hass: HomeAssistant, call: ServiceCall) -> tuple[str, str]:
+    """Resolve the search range as local clock times on the chosen dates."""
+    begin_raw = str(call.data.get("begin_date") or "").strip()
+    end_raw = str(call.data.get("end_date") or "").strip()
+    if begin_raw or end_raw:
+        return _clock_window(
+            _parse_calendar_day(begin_raw or end_raw),
+            _parse_calendar_day(end_raw or begin_raw),
+        )
+    if "days" not in call.data:
+        begin_id, end_id = search_date_entity_ids(hass)
+        begin_raw = _helper_date(hass, begin_id)
+        end_raw = _helper_date(hass, end_id)
+        if begin_raw or end_raw:
+            return _clock_window(
+                _parse_calendar_day(begin_raw or end_raw),
+                _parse_calendar_day(end_raw or begin_raw),
+            )
+    days = max(1, min(int(call.data.get("days") or DEFAULT_INSIGHT_LOOKBACK_DAYS), 31))
+    end = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return _clock_window(end - timedelta(days=days - 1), end)
 
 
 @dataclass
@@ -194,7 +235,6 @@ def _page_target(
 
 
 async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) -> None:
-    days = int(call.data.get("days") or DEFAULT_INSIGHT_LOOKBACK_DAYS)
     entry = _resolve_config_entry(hass, call)
     device = _resolve_workbench_device(hass, entry, call)
     channel = device.channel_id
@@ -225,7 +265,7 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
                 translation_domain=DOMAIN,
                 translation_key="insight_search_keyword_required",
             )
-        begin, end, _, _ = _time_window(days)
+        begin, end = _search_window(hass, call)
         cursor, page = None, 1
         session = None
     try:
@@ -306,7 +346,7 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
 
 
 def _briefing_stat_days(call: ServiceCall) -> tuple[str, str]:
-    """Resolve YYYYMMDD start/end for a single calendar day."""
+    """The selected date, from 00:00:00 through 23:59:59, as yyyyMMdd."""
     end_raw = str(call.data.get("end_date") or "").strip()
     if end_raw:
         try:

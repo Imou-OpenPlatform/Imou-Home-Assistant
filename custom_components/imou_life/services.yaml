@@ -33,6 +33,16 @@ search_ai_alarms:
       example: "person in black coat"
       selector:
         text:
+    begin_date:
+      required: false
+      example: "2026-11-01"
+      selector:
+        date:
+    end_date:
+      required: false
+      example: "2026-11-19"
+      selector:
+        date:
     days:
       required: false
       default: 7

@@ -15,7 +15,7 @@
 
 - **Media browser** — browse **Cloud recordings**, **Local recordings** (when the device supports local recording access), and **Record on alarm** clips per camera channel under **Media**.
 - **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
-- **AI Insight** sidebar (**Briefing**, **Search**, and **Trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **Briefing** refreshes that day's summary, risk periods, hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Search** steps through results with **Previous** and **Next**. **Trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
+- **AI Insight** sidebar (**Briefing**, **Search**, and **Trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **Briefing** refreshes that day's summary, from 00:00:00 through 23:59:59, including risk periods, the hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Search** uses a start date and an end date, from 00:00:00 on the start date through 23:59:59 on the end date, and steps through results with **Previous** and **Next**. **Trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
 - Service **`device_snap_detect`** — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, draws detection boxes on the picture, and sends it to your notification targets (defaults to the Home Assistant web notification drawer and signed-in Companion Apps when omitted).
 - Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
 
@@ -383,7 +383,7 @@
 
 - **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。
 - **智见**（摄像头通道）— 诊断用 **AI智见**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
-- **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后自动刷新当天概览、风险时段、两小时分段与告警统计（**人形**、**车辆**、**宠物**、**包裹**、**全部**）。**搜索** 用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动刷新概览、风险时段、两小时分段与告警统计（**人形**、**车辆**、**宠物**、**包裹**、**全部**）。**搜索** 选定开始日期和结束日期，从开始日 00:00:00 查到结束日 23:59:59，并用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
 - 服务 **`device_snap_detect`** — 对指定摄像头云端抓图并做人 / 车 / 宠检测，把检测框画到图片上并发送到通知目标（省略时默认发送到 Home Assistant 网页通知栏与已登录的手机 App）。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 

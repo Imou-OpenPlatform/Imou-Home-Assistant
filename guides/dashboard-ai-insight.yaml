@@ -1,7 +1,7 @@
 # The integration adds this dashboard to the sidebar as AI Insight / AI 智见.
 # Import this file only if that dashboard was removed.
-# Picking the date refreshes the briefing. Search reads the keyword text box
-# when the button does not pass keyword.
+# Picking the date refreshes the briefing for that whole day.
+# Search reads the keyword and the two dates when the button does not pass them.
 
 title: AI Insight
 views:
@@ -32,6 +32,10 @@ views:
                 name: Camera
               - entity: input_text.imou_insight_search_keyword
                 name: Keyword
+              - entity: input_datetime.imou_insight_search_begin
+                name: Start date
+              - entity: input_datetime.imou_insight_search_end
+                name: End date
           - type: horizontal-stack
             cards:
               - type: button
@@ -54,8 +58,6 @@ views:
                   service: imou_life.search_ai_alarms
                   target:
                     entity_id: select.imou_life_insight_workbench_device
-                  data:
-                    days: 7
               - type: button
                 name: Next
                 icon: mdi:chevron-right

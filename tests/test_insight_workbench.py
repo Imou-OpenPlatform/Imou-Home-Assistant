@@ -1,9 +1,14 @@
 """AI Insight workbench service account selection."""
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 import pytest
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.insight_workbench import (
+    _briefing_stat_days,
     _resolve_config_entry,
+    _search_window,
     search_card,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -67,6 +72,49 @@ async def test_one_account_needs_no_target(hass: HomeAssistant) -> None:
     call = ServiceCall(hass, DOMAIN, "refresh_ai_insight_briefing", {})
 
     assert _resolve_config_entry(hass, call).entry_id == entry.entry_id
+
+
+def test_briefing_uses_the_selected_calendar_day() -> None:
+    """A picked date is that whole day, sent as yyyyMMdd."""
+    call = ServiceCall(
+        MagicMock(),
+        DOMAIN,
+        "refresh_ai_insight_briefing",
+        {"end_date": "2026-11-19"},
+    )
+
+    assert _briefing_stat_days(call) == ("20261119", "20261119")
+
+
+def test_search_window_spans_the_selected_dates() -> None:
+    """Search runs from 00:00:00 on the start date through 23:59:59 on the end date."""
+    call = ServiceCall(
+        MagicMock(),
+        DOMAIN,
+        "search_ai_alarms",
+        {"begin_date": "2026-11-01", "end_date": "2026-11-03"},
+    )
+
+    assert _search_window(MagicMock(), call) == (
+        "2026-11-01 00:00:00",
+        "2026-11-03 23:59:59",
+    )
+
+
+def test_search_window_reads_the_date_boxes() -> None:
+    """The search button omits dates, so the service reads the two date helpers."""
+    hass = MagicMock()
+    hass.data = {}
+    hass.states.get.side_effect = lambda entity_id: {
+        "input_datetime.imou_insight_search_begin": SimpleNamespace(state="2026-11-02"),
+        "input_datetime.imou_insight_search_end": SimpleNamespace(state="2026-11-04"),
+    }.get(entity_id)
+    call = ServiceCall(hass, DOMAIN, "search_ai_alarms", {})
+
+    assert _search_window(hass, call) == (
+        "2026-11-02 00:00:00",
+        "2026-11-04 23:59:59",
+    )
 
 
 def test_search_card_lists_a_hit() -> None:

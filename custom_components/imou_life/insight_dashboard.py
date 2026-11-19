@@ -46,10 +46,14 @@ DASHBOARD_URL = "imou-zhijian"
 DASHBOARD_ICON = "mdi:creation"
 DATE_ENTITY_ID = "input_datetime.imou_insight_briefing_end"
 KEYWORD_ENTITY_ID = "input_text.imou_insight_search_keyword"
+SEARCH_BEGIN_ENTITY_ID = "input_datetime.imou_insight_search_begin"
+SEARCH_END_ENTITY_ID = "input_datetime.imou_insight_search_end"
 _LISTENER_FLAG = "insight_dashboard_listener"
 _LANGUAGE_FLAG = "insight_dashboard_language"
 _DATE_ENTITY_KEY = "insight_dashboard_date_entity"
 _KEYWORD_ENTITY_KEY = "insight_dashboard_keyword_entity"
+_SEARCH_BEGIN_ENTITY_KEY = "insight_dashboard_search_begin_entity"
+_SEARCH_END_ENTITY_KEY = "insight_dashboard_search_end_entity"
 
 _COPY_DEFAULTS = {
     "title": "AI Insight",
@@ -59,8 +63,12 @@ _COPY_DEFAULTS = {
     "device": "Camera",
     "date": "Date",
     "keyword": "Search text",
+    "search_begin": "Start date",
+    "search_end": "End date",
     "date_name": "Briefing date",
     "keyword_name": "Search text",
+    "search_begin_name": "Search start date",
+    "search_end_name": "Search end date",
     "search_alarms": "Search alarms",
     "refresh_briefing": "Refresh the briefing",
     "morning_refresh": "Refresh the briefing each morning",
@@ -112,6 +120,15 @@ def keyword_entity_id(hass: HomeAssistant) -> str:
     return stored if isinstance(stored, str) and stored else KEYWORD_ENTITY_ID
 
 
+def search_date_entity_ids(hass: HomeAssistant) -> tuple[str, str]:
+    """Start and end date helpers the search page reads."""
+    data = hass.data.get(DOMAIN) or {}
+    return (
+        _stored_entity(data, _SEARCH_BEGIN_ENTITY_KEY, SEARCH_BEGIN_ENTITY_ID),
+        _stored_entity(data, _SEARCH_END_ENTITY_KEY, SEARCH_END_ENTITY_ID),
+    )
+
+
 def _search_button(
     name: str, icon: str, select_entity: str, data: dict[str, Any]
 ) -> dict[str, Any]:
@@ -135,6 +152,8 @@ def build_insight_dashboard(
     *,
     date_entity: str,
     keyword_entity: str,
+    search_begin_entity: str,
+    search_end_entity: str,
     copy: Mapping[str, str],
 ) -> dict[str, Any]:
     """Return the Lovelace config for the sidebar dashboard."""
@@ -175,7 +194,7 @@ def build_insight_dashboard(
                         button_name,
                         "mdi:magnify",
                         select_entity,
-                        {"days": 7},
+                        {},
                     ),
                     _search_button(
                         next_name,
@@ -200,6 +219,10 @@ def build_insight_dashboard(
     if ready:
         briefing_rows.append({"entity": date_entity, "name": copy["date"]})
         search_rows.append({"entity": keyword_entity, "name": copy["keyword"]})
+        search_rows.append(
+            {"entity": search_begin_entity, "name": copy["search_begin"]}
+        )
+        search_rows.append({"entity": search_end_entity, "name": copy["search_end"]})
     else:
         briefing_cards.append({"type": "markdown", "content": copy["empty"]})
         search_cards.append({"type": "markdown", "content": copy["empty"]})
@@ -256,17 +279,23 @@ async def async_setup_insight_dashboard(
     try:
         await _ensure_listener(hass)
         await _watch_language(hass)
-        date_entity, keyword_entity = await _ensure_helpers(hass)
-        await _publish(hass, date_entity, keyword_entity)
-        if _date_value(hass, date_entity):
-            await _refresh_entry(hass, entry, _date_value(hass, date_entity))
-            return
-        await hass.services.async_call(
-            "input_datetime",
-            "set_datetime",
-            {"entity_id": date_entity, "date": dt_util.now().date()},
-            blocking=True,
+        date_entity, keyword_entity, search_begin, search_end = await _ensure_helpers(
+            hass
         )
+        await _publish(hass, date_entity, keyword_entity, search_begin, search_end)
+        today = dt_util.now().date()
+        had_briefing_date = bool(_date_value(hass, date_entity))
+        for entity_id in (date_entity, search_begin, search_end):
+            if _date_value(hass, entity_id):
+                continue
+            await hass.services.async_call(
+                "input_datetime",
+                "set_datetime",
+                {"entity_id": entity_id, "date": today},
+                blocking=True,
+            )
+        if had_briefing_date:
+            await _refresh_entry(hass, entry, _date_value(hass, date_entity))
     except Exception:
         _LOGGER.exception("Unable to install the AI Insight dashboard")
 
@@ -285,11 +314,7 @@ async def async_unload_insight_dashboard(
     try:
         if others:
             data = hass.data.get(DOMAIN) or {}
-            await _publish(
-                hass,
-                _stored_entity(data, _DATE_ENTITY_KEY, DATE_ENTITY_ID),
-                _stored_entity(data, _KEYWORD_ENTITY_KEY, KEYWORD_ENTITY_ID),
-            )
+            await _publish(hass, *_dashboard_inputs(data))
             return
         await _remove_dashboard(hass)
         data = hass.data.get(DOMAIN) or {}
@@ -345,6 +370,15 @@ def _entities_then(
 def _stored_entity(data: Mapping[str, Any], key: str, fallback: str) -> str:
     stored = data.get(key)
     return stored if isinstance(stored, str) and stored else fallback
+
+
+def _dashboard_inputs(data: Mapping[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        _stored_entity(data, _DATE_ENTITY_KEY, DATE_ENTITY_ID),
+        _stored_entity(data, _KEYWORD_ENTITY_KEY, KEYWORD_ENTITY_ID),
+        _stored_entity(data, _SEARCH_BEGIN_ENTITY_KEY, SEARCH_BEGIN_ENTITY_ID),
+        _stored_entity(data, _SEARCH_END_ENTITY_KEY, SEARCH_END_ENTITY_ID),
+    )
 
 
 def _date_value(hass: HomeAssistant, entity_id: str) -> str:
@@ -407,6 +441,8 @@ def _entity_id(
 _LANGUAGE_ENTITIES = (
     (DATE_ENTITY_ID, "date_name"),
     (KEYWORD_ENTITY_ID, "keyword_name"),
+    (SEARCH_BEGIN_ENTITY_ID, "search_begin_name"),
+    (SEARCH_END_ENTITY_ID, "search_end_name"),
     ("script.imou_search_insight_alarms", "search_alarms"),
     ("script.imou_refresh_insight_briefing", "refresh_briefing"),
 )
@@ -477,11 +513,7 @@ async def _watch_language(hass: HomeAssistant) -> None:
 
 async def _republish_current(hass: HomeAssistant) -> None:
     data = hass.data.get(DOMAIN) or {}
-    await _publish(
-        hass,
-        _stored_entity(data, _DATE_ENTITY_KEY, DATE_ENTITY_ID),
-        _stored_entity(data, _KEYWORD_ENTITY_KEY, KEYWORD_ENTITY_ID),
-    )
+    await _publish(hass, *_dashboard_inputs(data))
 
 
 def _apply_language_names(hass: HomeAssistant, copy: Mapping[str, str]) -> None:
@@ -504,35 +536,69 @@ def _apply_language_names(hass: HomeAssistant, copy: Mapping[str, str]) -> None:
         registry.async_update_entity(entity_id, name=desired)
 
 
-async def _ensure_helpers(hass: HomeAssistant) -> tuple[str, str]:
+async def _ensure_helpers(hass: HomeAssistant) -> tuple[str, str, str, str]:
     await async_setup_component(hass, "input_datetime", {})
     await async_setup_component(hass, "input_text", {})
-    date_entity = await _ensure_date_helper(hass)
-    keyword_entity = await _ensure_keyword_helper(hass)
-    data = hass.data.setdefault(DOMAIN, {})
-    data[_DATE_ENTITY_KEY] = date_entity
-    data[_KEYWORD_ENTITY_KEY] = keyword_entity
-    return date_entity, keyword_entity
-
-
-async def _ensure_date_helper(hass: HomeAssistant) -> str:
-    if hass.states.get(DATE_ENTITY_ID) is not None:
-        return DATE_ENTITY_ID
-    collection = _storage_collection(hass, "input_datetime/create")
-    if collection is None:
-        return DATE_ENTITY_ID
     copy = await _copy(hass)
-    for item in collection.async_items():
-        if item.get(CONF_NAME) in (
+    date_entity = await _ensure_named_date(
+        hass,
+        DATE_ENTITY_ID,
+        (
             "智见简报日期",
             "Briefing date",
             "imou_insight_briefing_end",
             copy["date_name"],
-        ):
+        ),
+        copy["date_name"],
+    )
+    search_begin = await _ensure_named_date(
+        hass,
+        SEARCH_BEGIN_ENTITY_ID,
+        (
+            "智见搜索开始日期",
+            "Search start date",
+            "imou_insight_search_begin",
+            copy["search_begin_name"],
+        ),
+        copy["search_begin_name"],
+    )
+    search_end = await _ensure_named_date(
+        hass,
+        SEARCH_END_ENTITY_ID,
+        (
+            "智见搜索结束日期",
+            "Search end date",
+            "imou_insight_search_end",
+            copy["search_end_name"],
+        ),
+        copy["search_end_name"],
+    )
+    keyword_entity = await _ensure_keyword_helper(hass)
+    data = hass.data.setdefault(DOMAIN, {})
+    data[_DATE_ENTITY_KEY] = date_entity
+    data[_KEYWORD_ENTITY_KEY] = keyword_entity
+    data[_SEARCH_BEGIN_ENTITY_KEY] = search_begin
+    data[_SEARCH_END_ENTITY_KEY] = search_end
+    return date_entity, keyword_entity, search_begin, search_end
+
+
+async def _ensure_named_date(
+    hass: HomeAssistant,
+    entity_id: str,
+    names: tuple[str, ...],
+    label: str,
+) -> str:
+    if hass.states.get(entity_id) is not None:
+        return entity_id
+    collection = _storage_collection(hass, "input_datetime/create")
+    if collection is None:
+        return entity_id
+    for item in collection.async_items():
+        if item.get(CONF_NAME) in names:
             return f"input_datetime.{item[CONF_ID]}"
     item = await collection.async_create_item(
         {
-            "name": copy["date_name"],
+            "name": label,
             "has_date": True,
             "has_time": False,
         }
@@ -565,7 +631,13 @@ async def _ensure_keyword_helper(hass: HomeAssistant) -> str:
     return f"input_text.{item[CONF_ID]}"
 
 
-async def _publish(hass: HomeAssistant, date_entity: str, keyword_entity: str) -> None:
+async def _publish(
+    hass: HomeAssistant,
+    date_entity: str,
+    keyword_entity: str,
+    search_begin_entity: str,
+    search_end_entity: str,
+) -> None:
     copy = await _copy(hass)
     _apply_language_names(hass, copy)
     await async_setup_component(hass, "lovelace", {})
@@ -577,6 +649,8 @@ async def _publish(hass: HomeAssistant, date_entity: str, keyword_entity: str) -
         await _dashboard_accounts(hass),
         date_entity=date_entity,
         keyword_entity=keyword_entity,
+        search_begin_entity=search_begin_entity,
+        search_end_entity=search_end_entity,
         copy=copy,
     )
     existing = next(

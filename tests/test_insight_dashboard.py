@@ -32,6 +32,8 @@ def _config() -> dict:
         [account],
         date_entity="input_datetime.imou_insight_briefing_end",
         keyword_entity="input_text.imou_insight_search_keyword",
+        search_begin_entity="input_datetime.imou_insight_search_begin",
+        search_end_entity="input_datetime.imou_insight_search_end",
         copy=copy,
     )
 
@@ -69,9 +71,12 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
     actions = [card["tap_action"] for card in search["cards"][1]["cards"]]
     assert [action["data"] for action in actions] == [
         {"page": "previous"},
-        {"days": 7},
+        {},
         {"page": "next"},
     ]
+    rendered = str(search)
+    assert "input_datetime.imou_insight_search_begin" in rendered
+    assert "input_datetime.imou_insight_search_end" in rendered
     assert {action["service"] for action in actions} == {"imou_life.search_ai_alarms"}
 
 
