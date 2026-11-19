@@ -89,17 +89,14 @@ def _iter_motion_sensors(
 
 
 def _device_offers_motion(device: ImouHaDevice) -> bool:
-    """True when this channel lists picture-change or person detect."""
+    """True when this channel's capability ids include picture or person detect."""
     if device.channel_id is None:
         return False
-    capability = device.capability_set
-    if capability is None:
+    capability_ids = device.capability_ids
+    if not capability_ids:
         return False
-    properties = set(capability.properties)
-    services = set(capability.services)
-    events = set(capability.events)
     return any(
-        binding_supported(binding, properties, services, events)
+        binding_supported(binding, capability_ids)
         for binding in cached_v2_target_map()
         if binding.ha_key in _MOTION_CAPABILITY_KEYS
     )

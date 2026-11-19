@@ -176,10 +176,17 @@ async def _owner_ui_language(hass: HomeAssistant) -> str | None:
     try:
         from homeassistant.components.frontend.storage import async_user_store
 
-        store = await async_user_store(hass, owner.id)
+        user_store = await async_user_store(hass, owner.id)
     except Exception:
         return None
-    raw = store.data.get("language")
+    user_data = (
+        user_store[1]
+        if isinstance(user_store, tuple) and len(user_store) == 2
+        else getattr(user_store, "data", None)
+    )
+    if not isinstance(user_data, dict):
+        return None
+    raw = user_data.get("language")
     if not isinstance(raw, dict):
         return None
     value = raw.get("language")

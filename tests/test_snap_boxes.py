@@ -18,9 +18,12 @@ def _jpeg(width: int = 100, height: int = 80) -> bytes:
 
 def test_box_is_top_left_plus_size() -> None:
     """x, y is the top-left corner; width and height extend right and down."""
-    assert detection_box(
-        {"x": 10, "y": 20, "width": 30, "height": 15}, 100, 80
-    ) == (10, 20, 40, 35)
+    assert detection_box({"x": 10, "y": 20, "width": 30, "height": 15}, 100, 80) == (
+        10,
+        20,
+        40,
+        35,
+    )
 
 
 def test_annotate_paints_the_box_edge() -> None:

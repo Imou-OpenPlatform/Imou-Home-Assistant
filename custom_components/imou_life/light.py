@@ -227,12 +227,19 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @property
     def _supported_property_ids(self) -> set[str]:
         """Return bulb property ids from the device's current capability snapshot."""
-        if self.device.bulb_v2 and self.device.capability_set is not None:
-            return {
-                property_id
-                for property_id in BULB_V2_PROPERTY_IDS
-                if property_id in self.device.capability_set.properties
-            }
+        if self.device.bulb_v2:
+            if self.device.capability_ids is not None:
+                return {
+                    property_id
+                    for property_id in BULB_V2_PROPERTY_IDS
+                    if property_id in self.device.capability_ids
+                }
+            if self.device.capability_set is not None:
+                return {
+                    property_id
+                    for property_id in BULB_V2_PROPERTY_IDS
+                    if property_id in self.device.capability_set.properties
+                }
         return set(BULB_V2_PROPERTY_IDS)
 
     @property

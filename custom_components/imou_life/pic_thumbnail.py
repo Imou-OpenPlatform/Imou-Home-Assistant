@@ -257,9 +257,7 @@ async def async_remember_picture_passwords(
             continue
         if not isinstance(key, str) or not key.strip():
             continue
-        password = login_password_from_play_token(
-            play_token=token, play_token_key=key
-        )
+        password = login_password_from_play_token(play_token=token, play_token_key=key)
         if password:
             runtime.picture_passwords[device_id] = password
 

@@ -28,9 +28,12 @@ _LOGGER = logging.getLogger(__name__)
 
 DATA_RECORD_PLAYBACK_MP4 = "imou_life_record_playback_mp4"
 PLAYBACK_URL = "/api/imou_life/record_play/{cache_id}.mp4"
-CACHE_SUBDIR = Path("www") / "imou" / "playback"
+CACHE_SUBDIR = Path("imou_life") / "playback_cache"
+_LEGACY_PUBLIC_CACHE_SUBDIR = Path("www") / "imou" / "playback"
 _REMUX_TIMEOUT = 900
 _PROCESS_STOP_TIMEOUT = 5
+_CACHE_TTL_SECONDS = 24 * 3600
+_CACHE_MAX_FILES = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +46,41 @@ class PlaybackSource:
 
 def _cache_dir(hass: HomeAssistant) -> Path:
     return Path(hass.config.path()) / CACHE_SUBDIR
+
+
+def _prune_playback_cache(
+    cache_dir: Path,
+    *,
+    legacy_public_dir: Path | None = None,
+    keep_cache_ids: set[str] | None = None,
+) -> None:
+    """Drop stale/excess cached MP4s and remove any old unauthenticated www copies."""
+    if legacy_public_dir is not None and legacy_public_dir.is_dir():
+        for stale in legacy_public_dir.glob("*.mp4"):
+            stale.unlink(missing_ok=True)
+    if not cache_dir.is_dir():
+        return
+    protected = keep_cache_ids or set()
+    now = time.time()
+    retained: list[tuple[float, Path]] = []
+    for candidate in cache_dir.glob("*.mp4"):
+        if candidate.name.endswith(".part.mp4"):
+            continue
+        stem = candidate.stem
+        if stem in protected:
+            continue
+        try:
+            mtime = candidate.stat().st_mtime
+        except OSError:
+            continue
+        if now - mtime > _CACHE_TTL_SECONDS:
+            candidate.unlink(missing_ok=True)
+            continue
+        retained.append((mtime, candidate))
+    if len(retained) > _CACHE_MAX_FILES:
+        retained.sort(key=lambda item: item[0], reverse=True)
+        for _mtime, old_file in retained[_CACHE_MAX_FILES:]:
+            old_file.unlink(missing_ok=True)
 
 
 def record_playback_cache_id(identifier: str) -> str:
@@ -61,6 +99,10 @@ def async_register_record_playback_mp4(hass: HomeAssistant) -> None:
         return
     cache_dir = _cache_dir(hass)
     cache_dir.mkdir(parents=True, exist_ok=True)
+    legacy_dir = Path(hass.config.path()) / _LEGACY_PUBLIC_CACHE_SUBDIR
+    hass.async_add_executor_job(
+        lambda: _prune_playback_cache(cache_dir, legacy_public_dir=legacy_dir)
+    )
     hass.http.register_view(ImouRecordPlaybackMp4View())
     hass.data[DATA_RECORD_PLAYBACK_MP4] = {
         "closed": set(),
@@ -289,6 +331,10 @@ async def async_prepare_record_mp4(
                 if not partial.is_file() or partial.stat().st_size < 1:
                     raise OSError("ffmpeg produced an empty recording file")
                 partial.replace(output)
+                active_ids = set(store.get("tasks", {})) | {cache_id}
+                await hass.async_add_executor_job(
+                    lambda: _prune_playback_cache(cache_dir, keep_cache_ids=active_ids)
+                )
                 async_delete_record_playback_issue(hass, entry_id)
                 store["sources"].pop(cache_id, None)
                 return output
@@ -368,6 +414,6 @@ class ImouRecordPlaybackMp4View(HomeAssistantView):
             except Exception as err:
                 _LOGGER.error("Imou recording transcode failed for %s", cache_id)
                 raise web.HTTPServiceUnavailable() from err
-        if not hass.config.is_allowed_path(str(path)):
+        if not path.is_file() or path.stat().st_size == 0:
             raise web.HTTPNotFound()
         return web.FileResponse(path)

@@ -371,9 +371,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         runtime = get_runtime_data(self.config_entry)
         if runtime is None:
             return
-        await async_remember_picture_passwords(
-            runtime, self.devices_by_key.values()
-        )
+        await async_remember_picture_passwords(runtime, self.devices_by_key.values())
 
     async def _async_refresh_known_devices(
         self, fresh_by_key: dict[str, ImouHaDevice]
@@ -412,9 +410,9 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 if isinstance(fresh.channel_ability, str):
                     current.set_channel_ability(fresh.channel_ability)
             if (
-                isinstance(fresh.capability_set, CapabilitySet)
-                and current.capability_snapshot != fresh.capability_snapshot
-            ):
+                isinstance(fresh.capability_ids, frozenset)
+                or isinstance(fresh.capability_set, CapabilitySet)
+            ) and current.capability_snapshot != fresh.capability_snapshot:
                 removed = current.replace_capabilities(fresh)
                 self._async_remove_entity_suffixes(key, removed)
                 refreshed[key] = current

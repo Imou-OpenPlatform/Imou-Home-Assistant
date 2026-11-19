@@ -88,27 +88,27 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
   - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications**. Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
   - Alarm pictures are decrypted on this Home Assistant (**linux x86-64 only**). [Download the official libraries](#obtain-the-official-decrypt-libraries) and place both `.so` files in `/config/imou_life/native/`. Many motion pushes have no picture URL; those stay text-only. Full setup: [Configure reference](guides/configuration.md#english)
-  - Choose push message types—including IoT device messages so thing-model switches, sensors, and arming update from property push instead of interval polling; messages are also synced to the Imou Life app
-  - **Record on alarm** — built-in: per-camera switch (default off), shared folder and duration under **Configure → Record on alarm**. No YAML automation. Setup: [Configure reference](guides/configuration.md#record-on-alarm)
+  - Choose push message types (**Device capability events** and **Device online/offline**). With **Device capability events** checked, smart plugs, bulbs, and sensors update from real-time state push instead of interval polling; messages also sync to the Imou Life app
+  - **Record on alarm** — built-in: per-camera switch (default off), duration under **Configure → Alarm push and notifications**. Clips are saved under Media and shown in the media browser. No YAML automation. Setup: [Configure reference](guides/configuration.md#record-on-alarm)
 * **Camera**
   - Status (name, online, storage, battery, …)
   - Live video
-  - PTZ (direction buttons; duration in **Configure → Polling and cameras → Camera defaults**)
-  - **Collection points** — `select.collection_point` (**Go to collection point**) lists points from the device / Imou Life app; choose one to move the camera (needs `CollectionPoint`; current position is not read back)
+  - PTZ (direction buttons)
+  - **Collection points** — **Go to collection point** lists points from the device / Imou Life app; choose one to move the camera (current position is not read back)
   - Detection: picture change, human, pet, PIR
   - **PIR detection** — configuration switch on cameras that support PIR; matches the PIR Detection toggle in the Imou Life app
-  - **Motion** — on cameras that support picture change or human detection. It shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears. Pet and vehicle alarms do not change it. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** switches (those turn detection on or off)
-  - **Call** — an event on a channel that can receive a call. An incoming call fires it. Unanswered calls do not. Needs **Enable event push** with type **alarm**; if push is off the entity stays but is unavailable
-  - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with type **alarm** and **Show the picture in alarm notifications**; if either is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
-  - Privacy mode, night vision, flip image, wide dynamic range, smart tracking
+  - **Motion** — on cameras that support picture change or human detection. Shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears. Pet and vehicle alarms do not change it. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** switches (those turn detection on or off)
+  - **Call** — an event on a channel that can receive a call. An incoming call fires it; unanswered calls do not. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable
+  - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
+  - Privacy mode, night vision, flip image, wide dynamic range (`select`), smart tracking
   - **White light** (`light`) on cameras that have a floodlight; on or off only
   - Color bulbs appear as one **Light**: on/off, brightness, color temperature or color, and scenes, plus a countdown. Adjusting color temperature switches the bulb to white light. White brightness and color brightness stay independent. Color bulbs do not show **Notify on alarm**
   - Alarm-linked white light, alarm-linked siren (configuration switches)
-  - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on devices with Siren capability or IoT refs `25500`/`22200`; does not require event push for manual control. Entity state auto-clears after about 15 seconds (typical firmware hold), or immediately on a `sirenOff` push when event push is enabled
+  - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on supported devices; does not require event push for manual control. Entity state auto-clears after about 15 seconds, or immediately when a siren-cleared push arrives
   - Audio recording, prompt sound, abnormal sound alarm
   - Restart device
-  - **Media browser** — cloud and local recordings per channel under **Media** ([details](guides/configuration.md#media-browser))
-  - **AI Insight** — **AI Insight** / **Cloud storage** sensors, alarm text with optional AI line, account workbench (search, briefing, trial) and [`device_snap_detect`](guides/configuration.md#capture-and-detect) ([details](guides/configuration.md#ai-insight-workbench))
+  - **Media browser** — cloud, local, and post-alarm recordings per channel under **Media** ([details](guides/configuration.md#media-browser))
+  - **AI Insight** — **AI Insight** / **Cloud storage** sensors, detected-object and picture descriptions in alarm notifications, sidebar (**Briefing**, **Search**, **Trial**), and [`device_snap_detect`](guides/configuration.md#capture-and-detect) ([details](guides/configuration.md#ai-insight-workbench))
 * **Alarm sensors**
   - Status (name, online, battery, …)
   - Arming — `alarm_control_panel` (home / away / disarm)
@@ -121,7 +121,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Status (name, energy use, online)
   - Plug switch and countdown (`number`, minutes; remaining counts down here, even with status polling off)
   - Plug indicator light
-  - Max power (`number`, watts)
+  - Overcharge protection (`switch`)
 
 ## Troubleshooting
 
@@ -133,12 +133,12 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Automations can listen to `imou_life_event` (all accepted pushes) and `imou_life_alarm` (security alarms only). Privacy-mask messages (`openCamera` / `closeCamera`) fire only `imou_life_event`.
   - If you receive `abAlarmSound` or `closeCamera`, the callback/webhook path is working.
   - If `videoMotion` / `human` / `mobileDetect` never appear: confirm picture change / human detection is enabled on the device; download **Diagnostics** and check `event_push.recent_msg_type_counts`. Missing keys mean the cloud/device did not push those types (not an HA misclassification). A push that does not match a Home Assistant device is discarded (still HTTP 200).
-  - Confirm event push is enabled in **Configure** and push types include **alarm**.
-  - If you do not see **Call**: this channel cannot receive a call. If the entity is **unavailable**: turn on event push and include type **alarm**. Picture change and human detection are a different entity (**Motion**).
-  - If you do not see **Alarm picture**: that device is not a camera. If the entity is **unavailable**: turn on event push with type **alarm**. If it is available but empty: the last alarm had no picture, or decrypt did not succeed. The entity does not take a live snapshot.
-  - If you do not see **Motion**: that camera does not support picture change or human detection. If the entity is **unavailable**: turn on event push and include type **alarm**. If it stays **Clear**, the camera has not reported motion. Vehicle and pet alarms do not change it.
-  - If thing-model switches or sensors freeze after a reload: event push must be on and types must include **IoT device messages**. Download **Diagnostics** and check `event_push.recent_msg_type_counts` for `iotProperty`. Uncheck that type to resume property polling.
-- **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`. v1.4.1 replaces `text.set_value` on plug countdown and max power with `number.set_value`, and `switch.turn_on` / `turn_off` on camera white light with `light.turn_on` / `light.turn_off`. Leftover `select.*_mode`, siren button, `text`, and white-light `switch` registry rows are removed on setup.
+  - Confirm event push is enabled in **Configure** and **Subscribe to** includes **Device capability events**.
+  - If you do not see **Call**: this channel cannot receive a call. If the entity is **unavailable**: turn on event push and check **Device capability events**. Picture change and human detection are a different entity (**Motion**).
+  - If you do not see **Alarm picture**: that device is not a camera. If the entity is **unavailable**: turn on event push and check **Device capability events**. If it is available but empty: the last alarm had no picture, or decrypt did not succeed. The entity does not take a live snapshot.
+  - If you do not see **Motion**: that camera does not support picture change or human detection. If the entity is **unavailable**: turn on event push and check **Device capability events**. If it stays **Clear**, the camera has not reported motion. Vehicle and pet alarms do not change it.
+  - If smart-plug, bulb, or sensor states stop updating after a reload: confirm event push is on and **Device capability events** is checked, or uncheck **Device capability events** to resume interval polling.
+- **Automations after upgrade** — v1.3.0 removes custom `imou_life.turn_on` / `turn_off` / `select` services; use standard `switch.turn_on`, `select.select_option`, and `button.press`. v1.4.0 replaces `select.select_option` on `select.*_mode` with `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`, and `button.siren_start` / `siren_stop` with `siren.turn_on` / `siren.turn_off`. v1.4.1 replaces `text.set_value` on plug countdown with `number.set_value`, and `switch.turn_on` / `turn_off` on camera white light with `light.turn_on` / `light.turn_off`. v2.0.0 turns **Wide dynamic** into a `select`, plug **Overcharge protection** into a `switch`, and **Doorbell** into **Call**. Leftover registry rows from older versions are removed on setup.
 - **Multi-lens cameras, NVRs, and gateway accessories** — each lens or NVR channel is its own device, shown under a page for the whole device; that page carries no entities of its own. An accessory is shown under the gateway it is paired to. Deleting the whole device's page stops polling it; deleting a single channel is refused, since exclusion only works per device. On Home Assistant **2026.9** or later, after you update this integration to **1.4.2** or newer, reload the integration if a lens is missing **Live** or **Alarm picture**.
 - **PTZ collection points** — use `select.select_option` on `select.<device>_collection_point` with the collection point name (as shown in the Imou Life app). The select shows **Select a collection point…** when the camera is not at a known position.
 - **Diagnostics** — Download redacted diagnostics from the integration's **Download diagnostics** (three-dot menu on the config entry).
@@ -241,27 +241,27 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
   - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
   - 告警图片在本机解密（**仅 linux x86-64**）。[自行下载官方库](#获取官方解密库)，把两个 `.so` 放到 `/config/imou_life/native/`。许多移动侦测推送没有图片 URL，此时仍为纯文本。完整步骤：[配置项参考](guides/configuration.md#zh-hans)
-  - 可选择推送消息类型——含物模型设备消息时，物模型开关 / 传感器 / 布防靠属性推送即时更新，不再跟间隔轮询走；消息也会同步到乐橙 App
+  - 可选择推送消息类型（**设备能力事件** 与 **设备上下线**）。勾选 **设备能力事件** 时，智能插座、灯泡、传感器等通过实时状态推送即时更新，不再按轮询间隔拉取；消息也会同步到乐橙 App
   - **告警时录像** — 内置：每路镜头一个开关（默认关），时长在 **配置 → 告警推送与通知**。片段保存在媒体目录，在媒体浏览器查看。不用写 YAML 自动化。完整步骤：[配置项参考](guides/configuration.md#record-on-alarm-zh)
 * **摄像头**
   - 状态（名称、在线、存储、电量等）
   - 直播
   - 云台（方向按钮，按一次转动 500 毫秒）
-  - **收藏点** — `select.collection_point`（**转到收藏点**）列出设备 / 乐橙 App 中的收藏点，选择后跳转（需 `CollectionPoint`；无法读取当前是否在某一收藏点）
+  - **收藏点** — **转到收藏点** 列出设备 / 乐橙 App 中的收藏点，选择后跳转（无法读取当前是否在某一收藏点）
   - 检测：画面变化、人形、宠物、PIR
   - **PIR 检测** — 支持 PIR 的摄像头在配置区提供开关，与乐橙 App 中的 PIR 检测一致
-  - **动态侦测** — 支持画面变化或人形检测的通道上出现。摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。宠物和车辆告警不会改变它。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用。和 **画面变化**、**人形检测** 开关不同（开关是开不开检测）
-  - **呼叫** — 能接呼叫的通道上的事件。有来电时触发。未接听不会。需 **启用事件推送** 且类型含 **alarm**；关掉推送时实体仍在，但是不可用
-  - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且类型含 **alarm**，并打开 **在告警通知中显示图片**；关掉其中任一项时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
-  - 隐私模式、夜视、画面翻转、宽动态、智能追踪
+  - **动态侦测** — 支持画面变化或人形检测的通道上出现。摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。宠物和车辆告警不会改变它。需 **启用事件推送** 且勾选 **设备能力事件**；关掉推送时实体仍在，但是不可用。和 **画面变化**、**人形检测** 开关不同（开关是开不开检测）
+  - **呼叫** — 能接呼叫的通道上的事件。有来电时触发，未接听不会。需 **启用事件推送** 且勾选 **设备能力事件**；关掉推送时实体仍在，但是不可用
+  - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且勾选 **设备能力事件**；关掉时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
+  - 隐私模式、夜视、画面翻转、宽动态（选择框）、智能追踪
   - **白光灯**（`light`），仅在有补光灯的摄像头上出现，只能开关
   - 彩色灯泡显示为一盏 **灯**：可开关、调节亮度、选择色温或颜色、选择场景，灯泡上还有倒计时。调节色温会切到白光。白光亮度和彩光亮度互不影响。彩色灯泡不显示 **告警时通知**
   - 告警联动白光灯、告警联动警笛（配置区开关）
-  - 具备 Siren 能力或 IoT refs `25500`/`22200` 的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位（与固件常见鸣响时长一致）；若已开事件推送，收到 `sirenOff` 会立即关
+  - 支持警笛的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位，收到警笛解除推送时会立即复位
   - 音频录制、设备提示音、异常音告警
   - 重启设备
   - **媒体浏览器** — 在 **媒体** 中按通道浏览云录像、本地录像和告警时录像（[说明](guides/configuration.md#media-browser-zh)）
-  - **智见** — **AI智见** / **云存储** 传感器、告警可选 AI 文案、账号工作台（搜索、简报、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
+  - **智见** — **AI智见** / **云存储** 传感器、告警通知中的识别对象与画面描述、侧边栏（简报、搜索、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
 * **告警传感器**
   - 状态（名称、在线、电量等）
   - 布防 — `alarm_control_panel`（在家 / 离家 / 撤防）
@@ -274,7 +274,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 状态（名称、用电、在线）
   - 插座开关与倒计时（`number`，分钟；剩余时间在本机倒数，关掉状态轮询也会走）
   - 插座指示灯
-  - 最大功率（`number`，瓦）
+  - 过充保护（`switch`）
 
 ## 故障排查
 
@@ -286,12 +286,12 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 自动化可监听 `imou_life_event`（所有已接受推送）与 `imou_life_alarm`（仅安防告警）。隐私遮蔽消息（`openCamera` / `closeCamera`）仅触发 `imou_life_event`。
   - 若收到 `abAlarmSound` 或 `closeCamera`，说明回调/Webhook 路径正常。
   - 若始终收不到 `videoMotion` / `human` / `mobileDetect`：确认设备已开启画面变化/人形检测；下载**诊断**并查看 `event_push.recent_msg_type_counts`。缺少对应键表示云端/设备未推送该类型（非 HA 分类错误）。对不上 Home Assistant 设备的推送会被丢弃（仍返回 HTTP 200）。
-  - 确认 **配置** 中已启用事件推送且推送类型包含 **alarm**。
-  - **呼叫** 没有实体：这个通道不能接呼叫。实体在但是不可用：打开事件推送且类型含 **alarm**。画面变化和人形检测是另一实体（**动态侦测**）。
-  - **告警图片** 没有实体：那不是摄像头。实体在但是不可用：打开事件推送且类型含 **alarm**。实体可用但没有画面：上次告警没有图，或解密没成功。该实体不会去拍直播快照。
-  - **动态侦测** 没有实体：这台摄像头不支持画面变化或人形检测。实体在但是不可用：打开事件推送且类型含 **alarm**。一直是 **清除**：摄像头还没有上报移动。车辆和宠物告警不会改变它。
-  - 物模型开关 / 传感器重载后停住：确认已开事件推送且类型含 **物模型设备消息**；下载**诊断**看 `event_push.recent_msg_type_counts` 有没有 `iotProperty`。取消勾选该类型即恢复属性轮询。
-- **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。v1.4.1 起插座倒计时和最大功率的 `text.set_value` 改为 `number.set_value`，摄像头白光灯的 `switch.turn_on` / `turn_off` 改为 `light.turn_on` / `light.turn_off`。遗留的 `select.*_mode`、警号 button、`text` 和白光灯 `switch` 注册行会在加载时删除。
+  - 确认 **配置** 中已启用事件推送且 **订阅类型** 勾选了 **设备能力事件**。
+  - **呼叫** 没有实体：这个通道不能接呼叫。实体在但是不可用：打开事件推送并勾选 **设备能力事件**。画面变化和人形检测是另一实体（**动态侦测**）。
+  - **告警图片** 没有实体：那不是摄像头。实体在但是不可用：打开事件推送并勾选 **设备能力事件**。实体可用但没有画面：上次告警没有图，或解密没成功。该实体不会去拍直播快照。
+  - **动态侦测** 没有实体：这台摄像头不支持画面变化或人形检测。实体在但是不可用：打开事件推送并勾选 **设备能力事件**。一直是 **清除**：摄像头还没有上报移动。车辆和宠物告警不会改变它。
+  - 智能插座、灯泡或传感器状态重载后不再变化：确认已开启事件推送并勾选 **设备能力事件**；或取消勾选 **设备能力事件** 以恢复间隔轮询。
+- **升级后自动化** — v1.3.0 起移除自定义 `imou_life.turn_on` / `turn_off` / `select` 服务；请使用标准 `switch.turn_on`、`select.select_option`、`button.press`。v1.4.0 起 `select.*_mode` 的 `select.select_option` 改为 `alarm_control_panel.alarm_arm_home` / `alarm_arm_away` / `alarm_disarm`；`button.siren_start` / `siren_stop` 改为 `siren.turn_on` / `siren.turn_off`。v1.4.1 起插座倒计时的 `text.set_value` 改为 `number.set_value`，摄像头白光灯的 `switch.turn_on` / `turn_off` 改为 `light.turn_on` / `light.turn_off`。v2.0.0 起 **宽动态** 改为 `select`，插座 **过充保护** 改为 `switch`，**门铃** 改为 **呼叫**。旧版本遗留的注册表行会在加载时移除。
 - **多目摄像头、NVR 与网关配件** — 每路镜头或 NVR 通道都是独立设备，挂在整台设备的页面下；那个页面本身不带实体。配件挂在它配对的网关下。删除整台设备的页面即停止轮询这台设备；单独删除一路通道会被拒绝，因为排除只能按设备来。Home Assistant **2026.9** 及以上、集成已更新到 **1.4.2** 或更新版本后，若某路镜头缺少 **直播** 或 **告警图片**，请重新加载集成。
 - **云台收藏点** — 对 `select.<设备>_collection_point` 使用 `select.select_option`，选项填乐橙 App 中的收藏点名称。当前位置未知时，下拉框显示 **选择收藏点…**。
 - **诊断** — 在集成条目的三点菜单中 **下载诊断**（已脱敏）。

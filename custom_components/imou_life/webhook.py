@@ -610,7 +610,11 @@ def _apply_property_push_values(
         )
         return
     device = _resolve_imou_ha_device_for_push(runtime, event_data)
-    if device is None or (require_capability and device.capability_set is None):
+    if device is None or (
+        require_capability
+        and device.capability_ids is None
+        and device.capability_set is None
+    ):
         return
     coordinator = runtime.coordinator
     if coordinator.device_manager.apply_property_values(device, values):

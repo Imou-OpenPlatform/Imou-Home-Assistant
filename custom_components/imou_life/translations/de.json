@@ -256,6 +256,9 @@
         "detected_vehicle": "Fahrzeug",
         "detected_pet": "Haustier",
         "detected_package": "Paket",
+        "detected_object": "Objekt",
+        "no_target": "Kein Ziel erkannt.",
+        "target_detected": "Ziel erkannt.",
         "picture": "Bildbeschreibung: {description}",
         "unknown_device": "Unbekanntes Gerät",
         "unknown_alarm": "Alarm"

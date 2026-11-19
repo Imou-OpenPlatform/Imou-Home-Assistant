@@ -2289,7 +2289,7 @@ async def test_mp4_refresh_failure_is_final_and_cleans_partial(
             RequestFailedException("No permission", api_code=ERROR_CODE_NO_PERMISSION),
         ]
     )
-    partial = hass.config.path(f"www/imou/playback/{cache_id}.part.mp4")
+    partial = hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4")
 
     def expired_remux(_source_url: str, output: Path) -> None:
         output.write_bytes(b"partial")
@@ -2324,7 +2324,7 @@ async def test_mp4_refresh_cancellation_propagates_and_cleans_partial(
             asyncio.CancelledError(),
         ]
     )
-    partial = hass.config.path(f"www/imou/playback/{cache_id}.part.mp4")
+    partial = hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4")
 
     def expired_remux(_source_url: str, output: Path) -> None:
         output.write_bytes(b"partial")
@@ -2429,7 +2429,7 @@ async def test_mp4_cancel_during_communicate_terminates_process(
 ) -> None:
     cache_id = f"cancel-process-{time.time_ns()}"
     communicate_started = asyncio.Event()
-    partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
+    partial = Path(hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4"))
     process = MagicMock(returncode=None)
 
     async def communicate():
@@ -2471,7 +2471,7 @@ async def test_mp4_timeout_terminates_then_kills_process(
     hass: HomeAssistant,
 ) -> None:
     cache_id = f"timeout-process-{time.time_ns()}"
-    partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
+    partial = Path(hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4"))
     process = MagicMock(returncode=None)
 
     async def communicate():
@@ -2536,7 +2536,7 @@ async def test_mp4_process_success_atomically_publishes_output(
     hass: HomeAssistant,
 ) -> None:
     cache_id = f"process-success-{time.time_ns()}"
-    partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
+    partial = Path(hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4"))
     process = MagicMock(returncode=0)
 
     async def communicate():
@@ -2584,7 +2584,7 @@ async def test_cancelling_same_cache_waiter_does_not_touch_owner_partial(
     hass: HomeAssistant,
 ) -> None:
     cache_id = f"waiter-cancel-{time.time_ns()}"
-    partial = Path(hass.config.path(f"www/imou/playback/{cache_id}.part.mp4"))
+    partial = Path(hass.config.path(f"imou_life/playback_cache/{cache_id}.part.mp4"))
     remux_started = asyncio.Event()
     allow_remux = asyncio.Event()
     provider = AsyncMock(return_value=_local_hls_descriptor())
@@ -2665,3 +2665,50 @@ async def test_cancelling_same_cache_owner_allows_waiter_to_take_over(
     assert await hass.async_add_executor_job(output.read_bytes) == b"complete"
     assert remux_calls == 2
     assert provider.await_count == 2
+
+
+def test_prune_playback_cache_drops_stale_excess_and_legacy_www_files(
+    tmp_path: Path,
+) -> None:
+    import os
+
+    from custom_components.imou_life.record_playback_mp4 import _prune_playback_cache
+
+    cache_dir = tmp_path / "imou_life" / "playback_cache"
+    legacy_dir = tmp_path / "www" / "imou" / "playback"
+    cache_dir.mkdir(parents=True)
+    legacy_dir.mkdir(parents=True)
+    legacy_file = legacy_dir / "old-public.mp4"
+    legacy_file.write_bytes(b"legacy")
+
+    expired = cache_dir / "expired.mp4"
+    expired.write_bytes(b"expired")
+    stale_time = time.time() - 48 * 3600
+    os.utime(expired, (stale_time, stale_time))
+
+    protected = cache_dir / "active.mp4"
+    protected.write_bytes(b"active")
+    os.utime(protected, (stale_time, stale_time))
+
+    now = time.time()
+    for idx in range(36):
+        clip = cache_dir / f"clip-{idx:02d}.mp4"
+        clip.write_bytes(b"clip")
+        ts = now - (36 - idx)
+        os.utime(clip, (ts, ts))
+
+    _prune_playback_cache(
+        cache_dir,
+        legacy_public_dir=legacy_dir,
+        keep_cache_ids={"active"},
+    )
+
+    assert not legacy_file.exists()
+    assert not expired.exists()
+    assert protected.exists()
+    remaining = sorted(
+        path.name for path in cache_dir.glob("*.mp4") if path.name != "active.mp4"
+    )
+    assert len(remaining) == 32
+    assert "clip-00.mp4" not in remaining
+    assert "clip-35.mp4" in remaining

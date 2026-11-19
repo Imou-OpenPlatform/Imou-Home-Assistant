@@ -261,7 +261,7 @@ class ImouSensor(ImouEntity, SensorEntity):
 
     @property
     @override
-    def state_class(self) -> SensorStateClass | None:
+    def state_class(self) -> SensorStateClass | str | None:
         if self._storage_status_text():
             return None
         return self.entity_description.state_class

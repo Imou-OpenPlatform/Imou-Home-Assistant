@@ -109,9 +109,7 @@ def write_annotated_snap(
     return f"/local/{_SNAP_SUBDIR.as_posix()}/{filename}"
 
 
-def annotated_snap_url(
-    hass: HomeAssistant, local_path: str
-) -> str:
+def annotated_snap_url(hass: HomeAssistant, local_path: str) -> str:
     """Return a URL a phone can fetch for an annotated snapshot."""
     return public_media_url(hass, local_path)
 

@@ -109,6 +109,8 @@ def _sync_curl_response(
             "-sS",
             "--max-time",
             _CURL_TIMEOUT,
+            "--max-filesize",
+            "67108864",
             "--http1.1",
             "--proto",
             "=http,https",

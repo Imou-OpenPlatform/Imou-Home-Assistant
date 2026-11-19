@@ -256,6 +256,9 @@
         "detected_vehicle": "Veicolo",
         "detected_pet": "Animale",
         "detected_package": "Pacco",
+        "detected_object": "Oggetto",
+        "no_target": "Nessun bersaglio rilevato.",
+        "target_detected": "Bersaglio rilevato.",
         "picture": "Descrizione: {description}",
         "unknown_device": "Dispositivo sconosciuto",
         "unknown_alarm": "Allarme"

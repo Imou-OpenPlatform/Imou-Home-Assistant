@@ -66,12 +66,17 @@ def _device_offers_call(device: ImouHaDevice) -> bool:
     """True when this channel lists an incoming-call event or call controls."""
     if device.channel_id is None:
         return False
-    capability = device.capability_set
-    if capability is None:
-        return False
-    if _CALL_SESSION_EVENT in capability.events:
+    capability_ids = device.capability_ids
+    if capability_ids is None:
+        capability = device.capability_set
+        if capability is None:
+            return False
+        if _CALL_SESSION_EVENT in capability.events:
+            return True
+        return bool(_CALL_SESSION_SERVICES.intersection(capability.services))
+    if _CALL_SESSION_EVENT in capability_ids:
         return True
-    return bool(_CALL_SESSION_SERVICES.intersection(capability.services))
+    return bool(_CALL_SESSION_SERVICES.intersection(capability_ids))
 
 
 async def async_setup_entry(

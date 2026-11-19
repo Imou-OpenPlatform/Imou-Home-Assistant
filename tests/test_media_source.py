@@ -27,6 +27,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
 
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
+
 
 def test_split_identifier() -> None:
     assert _split(None) == []
@@ -60,6 +62,7 @@ def _record_device(
     device = ImouHaDevice(device_id, "Camera", "Imou", "IPC", "1.0")
     device.set_channel_id(channel_id)
     if services is not None:
+        device.set_capability_ids(services)
         device.set_capability_set(
             CapabilitySet(
                 properties={},
@@ -218,6 +221,7 @@ async def test_local_folder_reflects_capability_rediscovery(
     source, entry, _ = _record_browse_source(hass, [device])
     assert "Local recordings" not in await _browse_record_kinds(source, entry)
 
+    device.set_capability_ids({"record.file.bitmap", "record.file.list"})
     device.set_capability_set(
         CapabilitySet(
             properties={},

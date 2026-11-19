@@ -4,33 +4,35 @@
 
 ### [2.0.0]
 
+#### Breaking
+
+- **Wide dynamic** is now a **select** (off / on / adaptive where supported) instead of a switch.
+- Plug **Overcharge protection** is now a **switch** instead of a wattage number. Leftover `number.*` rows for it are removed on setup.
+- **Call** replaces **Doorbell**. A channel that can receive a call shows **Call**, and an incoming call fires it. The old doorbell entity is removed on setup.
+- Under **Configure → Alarm push and notifications**, **Subscribe to** now offers **Device capability events** and **Device online/offline**. Reopen that page after upgrading and select **Device capability events** if you rely on alarm notifications, **Motion**, **Call**, **Alarm picture**, or **Record on alarm**.
+
 #### Added
 
-- **Event push** can subscribe to **Device capability events** (V2) alongside legacy alarm and device status types. Configure under **Configure → Alarm push and notifications**.
-- Entities are created only for capabilities your device reports on the Open Platform **capability list** (same gate for plugs and cameras).
-- **Media browser** — browse **cloud** and **local** recordings per camera channel under **Media**, then play clips with HLS (local tree appears when the device supports local recording file access).
-- **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; optional **AI** line in alarm notification templates when your template includes it.
-- **AI Insight** (per account) — sidebar **Briefing**, **Search**, and **Trial**, plus services **`search_ai_alarms`** / **`refresh_ai_insight_briefing`** (default last 7 days). Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
-- Service **`device_snap_detect`** — cloud snapshot with person / vehicle / pet detection; optional notify targets (defaults to persistent notification and every `mobile_app_*` notify service when omitted).
+- **Media browser** — browse **Cloud recordings**, **Local recordings** (when the device supports local recording access), and **Record on alarm** clips per camera channel under **Media**.
+- **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
+- **AI Insight** sidebar (**Briefing**, **Search**, and **Trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **Briefing** refreshes that day's summary, risk periods, hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Search** steps through results with **Previous** and **Next**. **Trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
+- Service **`device_snap_detect`** — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, draws detection boxes on the picture, and sends it to your notification targets (defaults to the Home Assistant web notification drawer and signed-in Companion Apps when omitted).
 - Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
 
 #### Changed
 
 - Requires **pyimouapi 2.0.0**, installed automatically with this integration.
-- The sidebar gains **AI Insight** (**Briefing**, **Search**, **Trial**). Picking a date on Briefing refreshes that day. Search turns with **Previous** and **Next**. **Trial** explains that adding the official WeChat or WhatsApp starts a trial.
-- The briefing chart shows **person**, **vehicle**, **pet**, **package**, and the **day total**.
-- On devices that use the new capability path, **Wide dynamic** appears as a **select** (off / on / adaptive where supported), not a switch.
-- Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account. Checking one again brings it back.
-- Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has an Alarm pictures page. The picture password is read when Imou Life loads. Change it in the Imou app, then reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
+- Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
+- Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
+- Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has a separate Alarm pictures page. The picture password is read when Imou Life loads; if you change it in the Imou app, reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
 - Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
 - **Sleep control retry wait** is set under **Configure → Polling and cameras → Camera defaults**.
-- **Call** replaces **Doorbell**. A channel that can receive a call shows **Call**, and an incoming call fires it. The old doorbell entity is removed on setup.
-- **Motion** shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears. A motion event from this version is removed on setup.
-- When the two official libraries for alarm pictures are missing, **Settings → System → Repairs** says where to put them and where to download them. A host that is not linux x86-64 gets a repair saying pictures stay encrypted.
+- **Motion** shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears.
+- When the two official `.so` libraries for alarm pictures are missing, **Settings → System → Repairs** explains where to download and place them. A host that is not linux x86-64 gets a repair noting that pictures stay encrypted.
 
 #### Fixed
 
-- The **Live** camera reuses the last still for 30 seconds. Opening it again in that time shows the same picture and does not ask the cloud for another snapshot
+- The **Live** camera reuses the last still for 30 seconds. Opening it again in that window shows the same picture without spending another snapshot call.
 
 ### [1.4.4]
 
@@ -370,33 +372,35 @@
 
 ### [2.0.0]
 
+#### 破坏性变更
+
+- **宽动态** 改为 **选择框**（关 / 开 / 自适应，以设备支持为准），不再是开关。
+- 插座 **过充保护** 改为 **开关**，不再是功率数值；旧的 `number.*` 实体会在加载时移除。
+- **呼叫** 取代 **门铃**。能接呼叫的通道显示 **呼叫**，有来电时触发；旧的门铃实体会在加载时删除。
+- **配置 → 告警推送与通知** 中的 **订阅类型** 现提供 **设备能力事件** 与 **设备上下线**。升级后若使用告警通知、**动态侦测**、**呼叫**、**告警图片** 或 **告警时录像**，请重新打开该页勾选 **设备能力事件**。
+
 #### 新增
 
-- 告警推送可订阅 **设备事件消息**（V2 能力事件），与原有告警、设备状态等类型并存；在 **配置 → 告警推送与通知** 中选择。
-- 实体仅根据开放平台返回的 **能力列表** 创建（插座与摄像头同一套门控）。
-- **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像** 与 **本地录像**（设备支持本地录像文件能力时显示本地树），用 HLS 播放片段。
-- **智见**（摄像头通道）— 诊断用 **智见**、**云存储** 传感器；告警通知模板可选用 **智见** 文案行。
-- **AI 智见**（按账号）— 侧边栏的 **简报**、**搜索**、**试用**，以及服务 **`search_ai_alarms`** / **`refresh_ai_insight_briefing`**（默认近 7 天）。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
-- 服务 **`device_snap_detect`** — 云端抓图并做人 / 车 / 宠检测；可指定通知目标（省略时默认持久通知与各 `mobile_app_*` 通知服务）。
+- **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。
+- **智见**（摄像头通道）— 诊断用 **AI智见**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
+- **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后自动刷新当天概览、风险时段、两小时分段与告警统计（**人形**、**车辆**、**宠物**、**包裹**、**全部**）。**搜索** 用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- 服务 **`device_snap_detect`** — 对指定摄像头云端抓图并做人 / 车 / 宠检测，把检测框画到图片上并发送到通知目标（省略时默认发送到 Home Assistant 网页通知栏与已登录的手机 App）。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
 #### 变更
 
 - 需要 **pyimouapi 2.0.0**，随本集成自动安装。
-- 侧边栏会出现 **AI 智见**（**简报**、**搜索**、**试用**）。在简报里选定日期后会自动重算。搜索用 **上一页**、**下一页** 翻页。**试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
-- 简报按 **人形**、**车辆**、**宠物**、**包裹**、**全部** 显示当天数量。
-- 走新标准能力路径的设备上，**宽动态** 为 **选择框**（关 / 开 / 自适应，以设备能力为准），不再是开关。
-- **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备。重新勾选后，设备会再出现。
-- 告警图片只要推送里带图，就会在本机解密。**配置** 里不再有「告警图片」这一页。图片密码在 Imou Life 加载时读取。在乐橙 App 里改了密码后，重新加载本集成，图片才会用新密码。仍解不开的图片会再试设备序列号。
-- **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置。各摄像头的开关仍在设备页。
+- 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
+- **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
+- 告警图片只要推送里带图就会在本机解密，**配置** 里不再单独设「告警图片」页。图片密码在 Imou Life 加载时读取；在乐橙 App 里修改密码后，重新加载本集成才会使用新密码。仍解不开的图片会尝试设备序列号。
+- **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置，各摄像头的开关仍在设备页。
 - **休眠控制重试等待** 改在 **配置 → 轮询与摄像头 → 摄像头默认** 里设置。
-- **呼叫** 取代门铃。能接呼叫的通道显示 **呼叫**，有来电时触发。原来的门铃实体会在加载时删除。
-- **动态侦测** 在摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。这一版里的动态侦测事件会在加载时删除。
-- 告警图片缺少两个官方库时，**设置 → 系统 → 修复** 会说明放到哪里、从哪里下载。不是 linux x86-64 的机器会提示图片保持加密。
+- **动态侦测** 在摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。
+- 告警图片缺少两个官方 `.so` 库时，**设置 → 系统 → 修复** 会说明下载地址与放置目录；非 linux x86-64 主机会提示图片保持加密。
 
 #### 修复
 
-- **直播** 会把最近一张静止画面留 30 秒。这段时间里再次打开用的是同一张图，不会再向云端要一张
+- **直播** 会将最近一张静止画面保留 30 秒，这段时间内再次打开直接复用，不会重复请求云端抓图。
 
 ### [1.4.4]
 

@@ -256,6 +256,9 @@
         "detected_vehicle": "车",
         "detected_pet": "宠物",
         "detected_package": "包裹",
+        "detected_object": "目标",
+        "no_target": "未检测到目标。",
+        "target_detected": "已检测到目标。",
         "picture": "画面描述：{description}",
         "unknown_device": "未知设备",
         "unknown_alarm": "告警"

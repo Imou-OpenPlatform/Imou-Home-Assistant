@@ -42,6 +42,7 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     device.device_ability = "WLAN"
     device.channel_ability = "WLAN"
     device.capability_set = None
+    device.capability_ids = None
     device.device_name = "Front"
     device.channel_name = "Front"
     device.manufacturer = "Imou"
@@ -144,24 +145,32 @@ def _capability(
     return capability
 
 
+def _set_call_ids(
+    device: MagicMock,
+    *,
+    services: tuple[str, ...] = (),
+    events: tuple[str, ...] = (),
+) -> None:
+    device.capability_ids = frozenset((*services, *events))
+    device.capability_set = _capability(services=services, events=events)
+
+
 def test_iter_call_events_follows_v2_call() -> None:
     """Doorbell follows an incoming call, not every camera."""
     camera = _device(channel_id="0")
-    camera.capability_set = _capability(events=("call.session.called",))
+    _set_call_ids(camera, events=("call.session.called",))
     plug = _device(channel_id=None, device_id="PLUG")
-    plug.capability_set = _capability(events=("call.session.called",))
+    _set_call_ids(plug, events=("call.session.called",))
     no_call = _device(channel_id="0", device_id="IPC2")
-    no_call.capability_set = _capability(services=("ptz.aim.step",))
+    _set_call_ids(no_call, services=("ptz.aim.step",))
     pairs = _iter_call_events(_coordinator([camera, plug, no_call]))
-    assert [(key, device.device_id) for key, device in pairs] == [
-        (PARAM_CALL, "SN1")
-    ]
+    assert [(key, device.device_id) for key, device in pairs] == [(PARAM_CALL, "SN1")]
 
 
 def test_iter_call_events_accepts_call_controls() -> None:
     """Answer, hang up, and refuse are the call feature when the event is absent."""
     camera = _device(channel_id="0")
-    camera.capability_set = _capability(services=("call.session.answer",))
+    _set_call_ids(camera, services=("call.session.answer",))
     assert _iter_call_events(_coordinator([camera])) == [(PARAM_CALL, camera)]
 
 
@@ -177,7 +186,7 @@ def test_iter_call_events_channel_without_call_is_skipped() -> None:
     """A channel whose capability list has no call feature is skipped."""
     camera = _device(channel_id="1")
     camera.is_ipc = False
-    camera.capability_set = _capability(services=("call.session.deviceTalk",))
+    _set_call_ids(camera, services=("call.session.deviceTalk",))
     assert _iter_call_events(_coordinator([camera])) == []
 
 
@@ -185,7 +194,7 @@ def test_iter_call_events_iot_uses_the_same_v2_call() -> None:
     """A product id does not change the capability check."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
-    camera.capability_set = _capability(events=("call.session.called",))
+    _set_call_ids(camera, events=("call.session.called",))
     assert _iter_call_events(_coordinator([camera])) == [(PARAM_CALL, camera)]
 
 

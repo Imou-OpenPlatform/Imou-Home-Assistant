@@ -101,8 +101,6 @@ def _assert_returned_to_menu(result) -> None:
     assert result["step_id"] == "init"
 
 
-
-
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_options_flow_init_shows_menu(hass) -> None:
     """Options init is a menu to pick which settings to edit."""

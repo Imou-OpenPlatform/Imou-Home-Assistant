@@ -17,7 +17,7 @@ from homeassistant.const import (
     CONF_NAME,
     EVENT_STATE_CHANGED,
 )
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
@@ -146,9 +146,12 @@ def build_insight_dashboard(
     briefing_cards: list[dict[str, Any]] = []
     search_cards: list[dict[str, Any]] = []
     for account in ready:
+        select_entity = account.select_entity
+        if select_entity is None:
+            continue
         device_name = copy["device"] if single else account.title
-        briefing_rows.append({"entity": account.select_entity, "name": device_name})
-        search_rows.append({"entity": account.select_entity, "name": device_name})
+        briefing_rows.append({"entity": select_entity, "name": device_name})
+        search_rows.append({"entity": select_entity, "name": device_name})
         button_name = copy["search"]
         if not single:
             button_name = f"{button_name} · {account.title}"
@@ -165,19 +168,19 @@ def build_insight_dashboard(
                     _search_button(
                         previous_name,
                         "mdi:chevron-left",
-                        account.select_entity,
+                        select_entity,
                         {"page": "previous"},
                     ),
                     _search_button(
                         button_name,
                         "mdi:magnify",
-                        account.select_entity,
+                        select_entity,
                         {"days": 7},
                     ),
                     _search_button(
                         next_name,
                         "mdi:chevron-right",
-                        account.select_entity,
+                        select_entity,
                         {"page": "next"},
                     ),
                 ],
@@ -367,8 +370,7 @@ def _loaded_entries(hass: HomeAssistant) -> list[ImouConfigEntry]:
     return [
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
-        if entry.state
-        in (ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS)
+        if entry.state in (ConfigEntryState.LOADED, ConfigEntryState.SETUP_IN_PROGRESS)
     ]
 
 
@@ -417,9 +419,7 @@ async def _copy(hass: HomeAssistant) -> dict[str, str]:
         hass, language, "selector", integrations={DOMAIN}
     )
     return {
-        key: selector_option_label(
-            hass, language, "insight_dashboard", key, fallback
-        )
+        key: selector_option_label(hass, language, "insight_dashboard", key, fallback)
         for key, fallback in _COPY_DEFAULTS.items()
     }
 
@@ -430,7 +430,7 @@ async def _ensure_listener(hass: HomeAssistant) -> None:
         return
 
     @callback
-    def _on_state(event: Event) -> None:
+    def _on_state(event: Event[EventStateChangedData]) -> None:
         entity_id = event.data.get(ATTR_ENTITY_ID)
         old = event.data.get("old_state")
         new = event.data.get("new_state")
@@ -461,28 +461,18 @@ async def _ensure_listener(hass: HomeAssistant) -> None:
 
 
 async def _watch_language(hass: HomeAssistant) -> None:
-    """Republish the dashboard when the owner changes profile language."""
+    """Republish the dashboard when the system or owner language changes."""
+    from homeassistant.const import EVENT_CORE_CONFIG_UPDATE
+
     data = hass.data.setdefault(DOMAIN, {})
     if data.get(_LANGUAGE_FLAG):
         return
-    try:
-        owner = await hass.auth.async_get_owner()
-    except Exception:
-        return
-    if owner is None:
-        return
-    from homeassistant.components.frontend.storage import async_user_store
-
-    try:
-        store = await async_user_store(hass, owner.id)
-    except Exception:
-        return
 
     @callback
-    def _changed() -> None:
+    def _on_config(_event: Event[Any]) -> None:
         hass.async_create_task(_republish_current(hass), eager_start=True)
 
-    data[_LANGUAGE_FLAG] = store.async_subscribe("language", _changed)
+    data[_LANGUAGE_FLAG] = hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, _on_config)
 
 
 async def _republish_current(hass: HomeAssistant) -> None:
@@ -606,9 +596,10 @@ async def _publish(hass: HomeAssistant, date_entity: str, keyword_entity: str) -
                 "show_in_sidebar": True,
             }
         )
-    elif existing.get("title") != copy["title"] or existing.get(
-        CONF_ICON
-    ) != DASHBOARD_ICON:
+    elif (
+        existing.get("title") != copy["title"]
+        or existing.get(CONF_ICON) != DASHBOARD_ICON
+    ):
         await collection.async_update_item(
             existing[CONF_ID],
             {"title": copy["title"], CONF_ICON: DASHBOARD_ICON},

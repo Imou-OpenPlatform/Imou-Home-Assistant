@@ -235,6 +235,9 @@ def _bulb_device(*, supported_refs: set[str] | None = None) -> MagicMock:
     device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
     device.switches = {}
     device.bulb_light = empty_bulb_state()
+    device.capability_ids = (
+        frozenset(supported_refs) if supported_refs is not None else None
+    )
     device.capability_set = (
         CapabilitySet(
             properties=dict.fromkeys(supported_refs),  # type: ignore[dict-item]
@@ -253,6 +256,7 @@ def _set_bulb_capabilities(
     supported_refs: set[str],
 ) -> None:
     """Replace the public capability snapshot used by an existing entity."""
+    device.capability_ids = frozenset(supported_refs)
     device.capability_set = CapabilitySet(
         properties=dict.fromkeys(supported_refs),  # type: ignore[dict-item]
         services=frozenset(),

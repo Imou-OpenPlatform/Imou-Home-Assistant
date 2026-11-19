@@ -163,6 +163,7 @@ def _paas_camera(device_id: str, *, properties: tuple[str, ...] = ()) -> MagicMo
     capability.services = frozenset()
     capability.events = frozenset()
     device.capability_set = capability
+    device.capability_ids = frozenset(properties)
     return device
 
 

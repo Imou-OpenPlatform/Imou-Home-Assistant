@@ -213,6 +213,7 @@ async def test_removing_the_account_device_deselects_it(hass: HomeAssistant) -> 
 
     account = _row(hass, "dev0")
     assert await async_remove_config_entry_device(hass, entry, account) is True
+    await hass.async_block_till_done()
     assert entry.options[PARAM_SELECTED_DEVICES] == ["dev9"]
 
 

@@ -256,6 +256,9 @@
         "detected_vehicle": "Vehicle",
         "detected_pet": "Pet",
         "detected_package": "Package",
+        "detected_object": "Object",
+        "no_target": "No target detected.",
+        "target_detected": "Target detected.",
         "picture": "Picture: {description}",
         "unknown_device": "Unknown device",
         "unknown_alarm": "Alarm"

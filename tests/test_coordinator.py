@@ -34,6 +34,8 @@ def _mock_device(device_id: str, channel_id: str | None = None) -> MagicMock:
     device.product_id = f"prod_{device_id}"
     device.parent_device_id = None
     device.parent_product_id = None
+    device.capability_ids = None
+    device.capability_set = None
     return device
 
 
@@ -414,6 +416,36 @@ async def test_rediscovery_retries_and_merges_complete_v2_snapshot(
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
+    callback.assert_called_once_with([current])
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_refreshes_when_page_capability_ids_change_without_detail(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Changing page capability ids updates entities even if capability.list failed."""
+    initial = ImouHaDevice("cam", "Cam", "Imou", "IPC", "1.0")
+    initial.set_channel_id("0")
+    initial.set_capability_ids(frozenset())
+    coordinator = await _run_update(hass, device_manager, [initial])
+    callback = MagicMock()
+    coordinator.new_device_callbacks.append(callback)
+
+    updated = ImouHaDevice("cam", "Cam", "Imou", "IPC", "1.0")
+    updated.set_channel_id("0")
+    updated.set_capability_ids({"detection.motion.enabled"})
+    updated.switches["motion_detect"] = {
+        "state": False,
+        "v2_target_id": "detection.motion.enabled",
+    }
+
+    device_manager.async_get_devices.return_value = [updated]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    current = coordinator.devices[0]
+    assert current.capability_ids == frozenset({"detection.motion.enabled"})
+    assert "motion_detect" in current.switches
     callback.assert_called_once_with([current])
 
 

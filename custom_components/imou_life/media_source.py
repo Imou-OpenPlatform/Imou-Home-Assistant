@@ -172,12 +172,14 @@ def _decode_file_token(token: str) -> str:
 
 def _supports_local_records(device: ImouHaDevice | None) -> bool:
     """Return whether a device exposes both local-recording services."""
-    if device is None or device.capability_set is None:
+    if device is None:
         return False
-    return {
-        "record.file.bitmap",
-        "record.file.list",
-    } <= device.capability_set.services
+    required = {"record.file.bitmap", "record.file.list"}
+    if device.capability_ids is not None:
+        return required <= device.capability_ids
+    if device.capability_set is None:
+        return False
+    return required <= device.capability_set.services
 
 
 class ImouRecordMediaSource(MediaSource):

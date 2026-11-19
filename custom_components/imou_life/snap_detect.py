@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pyimouapi.exceptions import ImouException
 from pyimouapi.snap_detect import DeviceSnapDetectResult, parse_device_snap_detect_data
@@ -17,9 +18,12 @@ from .const import DOMAIN, SERVICE_DEVICE_SNAP_DETECT
 from .coordinator import ImouConfigEntry
 from .helpers import (
     async_deliver_message_to_targets,
+    async_display_language,
     default_notify_service_targets,
+    fill_template,
     parse_notify_services,
     resolve_ha_device_name,
+    selector_option_label,
 )
 from .runtime_data import get_runtime_data
 from .snap_boxes import annotate_snap_jpeg, annotated_snap_url, write_annotated_snap
@@ -27,28 +31,49 @@ from .snap_boxes import annotate_snap_jpeg, annotated_snap_url, write_annotated_
 _LOGGER = logging.getLogger(__name__)
 
 _TARGET_LABELS = {
-    "human": "person",
-    "vehicle": "vehicle",
-    "animal": "pet",
-    "box": "object",
+    "human": ("detected_person", "Person"),
+    "vehicle": ("detected_vehicle", "Vehicle"),
+    "animal": ("detected_pet", "Pet"),
+    "box": ("detected_object", "Object"),
 }
 
 
-def _build_notification(
-    device_name: str, result: DeviceSnapDetectResult, picture_url: str | None
+async def _async_build_notification(
+    hass: HomeAssistant,
+    device_name: str,
+    result: DeviceSnapDetectResult,
+    picture_url: str | None,
 ) -> tuple[str, str]:
+    language = await async_display_language(hass)
+    await translation.async_get_translations(
+        hass, language, "selector", integrations={DOMAIN}
+    )
+
+    def copy(key: str, fallback: str, **values: str) -> str:
+        template = selector_option_label(
+            hass, language, "webhook_notification", key, fallback
+        )
+        return fill_template(template, fallback, **values)
+
     title = device_name
     if not result.detect_result and not result.targets:
-        message = "No target detected."
+        message = copy("no_target", "No target detected.")
     else:
         parts: list[str] = []
         for target in result.targets:
-            label = _TARGET_LABELS.get(target.target_type, target.target_type)
+            mapped = _TARGET_LABELS.get(target.target_type)
+            label = (
+                copy(mapped[0], mapped[1]) if mapped is not None else target.target_type
+            )
             if target.confidence not in (None, ""):
                 parts.append(f"{label} ({target.confidence})")
             else:
                 parts.append(label)
-        message = "Detected: " + ", ".join(parts) if parts else "Target detected."
+        message = (
+            copy("detected", "Detected: {targets}", targets=", ".join(parts))
+            if parts
+            else copy("target_detected", "Target detected.")
+        )
     if picture_url:
         message = f"{message}\n\n![]({picture_url})"
     return title, message
@@ -256,7 +281,9 @@ async def async_handle_device_snap_detect(
         )
         if annotated:
             image_url = annotated
-    title, message = _build_notification(device_name, result, image_url)
+    title, message = await _async_build_notification(
+        hass, device_name, result, image_url
+    )
     await async_deliver_message_to_targets(
         hass, title, message, notify_targets, image_url=image_url
     )

@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
+from homeassistant.util import dt as dt_util
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 from pyimouapi.insight.search import InsightAlarmHit, parse_search_ai_alarms
@@ -257,7 +258,9 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
             translation_domain=DOMAIN,
             translation_key="insight_search_last_page",
         )
-    shown = [(hit, None) for hit in hits[:_SEARCH_PAGE_SIZE]]
+    shown: list[tuple[InsightAlarmHit, str | None]] = [
+        (hit, None) for hit in hits[:_SEARCH_PAGE_SIZE]
+    ]
     labels = await _search_labels(hass)
     summary, markdown = search_card(keyword, shown, page=page, labels=labels)
     search_sensor = runtime.workbench_search_sensor
@@ -313,7 +316,7 @@ def _briefing_stat_days(call: ServiceCall) -> tuple[str, str]:
             raise ServiceValidationError(msg) from err
         day = end_dt.strftime("%Y%m%d")
         return day, day
-    today = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%d")
+    today = dt_util.now().strftime("%Y%m%d")
     return today, today
 
 
