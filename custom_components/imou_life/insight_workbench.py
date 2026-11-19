@@ -432,6 +432,18 @@ _TAG_FALLBACKS = {
     "tag_pet": "Pet",
     "tag_package": "Package",
 }
+_TAG_ICONS = {
+    "tag_person": "🚶",
+    "tag_vehicle": "🚗",
+    "tag_pet": "🐾",
+    "tag_package": "📦",
+}
+_RISK_FALLBACKS = {
+    "risk_low": "Low",
+    "risk_medium": "Medium",
+    "risk_high": "High",
+    "risk_severe": "Severe",
+}
 
 
 def _message_icon(hit: InsightAlarmHit) -> str:
@@ -442,27 +454,63 @@ def _message_icon(hit: InsightAlarmHit) -> str:
     return "🔔"
 
 
+def _risk_word_key(level: int) -> str:
+    """Map a 1-10 risk level onto a short description."""
+    if level <= 3:
+        return "risk_low"
+    if level <= 6:
+        return "risk_medium"
+    if level <= 8:
+        return "risk_high"
+    return "risk_severe"
+
+
+def _risk_bar(level: int) -> str:
+    filled = max(0, min(level, 10))
+    return "●" * filled + "○" * (10 - filled)
+
+
 def _search_meta(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
     """Labels and risk level for one search result, in the owner's language."""
+    blocks: list[str] = []
+    seen = _seen_line(hit, labels)
+    if seen:
+        blocks.append(seen)
+    risk = _risk_line(hit, labels)
+    if risk:
+        blocks.append(risk)
+    return "\n\n".join(blocks)
+
+
+def _seen_line(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
     names: list[str] = []
     for raw in hit.ai_tags:
         key = _TAG_LABEL_KEYS.get(raw) or _TAG_LABEL_KEYS.get(raw.lower())
         label = raw.strip() if key is None else (labels.get(key) or _TAG_FALLBACKS[key])
-        if label and label not in names:
-            names.append(label)
-    parts: list[str] = []
-    if names:
-        joiner = "、" if labels.get("tag_person") == "人" else ", "
-        parts.append(joiner.join(names))
-    if hit.security_risk_level is not None:
-        parts.append(
-            fill_template(
-                labels.get("risk") or "Risk {level}",
-                "Risk {level}",
-                level=str(hit.security_risk_level),
-            )
-        )
-    return " · ".join(parts)
+        if not label or label in names:
+            continue
+        icon = _TAG_ICONS.get(key or "", "")
+        names.append(f"{icon} {label}".strip())
+    if not names:
+        return ""
+    heading = labels.get("seen") or "Seen"
+    return f"**{_md(heading)}** {' · '.join(names)}"
+
+
+def _risk_line(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
+    level = hit.security_risk_level
+    if level is None:
+        return ""
+    word_key = _risk_word_key(level)
+    word = labels.get(word_key) or _RISK_FALLBACKS[word_key]
+    detail = fill_template(
+        labels.get("risk") or "{word} ({level}/10)",
+        "{word} ({level}/10)",
+        word=word,
+        level=str(level),
+    )
+    heading = labels.get("risk_name") or "Risk"
+    return f"**{_md(heading)}** {_risk_bar(level)} {detail}"
 
 
 def _md(text: str) -> str:
@@ -589,8 +637,30 @@ async def _search_labels(hass: HomeAssistant) -> dict[str, str]:
         "count": selector_option_label(
             hass, language, "insight_dashboard", "search_count", "{count} alarms"
         ),
+        "seen": selector_option_label(
+            hass, language, "insight_dashboard", "search_seen", "Seen"
+        ),
+        "risk_name": selector_option_label(
+            hass, language, "insight_dashboard", "search_risk_name", "Risk"
+        ),
         "risk": selector_option_label(
-            hass, language, "insight_dashboard", "search_risk", "Risk {level}"
+            hass,
+            language,
+            "insight_dashboard",
+            "search_risk",
+            "{word} ({level}/10)",
+        ),
+        "risk_low": selector_option_label(
+            hass, language, "insight_dashboard", "risk_low", "Low"
+        ),
+        "risk_medium": selector_option_label(
+            hass, language, "insight_dashboard", "risk_medium", "Medium"
+        ),
+        "risk_high": selector_option_label(
+            hass, language, "insight_dashboard", "risk_high", "High"
+        ),
+        "risk_severe": selector_option_label(
+            hass, language, "insight_dashboard", "risk_severe", "Severe"
         ),
         "tag_person": selector_option_label(
             hass, language, "insight_dashboard", "tag_person", "Person"

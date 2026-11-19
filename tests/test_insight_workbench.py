@@ -146,8 +146,10 @@ def test_search_card_lists_a_hit() -> None:
     assert "Page 1" in markdown
     assert "🚗 **一辆车经过**" in markdown
     assert "![有人经过](/local/imou/thumbs/1.jpg)" in markdown
-    assert "Person · Risk 1" in markdown
-    assert "Vehicle · Risk 2" in markdown
+    assert "**Seen** 🚶 Person" in markdown
+    assert "**Risk** ●○○○○○○○○○ Low (1/10)" in markdown
+    assert "**Seen** 🚗 Vehicle" in markdown
+    assert "**Risk** ●●○○○○○○○○ Low (2/10)" in markdown
     assert "human" not in markdown
 
 
@@ -165,12 +167,16 @@ def test_search_card_uses_the_owner_language_for_labels() -> None:
         "骑车",
         [(hit, None)],
         labels={
+            "seen": "识别到",
+            "risk_name": "风险",
+            "risk": "{word} ({level}/10)",
+            "risk_low": "较低",
             "tag_person": "人",
             "tag_vehicle": "车",
-            "risk": "风险 {level}",
         },
     )
-    assert "人、车 · 风险 3" in markdown
+    assert "**识别到** 🚶 人 · 🚗 车" in markdown
+    assert "**风险** ●●●○○○○○○○ 较低 (3/10)" in markdown
 
 
 def test_search_card_empty() -> None:
