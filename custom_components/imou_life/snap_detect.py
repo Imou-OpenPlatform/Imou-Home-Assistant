@@ -17,6 +17,7 @@ from pyimouapi.snap_detect import DeviceSnapDetectResult, parse_device_snap_dete
 
 from .const import DOMAIN, SERVICE_DEVICE_SNAP_DETECT
 from .coordinator import ImouConfigEntry
+from .detection_present import confidence_line, detection_labels, seen_line
 from .helpers import (
     async_deliver_message_to_targets,
     async_display_language,
@@ -35,11 +36,11 @@ _DRAWER_TARGETS = frozenset(
 
 _MIN_CONFIDENCE = 85
 
-_TARGET_LABELS = {
-    "human": ("detected_person", "Person"),
-    "vehicle": ("detected_vehicle", "Vehicle"),
-    "animal": ("detected_pet", "Pet"),
-    "box": ("detected_object", "Object"),
+_BOX_LABEL_KEYS = {
+    "human": "tag_person",
+    "vehicle": "tag_vehicle",
+    "animal": "tag_pet",
+    "box": "tag_object",
 }
 
 
@@ -86,27 +87,39 @@ async def _async_build_notification(
         return fill_template(template, fallback, **values)
 
     title = device_name
-    if not result.detect_result and not result.targets:
+    labels = detection_labels(hass, language)
+    if not result.targets:
         message = copy("no_target", "No target detected.")
     else:
-        parts: list[str] = []
-        for target in result.targets:
-            mapped = _TARGET_LABELS.get(target.target_type)
-            label = (
-                copy(mapped[0], mapped[1]) if mapped is not None else target.target_type
-            )
-            if target.confidence not in (None, ""):
-                parts.append(f"{label} ({target.confidence})")
-            else:
-                parts.append(label)
+        blocks = [
+            block
+            for target in result.targets
+            if (block := _target_block(labels, target.target_type, target.confidence))
+        ]
         message = (
-            copy("detected", "Detected: {targets}", targets=", ".join(parts))
-            if parts
+            "\n\n".join(blocks)
+            if blocks
             else copy("target_detected", "Target detected.")
         )
     if picture_url:
         message = f"{message}\n\n![]({picture_url})"
     return title, message
+
+
+def _target_block(labels: dict[str, str], target_type: str, confidence: object) -> str:
+    """Who was seen, then how sure that is, in the shared layout."""
+    parts = [seen_line(labels, [target_type])]
+    score = _confidence_score(confidence)
+    if score is not None:
+        parts.append(confidence_line(labels, score))
+    return "\n\n".join(part for part in parts if part)
+
+
+def _box_names(labels: dict[str, str]) -> dict[str, str]:
+    return {
+        target_type: labels.get(key) or key
+        for target_type, key in _BOX_LABEL_KEYS.items()
+    }
 
 
 async def _async_download_snap(hass: HomeAssistant, url: str) -> bytes | None:
@@ -137,9 +150,11 @@ async def _async_annotated_picture_url(
     jpeg = await _async_download_snap(hass, source_url)
     if not jpeg:
         return None
+    language = await async_display_language(hass)
+    names = _box_names(detection_labels(hass, language))
 
     def _draw_and_save() -> str | None:
-        annotated = annotate_snap_jpeg(jpeg, result.targets)
+        annotated = annotate_snap_jpeg(jpeg, result.targets, names)
         if not annotated:
             return None
         local_path = write_annotated_snap(hass, device_id, channel_id, annotated)

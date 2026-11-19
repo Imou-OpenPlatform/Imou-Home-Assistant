@@ -60,7 +60,9 @@ def detection_box(
 
 
 def annotate_snap_jpeg(
-    jpeg: bytes, targets: tuple[SnapDetectTarget, ...] | list[SnapDetectTarget]
+    jpeg: bytes,
+    targets: tuple[SnapDetectTarget, ...] | list[SnapDetectTarget],
+    names: dict[str, str] | None = None,
 ) -> bytes | None:
     """Return a jpeg with detection boxes, or None when nothing can be drawn."""
     try:
@@ -78,7 +80,9 @@ def annotate_snap_jpeg(
             continue
         color = _BOX_COLORS.get(target.target_type, (255, 220, 0))
         draw.rectangle(box, outline=color, width=stroke)
-        label = _LABELS.get(target.target_type, target.target_type)
+        label = (names or {}).get(target.target_type) or _LABELS.get(
+            target.target_type, target.target_type
+        )
         if target.confidence not in (None, ""):
             label = f"{label} {target.confidence}"
         text_y = box[1] - stroke - 4

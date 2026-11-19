@@ -65,7 +65,9 @@ async def test_device_snap_detect_notifies(hass: HomeAssistant) -> None:
     )
     message = _drawer_message(hass)
     assert "cdn.example/shot.jpg" in message
-    assert "Person" in message or "人" in message
+    assert "**Seen** 🚶 Person" in message
+    assert "**Confidence**" in message
+    assert "Sure (92)" in message
     assert "Vehicle" not in message
     assert "车辆" not in message
 

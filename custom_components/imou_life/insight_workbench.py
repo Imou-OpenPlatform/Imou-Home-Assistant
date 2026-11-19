@@ -26,6 +26,7 @@ from .const import (
     SERVICE_SEARCH_AI_ALARMS,
 )
 from .coordinator import ImouConfigEntry
+from .detection_present import seen_line, ten_bar
 from .helpers import async_display_language, fill_template, selector_option_label
 from .insight_account import camera_select_options
 from .insight_briefing_view import briefing_card
@@ -411,33 +412,6 @@ _MESSAGE_ICONS = (
 )
 
 
-_TAG_LABEL_KEYS = {
-    "human": "tag_person",
-    "person": "tag_person",
-    "people": "tag_person",
-    "人": "tag_person",
-    "vehicle": "tag_vehicle",
-    "car": "tag_vehicle",
-    "车": "tag_vehicle",
-    "pet": "tag_pet",
-    "animal": "tag_pet",
-    "宠物": "tag_pet",
-    "package": "tag_package",
-    "parcel": "tag_package",
-    "包裹": "tag_package",
-}
-_TAG_FALLBACKS = {
-    "tag_person": "Person",
-    "tag_vehicle": "Vehicle",
-    "tag_pet": "Pet",
-    "tag_package": "Package",
-}
-_TAG_ICONS = {
-    "tag_person": "🚶",
-    "tag_vehicle": "🚗",
-    "tag_pet": "🐾",
-    "tag_package": "📦",
-}
 _RISK_FALLBACKS = {
     "risk_low": "Low",
     "risk_medium": "Medium",
@@ -465,11 +439,6 @@ def _risk_word_key(level: int) -> str:
     return "risk_severe"
 
 
-def _risk_bar(level: int) -> str:
-    filled = max(0, min(level, 10))
-    return "●" * filled + "○" * (10 - filled)
-
-
 def _search_meta(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
     """Labels and risk level for one search result, in the owner's language."""
     blocks: list[str] = []
@@ -483,18 +452,7 @@ def _search_meta(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
 
 
 def _seen_line(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
-    names: list[str] = []
-    for raw in hit.ai_tags:
-        key = _TAG_LABEL_KEYS.get(raw) or _TAG_LABEL_KEYS.get(raw.lower())
-        label = raw.strip() if key is None else (labels.get(key) or _TAG_FALLBACKS[key])
-        if not label or label in names:
-            continue
-        icon = _TAG_ICONS.get(key or "", "")
-        names.append(f"{icon} {label}".strip())
-    if not names:
-        return ""
-    heading = labels.get("seen") or "Seen"
-    return f"**{_md(heading)}** {' · '.join(names)}"
+    return seen_line(labels, list(hit.ai_tags))
 
 
 def _risk_line(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
@@ -510,7 +468,7 @@ def _risk_line(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
         level=str(level),
     )
     heading = labels.get("risk_name") or "Risk"
-    return f"**{_md(heading)}** {_risk_bar(level)} {detail}"
+    return f"**{_md(heading)}** {ten_bar(level)} {detail}"
 
 
 def _md(text: str) -> str:

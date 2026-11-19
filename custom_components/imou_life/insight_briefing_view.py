@@ -13,8 +13,8 @@ from pyimouapi.insight.statistics import (
 )
 
 _SERIES_ZH = (
-    ("人形", "human", "#3b82c4"),
-    ("车辆", "vehicle", "#2a9d8f"),
+    ("人", "human", "#3b82c4"),
+    ("车", "vehicle", "#2a9d8f"),
     ("宠物", "pet", "#d08a3a"),
     ("包裹", "package", "#7c6bb0"),
     ("全部", "total", "#4c5d73"),

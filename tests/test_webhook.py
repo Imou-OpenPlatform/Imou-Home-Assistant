@@ -931,8 +931,8 @@ async def test_webhook_notification_shows_detected_and_picture(
             "ai_copywriting": "A person left a box",
         },
     )
-    assert "Detected: Person / Vehicle / Package" in message
-    assert "Picture: A person left a box" in message
+    assert "**Seen** 🚶 Person · 🚗 Vehicle · 📦 Package" in message
+    assert "**Picture** A person left a box" in message
     assert "AI:" not in message
 
 

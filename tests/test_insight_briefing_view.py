@@ -33,7 +33,10 @@ def test_briefing_card_writes_a_bar_chart(tmp_path) -> None:
     assert "门口安全" not in chart
     assert "检测" not in chart
     assert "2026-11-15" in chart
-    assert "人形" in chart
+    assert ">人<" in chart
+    assert ">车<" in chart
+    assert "人形" not in chart
+    assert "车辆" not in chart
     assert "包裹" in chart
     assert "全部" in chart
     assert "画面变化" not in chart

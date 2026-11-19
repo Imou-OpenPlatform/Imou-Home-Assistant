@@ -38,6 +38,7 @@ from .const import (
     imou_life_device_key,
     imou_life_device_keys_from_ids,
 )
+from .detection_present import detection_labels, picture_line, seen_line
 from .helpers import (
     alarm_type_option_key,
     event_push_type_active,
@@ -117,48 +118,13 @@ def _notify_on_alarm_enabled(hass: HomeAssistant, event_data: dict[str, Any]) ->
     return state.state != STATE_OFF
 
 
-_DETECTED_CATEGORIES = (
-    ("person", ("human", "person", "people")),
-    ("vehicle", ("vehicle", "car", "veh")),
-    ("pet", ("pet", "animal")),
-    ("package", ("package", "parcel")),
-)
-_DETECTED_FALLBACK = {
-    "person": "Person",
-    "vehicle": "Vehicle",
-    "pet": "Pet",
-    "package": "Package",
-}
-
-
-def _detected_targets(hass: HomeAssistant, language: str, tags: Any) -> str | None:
-    """Person, vehicle, pet, and package names for a notification line."""
-    if isinstance(tags, str):
-        tags = [part.strip() for part in tags.replace("\uff0c", ",").split(",")]
-    if not isinstance(tags, list):
-        return None
-    present = {str(tag).strip().lower() for tag in tags if str(tag).strip()}
-    labels: list[str] = []
-    for key, aliases in _DETECTED_CATEGORIES:
-        if present.intersection(aliases):
-            labels.append(
-                selector_option_label(
-                    hass,
-                    language,
-                    "webhook_notification",
-                    f"detected_{key}",
-                    _DETECTED_FALLBACK[key],
-                )
-            )
-            present.difference_update(aliases)
-    for tag in tags:
-        text = str(tag).strip()
-        if text and text.lower() in present:
-            labels.append(text)
-            present.discard(text.lower())
-    if not labels:
-        return None
-    return " / ".join(labels)
+def _tag_list(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        parts = raw.replace("\uff0c", ",").split(",")
+        return [part.strip() for part in parts if part.strip()]
+    if isinstance(raw, list):
+        return [str(tag).strip() for tag in raw if str(tag).strip()]
+    return []
 
 
 def _alarm_type_label(
@@ -366,14 +332,13 @@ async def _async_build_notification_message(
             message += "\n" + notif(
                 "details", "Details: {desc_type}", desc_type=desc_type
             )
-    detected = _detected_targets(hass, language, event_data.get("ai_tags"))
-    if detected:
-        message += "\n" + notif("detected", "Detected: {targets}", targets=detected)
+    labels = detection_labels(hass, language)
+    seen = seen_line(labels, _tag_list(event_data.get("ai_tags")))
+    if seen:
+        message += "\n" + seen
     picture = event_data.get("ai_copywriting")
-    if isinstance(picture, str) and picture.strip():
-        message += "\n" + notif(
-            "picture", "Picture: {description}", description=picture.strip()
-        )
+    if isinstance(picture, str) and (line := picture_line(labels, picture)):
+        message += "\n" + line
     return title, message
 
 

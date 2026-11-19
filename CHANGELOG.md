@@ -35,6 +35,7 @@
 - The **Live** camera reuses the last still for 30 seconds. Opening it again in that window shows the same picture without spending another snapshot call.
 - **Capture and detect** always posts the picture to the notification drawer and to signed-in phone apps. The service no longer asks for notification targets. It names what was found and draws a box only when the result is at least 85% sure. A box given as a fraction of the picture is drawn at that place on the picture.
 - **Search** names who was seen on each alarm, with an icon, and shows a 10-step risk bar plus a short description from low to severe.
+- **Capture and detect**, **Search**, and alarm notifications name a person, a vehicle, a pet, and a package the same way, with the same icons. **Capture and detect** also shows how sure the result is on that 10-step bar. The daily briefing chart uses those same names.
 
 ### [1.4.4]
 
@@ -385,7 +386,7 @@
 
 - **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。
 - **智见**（摄像头通道）— 诊断用 **AI智见**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
-- **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动刷新概览、风险时段、两小时分段与告警统计（**人形**、**车辆**、**宠物**、**包裹**、**全部**）。**搜索** 选定开始日期和结束日期，从开始日 00:00:00 查到结束日 23:59:59，并用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动刷新概览、风险时段、两小时分段与告警统计（**人**、**车**、**宠物**、**包裹**、**全部**）。**搜索** 选定开始日期和结束日期，从开始日 00:00:00 查到结束日 23:59:59，并用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
 - 服务 **`device_snap_detect`** — 对指定摄像头云端抓图并做人 / 车 / 宠检测，把检测框画到图片上并发送到通知目标（省略时默认发送到 Home Assistant 网页通知栏与已登录的手机 App）。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
@@ -405,6 +406,7 @@
 - **直播** 会将最近一张静止画面保留 30 秒，这段时间内再次打开直接复用，不会重复请求云端抓图。
 - **抓图检测** 总会把图片发到通知栏和已登录的手机，服务里不再单独选通知目标。把握达到 85% 才写出检测结果并画框。位置按画面比例给出时，框画在对应的人、车或宠物上。
 - **搜索** 在每条告警上写出识别到的对象（带图标），并用 10 格风险条和简短说明标出风险等级，从较低到很高。
+- **抓图检测**、**搜索**和告警通知用同一套名字和图标标出人、车、宠物和包裹。**抓图检测**再用这 10 格标出把握。每日简报的图表也用同样的名字。
 
 ### [1.4.4]
 
