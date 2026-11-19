@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -58,6 +59,7 @@ from .record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
     async_register_record_hls_proxy,
+    record_hls_proxy_origin,
 )
 from .record_playback_mp4 import (
     async_register_record_playback_mp4,
@@ -99,6 +101,42 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
 _STREAM_OPEN_TIMEOUT = 12
 
 
+async def _async_start_and_wait_for_stream(stream: object, provider: object) -> bool:
+    """Start Stream and wait for a playable segment, or bail when it fails."""
+    failed = asyncio.Event()
+
+    def _on_stream_update() -> None:
+        if not getattr(stream, "available", True):
+            failed.set()
+
+    set_callback = getattr(stream, "set_update_callback", None)
+    if callable(set_callback):
+        set_callback(_on_stream_update)
+
+    try:
+        await stream.start()  # type: ignore[attr-defined]
+        if failed.is_set() or not getattr(stream, "available", True):
+            return False
+        recv_task = asyncio.create_task(provider.recv())  # type: ignore[attr-defined]
+        fail_task = asyncio.create_task(failed.wait())
+        done, pending = await asyncio.wait(
+            {recv_task, fail_task},
+            timeout=_STREAM_OPEN_TIMEOUT,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+        for task in pending:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        if recv_task in done and not recv_task.cancelled():
+            return bool(recv_task.result())
+        return False
+    finally:
+        if callable(set_callback):
+            set_callback(lambda: None)
+
+
 async def _async_try_hls_playback(
     hass: HomeAssistant,
     descriptor: RecordHlsDescriptor,
@@ -118,7 +156,8 @@ async def _async_try_hls_playback(
             entry_id=entry_id,
             expires_at=descriptor.expires_at,
         )
-        playlist_source = f"{get_url(hass).rstrip('/')}{signed_playlist}"
+        proxy_origin = record_hls_proxy_origin(hass, fallback_url=get_url)
+        playlist_source = f"{proxy_origin}{signed_playlist}"
         stream = create_stream(
             hass,
             playlist_source,
@@ -127,11 +166,7 @@ async def _async_try_hls_playback(
             stream_label=stream_label,
         )
         provider = stream.add_provider(HLS_PROVIDER, timeout=3600)
-        await stream.start()
-        try:
-            opened = await asyncio.wait_for(provider.recv(), _STREAM_OPEN_TIMEOUT)
-        except TimeoutError:
-            opened = False
+        opened = await _async_start_and_wait_for_stream(stream, provider)
         if not opened:
             raise HomeAssistantError("Stream produced no playable segment")
         stream_url = stream.endpoint_url(HLS_PROVIDER).replace("master_", "")
@@ -337,7 +372,7 @@ class ImouRecordMediaSource(MediaSource):
                 entry_id=entry_id,
                 expires_at=source.expires_at,
             )
-            proxy_origin = get_url(self.hass).rstrip("/")
+            proxy_origin = record_hls_proxy_origin(self.hass, fallback_url=get_url)
             return RecordHlsDescriptor(
                 f"{proxy_origin}{signed_playlist}",
                 source.expires_at,

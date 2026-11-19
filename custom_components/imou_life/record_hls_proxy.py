@@ -227,10 +227,50 @@ def _playlist_target_duration(playlist_body: str) -> int:
     return 2
 
 
+def _loopback_host(hass: HomeAssistant, api: object) -> str:
+    """Pick the local address this Home Assistant server listens on."""
+    http_server = getattr(hass, "http", None)
+    server_host = getattr(http_server, "server_host", None)
+    if server_host is None:
+        return "127.0.0.1"
+    hosts = [server_host] if isinstance(server_host, str) else list(server_host)
+    if any(host in ("0.0.0.0", "127.0.0.1", "localhost") for host in hosts):
+        return "127.0.0.1"
+    if any(host in ("::", "::1") for host in hosts):
+        return "[::1]"
+    if hosts:
+        host = hosts[0]
+        return f"[{host}]" if ":" in host and not host.startswith("[") else host
+    host = getattr(api, "host", None)
+    if not host or host in ("0.0.0.0", "::", "127.0.0.1", "localhost"):
+        return "127.0.0.1"
+    return f"[{host}]" if ":" in host and not host.startswith("[") else host
+
+
+def record_hls_proxy_origin(
+    hass: HomeAssistant,
+    *,
+    fallback_url: Callable[[HomeAssistant], str] | None = None,
+) -> str:
+    """Return an origin this Home Assistant process can open on itself.
+
+    Stream/PyAV and ffmpeg run on the Home Assistant host, not in the browser.
+    Prefer local loopback when HA listens over plain HTTP so reverse proxies,
+    Docker bridges, mDNS, and external URLs cannot break internal playback.
+    """
+    api = getattr(hass.config, "api", None)
+    if api is not None and not getattr(api, "use_ssl", False):
+        port = getattr(api, "port", None)
+        if port:
+            return f"http://{_loopback_host(hass, api)}:{port}"
+    resolver = fallback_url or get_url
+    return resolver(hass).rstrip("/")
+
+
 def _proxy_origin(hass: HomeAssistant) -> str:
     """Origin this Home Assistant process can open, for Stream's second fetch."""
     try:
-        return get_url(hass).rstrip("/")
+        return record_hls_proxy_origin(hass)
     except NoURLAvailableError:
         return ""
 
@@ -590,6 +630,39 @@ def _validate_byte_range_response(
         raise ValueError(msg)
 
 
+def _pin_cache_key(url: str) -> tuple[str, str, int] | None:
+    """Return (scheme, host, port) for safe URLs so repeated segments skip DNS."""
+    if url != url.strip() or any(ord(character) < 32 for character in url):
+        return None
+    try:
+        parsed = urlsplit(url)
+        explicit_port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or explicit_port == 0
+    ):
+        return None
+    port = explicit_port or (443 if parsed.scheme.lower() == "https" else 80)
+    return (parsed.scheme.lower(), parsed.hostname.lower(), port)
+
+
+async def _async_pin_segment_urls(hass: HomeAssistant, urls: list[str]) -> None:
+    """Pin each unique public segment host once instead of repeating DNS lookups."""
+    seen: set[tuple[str, str, int]] = set()
+    for segment_url in urls:
+        key = _pin_cache_key(segment_url)
+        if key is not None and key in seen:
+            continue
+        await async_pin_public_url(hass, segment_url)
+        if key is not None:
+            seen.add(key)
+
+
 async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
 ) -> _LoadedMediaPlaylist:
@@ -597,8 +670,7 @@ async def _load_media_playlist(
     media_playlist_url = getattr(body, "final_url", playlist_url)
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     if segment_urls:
-        for segment_url in segment_urls:
-            await async_pin_public_url(hass, segment_url)
+        await _async_pin_segment_urls(hass, segment_urls)
         return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
     variant = pick_hls_variant_playlist_url(body, media_playlist_url)
     if variant is None:
@@ -607,8 +679,7 @@ async def _load_media_playlist(
     body = await async_fetch_url_text(hass, variant)
     media_playlist_url = getattr(body, "final_url", variant)
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
-    for segment_url in segment_urls:
-        await async_pin_public_url(hass, segment_url)
+    await _async_pin_segment_urls(hass, segment_urls)
     return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
 
 

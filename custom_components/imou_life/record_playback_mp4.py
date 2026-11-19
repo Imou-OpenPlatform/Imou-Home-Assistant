@@ -412,7 +412,7 @@ class ImouRecordPlaybackMp4View(HomeAssistantView):
             except LookupError as err:
                 raise web.HTTPNotFound() from err
             except Exception as err:
-                _LOGGER.error("Imou recording transcode failed for %s", cache_id)
+                _LOGGER.error("Imou recording remux failed for %s: %s", cache_id, err)
                 raise web.HTTPServiceUnavailable() from err
         if not path.is_file() or path.stat().st_size == 0:
             raise web.HTTPNotFound()

@@ -27,6 +27,7 @@ from custom_components.imou_life.record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
     async_remove_record_hls_proxy_sessions,
+    record_hls_proxy_origin,
 )
 from custom_components.imou_life.record_playback_mp4 import (
     DATA_RECORD_PLAYBACK_MP4,
@@ -2093,6 +2094,130 @@ async def test_resolve_cloud_clip_mp4_when_stream_does_not_open(
     stream_mock.stop.assert_awaited_once()
     register_mock.assert_called_once()
     assert play.mime_type == MIME_MP4
+
+
+@pytest.mark.asyncio
+async def test_resolve_cloud_clip_falls_back_when_stream_turns_unavailable(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    hass.config.components.add("stream")
+
+    source = ImouRecordMediaSource(hass)
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+    stream_mock = _opened_stream()
+    stream_mock.available = True
+    never = asyncio.Event()
+    stream_mock.add_provider.return_value.recv = AsyncMock(side_effect=never.wait)
+    callbacks: list[Callable[[], None]] = []
+    stream_mock.set_update_callback.side_effect = callbacks.append
+
+    async def fail_on_start() -> None:
+        stream_mock.available = False
+        for callback in list(callbacks):
+            callback()
+
+    stream_mock.start = AsyncMock(side_effect=fail_on_start)
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=_runtime_with_hls_url(),
+        ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://example.local:8123",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.create_stream",
+            return_value=stream_mock,
+        ),
+        patch(
+            "custom_components.imou_life.media_source.register_playback_source",
+        ) as register_mock,
+        patch(
+            "custom_components.imou_life.media_source.signed_record_playback_url",
+            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+        ),
+    ):
+        play = await asyncio.wait_for(source.async_resolve_media(item), timeout=2)
+
+    stream_mock.stop.assert_awaited_once()
+    register_mock.assert_called_once()
+    assert play.mime_type == MIME_MP4
+
+
+@pytest.mark.asyncio
+async def test_proxy_origin_prefers_loopback_for_plain_http(
+    hass: HomeAssistant,
+) -> None:
+    hass.config.api = SimpleNamespace(
+        local_ip="192.168.1.50",
+        host="192.168.1.50",
+        port=8123,
+        use_ssl=False,
+    )
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.get_url",
+        return_value="https://ha.example.com",
+    ):
+        assert record_hls_proxy_origin(hass) == "http://127.0.0.1:8123"
+
+    hass.config.api = SimpleNamespace(
+        local_ip="192.168.1.50",
+        host="192.168.1.50",
+        port=8123,
+        use_ssl=True,
+    )
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.get_url",
+        return_value="https://ha.example.com",
+    ):
+        assert record_hls_proxy_origin(hass) == "https://ha.example.com"
+
+
+@pytest.mark.asyncio
+async def test_load_media_playlist_pins_same_segment_host_once(
+    hass: HomeAssistant,
+) -> None:
+    playlist = """#EXTM3U
+#EXTINF:2,
+https://media.example:7080/a.ts
+#EXTINF:2,
+https://media.example:7080/b.ts
+#EXTINF:2,
+https://media.example:7080/c.ts
+"""
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ) as pin_mock,
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example:7080/index.m3u8",
+            refresh=AsyncMock(),
+            entry_id="entry-a",
+        )
+
+    assert pin_mock.await_count == 1
 
 
 @pytest.mark.asyncio
