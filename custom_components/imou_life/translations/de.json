@@ -758,13 +758,7 @@
     },
     "device_snap_detect": {
       "name": "Aufnahme und Erkennung",
-      "description": "Schnappschuss aufnehmen, Imou-Zielerkennung ausführen und das Ergebnis an Benachrichtigungsziele senden.",
-      "fields": {
-        "notify_targets": {
-          "name": "Benachrichtigungsziele",
-          "description": "Optionale Notify-Dienste für diesen Aufruf. Wenn leer, werden die unter Ereignis-Push konfigurierten Ziele verwendet."
-        }
-      }
+      "description": "Nimmt ein Bild auf und führt die Erkennung aus. Benachrichtigungsleiste und angemeldete Telefon-Apps zeigen das Bild. Ein Rahmen und das Erkennungsergebnis erscheinen nur, wenn das Ergebnis mindestens zu 85 % sicher ist."
     }
   },
   "exceptions": {

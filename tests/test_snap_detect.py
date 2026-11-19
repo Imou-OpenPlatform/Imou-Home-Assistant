@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from custom_components.imou_life.const import DOMAIN, SERVICE_DEVICE_SNAP_DETECT
 from custom_components.imou_life.snap_detect import async_handle_device_snap_detect
+from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -16,6 +17,12 @@ from PIL import Image
 from pytest_homeassistant_custom_component.common import async_mock_service
 
 from .conftest import setup_imou_runtime
+
+
+def _drawer_message(hass: HomeAssistant) -> str:
+    notes = hass.data[persistent_notification.DOMAIN]
+    note = next(iter(notes.values()))
+    return note["message"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -32,8 +39,8 @@ async def test_device_snap_detect_notifies(hass: HomeAssistant) -> None:
             "url": "https://cdn.example/shot.jpg",
             "detectResult": True,
             "targets": [
-                {"targetType": "human", "confidence": "0.92"},
-                {"targetType": "vehicle", "confidence": "0.81"},
+                {"targetType": "human", "confidence": 92},
+                {"targetType": "vehicle", "confidence": 81},
             ],
         }
     )
@@ -56,6 +63,11 @@ async def test_device_snap_detect_notifies(hass: HomeAssistant) -> None:
     runtime.coordinator.device_manager.delegate.async_device_snap_detect.assert_awaited_once_with(
         "SN1", "0"
     )
+    message = _drawer_message(hass)
+    assert "cdn.example/shot.jpg" in message
+    assert "Person" in message or "人" in message
+    assert "Vehicle" not in message
+    assert "车辆" not in message
 
 
 def _white_jpeg() -> bytes:
@@ -83,7 +95,7 @@ async def test_device_snap_detect_sends_the_picture_with_boxes(
             "targets": [
                 {
                     "targetType": "human",
-                    "confidence": "0.92",
+                    "confidence": 95,
                     "targetRegion": {"x": 10, "y": 20, "width": 30, "height": 15},
                 }
             ],
@@ -97,7 +109,6 @@ async def test_device_snap_detect_sends_the_picture_with_boxes(
         config_entry=entry,
         suggested_object_id="imou_cam_boxes",
     )
-    calls = async_mock_service(hass, "notify", "persistent_notification")
     call = ServiceCall(
         hass,
         DOMAIN,
@@ -109,7 +120,7 @@ async def test_device_snap_detect_sends_the_picture_with_boxes(
         AsyncMock(return_value=_white_jpeg()),
     ):
         await async_handle_device_snap_detect(hass, call)
-    message = calls[0].data["message"]
+    message = _drawer_message(hass)
     assert "imou_life/snap/" in message
     assert "cdn.example" not in message
 
@@ -142,3 +153,90 @@ async def test_device_snap_detect_uses_the_device(hass: HomeAssistant) -> None:
     runtime.coordinator.device_manager.delegate.async_device_snap_detect.assert_awaited_once_with(
         "SN1", "0"
     )
+    assert "cdn.example/shot.jpg" in _drawer_message(hass)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_device_snap_detect_posts_when_alarm_targets_are_empty(
+    hass: HomeAssistant,
+) -> None:
+    """An empty alarm-notification list still shows the picture and the result."""
+    runtime = setup_imou_runtime(hass, notify_services=[])
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    device = SimpleNamespace(device_id="SN1", channel_id="0")
+    runtime.coordinator.devices_by_key = {"SN1_0": device}
+    runtime.coordinator.device_manager.delegate.async_device_snap_detect = AsyncMock(
+        return_value={
+            "url": "http://cdn.example/shot.jpg",
+            "detectResult": True,
+            "targets": [{"targetType": "human", "confidence": 92}],
+        }
+    )
+    registry = er.async_get(hass)
+    entity_entry = registry.async_get_or_create(
+        DOMAIN,
+        "camera",
+        "SN1_0",
+        config_entry=entry,
+        suggested_object_id="imou_cam_empty_notify",
+    )
+    call = ServiceCall(
+        hass,
+        DOMAIN,
+        SERVICE_DEVICE_SNAP_DETECT,
+        {"entity_id": entity_entry.entity_id},
+    )
+    await async_handle_device_snap_detect(hass, call)
+    message = _drawer_message(hass)
+    assert "http://cdn.example/shot.jpg" in message
+    assert "Person" in message or "人" in message
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_device_snap_detect_ignores_results_below_85(
+    hass: HomeAssistant,
+) -> None:
+    """A result below 85% is not named and is not drawn on the picture."""
+    runtime = setup_imou_runtime(hass, notify_services=[])
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    device = SimpleNamespace(device_id="SN1", channel_id="0")
+    runtime.coordinator.devices_by_key = {"SN1_0": device}
+    runtime.coordinator.device_manager.delegate.async_device_snap_detect = AsyncMock(
+        return_value={
+            "url": "https://cdn.example/shot.jpg",
+            "detectResult": True,
+            "targets": [
+                {
+                    "targetType": "human",
+                    "confidence": 84,
+                    "targetRegion": {"x": 0.5, "y": 0.4, "width": 0.2, "height": 0.3},
+                }
+            ],
+        }
+    )
+    registry = er.async_get(hass)
+    entity_entry = registry.async_get_or_create(
+        DOMAIN,
+        "camera",
+        "SN1_0",
+        config_entry=entry,
+        suggested_object_id="imou_cam_low_confidence",
+    )
+    call = ServiceCall(
+        hass,
+        DOMAIN,
+        SERVICE_DEVICE_SNAP_DETECT,
+        {"entity_id": entity_entry.entity_id},
+    )
+    with patch(
+        "custom_components.imou_life.snap_detect._async_download_snap",
+        AsyncMock(return_value=_white_jpeg()),
+    ) as download:
+        await async_handle_device_snap_detect(hass, call)
+    download.assert_not_awaited()
+    message = _drawer_message(hass)
+    assert "cdn.example/shot.jpg" in message
+    assert "imou_life/snap/" not in message
+    assert "Person" not in message
+    assert "人" not in message
+    assert "No target detected." in message or "未检测到目标" in message

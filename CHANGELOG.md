@@ -33,6 +33,7 @@
 #### Fixed
 
 - The **Live** camera reuses the last still for 30 seconds. Opening it again in that window shows the same picture without spending another snapshot call.
+- **Capture and detect** always posts the picture to the notification drawer and to signed-in phone apps. The service no longer asks for notification targets. It names what was found and draws a box only when the result is at least 85% sure. A box given as a fraction of the picture is drawn at that place on the picture.
 
 ### [1.4.4]
 
@@ -401,6 +402,7 @@
 #### 修复
 
 - **直播** 会将最近一张静止画面保留 30 秒，这段时间内再次打开直接复用，不会重复请求云端抓图。
+- **抓图检测** 总会把图片发到通知栏和已登录的手机，服务里不再单独选通知目标。把握达到 85% 才写出检测结果并画框。位置按画面比例给出时，框画在对应的人、车或宠物上。
 
 ### [1.4.4]
 

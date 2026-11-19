@@ -141,7 +141,7 @@ Alarm notifications include detected targets and a picture description when the 
 
 | Service | What it does |
 | --- | --- |
-| `imou_life.device_snap_detect` | Grabs a cloud snapshot on the targeted camera channel, runs person / vehicle / pet detection, draws those boxes on the picture, and sends it to the notify targets. Without `notify_targets`, sends to the Home Assistant web notification drawer and signed-in Companion Apps. |
+| `imou_life.device_snap_detect` | Takes a picture on the targeted camera and runs person / vehicle / pet detection. The notification drawer and signed-in phone apps always get the picture. A box and the detection result are included only when the result is at least 85% sure. |
 
 ### Devices
 
@@ -306,7 +306,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 | 服务 | 作用 |
 | --- | --- |
-| `imou_life.device_snap_detect` | 对目标摄像头通道云端抓图，做人 / 车 / 宠检测，把检测框画到图片上，再发到通知目标。未填 `notify_targets` 时默认发送到网页通知栏与已登录的手机 App。 |
+| `imou_life.device_snap_detect` | 对目标摄像头抓取当前画面并做人 / 车 / 宠检测。通知栏和已登录的手机会收到图片。把握达到 85% 时才画框并写出检测结果。 |
 
 ### 设备
 

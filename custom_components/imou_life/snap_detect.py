@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from aiohttp import ClientError, ClientTimeout
+from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
@@ -21,7 +22,6 @@ from .helpers import (
     async_display_language,
     default_notify_service_targets,
     fill_template,
-    parse_notify_services,
     resolve_ha_device_name,
     selector_option_label,
 )
@@ -29,6 +29,11 @@ from .runtime_data import get_runtime_data
 from .snap_boxes import annotate_snap_jpeg, annotated_snap_url, write_annotated_snap
 
 _LOGGER = logging.getLogger(__name__)
+_DRAWER_TARGETS = frozenset(
+    {"notify.persistent_notification", "persistent_notification.create"}
+)
+
+_MIN_CONFIDENCE = 85
 
 _TARGET_LABELS = {
     "human": ("detected_person", "Person"),
@@ -36,6 +41,31 @@ _TARGET_LABELS = {
     "animal": ("detected_pet", "Pet"),
     "box": ("detected_object", "Object"),
 }
+
+
+def _confidence_score(raw: object) -> float | None:
+    """Return a numeric confidence, or None when the value cannot be read."""
+    if isinstance(raw, bool) or raw in (None, ""):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, str):
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+    return None
+
+
+def _accurate_result(result: DeviceSnapDetectResult) -> DeviceSnapDetectResult:
+    """Keep targets that are at least 85% sure."""
+    targets = tuple(
+        target
+        for target in result.targets
+        if (score := _confidence_score(target.confidence)) is not None
+        and score >= _MIN_CONFIDENCE
+    )
+    return DeviceSnapDetectResult(result.url, bool(targets), targets)
 
 
 async def _async_build_notification(
@@ -137,16 +167,20 @@ def _call_id(call: ServiceCall, key: str) -> str | None:
     return _first_id(call.data.get(key))
 
 
-def _notify_targets(
-    hass: HomeAssistant, call: ServiceCall, runtime_services: list[str]
-) -> list[str]:
-    notify_raw = call.data.get("notify_targets")
-    if notify_raw is None:
-        notify = list(runtime_services)
-        if not notify:
-            notify = default_notify_service_targets(hass)
-        return notify
-    return parse_notify_services(notify_raw)
+def _with_drawer(targets: list[str]) -> list[str]:
+    """The notification drawer is always included so a call is never silent."""
+    if any(target in _DRAWER_TARGETS for target in targets):
+        return targets
+    return ["notify.persistent_notification", *targets]
+
+
+def _notify_targets(hass: HomeAssistant, runtime_services: list[str]) -> list[str]:
+    """Always notify the drawer, signed-in phones, and alarm-notification targets."""
+    targets = default_notify_service_targets(hass)
+    for extra in runtime_services:
+        if extra not in targets:
+            targets.append(extra)
+    return _with_drawer(targets)
 
 
 def _resolve_device_target(
@@ -188,7 +222,7 @@ def _resolve_device_target(
         config_entry,
         device.device_id,
         device.channel_id,
-        _notify_targets(hass, call, list(runtime.notify_services)),
+        _notify_targets(hass, list(runtime.notify_services)),
     )
 
 
@@ -246,7 +280,7 @@ def _resolve_call(
         config_entry,
         device.device_id,
         channel_id,
-        _notify_targets(hass, call, list(runtime.notify_services)),
+        _notify_targets(hass, list(runtime.notify_services)),
     )
 
 
@@ -273,8 +307,9 @@ async def async_handle_device_snap_detect(
             translation_key="snap_detect_failed",
             translation_placeholders={"error": err.message or str(err)},
         ) from err
-    result = parse_device_snap_detect_data(raw)
-    image_url = result.url if result.url and result.url.startswith("https://") else None
+    result = _accurate_result(parse_device_snap_detect_data(raw))
+    source_url = (result.url or "").strip()
+    image_url = source_url if source_url.startswith(("http://", "https://")) else None
     if image_url and any(target.region for target in result.targets):
         annotated = await _async_annotated_picture_url(
             hass, device_id, channel_id, image_url, result
@@ -284,15 +319,24 @@ async def async_handle_device_snap_detect(
     title, message = await _async_build_notification(
         hass, device_name, result, image_url
     )
-    await async_deliver_message_to_targets(
-        hass, title, message, notify_targets, image_url=image_url
+    persistent_notification.async_create(
+        hass,
+        message,
+        title=title,
+        notification_id=f"imou_life_snap_{device_id}_{channel_id or '0'}",
     )
-    _LOGGER.debug(
-        "deviceSnapDetect %s ch%s targets=%s notify=%s",
+    phone_targets = [
+        target for target in notify_targets if target not in _DRAWER_TARGETS
+    ]
+    await async_deliver_message_to_targets(
+        hass, title, message, phone_targets, image_url=image_url
+    )
+    _LOGGER.info(
+        "Snap detect %s ch%s posted %s target(s) with picture=%s",
         device_id,
         channel_id,
         len(result.targets),
-        len(notify_targets),
+        bool(image_url),
     )
 
 

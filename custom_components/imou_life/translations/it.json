@@ -758,13 +758,7 @@
     },
     "device_snap_detect": {
       "name": "Cattura e rilevamento",
-      "description": "Scatta un'istantanea, esegui il rilevamento Imou e invia il risultato alle destinazioni di notifica.",
-      "fields": {
-        "notify_targets": {
-          "name": "Destinazioni di notifica",
-          "description": "Servizi notify opzionali per questa chiamata. Se omessi, usa le destinazioni configurate in Push eventi."
-        }
-      }
+      "description": "Scatta un'immagine ed esegue il rilevamento. Il riquadro notifiche e le app del telefono connesse mostrano l'immagine. Un riquadro e il risultato compaiono solo quando il risultato è sicuro almeno all'85%."
     }
   },
   "exceptions": {

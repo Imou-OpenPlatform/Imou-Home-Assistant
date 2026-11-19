@@ -40,6 +40,31 @@ def test_annotate_paints_the_box_edge() -> None:
     assert all(channel > 240 for channel in outside)
 
 
+def test_fractional_region_uses_the_picture_size() -> None:
+    """A 0-1 region is a fraction of the picture, not a one-pixel box."""
+    assert detection_box(
+        {"x": 0.53, "y": 0.466, "width": 0.101, "height": 0.359},
+        1000,
+        1000,
+    ) == (530, 466, 631, 825)
+
+
+def test_annotate_paints_a_fractional_person_box() -> None:
+    """A fractional person region is drawn on the person, not the corner."""
+    target = SnapDetectTarget(
+        "human",
+        95,
+        {"x": 0.5, "y": 0.25, "width": 0.2, "height": 0.5},
+    )
+    annotated = annotate_snap_jpeg(_jpeg(200, 100), (target,))
+    assert annotated is not None
+    image = Image.open(BytesIO(annotated))
+    edge = [image.getpixel((x, 25)) for x in range(100, 140)]
+    assert any(red > green + 30 and red > blue + 30 for red, green, blue in edge)
+    corner = image.getpixel((2, 2))
+    assert all(channel > 240 for channel in corner)
+
+
 def test_missing_origin_is_not_drawn() -> None:
     """A region without y is not guessed into a box."""
     target = SnapDetectTarget("human", None, {"x": 10, "width": 20, "height": 30})

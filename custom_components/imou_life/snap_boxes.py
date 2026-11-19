@@ -36,8 +36,8 @@ def detection_box(
 ) -> tuple[int, int, int, int] | None:
     """Return a pixel rectangle from a top-left ``x, y, width, height`` region.
 
-    The origin is the top-left of the picture. ``width`` and ``height`` are
-    the box size in the same pixel coordinates.
+    The origin is the top-left of the picture. Values in the 0-1 range are
+    fractions of the picture; larger values are already pixels.
     """
     x = _number(region, "x")
     y = _number(region, "y")
@@ -47,6 +47,11 @@ def detection_box(
         return None
     if width <= 0 or height <= 0 or img_width < 2 or img_height < 2:
         return None
+    if _is_fraction(x, y, width, height):
+        x *= img_width
+        y *= img_height
+        width *= img_width
+        height *= img_height
     left = max(0, min(round(x), img_width - 1))
     top = max(0, min(round(y), img_height - 1))
     right = max(left + 1, min(round(x + width), img_width - 1))
@@ -112,6 +117,11 @@ def write_annotated_snap(
 def annotated_snap_url(hass: HomeAssistant, local_path: str) -> str:
     """Return a URL a phone can fetch for an annotated snapshot."""
     return public_media_url(hass, local_path)
+
+
+def _is_fraction(x: float, y: float, width: float, height: float) -> bool:
+    """True when every edge is a fraction of the picture, not a pixel count."""
+    return max(x, y, width, height) <= 1
 
 
 def _number(region: dict, key: str) -> float | None:

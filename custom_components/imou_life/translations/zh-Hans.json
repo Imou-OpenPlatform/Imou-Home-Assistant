@@ -758,13 +758,7 @@
     },
     "device_snap_detect": {
       "name": "抓图检测",
-      "description": "抓取当前画面并做目标检测，把画好检测框的图片发到通知目标。",
-      "fields": {
-        "notify_targets": {
-          "name": "通知目标",
-          "description": "本次调用使用的 notify 服务；不填则使用「事件推送」里配置的通知目标。"
-        }
-      }
+      "description": "抓取当前画面并做检测。通知栏和已登录的手机显示图片。把握达到 85% 时才画框并写出检测结果。"
     }
   },
   "exceptions": {

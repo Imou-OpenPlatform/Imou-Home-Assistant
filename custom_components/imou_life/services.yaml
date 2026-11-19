@@ -17,12 +17,6 @@ device_snap_detect:
   target:
     device:
       integration: imou_life
-  fields:
-    notify_targets:
-      required: false
-      example: ["notify.mobile_app_phone"]
-      selector:
-        object:
 search_ai_alarms:
   target:
     entity:

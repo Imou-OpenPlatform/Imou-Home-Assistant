@@ -758,13 +758,7 @@
     },
     "device_snap_detect": {
       "name": "Capture and detect",
-      "description": "Take a snapshot, run target detection, and send the picture with detection boxes to the notification targets.",
-      "fields": {
-        "notify_targets": {
-          "name": "Notification targets",
-          "description": "Optional notify services for this call. When omitted, uses the targets configured under event push notifications."
-        }
-      }
+      "description": "Take a picture and run detection. The notification drawer and signed-in phone apps show the picture. A box and the detection result are included only when the result is at least 85% sure."
     }
   },
   "exceptions": {

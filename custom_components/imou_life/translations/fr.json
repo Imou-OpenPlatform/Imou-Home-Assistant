@@ -758,13 +758,7 @@
     },
     "device_snap_detect": {
       "name": "Capture et détection",
-      "description": "Prendre une capture, lancer la détection Imou et envoyer le résultat aux cibles de notification.",
-      "fields": {
-        "notify_targets": {
-          "name": "Cibles de notification",
-          "description": "Services notify optionnels pour cet appel. Si omis, utilise les cibles configurées sous Push d'événements."
-        }
-      }
+      "description": "Prend une image et lance la détection. Le volet de notifications et les téléphones connectés affichent l'image. Un cadre et le résultat ne sont ajoutés que lorsque le résultat est sûr à au moins 85 %."
     }
   },
   "exceptions": {
