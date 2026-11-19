@@ -269,7 +269,7 @@ async def test_failed_refreshed_segment_returns_502_without_second_refresh(
     assert len(hass.data[DATA_RECORD_HLS_PROXY]) == 1
 
 
-@pytest.mark.parametrize("status", [401, 404])
+@pytest.mark.parametrize("status", [401, 404, 502])
 @pytest.mark.asyncio
 async def test_other_expired_segment_statuses_refresh(
     hass: HomeAssistant, status: int
@@ -723,6 +723,10 @@ two.m4s?token=secret
             "custom_components.imou_life.record_hls_proxy.async_sign_path",
             side_effect=lambda _hass, path, *_args, **_kwargs: path,
         ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.get_url",
+            return_value="http://ha.local:8123",
+        ),
     ):
         signed = await async_create_record_hls_proxy_playlist_url(
             hass,
@@ -735,6 +739,7 @@ two.m4s?token=secret
             _segment_request(hass), session_id
         )
 
+    origin = "http://ha.local:8123"
     assert (
         response.text
         == f"""#EXTM3U
@@ -742,14 +747,14 @@ two.m4s?token=secret
 #EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:42
 #EXT-X-PLAYLIST-TYPE:VOD
-#EXT-X-KEY:METHOD=AES-128,URI="/api/imou_life/record_hls/{session_id}/resource/key/0",IV=0x1
-#EXT-X-MAP:URI="/api/imou_life/record_hls/{session_id}/resource/map/0",BYTERANGE="100@20"
+#EXT-X-KEY:METHOD=AES-128,URI="{origin}/api/imou_life/record_hls/{session_id}/resource/key/0",IV=0x1
+#EXT-X-MAP:URI="{origin}/api/imou_life/record_hls/{session_id}/resource/map/0",BYTERANGE="100@20"
 #EXT-X-PROGRAM-DATE-TIME:2026-11-01T00:00:00Z
 #EXTINF:1.25,first title
-/api/imou_life/record_hls/{session_id}/segment/0.ts
+{origin}/api/imou_life/record_hls/{session_id}/segment/0.ts
 #EXT-X-DISCONTINUITY
 #EXTINF:4.75,second title
-/api/imou_life/record_hls/{session_id}/segment/1.ts
+{origin}/api/imou_life/record_hls/{session_id}/segment/1.ts
 #EXT-X-KEY:METHOD=NONE
 #EXT-X-ENDLIST
 """
@@ -1809,6 +1814,18 @@ async def test_expiry_during_segment_fetch_does_not_refresh(
     refresh.assert_not_awaited()
 
 
+def _opened_stream() -> MagicMock:
+    """A Stream double that reports one playable segment."""
+    provider = MagicMock()
+    provider.recv = AsyncMock(return_value=True)
+    stream = MagicMock()
+    stream.add_provider.return_value = provider
+    stream.start = AsyncMock()
+    stream.stop = AsyncMock()
+    stream.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
+    return stream
+
+
 @pytest.mark.asyncio
 async def test_resolve_cloud_clip_prefers_hls(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
@@ -1818,8 +1835,7 @@ async def test_resolve_cloud_clip_prefers_hls(hass: HomeAssistant) -> None:
 
     source = ImouRecordMediaSource(hass)
     item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
-    stream_mock = MagicMock()
-    stream_mock.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
+    stream_mock = _opened_stream()
     now = time.time()
     runtime = _runtime_with_hls_url({"url": HLS_UPSTREAM, "expireTime": 30})
 
@@ -1877,8 +1893,7 @@ async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
         LOCAL_IDENTIFIER.format(entry=entry.entry_id),
         None,
     )
-    stream_mock = MagicMock()
-    stream_mock.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
+    stream_mock = _opened_stream()
 
     with (
         patch(
@@ -2033,6 +2048,54 @@ async def test_resolve_cloud_clip_mp4_when_create_stream_fails(
 
 
 @pytest.mark.asyncio
+async def test_resolve_cloud_clip_mp4_when_stream_does_not_open(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    hass.config.components.add("stream")
+
+    source = ImouRecordMediaSource(hass)
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+    stream_mock = _opened_stream()
+    stream_mock.add_provider.return_value.recv = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=_runtime_with_hls_url(),
+        ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://example.local:8123",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.create_stream",
+            return_value=stream_mock,
+        ),
+        patch(
+            "custom_components.imou_life.media_source.register_playback_source",
+        ) as register_mock,
+        patch(
+            "custom_components.imou_life.media_source.signed_record_playback_url",
+            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+        ),
+    ):
+        play = await source.async_resolve_media(item)
+
+    stream_mock.start.assert_awaited_once()
+    stream_mock.stop.assert_awaited_once()
+    register_mock.assert_called_once()
+    assert play.mime_type == MIME_MP4
+
+
+@pytest.mark.asyncio
 async def test_stable_resolve_failure_creates_playback_issue(
     hass: HomeAssistant,
 ) -> None:
@@ -2103,8 +2166,7 @@ async def test_successful_hls_resolve_clears_playback_issue(
         entry.entry_id,
         RequestFailedException("No permission", api_code=ERROR_CODE_NO_PERMISSION),
     )
-    stream_mock = MagicMock()
-    stream_mock.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
+    stream_mock = _opened_stream()
     item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
 
     with (

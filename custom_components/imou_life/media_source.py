@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import time
@@ -28,8 +29,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
 from pyimouapi.cloud_record import parse_cloud_record_bitmap_days
+from pyimouapi.const import ERROR_CODE_DEVICE_OFFLINE, PARAM_STATE, PARAM_STATUS
 from pyimouapi.exceptions import ImouException
-from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pyimouapi.local_record import (
     day_time_window,
     local_record_display_title,
@@ -48,6 +50,10 @@ from .alarm_saved_clips import (
     resolve_clip_path,
 )
 from .const import DOMAIN, imou_life_device_key_from_ids
+from .record_cover import (
+    async_register_record_covers,
+    record_cover_thumbnail_url,
+)
 from .record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
@@ -86,7 +92,11 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
     async_register_saved_record_view(hass)
     async_register_record_hls_proxy(hass)
     async_register_record_playback_mp4(hass)
+    async_register_record_covers(hass)
     return ImouRecordMediaSource(hass)
+
+
+_STREAM_OPEN_TIMEOUT = 12
 
 
 async def _async_try_hls_playback(
@@ -116,7 +126,14 @@ async def _async_try_hls_playback(
             DynamicStreamSettings(),
             stream_label=stream_label,
         )
-        stream.add_provider(HLS_PROVIDER, timeout=3600)
+        provider = stream.add_provider(HLS_PROVIDER, timeout=3600)
+        await stream.start()
+        try:
+            opened = await asyncio.wait_for(provider.recv(), _STREAM_OPEN_TIMEOUT)
+        except TimeoutError:
+            opened = False
+        if not opened:
+            raise HomeAssistantError("Stream produced no playable segment")
         stream_url = stream.endpoint_url(HLS_PROVIDER).replace("master_", "")
         return PlayMedia(stream_url, MIME_HLS)
     except (
@@ -126,7 +143,11 @@ async def _async_try_hls_playback(
         TimeoutError,
         ValueError,
     ) as err:
-        _LOGGER.debug("Imou recording HLS via Stream failed (%s), will try MP4", err)
+        _LOGGER.warning(
+            "Imou recording %s: Stream did not open the playlist (%s), using MP4",
+            stream_label,
+            err,
+        )
         if stream is not None:
             await stream.stop()
         return None
@@ -559,14 +580,31 @@ class ImouRecordMediaSource(MediaSource):
                 bitmap = str(data.get("bitmap") or "")
                 days = parse_cloud_record_bitmap_days(bitmap, year=year, month=month)
             else:
-                data = await manager.async_local_record_bitmap(
-                    device_id,
-                    channel_id,
-                    year=year,
-                    month=month,
-                    product_id=self._camera_product_id(runtime, device_id, channel_id),
-                )
-                days = parse_local_bitmap_days(data, year=year, month=month)
+                try:
+                    data = await manager.async_local_record_bitmap(
+                        device_id,
+                        channel_id,
+                        year=year,
+                        month=month,
+                        product_id=self._camera_product_id(
+                            runtime, device_id, channel_id
+                        ),
+                    )
+                except ImouException as err:
+                    offline = await self._offline_browse_error(
+                        runtime, device_id, channel_id, err
+                    )
+                    if offline is not None:
+                        raise offline from err
+                    _LOGGER.debug(
+                        "Record bitmap unavailable for %s ch%s (%s)",
+                        device_id,
+                        channel_id,
+                        kind,
+                        exc_info=True,
+                    )
+                else:
+                    days = parse_local_bitmap_days(data, year=year, month=month)
         except ImouException:
             _LOGGER.debug(
                 "Record bitmap unavailable for %s ch%s (%s)",
@@ -678,7 +716,12 @@ class ImouRecordMediaSource(MediaSource):
                             title=title,
                             can_play=True,
                             can_expand=False,
-                            thumbnail=segment.thumb_url,
+                            thumbnail=self._cover_thumbnail(
+                                entry_id,
+                                device_id,
+                                channel_id,
+                                segment.thumb_url,
+                            ),
                         )
                     )
             else:
@@ -716,9 +759,21 @@ class ImouRecordMediaSource(MediaSource):
                             title=title,
                             can_play=True,
                             can_expand=False,
+                            thumbnail=self._cover_thumbnail(
+                                entry_id,
+                                device_id,
+                                channel_id,
+                                segment.thumb_url,
+                            ),
                         )
                     )
-        except ImouException:
+        except ImouException as err:
+            if kind == KIND_LOCAL:
+                offline = await self._offline_browse_error(
+                    runtime, device_id, channel_id, err
+                )
+                if offline is not None:
+                    raise offline from err
             _LOGGER.debug(
                 "Record list failed for %s ch%s on %s",
                 device_id,
@@ -738,6 +793,39 @@ class ImouRecordMediaSource(MediaSource):
             children=children,
         )
 
+    def _cover_thumbnail(
+        self, entry_id: str, device_id: str, channel_id: str, url: str | None
+    ) -> str | None:
+        if not url:
+            return None
+        return record_cover_thumbnail_url(
+            self.hass,
+            entry_id=entry_id,
+            device_id=device_id,
+            channel_id=channel_id,
+            url=url,
+        )
+
+    def _camera(self, runtime, device_id: str, channel_id: str) -> ImouHaDevice | None:
+        device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
+        if device_key is None:
+            return None
+        return runtime.coordinator.get_device(device_key)
+
+    async def _offline_browse_error(
+        self, runtime, device_id: str, channel_id: str, err: ImouException
+    ) -> BrowseError | None:
+        """Local recordings need the device. An offline device is not an empty day."""
+        if not _local_failure_is_offline(
+            err, self._camera(runtime, device_id, channel_id)
+        ):
+            return None
+        return BrowseError(
+            await _translation(
+                self.hass, "record_media_device_offline", "Device is offline"
+            )
+        )
+
     @staticmethod
     def _camera_product_id(runtime, device_id: str, channel_id: str) -> str | None:
         device_key = imou_life_device_key_from_ids(device_id, channel_id, None)
@@ -754,6 +842,21 @@ class ImouRecordMediaSource(MediaSource):
         if runtime is None:
             raise BrowseError("Imou integration is not loaded")
         return runtime
+
+
+def _local_failure_is_offline(err: ImouException, device: ImouHaDevice | None) -> bool:
+    """True when a local-recording query failed because the device is offline."""
+    if (err.api_code or "").upper() == ERROR_CODE_DEVICE_OFFLINE:
+        return True
+    message = (err.message or "").lower()
+    if "dv1007" in message or "offline" in message or "离线" in message:
+        return True
+    if device is None:
+        return False
+    status = device.sensors.get(PARAM_STATUS)
+    if not isinstance(status, dict):
+        return False
+    return status.get(PARAM_STATE) == DeviceStatus.OFFLINE.value
 
 
 async def _cloud_folder_title(hass: HomeAssistant) -> str:

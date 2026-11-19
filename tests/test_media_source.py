@@ -16,9 +16,11 @@ from custom_components.imou_life.media_source import (
     _record_hls_expiry,
     _split,
 )
+from homeassistant.components.media_player import BrowseError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.const import PARAM_STATE, PARAM_STATUS
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
@@ -61,6 +63,7 @@ def _record_device(
 ) -> ImouHaDevice:
     device = ImouHaDevice(device_id, "Camera", "Imou", "IPC", "1.0")
     device.set_channel_id(channel_id)
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "online"
     if services is not None:
         device.set_capability_ids(services)
         device.set_capability_set(
@@ -334,6 +337,70 @@ async def test_local_day_is_empty_when_aggregate_fails(
     manager.async_list_local_record_segments.assert_awaited_once()
     assert browse.children == []
     assert browse.can_expand is False
+
+
+async def test_offline_local_day_says_the_device_is_offline(
+    hass: HomeAssistant,
+) -> None:
+    """A local-recording failure on an offline device is not an empty folder."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "offline"
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        side_effect=ImouException("device offline", api_code="DV1007")
+    )
+
+    with pytest.raises(BrowseError, match=r"offline|设备离线"):
+        await source._browse_clips(
+            [
+                f"entry:{entry.entry_id}",
+                "cam:SN1:0",
+                "local",
+                "month:2026-11",
+                "day:01",
+            ]
+        )
+
+
+async def test_local_clip_shows_a_cover_when_the_record_has_one(
+    hass: HomeAssistant,
+) -> None:
+    """A cover URL is shown through this Home Assistant, not the raw cloud address."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        return_value=[
+            LocalRecordSegment(
+                file_name="rec-1",
+                begin_time="2026-11-01 08:00:00",
+                end_time="2026-11-01 08:10:00",
+                thumb_url="https://example.test/cover.jpg",
+            )
+        ]
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    thumbnail = (browse.children or [])[0].thumbnail or ""
+    assert thumbnail.startswith("/api/imou_life/record_cover/")
 
 
 async def test_local_month_bitmap_forwards_product_id(

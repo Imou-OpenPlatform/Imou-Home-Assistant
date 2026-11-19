@@ -18,6 +18,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from pyimouapi.playback.hls import (
     parse_hls_media_segment_urls,
     pick_hls_variant_playlist_url,
@@ -40,6 +41,7 @@ SESSION_TTL_SECONDS = 600
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
 RESOURCE_URL = "/api/imou_life/record_hls/{session_id}/resource/{kind}/{index}"
+_UPSTREAM_REFRESH_STATUSES = frozenset({401, 403, 404, 502})
 
 
 @dataclass(slots=True)
@@ -225,6 +227,25 @@ def _playlist_target_duration(playlist_body: str) -> int:
     return 2
 
 
+def _proxy_origin(hass: HomeAssistant) -> str:
+    """Origin this Home Assistant process can open, for Stream's second fetch."""
+    try:
+        return get_url(hass).rstrip("/")
+    except NoURLAvailableError:
+        return ""
+
+
+def _absolute_proxy_url(hass: HomeAssistant, signed_path: str) -> str:
+    """Turn a signed /api path into an absolute URL on this Home Assistant."""
+    if signed_path.startswith(("http://", "https://")):
+        return signed_path
+    origin = _proxy_origin(hass)
+    if not origin:
+        return signed_path
+    path = signed_path if signed_path.startswith("/") else f"/{signed_path}"
+    return f"{origin}{path}"
+
+
 def _build_proxy_playlist(
     hass: HomeAssistant, session_id: str, session: RecordHlsSession
 ) -> str:
@@ -249,11 +270,14 @@ def _build_proxy_playlist(
             resource_path = RESOURCE_URL.format(
                 session_id=session_id, kind=kind, index=index
             )
-            signed = async_sign_path(
+            signed = _absolute_proxy_url(
                 hass,
-                resource_path,
-                timedelta(seconds=remaining_ttl),
-                use_content_user=True,
+                async_sign_path(
+                    hass,
+                    resource_path,
+                    timedelta(seconds=remaining_ttl),
+                    use_content_user=True,
+                ),
             )
             lines.append(re.sub(r'URI="[^"]*"', f'URI="{signed}"', original, count=1))
             continue
@@ -268,11 +292,14 @@ def _build_proxy_playlist(
                 session_id=session_id, index=segment_index
             )
             lines.append(
-                async_sign_path(
+                _absolute_proxy_url(
                     hass,
-                    segment_path,
-                    timedelta(seconds=remaining_ttl),
-                    use_content_user=True,
+                    async_sign_path(
+                        hass,
+                        segment_path,
+                        timedelta(seconds=remaining_ttl),
+                        use_content_user=True,
+                    ),
                 )
             )
             segment_index += 1
@@ -796,7 +823,12 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             raise web.HTTPBadGateway() from err
         if not record.active or _sessions(hass).get(session_id) is not record:
             raise web.HTTPNotFound()
-        if upstream_response.status in (401, 403, 404):
+        if upstream_response.status in _UPSTREAM_REFRESH_STATUSES:
+            _LOGGER.warning(
+                "Imou HLS segment %s upstream HTTP %s; refreshing session",
+                seg_index,
+                upstream_response.status,
+            )
             refreshed = await _async_refresh_record_hls_session(
                 hass, session_id, record, generation
             )
@@ -838,6 +870,11 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
         except ValueError as err:
             raise web.HTTPBadGateway() from err
         if not 200 <= upstream_response.status < 300:
+            _LOGGER.warning(
+                "Imou HLS segment %s upstream HTTP %s",
+                seg_index,
+                upstream_response.status,
+            )
             raise web.HTTPBadGateway()
         response_headers = {
             name: value
@@ -911,8 +948,17 @@ class ImouRecordHlsResourceView(HomeAssistantView):
                 hass, resource.url, range_header=range_header
             )
         except (OSError, TimeoutError, ValueError) as err:
+            _LOGGER.warning(
+                "Imou HLS %s %s fetch failed: %s", kind, resource_index, err
+            )
             raise web.HTTPBadGateway() from err
-        if upstream.status in (401, 403, 404):
+        if upstream.status in _UPSTREAM_REFRESH_STATUSES:
+            _LOGGER.warning(
+                "Imou HLS %s %s upstream HTTP %s; refreshing session",
+                kind,
+                resource_index,
+                upstream.status,
+            )
             refreshed = await _async_refresh_record_hls_session(
                 hass, session_id, record, generation
             )
@@ -928,6 +974,12 @@ class ImouRecordHlsResourceView(HomeAssistantView):
                     hass, resource.url, range_header=range_header
                 )
             except (OSError, TimeoutError, ValueError) as err:
+                _LOGGER.warning(
+                    "Refreshed Imou HLS %s %s fetch failed: %s",
+                    kind,
+                    resource_index,
+                    err,
+                )
                 raise web.HTTPBadGateway() from err
         try:
             _validate_byte_range_response(
@@ -936,6 +988,12 @@ class ImouRecordHlsResourceView(HomeAssistantView):
         except ValueError as err:
             raise web.HTTPBadGateway() from err
         if not 200 <= upstream.status < 300:
+            _LOGGER.warning(
+                "Imou HLS %s %s upstream HTTP %s",
+                kind,
+                resource_index,
+                upstream.status,
+            )
             raise web.HTTPBadGateway()
         headers = {
             name: value

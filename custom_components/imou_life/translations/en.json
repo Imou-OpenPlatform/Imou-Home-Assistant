@@ -742,7 +742,8 @@
   "media_source": {
     "record_media_cloud_folder": "Cloud recordings",
     "record_media_local_folder": "Local recordings",
-    "record_media_alarm_folder": "Record on alarm"
+    "record_media_alarm_folder": "Record on alarm",
+    "record_media_device_offline": "Device is offline"
   },
   "services": {
     "control_move_ptz": {

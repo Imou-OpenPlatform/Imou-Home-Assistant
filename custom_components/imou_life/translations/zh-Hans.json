@@ -742,7 +742,8 @@
   "media_source": {
     "record_media_cloud_folder": "云录像",
     "record_media_local_folder": "本地录像",
-    "record_media_alarm_folder": "告警时录像"
+    "record_media_alarm_folder": "告警时录像",
+    "record_media_device_offline": "设备离线"
   },
   "services": {
     "control_move_ptz": {
