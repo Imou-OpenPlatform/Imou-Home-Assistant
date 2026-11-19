@@ -146,8 +146,31 @@ def test_search_card_lists_a_hit() -> None:
     assert "Page 1" in markdown
     assert "🚗 **一辆车经过**" in markdown
     assert "![有人经过](/local/imou/thumbs/1.jpg)" in markdown
-    assert "风险" not in markdown
+    assert "Person · Risk 1" in markdown
+    assert "Vehicle · Risk 2" in markdown
     assert "human" not in markdown
+
+
+def test_search_card_uses_the_owner_language_for_labels() -> None:
+    """Tags and the risk level follow the labels for the owner's language."""
+    hit = InsightAlarmHit(
+        alarm_id="1",
+        begin_time="2026-11-15 08:00:00",
+        ai_copywriting="有人骑车经过",
+        security_risk_level=3,
+        ai_tags=("人", "车"),
+        thumb_url=None,
+    )
+    _summary, markdown = search_card(
+        "骑车",
+        [(hit, None)],
+        labels={
+            "tag_person": "人",
+            "tag_vehicle": "车",
+            "risk": "风险 {level}",
+        },
+    )
+    assert "人、车 · 风险 3" in markdown
 
 
 def test_search_card_empty() -> None:

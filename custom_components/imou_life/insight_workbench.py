@@ -411,12 +411,58 @@ _MESSAGE_ICONS = (
 )
 
 
+_TAG_LABEL_KEYS = {
+    "human": "tag_person",
+    "person": "tag_person",
+    "people": "tag_person",
+    "人": "tag_person",
+    "vehicle": "tag_vehicle",
+    "car": "tag_vehicle",
+    "车": "tag_vehicle",
+    "pet": "tag_pet",
+    "animal": "tag_pet",
+    "宠物": "tag_pet",
+    "package": "tag_package",
+    "parcel": "tag_package",
+    "包裹": "tag_package",
+}
+_TAG_FALLBACKS = {
+    "tag_person": "Person",
+    "tag_vehicle": "Vehicle",
+    "tag_pet": "Pet",
+    "tag_package": "Package",
+}
+
+
 def _message_icon(hit: InsightAlarmHit) -> str:
     blob = " ".join([hit.alarm_type or "", *hit.ai_tags]).lower()
     for keys, icon in _MESSAGE_ICONS:
         if any(key in blob for key in keys):
             return icon
     return "🔔"
+
+
+def _search_meta(hit: InsightAlarmHit, labels: dict[str, str]) -> str:
+    """Labels and risk level for one search result, in the owner's language."""
+    names: list[str] = []
+    for raw in hit.ai_tags:
+        key = _TAG_LABEL_KEYS.get(raw) or _TAG_LABEL_KEYS.get(raw.lower())
+        label = raw.strip() if key is None else (labels.get(key) or _TAG_FALLBACKS[key])
+        if label and label not in names:
+            names.append(label)
+    parts: list[str] = []
+    if names:
+        joiner = "、" if labels.get("tag_person") == "人" else ", "
+        parts.append(joiner.join(names))
+    if hit.security_risk_level is not None:
+        parts.append(
+            fill_template(
+                labels.get("risk") or "Risk {level}",
+                "Risk {level}",
+                level=str(hit.security_risk_level),
+            )
+        )
+    return " · ".join(parts)
 
 
 def _md(text: str) -> str:
@@ -513,6 +559,9 @@ def search_card(
             parts.append(f"![{_md(title)}]({image})")
         if hit.begin_time and hit.begin_time != title:
             parts.append(hit.begin_time)
+        meta = _search_meta(hit, copy)
+        if meta:
+            parts.append(meta)
         blocks.append("\n\n".join(parts))
     summary = rows[0][0].ai_copywriting or fill_template(
         count_label, "{count} alarms", count=str(len(rows))
@@ -539,6 +588,21 @@ async def _search_labels(hass: HomeAssistant) -> dict[str, str]:
         ),
         "count": selector_option_label(
             hass, language, "insight_dashboard", "search_count", "{count} alarms"
+        ),
+        "risk": selector_option_label(
+            hass, language, "insight_dashboard", "search_risk", "Risk {level}"
+        ),
+        "tag_person": selector_option_label(
+            hass, language, "insight_dashboard", "tag_person", "Person"
+        ),
+        "tag_vehicle": selector_option_label(
+            hass, language, "insight_dashboard", "tag_vehicle", "Vehicle"
+        ),
+        "tag_pet": selector_option_label(
+            hass, language, "insight_dashboard", "tag_pet", "Pet"
+        ),
+        "tag_package": selector_option_label(
+            hass, language, "insight_dashboard", "tag_package", "Package"
         ),
     }
 

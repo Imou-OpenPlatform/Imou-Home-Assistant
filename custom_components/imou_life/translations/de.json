@@ -284,6 +284,11 @@
         "search_empty": "Keine Alarme passen zu „{keyword}“.",
         "search_page": "Seite {page}",
         "search_count": "{count} Alarme",
+        "search_risk": "Risiko {level}",
+        "tag_person": "Person",
+        "tag_vehicle": "Fahrzeug",
+        "tag_pet": "Haustier",
+        "tag_package": "Paket",
         "date_name": "Berichtsdatum",
         "keyword_name": "Suchtext",
         "search_begin": "Startdatum",
@@ -304,7 +309,7 @@
         "wechat": "17799860785",
         "wechat_label": "WeChat",
         "whatsapp": "+86 19106884129",
-        "trial_markdown": "## ✨ AI Insight sagt, was die Kameras gesehen haben\n\n🌅 **Ein Bericht für den Tag, den du wählst**\nWähle ein Datum. Personen, Fahrzeuge, Haustiere, Pakete und die Zahl des Tages stehen in einem Diagramm.\n\n🔍 **Einen Alarm in einem Satz finden**\nSchreib auf, woran du dich erinnerst. Passende Alarme erscheinen mit Uhrzeit und Bild.\n\n🚶 🚗 🐾 **Jede Art von Moment hat ein eigenes Symbol**\nPerson, Fahrzeug, Haustier und Paket haben je ein Zeichen. Der Titel ist der Satz, der zu diesem Alarm gehört."
+        "trial_markdown": "## ✨ AI Insight sagt, was die Kameras gesehen haben\n\n🌅 **Ein Bericht für den Tag, den du wählst**\nWähle ein Datum. Personen, Fahrzeuge, Haustiere, Pakete und die Zahl des Tages stehen in einem Diagramm.\n\n🔍 **Einen Alarm in einem Satz finden**\nSchreib auf, woran du dich erinnerst. Passende Alarme erscheinen mit Uhrzeit, Bild, Kennzeichnungen und Risikostufe.\n\n🚶 🚗 🐾 **Jede Art von Moment hat ein eigenes Symbol**\nPerson, Fahrzeug, Haustier und Paket haben je ein Zeichen. Der Titel ist der Satz, der zu diesem Alarm gehört."
       }
     },
     "alarm_type": {

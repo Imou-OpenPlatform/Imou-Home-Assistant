@@ -284,6 +284,11 @@
         "search_empty": "Nessun allarme corrisponde a «{keyword}».",
         "search_page": "Pagina {page}",
         "search_count": "{count} allarmi",
+        "search_risk": "Rischio {level}",
+        "tag_person": "Persona",
+        "tag_vehicle": "Veicolo",
+        "tag_pet": "Animale",
+        "tag_package": "Pacco",
         "date_name": "Data del riepilogo",
         "keyword_name": "Testo di ricerca",
         "search_begin": "Data di inizio",
@@ -304,7 +309,7 @@
         "wechat": "17799860785",
         "wechat_label": "WeChat",
         "whatsapp": "+86 19106884129",
-        "trial_markdown": "## ✨ AI Insight racconta cosa hanno visto le telecamere\n\n🌅 **Un riepilogo per il giorno che scegli**\nScegli una data. Persone, veicoli, animali, pacchi e il totale del giorno stanno in un unico grafico.\n\n🔍 **Trova un allarme in una frase**\nScrivi ciò che ricordi. Gli allarmi corrispondenti compaiono con l'ora e l'immagine.\n\n🚶 🚗 🐾 **Ogni tipo di momento ha la sua icona**\nPersona, veicolo, animale e pacco hanno ciascuno un segno. Il titolo è la frase salvata con quell'allarme."
+        "trial_markdown": "## ✨ AI Insight racconta cosa hanno visto le telecamere\n\n🌅 **Un riepilogo per il giorno che scegli**\nScegli una data. Persone, veicoli, animali, pacchi e il totale del giorno stanno in un unico grafico.\n\n🔍 **Trova un allarme in una frase**\nScrivi ciò che ricordi. Gli allarmi corrispondenti compaiono con l'ora, l'immagine, le etichette e il livello di rischio.\n\n🚶 🚗 🐾 **Ogni tipo di momento ha la sua icona**\nPersona, veicolo, animale e pacco hanno ciascuno un segno. Il titolo è la frase salvata con quell'allarme."
       }
     },
     "alarm_type": {

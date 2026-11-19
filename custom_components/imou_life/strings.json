@@ -284,6 +284,11 @@
         "search_empty": "No alarms match \"{keyword}\".",
         "search_page": "Page {page}",
         "search_count": "{count} alarms",
+        "search_risk": "Risk {level}",
+        "tag_person": "Person",
+        "tag_vehicle": "Vehicle",
+        "tag_pet": "Pet",
+        "tag_package": "Package",
         "date_name": "Briefing date",
         "keyword_name": "Search text",
         "search_begin": "Start date",
@@ -304,7 +309,7 @@
         "wechat": "17799860785",
         "wechat_label": "WeChat",
         "whatsapp": "+86 19106884129",
-        "trial_markdown": "## ✨ AI Insight tells you what the cameras saw\n\n🌅 **A briefing for the day you pick**\nChoose a date. People, vehicles, pets, packages, and the day's total appear on one chart.\n\n🔍 **Find an alarm in one sentence**\nType what you remember. Matching alarms show up with their time and picture.\n\n🚶 🚗 🐾 **Each kind of moment has its own icon**\nA person, a vehicle, a pet, and a package each get a mark. The title is the sentence saved with that alarm."
+        "trial_markdown": "## ✨ AI Insight tells you what the cameras saw\n\n🌅 **A briefing for the day you pick**\nChoose a date. People, vehicles, pets, packages, and the day's total appear on one chart.\n\n🔍 **Find an alarm in one sentence**\nType what you remember. Matching alarms show up with their time, picture, labels, and risk level.\n\n🚶 🚗 🐾 **Each kind of moment has its own icon**\nA person, a vehicle, a pet, and a package each get a mark. The title is the sentence saved with that alarm."
       }
     },
     "alarm_type": {
