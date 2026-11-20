@@ -23,6 +23,7 @@ from pyimouapi.push import (
     is_v2_capability_event_id,
     is_v2_property_report,
     normalize_push_payload,
+    v2_capability_event_permitted,
     v2_property_report_values,
 )
 
@@ -554,10 +555,16 @@ def _is_security_alarm(msg_type: str | None) -> bool:
 
 
 def _v2_capability_event_allowed(ha_device: ImouHaDevice | None, event_id: str) -> bool:
-    """Gate a capability event on the page ids saved for this device row."""
-    if ha_device is None or ha_device.capability_ids is None:
+    """Gate V2 pushes on capability.list events, else page ids when the list is empty."""
+    if ha_device is None:
         return True
-    return event_id in ha_device.capability_ids
+    if ha_device.capability_set is not None:
+        events = ha_device.capability_set.events
+        if events:
+            return v2_capability_event_permitted(events, event_id)
+    if ha_device.capability_ids is not None:
+        return event_id in ha_device.capability_ids
+    return True
 
 
 def _apply_property_push_values(

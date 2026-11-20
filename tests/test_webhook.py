@@ -860,10 +860,10 @@ async def test_webhook_capability_ids_allow_event_missing_from_detail(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_webhook_capability_ids_drop_detail_only_event(
+async def test_webhook_capability_list_delivers_event_missing_from_page_ids(
     hass: HomeAssistant,
 ) -> None:
-    """An event only present in the capability list is not delivered."""
+    """An event from device.capability.list is delivered even when page ids omit it."""
     from pyimouapi.capability.catalog import CapabilitySet
     from pyimouapi.ha_device import ImouHaDevice
 
@@ -902,7 +902,8 @@ async def test_webhook_capability_ids_drop_detail_only_event(
     await hass.async_block_till_done(wait_background_tasks=True)
 
     assert response.status == 200
-    assert events == []
+    assert len(events) == 1
+    assert events[0].data["msg_type"] == "detection.motion.detected"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
