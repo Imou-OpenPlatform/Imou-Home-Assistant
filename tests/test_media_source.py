@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from custom_components.imou_life.const import (
@@ -19,6 +20,7 @@ from custom_components.imou_life.media_source import (
 from homeassistant.components.media_player import BrowseError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.const import PARAM_STATE, PARAM_STATUS
 from pyimouapi.device import ImouDeviceManager
@@ -118,13 +120,12 @@ async def _browse_record_kinds(
         None,
         frozenset(),
         frozenset({"record.file.bitmap"}),
-        frozenset({"record.file.list"}),
     ],
 )
 async def test_local_folder_hidden_without_both_record_capabilities(
     hass: HomeAssistant, services: frozenset[str] | None
 ) -> None:
-    """Local recordings require both bitmap and list services."""
+    """Local recordings require the clip list. A bitmap alone stays hidden."""
     source, entry, _ = _record_browse_source(
         hass, [_record_device("SN1", "0", services)]
     )
@@ -158,6 +159,57 @@ async def test_local_bitmap_failure_lists_no_days(hass: HomeAssistant) -> None:
     )
 
     assert browse.children == []
+
+
+async def test_local_folder_shown_with_list_and_no_bitmap(
+    hass: HomeAssistant,
+) -> None:
+    source, entry, _ = _record_browse_source(
+        hass, [_record_device("SN1", "0", frozenset({"record.file.list"}))]
+    )
+    assert "Local recordings" in await _browse_record_kinds(source, entry)
+
+
+async def test_missing_bitmap_lists_days_through_today(
+    hass: HomeAssistant,
+) -> None:
+    device = _record_device("SN1", "1", frozenset({"record.file.list"}))
+    device.set_device_capability_ids(frozenset())
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    coordinator.device_manager.delegate.async_local_record_bitmap = AsyncMock()
+    with patch(
+        "custom_components.imou_life.media_source.dt_util.now",
+        return_value=datetime(2026, 11, 20, tzinfo=dt_util.UTC),
+    ):
+        current = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-11"]
+        )
+        past = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-10"]
+        )
+    coordinator.device_manager.delegate.async_local_record_bitmap.assert_not_awaited()
+    assert [child.title for child in current.children or []] == [
+        f"2026-11-{day:02d}" for day in range(1, 21)
+    ]
+    assert [child.title for child in past.children or []] == [
+        f"2026-10-{day:02d}" for day in range(1, 32)
+    ]
+
+
+async def test_device_level_bitmap_still_queries_the_fixed_lens(
+    hass: HomeAssistant,
+) -> None:
+    device = _record_device("SN1", "1", frozenset({"record.file.list"}))
+    device.set_device_capability_ids(frozenset({"record.file.bitmap"}))
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    coordinator.device_manager.delegate.async_local_record_bitmap = AsyncMock(
+        return_value={"outputData": {"bitmap": "1" + "0" * 30}}
+    )
+    browse = await source._browse_days(
+        [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-10"]
+    )
+    coordinator.device_manager.delegate.async_local_record_bitmap.assert_awaited()
+    assert browse.children
 
 
 async def test_local_folder_hidden_when_device_is_missing(

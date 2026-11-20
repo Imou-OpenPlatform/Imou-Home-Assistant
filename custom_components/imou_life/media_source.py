@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import calendar
 import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from pathlib import Path
 from typing import override
 
@@ -227,15 +229,32 @@ def _decode_file_token(token: str) -> str:
 
 
 def _supports_local_records(device: ImouHaDevice | None) -> bool:
-    """Return whether a device exposes both local-recording services."""
+    """Return whether a device can list local recording clips."""
     if device is None:
         return False
-    required = {"record.file.bitmap", "record.file.list"}
-    if device.capability_ids is not None:
-        return required <= device.capability_ids
-    if device.capability_set is None:
-        return False
-    return required <= device.capability_set.services
+    ids = device.capability_ids
+    if ids is None and device.capability_set is not None:
+        ids = device.capability_set.services
+    return bool(ids and "record.file.list" in ids)
+
+
+def _has_record_bitmap(device: ImouHaDevice) -> bool:
+    """Return whether this camera can ask which days have recordings."""
+    ids = set(device.capability_ids or ())
+    ids.update(device.device_capability_ids)
+    if device.capability_set is not None:
+        ids.update(device.capability_set.services)
+    return "record.file.bitmap" in ids
+
+
+def _days_without_bitmap(year: int, month: int, today: datetime) -> list[int]:
+    """Every day of the month, through today when the month is current."""
+    last = calendar.monthrange(year, month)[1]
+    if (year, month) > (today.year, today.month):
+        return []
+    if (year, month) == (today.year, today.month):
+        last = min(last, today.day)
+    return list(range(1, last + 1))
 
 
 class ImouRecordMediaSource(MediaSource):
@@ -615,31 +634,35 @@ class ImouRecordMediaSource(MediaSource):
                 bitmap = str(data.get("bitmap") or "")
                 days = parse_cloud_record_bitmap_days(bitmap, year=year, month=month)
             else:
-                try:
-                    data = await manager.async_local_record_bitmap(
-                        device_id,
-                        channel_id,
-                        year=year,
-                        month=month,
-                        product_id=self._camera_product_id(
-                            runtime, device_id, channel_id
-                        ),
-                    )
-                except ImouException as err:
-                    offline = await self._offline_browse_error(
-                        runtime, device_id, channel_id, err
-                    )
-                    if offline is not None:
-                        raise offline from err
-                    _LOGGER.debug(
-                        "Record bitmap unavailable for %s ch%s (%s)",
-                        device_id,
-                        channel_id,
-                        kind,
-                        exc_info=True,
-                    )
+                camera = self._camera(runtime, device_id, channel_id)
+                if camera is not None and not _has_record_bitmap(camera):
+                    days = _days_without_bitmap(year, month, dt_util.now())
                 else:
-                    days = parse_local_bitmap_days(data, year=year, month=month)
+                    try:
+                        data = await manager.async_local_record_bitmap(
+                            device_id,
+                            channel_id,
+                            year=year,
+                            month=month,
+                            product_id=self._camera_product_id(
+                                runtime, device_id, channel_id
+                            ),
+                        )
+                    except ImouException as err:
+                        offline = await self._offline_browse_error(
+                            runtime, device_id, channel_id, err
+                        )
+                        if offline is not None:
+                            raise offline from err
+                        _LOGGER.debug(
+                            "Record bitmap unavailable for %s ch%s (%s)",
+                            device_id,
+                            channel_id,
+                            kind,
+                            exc_info=True,
+                        )
+                    else:
+                        days = parse_local_bitmap_days(data, year=year, month=month)
         except ImouException:
             _LOGGER.debug(
                 "Record bitmap unavailable for %s ch%s (%s)",

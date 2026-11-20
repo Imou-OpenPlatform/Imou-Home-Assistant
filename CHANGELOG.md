@@ -36,6 +36,7 @@
 - **Capture and detect** always posts the picture to the notification drawer and to signed-in phone apps. The service no longer asks for notification targets. It names what was found and draws a box only when the result is at least 85% sure. A box given as a fraction of the picture is drawn at that place on the picture.
 - **Search** names who was seen on each alarm, with an icon, and shows a 10-step risk bar plus a short description from low to severe.
 - **Capture and detect**, **Search**, and alarm notifications name a person, a vehicle, a pet, and a package the same way, with the same icons. **Capture and detect** also shows how sure the result is on that 10-step bar. The daily briefing chart uses those same names.
+- A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
 
 ### [1.4.4]
 
@@ -407,6 +408,7 @@
 - **抓图检测** 总会把图片发到通知栏和已登录的手机，服务里不再单独选通知目标。把握达到 85% 才写出检测结果并画框。位置按画面比例给出时，框画在对应的人、车或宠物上。
 - **搜索** 在每条告警上写出识别到的对象（带图标），并用 10 格风险条和简短说明标出风险等级，从较低到很高。
 - **抓图检测**、**搜索**和告警通知用同一套名字和图标标出人、车、宠物和包裹。**抓图检测**再用这 10 格标出把握。每日简报的图表也用同样的名字。
+- 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
 
 ### [1.4.4]
 
