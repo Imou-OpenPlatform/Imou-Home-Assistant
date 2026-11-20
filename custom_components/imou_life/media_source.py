@@ -60,6 +60,7 @@ from .record_cover import (
 from .record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
+    async_prepare_local_record_playback,
     async_register_record_hls_proxy,
     record_hls_proxy_origin,
 )
@@ -104,9 +105,15 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
 # publish the same kind of public address, but the first segment can take
 # longer while the list is still moving forward.
 _STREAM_OPEN_TIMEOUT = 30
+_LOCAL_STREAM_OPEN_TIMEOUT = 45
 
 
-async def _async_start_and_wait_for_stream(stream: object, provider: object) -> bool:
+async def _async_start_and_wait_for_stream(
+    stream: object,
+    provider: object,
+    *,
+    timeout: float = _STREAM_OPEN_TIMEOUT,
+) -> bool:
     """Start Stream and wait for a playable segment, or bail when it fails."""
     failed = asyncio.Event()
 
@@ -126,7 +133,7 @@ async def _async_start_and_wait_for_stream(stream: object, provider: object) -> 
         fail_task = asyncio.create_task(failed.wait())
         done, pending = await asyncio.wait(
             {recv_task, fail_task},
-            timeout=_STREAM_OPEN_TIMEOUT,
+            timeout=timeout,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
@@ -148,18 +155,27 @@ async def _async_try_hls_playback(
     refresh: Callable[[], Awaitable[RecordHlsDescriptor]],
     entry_id: str,
     stream_label: str,
+    *,
+    local_recording: bool = False,
 ) -> PlayMedia | None:
     """Return Stream HLS PlayMedia when the Stream integration can remux the clip."""
     if "stream" not in hass.config.components:
         return None
     stream = None
     try:
+        prepared_playback = None
+        if local_recording:
+            prepared_playback = await async_prepare_local_record_playback(
+                hass,
+                descriptor.playlist_url,
+            )
         signed_playlist = await async_create_record_hls_proxy_playlist_url(
             hass,
             descriptor.playlist_url,
             refresh=refresh,
             entry_id=entry_id,
             expires_at=descriptor.expires_at,
+            prepared_playback=prepared_playback,
         )
         proxy_origin = record_hls_proxy_origin(hass, fallback_url=get_url)
         playlist_source = f"{proxy_origin}{signed_playlist}"
@@ -171,7 +187,14 @@ async def _async_try_hls_playback(
             stream_label=stream_label,
         )
         provider = stream.add_provider(HLS_PROVIDER, timeout=3600)
-        opened = await _async_start_and_wait_for_stream(stream, provider)
+        stream_open_timeout = (
+            _LOCAL_STREAM_OPEN_TIMEOUT if local_recording else _STREAM_OPEN_TIMEOUT
+        )
+        opened = await _async_start_and_wait_for_stream(
+            stream,
+            provider,
+            timeout=stream_open_timeout,
+        )
         if not opened:
             raise HomeAssistantError("Stream produced no playable segment")
         stream_url = stream.endpoint_url(HLS_PROVIDER).replace("master_", "")
@@ -378,6 +401,7 @@ class ImouRecordMediaSource(MediaSource):
             async_record_hls_descriptor,
             entry_id,
             clip_label,
+            local_recording=record_type == RECORD_TYPE_LOCAL,
         )
         if hls_play is not None:
             _LOGGER.debug(

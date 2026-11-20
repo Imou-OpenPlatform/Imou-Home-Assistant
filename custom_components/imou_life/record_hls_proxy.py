@@ -38,6 +38,8 @@ DATA_RECORD_HLS_PROXY_TIMER = "imou_life_record_hls_proxy_timer"
 DATA_RECORD_HLS_PROXY_TIMER_TOKEN = "imou_life_record_hls_proxy_timer_token"
 SESSION_TTL_SECONDS = 600
 PLAYLIST_FOLLOW_MIN_SECONDS = 2.0
+_LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
+_LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
@@ -61,6 +63,17 @@ class _LoadedMediaPlaylist:
     body: str
     segment_urls: list[str]
     base_url: str
+
+
+_LOCAL_PREPARE_WARM_SEGMENT_COUNT = 3
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedRecordHlsPlayback:
+    """A public localvod snapshot once the first upstream segment is readable."""
+
+    loaded: _LoadedMediaPlaylist
+    segment_prefetch: dict[int, bytes]
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,14 +278,15 @@ def record_hls_proxy_origin(
     """Return an origin this Home Assistant process can open on itself.
 
     Stream/PyAV and ffmpeg run on the Home Assistant host, not in the browser.
-    Prefer local loopback when HA listens over plain HTTP so reverse proxies,
-    Docker bridges, mDNS, and external URLs cannot break internal playback.
+    Always prefer loopback on the API port so external URLs, reverse proxies,
+    hairpin NAT, and split DNS cannot break server-side playback for remote users.
     """
     api = getattr(hass.config, "api", None)
-    if api is not None and not getattr(api, "use_ssl", False):
+    if api is not None:
         port = getattr(api, "port", None)
         if port:
-            return f"http://{_loopback_host(hass, api)}:{port}"
+            scheme = "https" if getattr(api, "use_ssl", False) else "http"
+            return f"{scheme}://{_loopback_host(hass, api)}:{port}"
     resolver = fallback_url or get_url
     return resolver(hass).rstrip("/")
 
@@ -812,6 +826,96 @@ async def _async_pin_segment_urls(hass: HomeAssistant, urls: list[str]) -> None:
             seen.add(key)
 
 
+async def _async_fetch_playlist_segment_body(
+    hass: HomeAssistant,
+    loaded: _LoadedMediaPlaylist,
+    index: int,
+) -> bytes | None:
+    """Fetch one upstream media segment when the playlist lists it."""
+    if index < 0 or index >= len(loaded.segment_urls):
+        return None
+    segments = _segment_descriptors(loaded.body, loaded.segment_urls)
+    if index >= len(segments):
+        return None
+    segment = segments[index]
+    if not segment.valid:
+        return None
+    range_header: str | None = None
+    if segment.byte_range is not None:
+        range_header = segment.byte_range.request_header
+    try:
+        response = await async_fetch_url_response(
+            hass,
+            segment.url,
+            range_header=range_header,
+        )
+    except (OSError, TimeoutError, ValueError):
+        return None
+    if not 200 <= response.status < 300 or not response.body:
+        return None
+    try:
+        _validate_byte_range_response(
+            segment,
+            range_header,
+            response.status,
+            response.headers,
+        )
+    except ValueError:
+        return None
+    return response.body
+
+
+async def _async_upstream_first_segment_ready(
+    hass: HomeAssistant,
+    loaded: _LoadedMediaPlaylist,
+) -> PreparedRecordHlsPlayback | None:
+    """Return a snapshot when the playlist's first media segment can be fetched."""
+    first_body = await _async_fetch_playlist_segment_body(hass, loaded, 0)
+    if first_body is None:
+        return None
+    prefetch: dict[int, bytes] = {0: first_body}
+    warm_through = min(
+        _LOCAL_PREPARE_WARM_SEGMENT_COUNT,
+        len(loaded.segment_urls),
+    )
+    for index in range(1, warm_through):
+        if (body := await _async_fetch_playlist_segment_body(hass, loaded, index)) is None:
+            break
+        prefetch[index] = body
+    return PreparedRecordHlsPlayback(loaded, prefetch)
+
+
+async def async_prepare_local_record_playback(
+    hass: HomeAssistant,
+    playlist_url: str,
+    *,
+    max_wait: float = _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS,
+) -> PreparedRecordHlsPlayback:
+    """Poll localvod until Lechange publishes a fetchable first segment."""
+    deadline = time.time() + max_wait
+    last_log = 0.0
+    while time.time() < deadline:
+        try:
+            loaded = await _load_media_playlist(hass, playlist_url)
+        except (OSError, TimeoutError, ValueError):
+            await asyncio.sleep(_LOCAL_PLAYBACK_PREPARE_POLL_SECONDS)
+            continue
+        prepared = await _async_upstream_first_segment_ready(hass, loaded)
+        if prepared is not None:
+            elapsed = max_wait - (deadline - time.time())
+            _LOGGER.debug(
+                "Imou local recording segments ready after %.1fs", elapsed
+            )
+            return prepared
+        now = time.time()
+        if now - last_log >= 5.0:
+            last_log = now
+            _LOGGER.debug("Waiting for Imou local recording segments to publish")
+        await asyncio.sleep(_LOCAL_PLAYBACK_PREPARE_POLL_SECONDS)
+    msg = "Imou local recording segments were not ready in time"
+    raise TimeoutError(msg)
+
+
 async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
 ) -> _LoadedMediaPlaylist:
@@ -839,10 +943,14 @@ async def async_create_record_hls_proxy_playlist_url(
     refresh: Callable[[], Awaitable[RecordHlsDescriptor | str]],
     entry_id: str,
     expires_at: float | None = None,
+    prepared_playback: PreparedRecordHlsPlayback | None = None,
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
     _prune_sessions(hass)
-    loaded = await _load_media_playlist(hass, upstream_playlist_url)
+    if prepared_playback is not None:
+        loaded = prepared_playback.loaded
+    else:
+        loaded = await _load_media_playlist(hass, upstream_playlist_url)
     if isinstance(loaded, _LoadedMediaPlaylist):
         body, segment_urls, media_playlist_url = (
             loaded.body,
@@ -879,7 +987,11 @@ async def async_create_record_hls_proxy_playlist_url(
         last_playlist_fetch_at=time.time(),
     )
     _sessions(hass)[session_id] = session
-    if not live and session.segments:
+    if prepared_playback is not None:
+        for index, body in prepared_playback.segment_prefetch.items():
+            if 0 <= index < len(session.segments):
+                session.segment_prefetch[index] = body
+    elif not live and session.segments:
         hass.async_create_task(
             _async_prefetch_upstream_segments(hass, session, [0]),
         )

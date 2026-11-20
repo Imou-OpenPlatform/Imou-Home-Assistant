@@ -26,6 +26,7 @@ from custom_components.imou_life.record_hls_proxy import (
     ImouRecordHlsSegmentView,
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
+    async_prepare_local_record_playback,
     async_remove_record_hls_proxy_sessions,
     record_hls_proxy_origin,
 )
@@ -863,6 +864,61 @@ https://media.example/clip?userid=seg_4.ts&proto=https
 #EXT-X-ENDLIST
 """
     )
+
+
+@pytest.mark.asyncio
+async def test_prepare_local_playback_polls_until_first_segment(
+    hass: HomeAssistant,
+) -> None:
+    sliding = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-TARGETDURATION:4
+#EXTINF:4,
+https://media.example/clip?userid=seg_0.ts&proto=https
+"""
+    waiting = (sliding, [])
+    ready = (
+        sliding,
+        ["https://media.example/clip?userid=seg_0.ts&proto=https"],
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            side_effect=[
+                type(
+                    "Loaded",
+                    (),
+                    {"body": waiting[0], "segment_urls": waiting[1], "base_url": "x"},
+                )(),
+                type(
+                    "Loaded",
+                    (),
+                    {"body": ready[0], "segment_urls": ready[1], "base_url": "x"},
+                )(),
+            ],
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            return_value=_upstream_response(200, b"segment-ready"),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as sleep_mock,
+    ):
+        prepared = await async_prepare_local_record_playback(
+            hass,
+            "https://media.example/local.m3u8",
+        )
+
+    assert prepared.segment_prefetch[0] == b"segment-ready"
+    sleep_mock.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -2393,7 +2449,7 @@ async def test_proxy_origin_prefers_loopback_for_plain_http(
         "custom_components.imou_life.record_hls_proxy.get_url",
         return_value="https://ha.example.com",
     ):
-        assert record_hls_proxy_origin(hass) == "https://ha.example.com"
+        assert record_hls_proxy_origin(hass) == "https://127.0.0.1:8123"
 
 
 @pytest.mark.asyncio
