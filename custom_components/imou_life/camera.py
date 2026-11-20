@@ -91,7 +91,7 @@ class ImouCamera(ImouEntity, Camera):
         return url
 
     async def _async_fetch_stream_url(self) -> str:
-        """Ask the cloud for a getStreamUrl ticket."""
+        """Ask the cloud for a live stream URL."""
         try:
             return await self.coordinator.device_manager.async_get_device_stream(
                 self.device,

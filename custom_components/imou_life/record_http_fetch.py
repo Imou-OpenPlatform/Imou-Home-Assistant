@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 _LOGGER = logging.getLogger(__name__)
 
 _CURL_TIMEOUT = "120"
+_CURL_MAX_FILESIZE = "268435456"
 _MAX_REDIRECTS = 5
 
 
@@ -110,7 +111,7 @@ def _sync_curl_response(
             "--max-time",
             _CURL_TIMEOUT,
             "--max-filesize",
-            "67108864",
+            _CURL_MAX_FILESIZE,
             "--http1.1",
             "--proto",
             "=http,https",

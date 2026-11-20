@@ -87,6 +87,30 @@ async def test_refresh_copies_the_new_play_token(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_refresh_copies_source_and_device_capability_ids(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A refresh updates source and device capability ids without channel drift."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    current = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    current.set_channel_id("1")
+    current.set_capability_ids({"record.file.list"})
+    current.set_source("share")
+    fresh = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    fresh.set_channel_id("1")
+    fresh.set_capability_ids({"record.file.list"})
+    fresh.set_source("bind")
+    fresh.set_device_capability_ids({"record.file.bitmap"})
+    key = imou_life_device_key(current)
+    coordinator.devices_by_key = {key: current}
+    await coordinator._async_refresh_known_devices({key: fresh})
+    assert current.source == "bind"
+    assert current.device_capability_ids == frozenset({"record.file.bitmap"})
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_filter_none_selects_all(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:

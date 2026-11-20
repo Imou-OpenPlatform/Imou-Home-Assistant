@@ -122,7 +122,7 @@ async def _browse_record_kinds(
         frozenset({"record.file.bitmap"}),
     ],
 )
-async def test_local_folder_hidden_without_both_record_capabilities(
+async def test_local_folder_hidden_without_record_list_capability(
     hass: HomeAssistant, services: frozenset[str] | None
 ) -> None:
     """Local recordings require the clip list. A bitmap alone stays hidden."""
@@ -161,6 +161,25 @@ async def test_local_bitmap_failure_lists_no_days(hass: HomeAssistant) -> None:
     assert browse.children == []
 
 
+async def test_local_folder_shown_when_page_ids_omit_the_record_list(
+    hass: HomeAssistant,
+) -> None:
+    """A fixed lens keeps record services on the capability list, not page ids."""
+    device = _record_device("SN1", "1", frozenset({"image.night.mode"}))
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset({"record.file.list", "record.file.bitmap"}),
+            events=frozenset(),
+        )
+    )
+    source, entry, _ = _record_browse_source(hass, [device])
+
+    assert "Local recordings" in await _browse_record_kinds(
+        source, entry, channel_id="1"
+    )
+
+
 async def test_local_folder_shown_with_list_and_no_bitmap(
     hass: HomeAssistant,
 ) -> None:
@@ -187,6 +206,9 @@ async def test_missing_bitmap_lists_days_through_today(
         past = await source._browse_days(
             [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-10"]
         )
+        future = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-12"]
+        )
     coordinator.device_manager.delegate.async_local_record_bitmap.assert_not_awaited()
     assert [child.title for child in current.children or []] == [
         f"2026-11-{day:02d}" for day in range(1, 21)
@@ -194,6 +216,7 @@ async def test_missing_bitmap_lists_days_through_today(
     assert [child.title for child in past.children or []] == [
         f"2026-10-{day:02d}" for day in range(1, 32)
     ]
+    assert future.children == []
 
 
 async def test_device_level_bitmap_still_queries_the_fixed_lens(

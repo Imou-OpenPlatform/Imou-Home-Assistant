@@ -100,7 +100,10 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
     return ImouRecordMediaSource(hass)
 
 
-_STREAM_OPEN_TIMEOUT = 12
+# Cloud recordings arrive as a finished public playlist. Local recordings
+# publish the same kind of public address, but the first segment can take
+# longer while the list is still moving forward.
+_STREAM_OPEN_TIMEOUT = 30
 
 
 async def _async_start_and_wait_for_stream(stream: object, provider: object) -> bool:
@@ -228,23 +231,25 @@ def _decode_file_token(token: str) -> str:
     return base64.urlsafe_b64decode(token + pad).decode()
 
 
-def _supports_local_records(device: ImouHaDevice | None) -> bool:
-    """Return whether a device can list local recording clips."""
-    if device is None:
-        return False
-    ids = device.capability_ids
-    if ids is None and device.capability_set is not None:
-        ids = device.capability_set.services
-    return bool(ids and "record.file.list" in ids)
-
-
-def _has_record_bitmap(device: ImouHaDevice) -> bool:
-    """Return whether this camera can ask which days have recordings."""
+def _record_capability_ids(device: ImouHaDevice) -> set[str]:
+    """Page ids, parent device ids, and the capability list, together."""
     ids = set(device.capability_ids or ())
     ids.update(device.device_capability_ids)
     if device.capability_set is not None:
         ids.update(device.capability_set.services)
-    return "record.file.bitmap" in ids
+    return ids
+
+
+def _supports_local_records(device: ImouHaDevice | None) -> bool:
+    """Return whether a device can list local recording clips."""
+    if device is None:
+        return False
+    return "record.file.list" in _record_capability_ids(device)
+
+
+def _has_record_bitmap(device: ImouHaDevice) -> bool:
+    """Return whether this camera can ask which days have recordings."""
+    return "record.file.bitmap" in _record_capability_ids(device)
 
 
 def _days_without_bitmap(year: int, month: int, today: datetime) -> list[int]:

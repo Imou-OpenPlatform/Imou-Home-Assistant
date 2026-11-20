@@ -138,6 +138,10 @@ async def _create_refreshable_session(
             ],
         ),
         patch(
+            "custom_components.imou_life.record_hls_proxy._async_prefetch_upstream_segments",
+            new_callable=AsyncMock,
+        ),
+        patch(
             "custom_components.imou_life.record_hls_proxy.async_sign_path",
             side_effect=lambda _hass, path, *_args, **_kwargs: path,
         ),
@@ -165,6 +169,10 @@ async def _create_session_from_playlist(
             "custom_components.imou_life.record_hls_proxy._load_media_playlist",
             new_callable=AsyncMock,
             return_value=(playlist, segment_urls),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy._async_prefetch_upstream_segments",
+            new_callable=AsyncMock,
         ),
         patch(
             "custom_components.imou_life.record_hls_proxy.async_sign_path",
@@ -449,6 +457,10 @@ https://media.example/43.ts?token=fresh
                     "https://media.example/43.ts?token=old",
                 ],
             ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy._async_prefetch_upstream_segments",
+            new_callable=AsyncMock,
         ),
         patch(
             "custom_components.imou_life.record_hls_proxy.async_sign_path",
@@ -760,6 +772,157 @@ two.m4s?token=secret
 #EXT-X-ENDLIST
 """
     )
+
+
+@pytest.mark.asyncio
+async def test_live_playlist_follows_the_public_window(hass: HomeAssistant) -> None:
+    """A moving public playlist keeps the same Home Assistant segment indexes."""
+    first = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-TARGETDURATION:4
+#EXTINF:4,
+https://media.example/clip?userid=seg_0.ts&proto=https
+#EXTINF:4,
+https://media.example/clip?userid=seg_1.ts&proto=https
+#EXTINF:4,
+https://media.example/clip?userid=seg_2.ts&proto=https
+"""
+    second = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:2
+#EXT-X-TARGETDURATION:4
+#EXTINF:4,
+https://media.example/clip?userid=seg_2.ts&proto=https
+#EXTINF:4,
+https://media.example/clip?userid=seg_3.ts&proto=https
+#EXTINF:4,
+https://media.example/clip?userid=seg_4.ts&proto=https
+#EXT-X-ENDLIST
+"""
+    first_urls = [
+        "https://media.example/clip?userid=seg_0.ts&proto=https",
+        "https://media.example/clip?userid=seg_1.ts&proto=https",
+        "https://media.example/clip?userid=seg_2.ts&proto=https",
+    ]
+    second_urls = [
+        "https://media.example/clip?userid=seg_2.ts&proto=https",
+        "https://media.example/clip?userid=seg_3.ts&proto=https",
+        "https://media.example/clip?userid=seg_4.ts&proto=https",
+    ]
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(first, first_urls),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=second,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            return_value=_upstream_response(200, b"warm"),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.get_url",
+            return_value="http://ha.local:8123",
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/local.m3u8",
+            refresh=AsyncMock(return_value="https://media.example/local.m3u8"),
+            entry_id="entry-a",
+        )
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        response = await ImouRecordHlsPlaylistView().get(
+            _segment_request(hass), session_id
+        )
+
+    origin = "http://ha.local:8123"
+    assert (
+        response.text
+        == f"""#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:2
+#EXT-X-TARGETDURATION:4
+#EXTINF:4,
+{origin}/api/imou_life/record_hls/{session_id}/segment/2.ts
+#EXTINF:4,
+{origin}/api/imou_life/record_hls/{session_id}/segment/3.ts
+#EXTINF:4,
+{origin}/api/imou_life/record_hls/{session_id}/segment/4.ts
+#EXT-X-ENDLIST
+"""
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_create_prefetches_and_serves_cached_segment(
+    hass: HomeAssistant,
+) -> None:
+    playlist = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:2,
+https://media.example/seg0.ts
+#EXTINF:2,
+https://media.example/seg1.ts
+#EXT-X-ENDLIST
+"""
+    fetch = AsyncMock(
+        side_effect=[
+            _upstream_response(200, b"prefetched-0"),
+        ]
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                playlist,
+                [
+                    "https://media.example/seg0.ts",
+                    "https://media.example/seg1.ts",
+                ],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            fetch,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/vod.m3u8",
+            refresh=AsyncMock(return_value="https://media.example/vod.m3u8"),
+            entry_id="entry-a",
+        )
+        await hass.async_block_till_done()
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        assert fetch.await_count == 1
+        fetch.reset_mock()
+        response = await ImouRecordHlsSegmentView().get(
+            _segment_request(hass), session_id, "0"
+        )
+
+    assert response.body == b"prefetched-0"
+    fetch.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -2250,6 +2413,10 @@ https://media.example:7080/c.ts
             "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
             new_callable=AsyncMock,
             return_value=playlist,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy._async_prefetch_upstream_segments",
+            new_callable=AsyncMock,
         ),
         patch(
             "custom_components.imou_life.record_hls_proxy.async_pin_public_url",

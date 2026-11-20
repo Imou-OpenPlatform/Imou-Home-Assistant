@@ -386,6 +386,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             token = fresh.play_token_v2
             if isinstance(token, str) and token:
                 current.set_play_token_v2(token)
+            source = fresh.source
+            if isinstance(source, str) and source:
+                current.set_source(source)
+            device_caps = fresh.device_capability_ids
+            if isinstance(device_caps, frozenset) and (
+                device_caps or isinstance(fresh.capability_ids, frozenset)
+            ):
+                current.set_device_capability_ids(device_caps)
             if fresh.cs_status is not None:
                 current.set_cs_status(fresh.cs_status)
             if fresh.ai_insight_status is not None:

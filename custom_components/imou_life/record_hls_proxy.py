@@ -9,7 +9,7 @@ import secrets
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from urllib.parse import parse_qs, urljoin, urlsplit
 
@@ -37,6 +37,7 @@ DATA_RECORD_HLS_PROXY_REGISTERED = "imou_life_record_hls_proxy_registered"
 DATA_RECORD_HLS_PROXY_TIMER = "imou_life_record_hls_proxy_timer"
 DATA_RECORD_HLS_PROXY_TIMER_TOKEN = "imou_life_record_hls_proxy_timer_token"
 SESSION_TTL_SECONDS = 600
+PLAYLIST_FOLLOW_MIN_SECONDS = 2.0
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
@@ -116,6 +117,13 @@ class RecordHlsSession:
     refresh_attempted: bool = False
     generation: int = 0
     active: bool = True
+    media_playlist_url: str = ""
+    live: bool = False
+    window_indexes: list[int] = field(default_factory=list)
+    last_playlist_fetch_at: float = 0
+    tracked_media_sequence: int | None = None
+    segment_prefetch: dict[int, bytes] = field(default_factory=dict)
+    upstream_fetch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
         """Release callbacks and cancel an in-progress refresh."""
@@ -126,6 +134,8 @@ class RecordHlsSession:
             refresh_task.cancel()
         self.refresh_task = None
         self.segments.clear()
+        self.window_indexes.clear()
+        self.segment_prefetch.clear()
         if self.refreshed_segments is not None:
             self.refreshed_segments.clear()
         for resources in self.resources.values():
@@ -286,6 +296,140 @@ def _absolute_proxy_url(hass: HomeAssistant, signed_path: str) -> str:
     return f"{origin}{path}"
 
 
+def _media_sequence(body: str) -> int | None:
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#EXT-X-MEDIA-SEQUENCE:"):
+            continue
+        try:
+            return int(stripped.split(":", 1)[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _is_sliding_playlist(body: str) -> bool:
+    """A public playlist that keeps moving until the clip ends."""
+    if "#EXT-X-ENDLIST" in body:
+        return False
+    return any(
+        line.strip().startswith("#EXT-X-MEDIA-SEQUENCE:") for line in body.splitlines()
+    )
+
+
+def _replace_sliding_window(
+    session: RecordHlsSession,
+    body: str,
+    segment_urls: list[str],
+    media_playlist_url: str,
+) -> None:
+    """Keep issued segment indexes and serve the playlist's current window."""
+    if not segment_urls:
+        return
+    incoming = _segment_descriptors(body, segment_urls)
+    known: dict[str, int] = {}
+    for index, segment in enumerate(session.segments):
+        if segment.identity and segment.identity not in known:
+            known[segment.identity] = index
+    window: list[int] = []
+    for segment in incoming:
+        if segment.identity and segment.identity in known:
+            index = known[segment.identity]
+            session.segments[index] = segment
+        else:
+            index = len(session.segments)
+            session.segments.append(segment)
+            if segment.identity:
+                known[segment.identity] = index
+        window.append(index)
+    session.window_indexes = window
+    session.playlist_body = body
+    session.media_playlist_url = media_playlist_url
+    session.live = _is_sliding_playlist(body)
+
+
+async def _async_prefetch_upstream_segments(
+    hass: HomeAssistant, session: RecordHlsSession, indexes: list[int]
+) -> None:
+    """Warm the first segment while the player is still opening the playlist."""
+
+    if session.live:
+        return
+
+    async def async_prefetch(index: int) -> None:
+        if index < 0 or index >= len(session.segments):
+            return
+        if index in session.segment_prefetch:
+            return
+        segment = session.segments[index]
+        range_header: str | None = None
+        if segment.byte_range is not None:
+            range_header = segment.byte_range.request_header
+        try:
+            async with session.upstream_fetch_lock:
+                upstream_response = await async_fetch_url_response(
+                    hass,
+                    segment.url,
+                    range_header=range_header,
+                )
+        except (OSError, TimeoutError, ValueError):
+            _LOGGER.debug("Imou HLS segment %s prefetch skipped", index)
+            return
+        if 200 <= upstream_response.status < 300:
+            session.segment_prefetch[index] = upstream_response.body
+
+    for index in indexes:
+        await async_prefetch(index)
+
+
+async def _async_follow_live_playlist(
+    hass: HomeAssistant,
+    session: RecordHlsSession,
+    *,
+    force: bool = False,
+) -> None:
+    """Re-read a moving public playlist and adopt its current window."""
+    if not session.live or not session.media_playlist_url:
+        return
+    now = time.time()
+    if not force and now - session.last_playlist_fetch_at < PLAYLIST_FOLLOW_MIN_SECONDS:
+        return
+    playlist_url = session.media_playlist_url
+    try:
+        body = await async_fetch_url_text(hass, playlist_url)
+    except (OSError, TimeoutError, ValueError):
+        _LOGGER.debug("Imou live recording playlist was not reloaded")
+        return
+    media_playlist_url = getattr(body, "final_url", playlist_url)
+    media_sequence = _media_sequence(body)
+    if (
+        not force
+        and media_sequence is not None
+        and media_sequence == session.tracked_media_sequence
+    ):
+        session.last_playlist_fetch_at = now
+        return
+    segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
+    if not segment_urls:
+        return
+    if not force and str(body) == session.playlist_body:
+        session.last_playlist_fetch_at = now
+        return
+    try:
+        await _async_pin_segment_urls(hass, segment_urls)
+    except ValueError:
+        _LOGGER.debug("Imou live recording playlist pin skipped")
+        return
+    if not session.active:
+        return
+    async with session.refresh_lock:
+        if not session.active or not session.live:
+            return
+        _replace_sliding_window(session, body, segment_urls, media_playlist_url)
+        session.tracked_media_sequence = media_sequence
+        session.last_playlist_fetch_at = now
+
+
 def _build_proxy_playlist(
     hass: HomeAssistant, session_id: str, session: RecordHlsSession
 ) -> str:
@@ -322,14 +466,19 @@ def _build_proxy_playlist(
             lines.append(re.sub(r'URI="[^"]*"', f'URI="{signed}"', original, count=1))
             continue
         if stripped and not stripped.startswith("#"):
-            segment = session.segments[segment_index]
+            absolute_index = (
+                session.window_indexes[segment_index]
+                if segment_index < len(session.window_indexes)
+                else segment_index
+            )
+            segment = session.segments[absolute_index]
             if pending_range_line is not None and segment.byte_range is not None:
                 lines[pending_range_line] = (
                     "#EXT-X-BYTERANGE:"
                     f"{segment.byte_range.length}@{segment.byte_range.start}"
                 )
             segment_path = SEGMENT_URL.format(
-                session_id=session_id, index=segment_index
+                session_id=session_id, index=absolute_index
             )
             lines.append(
                 _absolute_proxy_url(
@@ -710,7 +859,8 @@ async def async_create_record_hls_proxy_playlist_url(
     resources = _playlist_resource_descriptors(body, media_playlist_url)
     await _async_validate_playlist_targets(hass, resources)
     session_id = secrets.token_hex(16)
-    _sessions(hass)[session_id] = RecordHlsSession(
+    live = _is_sliding_playlist(body)
+    session = RecordHlsSession(
         entry_id=entry_id,
         segments=segments,
         resources=resources,
@@ -722,7 +872,17 @@ async def async_create_record_hls_proxy_playlist_url(
         ),
         refresh=refresh,
         refresh_lock=asyncio.Lock(),
+        media_playlist_url=media_playlist_url,
+        live=live,
+        window_indexes=list(range(len(segments))),
+        tracked_media_sequence=_media_sequence(body),
+        last_playlist_fetch_at=time.time(),
     )
+    _sessions(hass)[session_id] = session
+    if not live and session.segments:
+        hass.async_create_task(
+            _async_prefetch_upstream_segments(hass, session, [0]),
+        )
     _schedule_cleanup(hass)
     playlist_path = PLAYLIST_URL.format(session_id=session_id)
     signed_playlist = async_sign_path(
@@ -809,6 +969,7 @@ async def _async_refresh_record_hls_session(
                 segment_urls,
                 descriptor.expires_at,
             )
+            record.segment_prefetch.clear()
             record.generation += 1
             _schedule_cleanup(hass)
         except web.HTTPException:
@@ -834,6 +995,10 @@ class ImouRecordHlsPlaylistView(HomeAssistantView):
         record = _sessions(hass).get(session_id)
         if record is None:
             raise web.HTTPNotFound()
+        if record.live:
+            await _async_follow_live_playlist(hass, record)
+            if not record.active or _sessions(hass).get(session_id) is not record:
+                raise web.HTTPNotFound()
         playlist = _build_proxy_playlist(hass, session_id, record)
         if not playlist:
             raise web.HTTPNotFound()
@@ -882,6 +1047,16 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             range_header = _upstream_range_header(segment, request.headers.get("Range"))
         except ValueError as err:
             raise web.HTTPBadGateway() from err
+        if (
+            range_header is None
+            and segment.byte_range is None
+            and (cached := record.segment_prefetch.get(seg_index)) is not None
+        ):
+            return web.Response(
+                body=cached,
+                status=200,
+                headers={"Content-Type": "video/mp2t"},
+            )
         generation = record.generation
         try:
             upstream_response = await async_fetch_url_response(
@@ -894,6 +1069,33 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             raise web.HTTPBadGateway() from err
         if not record.active or _sessions(hass).get(session_id) is not record:
             raise web.HTTPNotFound()
+        if upstream_response.status in _UPSTREAM_REFRESH_STATUSES and record.live:
+            previous_url = upstream
+            await _async_follow_live_playlist(hass, record, force=True)
+            if not record.active or _sessions(hass).get(session_id) is not record:
+                raise web.HTTPNotFound()
+            if seg_index < len(record.segments):
+                segment = record.segments[seg_index]
+                if segment.url != previous_url:
+                    upstream = segment.url
+                    identity = segment.identity
+                    try:
+                        range_header = _upstream_range_header(
+                            segment, request.headers.get("Range")
+                        )
+                    except ValueError as err:
+                        raise web.HTTPBadGateway() from err
+                    try:
+                        upstream_response = await async_fetch_url_response(
+                            hass,
+                            upstream,
+                            range_header=range_header,
+                        )
+                    except (OSError, TimeoutError, ValueError) as err:
+                        _LOGGER.warning(
+                            "Imou HLS segment %s fetch failed: %s", seg_index, err
+                        )
+                        raise web.HTTPBadGateway() from err
         if upstream_response.status in _UPSTREAM_REFRESH_STATUSES:
             _LOGGER.warning(
                 "Imou HLS segment %s upstream HTTP %s; refreshing session",
