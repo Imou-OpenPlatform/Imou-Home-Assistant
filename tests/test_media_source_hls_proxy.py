@@ -1915,7 +1915,7 @@ async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
             return_value=stream_mock,
         ),
     ):
-        await source.async_resolve_media(item)
+        play = await source.async_resolve_media(item)
         await proxy_mock.await_args.kwargs["refresh"]()
 
     create_hls = (
@@ -1926,6 +1926,8 @@ async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
     for call in calls:
         assert call.kwargs["record_type"] == "localRecord"
         assert call.kwargs["file_name"] == "/record/file.dav"
+    assert play.url == "/api/hls/imou_rec/playlist.m3u8"
+    assert "lechange.com" not in play.url
 
 
 @pytest.mark.asyncio
@@ -1968,6 +1970,54 @@ async def test_resolve_cloud_clip_mp4_when_stream_missing(hass: HomeAssistant) -
     )
     assert play.mime_type == MIME_MP4
     assert play.url.startswith("/api/imou_life/record_play/")
+
+
+@pytest.mark.asyncio
+async def test_resolve_local_clip_mp4_uses_home_assistant_address(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    runtime = _runtime_with_hls_url()
+    source = ImouRecordMediaSource(hass)
+    item = MediaSourceItem(
+        hass, DOMAIN, LOCAL_IDENTIFIER.format(entry=entry.entry_id), None
+    )
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=runtime,
+        ),
+        patch(
+            "custom_components.imou_life.media_source.register_playback_source",
+        ) as register_mock,
+        patch(
+            "custom_components.imou_life.media_source.signed_record_playback_url",
+            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=y",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://ha.local:8123",
+        ),
+    ):
+        play = await source.async_resolve_media(item)
+        descriptor = await register_mock.call_args.args[3]()
+
+    create_hls = (
+        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
+    )
+    assert create_hls.await_args.kwargs["record_type"] == "localRecord"
+    assert "lechange.com" not in play.url
+    assert play.url.startswith("/api/imou_life/record_play/")
+    assert descriptor.playlist_url == (
+        "http://ha.local:8123/api/imou_life/record_hls/sid/playlist.m3u8?authSig=y"
+    )
 
 
 @pytest.mark.asyncio
