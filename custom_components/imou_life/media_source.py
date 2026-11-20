@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import calendar
-import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -60,7 +58,6 @@ from .record_cover import (
 from .record_hls_proxy import (
     RecordHlsDescriptor,
     async_create_record_hls_proxy_playlist_url,
-    async_prepare_local_record_playback,
     async_register_record_hls_proxy,
     record_hls_proxy_origin,
 )
@@ -101,81 +98,26 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
     return ImouRecordMediaSource(hass)
 
 
-# Cloud recordings arrive as a finished public playlist. Local recordings
-# publish the same kind of public address, but the first segment can take
-# longer while the list is still moving forward.
-_STREAM_OPEN_TIMEOUT = 30
-_LOCAL_STREAM_OPEN_TIMEOUT = 45
-
-
-async def _async_start_and_wait_for_stream(
-    stream: object,
-    provider: object,
-    *,
-    timeout: float = _STREAM_OPEN_TIMEOUT,
-) -> bool:
-    """Start Stream and wait for a playable segment, or bail when it fails."""
-    failed = asyncio.Event()
-
-    def _on_stream_update() -> None:
-        if not getattr(stream, "available", True):
-            failed.set()
-
-    set_callback = getattr(stream, "set_update_callback", None)
-    if callable(set_callback):
-        set_callback(_on_stream_update)
-
-    try:
-        await stream.start()  # type: ignore[attr-defined]
-        if failed.is_set() or not getattr(stream, "available", True):
-            return False
-        recv_task = asyncio.create_task(provider.recv())  # type: ignore[attr-defined]
-        fail_task = asyncio.create_task(failed.wait())
-        done, pending = await asyncio.wait(
-            {recv_task, fail_task},
-            timeout=timeout,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for task in pending:
-            task.cancel()
-        for task in pending:
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-        if recv_task in done and not recv_task.cancelled():
-            return bool(recv_task.result())
-        return False
-    finally:
-        if callable(set_callback):
-            set_callback(lambda: None)
-
-
 async def _async_try_hls_playback(
     hass: HomeAssistant,
     descriptor: RecordHlsDescriptor,
     refresh: Callable[[], Awaitable[RecordHlsDescriptor]],
     entry_id: str,
     stream_label: str,
-    *,
-    local_recording: bool = False,
 ) -> PlayMedia | None:
-    """Return Stream HLS PlayMedia when the Stream integration can remux the clip."""
+    """Return Stream HLS PlayMedia; Stream buffers after the browser opens the URL."""
     if "stream" not in hass.config.components:
         return None
-    stream = None
     try:
-        prepared_playback = None
-        if local_recording:
-            prepared_playback = await async_prepare_local_record_playback(
-                hass,
-                descriptor.playlist_url,
-            )
+        # Hand the browser a Stream URL right away (same feel as early media-browser
+        # local playback). Waiting here for the first localvod segment made resolve
+        # sit for tens of seconds before anything appeared to load.
         signed_playlist = await async_create_record_hls_proxy_playlist_url(
             hass,
             descriptor.playlist_url,
             refresh=refresh,
             entry_id=entry_id,
             expires_at=descriptor.expires_at,
-            prepared_playback=prepared_playback,
         )
         proxy_origin = record_hls_proxy_origin(hass, fallback_url=get_url)
         playlist_source = f"{proxy_origin}{signed_playlist}"
@@ -186,17 +128,7 @@ async def _async_try_hls_playback(
             DynamicStreamSettings(),
             stream_label=stream_label,
         )
-        provider = stream.add_provider(HLS_PROVIDER, timeout=3600)
-        stream_open_timeout = (
-            _LOCAL_STREAM_OPEN_TIMEOUT if local_recording else _STREAM_OPEN_TIMEOUT
-        )
-        opened = await _async_start_and_wait_for_stream(
-            stream,
-            provider,
-            timeout=stream_open_timeout,
-        )
-        if not opened:
-            raise HomeAssistantError("Stream produced no playable segment")
+        stream.add_provider(HLS_PROVIDER, timeout=3600)
         stream_url = stream.endpoint_url(HLS_PROVIDER).replace("master_", "")
         return PlayMedia(stream_url, MIME_HLS)
     except (
@@ -206,13 +138,9 @@ async def _async_try_hls_playback(
         TimeoutError,
         ValueError,
     ) as err:
-        _LOGGER.warning(
-            "Imou recording %s: Stream did not open the playlist (%s), using MP4",
-            stream_label,
-            err,
+        _LOGGER.debug(
+            "Imou recording HLS via Stream failed (%s), will try MP4", err
         )
-        if stream is not None:
-            await stream.stop()
         return None
 
 
@@ -401,7 +329,6 @@ class ImouRecordMediaSource(MediaSource):
             async_record_hls_descriptor,
             entry_id,
             clip_label,
-            local_recording=record_type == RECORD_TYPE_LOCAL,
         )
         if hls_play is not None:
             _LOGGER.debug(
