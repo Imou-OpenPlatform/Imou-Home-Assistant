@@ -21,7 +21,7 @@
 
 #### Changed
 
-- Requires **pyimouapi 2.0.1**, installed automatically with this integration.
+- Requires **pyimouapi 2.0.0**, installed automatically with this integration.
 - **Briefing** and **Search** list a camera when **AI Insight** or **AI Insight cloud storage** is active.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
@@ -398,7 +398,7 @@
 
 #### 变更
 
-- 需要 **pyimouapi 2.0.1**，随本集成自动安装。
+- 需要 **pyimouapi 2.0.0**，随本集成自动安装。
 - **简报** 与 **搜索** 在 **AI智见** 或 **AI智见云存储** 为已开通时都会列出该摄像头。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
