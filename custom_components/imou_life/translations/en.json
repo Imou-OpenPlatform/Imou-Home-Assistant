@@ -543,6 +543,14 @@
           "unavailable": "Unavailable"
         }
       },
+      "ai_insight_cloud_storage_status": {
+        "name": "AI Insight cloud storage",
+        "state": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "unavailable": "Unavailable"
+        }
+      },
       "storage_used": {
         "name": "Storage used",
         "state": {

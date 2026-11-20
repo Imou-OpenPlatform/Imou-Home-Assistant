@@ -14,14 +14,15 @@
 #### Added
 
 - **Media browser** — browse **Cloud recordings**, **Local recordings** (when the device supports local recording access), and **Record on alarm** clips per camera channel under **Media**.
-- **AI Insight** on camera channels — diagnostic **AI Insight** and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
+- **AI Insight** on camera channels — diagnostic **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
 - **AI Insight** sidebar (**Briefing**, **Search**, and **Trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **Briefing** refreshes that day's summary, from 00:00:00 through 23:59:59, including risk periods, the hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Search** uses a start date and an end date, from 00:00:00 on the start date through 23:59:59 on the end date, and steps through results with **Previous** and **Next**. **Trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
 - Service **`device_snap_detect`** — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, draws detection boxes on the picture, and sends it to your notification targets (defaults to the Home Assistant web notification drawer and signed-in Companion Apps when omitted).
 - Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
 
 #### Changed
 
-- Requires **pyimouapi 2.0.0**, installed automatically with this integration.
+- Requires **pyimouapi 2.0.1**, installed automatically with this integration.
+- **Briefing** and **Search** list a camera when **AI Insight** or **AI Insight cloud storage** is active.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
 - Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has a separate Alarm pictures page. The picture password is read when Imou Life loads; if you change it in the Imou app, reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
@@ -390,14 +391,15 @@
 #### 新增
 
 - **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。
-- **智见**（摄像头通道）— 诊断用 **AI智见**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
+- **智见**（摄像头通道）— 诊断用 **AI智见**、**AI智见云存储**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
 - **AI 智见** 侧边栏（**简报**、**搜索**、**试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动刷新概览、风险时段、两小时分段与告警统计（**人**、**车**、**宠物**、**包裹**、**全部**）。**搜索** 选定开始日期和结束日期，从开始日 00:00:00 查到结束日 23:59:59，并用 **上一页**、**下一页** 翻页。**试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
 - 服务 **`device_snap_detect`** — 对指定摄像头云端抓图并做人 / 车 / 宠检测，把检测框画到图片上并发送到通知目标（省略时默认发送到 Home Assistant 网页通知栏与已登录的手机 App）。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
 #### 变更
 
-- 需要 **pyimouapi 2.0.0**，随本集成自动安装。
+- 需要 **pyimouapi 2.0.1**，随本集成自动安装。
+- **简报** 与 **搜索** 在 **AI智见** 或 **AI智见云存储** 为已开通时都会列出该摄像头。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
 - 告警图片只要推送里带图就会在本机解密，**配置** 里不再单独设「告警图片」页。图片密码在 Imou Life 加载时读取；在乐橙 App 里修改密码后，重新加载本集成才会使用新密码。仍解不开的图片会尝试设备序列号。

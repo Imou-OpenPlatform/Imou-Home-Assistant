@@ -30,6 +30,7 @@ from pyimouapi.ha_device import ImouHaDevice
 from .const import (
     AI_INSIGHT_STATUS_OPTIONS,
     CLOUD_STORAGE_STATUS_OPTIONS,
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
     PARAM_AI_INSIGHT_STATUS,
     PARAM_CLOUD_STORAGE_STATUS,
     PARAM_INSIGHT_BRIEFING,
@@ -142,6 +143,13 @@ SENSOR_DESCRIPTIONS: dict[str, ImouSensorEntityDescription] = {
         entity_category=EntityCategory.DIAGNOSTIC,
         options=list(CLOUD_STORAGE_STATUS_OPTIONS),
     ),
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS: ImouSensorEntityDescription(
+        key=PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
+        translation_key=PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        options=list(AI_INSIGHT_STATUS_OPTIONS),
+    ),
 }
 
 
@@ -159,6 +167,9 @@ def _iter_sensors(
     for device in camera_channel_devices(coordinator.devices):
         insight.append((SENSOR_DESCRIPTIONS[PARAM_AI_INSIGHT_STATUS], device))
         insight.append((SENSOR_DESCRIPTIONS[PARAM_CLOUD_STORAGE_STATUS], device))
+        insight.append(
+            (SENSOR_DESCRIPTIONS[PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS], device)
+        )
     return standard + insight
 
 
@@ -279,6 +290,8 @@ class ImouSensor(ImouEntity, SensorEntity):
         """Return the sensor value."""
         if self._entity_type == PARAM_AI_INSIGHT_STATUS:
             return self._ai_insight_state()
+        if self._entity_type == PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS:
+            return self.device.ai_insight_cloud_label
         if self._entity_type == PARAM_CLOUD_STORAGE_STATUS:
             return self._cloud_storage_state()
         value = self.device.sensors[self._entity_type].get(PARAM_STATE)

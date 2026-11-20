@@ -53,9 +53,11 @@ def device_option_label(device: ImouHaDevice) -> str:
 def ai_insight_channel_devices(
     devices: list[ImouHaDevice],
 ) -> list[ImouHaDevice]:
-    """Camera channels whose device-list AI Insight status is on."""
+    """Camera channels with AI Insight or AI Insight cloud storage active."""
     return [
-        device for device in camera_channel_devices(devices) if device.ai_insight_active
+        device
+        for device in camera_channel_devices(devices)
+        if device.insight_features_active
     ]
 
 

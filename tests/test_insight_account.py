@@ -51,9 +51,19 @@ async def test_trial_copy_overseas(hass: HomeAssistant) -> None:
 def test_ai_insight_select_filters_non_insight_cameras() -> None:
     insight = _camera("cam-insight")
     insight.ai_insight_active = True
+    insight.insight_features_active = True
     other = _camera("cam-event")
     other.ai_insight_active = False
+    other.insight_features_active = False
     filtered = ai_insight_channel_devices([insight, other])
     assert [d.device_id for d in filtered] == ["cam-insight"]
     labels, _ = camera_select_options([insight, other])
     assert labels == ["cam-insight"]
+
+
+def test_ai_insight_select_includes_cloud_plan_only() -> None:
+    cloud_only = _camera("cam-cloud")
+    cloud_only.ai_insight_active = False
+    cloud_only.insight_features_active = True
+    filtered = ai_insight_channel_devices([cloud_only])
+    assert [d.device_id for d in filtered] == ["cam-cloud"]

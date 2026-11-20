@@ -12,6 +12,9 @@
 			"cloud_storage_status": {
 				"default": "mdi:cloud-arrow-up"
 			},
+			"ai_insight_cloud_storage_status": {
+				"default": "mdi:cloud-sync"
+			},
 			"storage_used": {
 				"default": "mdi:harddisk",
 				"state": {

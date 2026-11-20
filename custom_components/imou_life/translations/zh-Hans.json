@@ -543,6 +543,14 @@
           "unavailable": "未知"
         }
       },
+      "ai_insight_cloud_storage_status": {
+        "name": "AI 智见云存储",
+        "state": {
+          "active": "已开通",
+          "inactive": "未开通",
+          "unavailable": "未知"
+        }
+      },
       "storage_used": {
         "name": "存储使用率",
         "state": {
