@@ -42,7 +42,7 @@
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
 - **Local recordings** play from this Home Assistant, the same way **Cloud recordings** do. Opening a clip returns a playable address right away; Stream fills in while the player starts. Server-side fetches use loopback on the API port so remote web clients do not depend on the public URL reaching back into this host.
-- **Live** uses the cloud RTSP address again so playback works the same for owner and shared cameras.
+- **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 
 ### [1.4.4]
 
@@ -420,7 +420,7 @@
 - **直播** 的预览和下载的抓图显示完整画面。
 - 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
 - **本地录像**和**云录像**一样，从这台 Home Assistant 播放。点开片段会马上给出可播地址，Stream 在播放器启动时再缓冲。服务端取流走 API 端口回环，远程网页播放不再依赖公网地址能否从本机访问自己。
-- **直播**重新使用云端 RTSP 地址，自有与分享设备都能正常播放。
+- **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
 
 ### [1.4.4]
 

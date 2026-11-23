@@ -113,8 +113,8 @@ class ImouCamera(ImouEntity, Camera):
     async def _async_fetch_stream_url(self) -> str:
         """Ask the cloud for a live stream URL.
 
-        Owner cameras prefer continuous FLV, then HTTP HLS. Shared cameras
-        receive getStreamUrl; that ticket is dropped when idle.
+        Owner cameras use HTTP HLS. Shared cameras receive getStreamUrl;
+        that ticket is dropped when idle.
         """
         try:
             return await self.coordinator.device_manager.async_get_device_stream(
