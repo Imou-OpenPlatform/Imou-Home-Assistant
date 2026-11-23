@@ -547,6 +547,7 @@
         "name": "AI Insight cloud storage",
         "state": {
           "active": "Attivo",
+          "paused": "In pausa",
           "inactive": "Non attivo",
           "unavailable": "Non disponibile"
         }

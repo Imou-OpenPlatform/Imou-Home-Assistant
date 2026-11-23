@@ -28,6 +28,7 @@ from pyimouapi.const import PARAM_STATE, PARAM_STATE_VARIANT, STATE_VARIANT_NUME
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
+    AI_INSIGHT_CLOUD_STORAGE_STATUS_OPTIONS,
     AI_INSIGHT_STATUS_OPTIONS,
     CLOUD_STORAGE_STATUS_OPTIONS,
     PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
@@ -148,7 +149,7 @@ SENSOR_DESCRIPTIONS: dict[str, ImouSensorEntityDescription] = {
         translation_key=PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
-        options=list(AI_INSIGHT_STATUS_OPTIONS),
+        options=list(AI_INSIGHT_CLOUD_STORAGE_STATUS_OPTIONS),
     ),
 }
 

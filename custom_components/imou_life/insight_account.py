@@ -5,9 +5,10 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import translation
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.const import PARAM_STATE
+from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 
-from .const import CONF_API_URL_HZ, DOMAIN, PARAM_API_URL, imou_life_device_key
+from .const import CONF_API_URL_HZ, DOMAIN, PARAM_API_URL, PARAM_STATUS, imou_life_device_key
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .helpers import camera_channel_devices, resolve_ui_language, selector_option_label
 
@@ -50,14 +51,20 @@ def device_option_label(device: ImouHaDevice) -> str:
     return name
 
 
+def _channel_online(device: ImouHaDevice) -> bool:
+    """True when the channel is not marked offline in the last status poll."""
+    state = device.sensors.get(PARAM_STATUS, {}).get(PARAM_STATE)
+    return state != DeviceStatus.OFFLINE.value
+
+
 def ai_insight_channel_devices(
     devices: list[ImouHaDevice],
 ) -> list[ImouHaDevice]:
-    """Camera channels with AI Insight or AI Insight cloud storage active."""
+    """Online camera channels with AI Insight or AI Insight cloud storage active."""
     return [
         device
         for device in camera_channel_devices(devices)
-        if device.insight_features_active
+        if _channel_online(device) and device.insight_features_active
     ]
 
 

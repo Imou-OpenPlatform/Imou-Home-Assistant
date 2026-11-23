@@ -547,6 +547,7 @@
         "name": "AI 智见云存储",
         "state": {
           "active": "已开通",
+          "paused": "暂停中",
           "inactive": "未开通",
           "unavailable": "未知"
         }
