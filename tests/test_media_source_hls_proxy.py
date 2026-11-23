@@ -17,6 +17,7 @@ from custom_components.imou_life.media_source import (
     KIND_CLOUD,
     KIND_LOCAL,
     MIME_MP4,
+    SOURCE_REUSE_SECONDS,
     ImouRecordMediaSource,
 )
 from custom_components.imou_life.record_hls_proxy import (
@@ -2130,12 +2131,65 @@ async def test_resolve_cloud_clip_uses_mp4(hass: HomeAssistant) -> None:
     signed_mock.assert_called_once()
     assert now + 29 <= proxy_mock.await_args.kwargs["expires_at"] <= now + 31
     assert descriptor.playlist_url == f"http://ha.local:8123{signed_playlist}"
-    assert (
-        runtime.coordinator.device_manager.delegate.async_create_device_record_hls.await_count
-        == 2
+    create_hls = (
+        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
     )
+    assert create_hls.await_count == 1
     assert play.mime_type == MIME_MP4
     assert play.url == "/api/imou_life/record_play/abc.mp4?authSig=x"
+
+
+@pytest.mark.asyncio
+async def test_resolve_cloud_clip_mints_fresh_source_when_play_is_delayed(
+    hass: HomeAssistant,
+) -> None:
+    """A player that asks for the MP4 long after resolving gets a fresh URL."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+
+    source = ImouRecordMediaSource(hass)
+    item = MediaSourceItem(hass, DOMAIN, IDENTIFIER.format(entry=entry.entry_id), None)
+    now = time.time()
+    runtime = _runtime_with_hls_url()
+
+    with (
+        patch(
+            "custom_components.imou_life.media_source.get_runtime_data",
+            return_value=runtime,
+        ),
+        patch(
+            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
+            new_callable=AsyncMock,
+            return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.register_playback_source",
+        ) as register_mock,
+        patch(
+            "custom_components.imou_life.media_source.signed_record_playback_url",
+            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+        ),
+        patch(
+            "custom_components.imou_life.media_source.get_url",
+            return_value="http://ha.local:8123",
+        ),
+    ):
+        await source.async_resolve_media(item)
+        provider = register_mock.call_args.args[3]
+        with patch(
+            "custom_components.imou_life.media_source.time.time",
+            return_value=now + SOURCE_REUSE_SECONDS + 1,
+        ):
+            descriptor = await provider()
+
+    create_hls = (
+        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
+    )
+    assert create_hls.await_count == 2
+    assert descriptor.playlist_url == (
+        "http://ha.local:8123/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x"
+    )
 
 
 @pytest.mark.asyncio

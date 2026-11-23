@@ -87,6 +87,9 @@ KIND_CLOUD = "cloud"
 KIND_LOCAL = "local"
 KIND_ALARM = "alarm"
 PREFIX_PLAY = "play"
+# Cloud URLs carry short-lived tokens; only reuse the one minted while resolving
+# when the player asks for the clip right away.
+SOURCE_REUSE_SECONDS = 60.0
 
 
 async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
@@ -322,9 +325,17 @@ class ImouRecordMediaSource(MediaSource):
             ) from err
         clip_label = f"{device_id} {begin_time}–{end_time}"
         cache_id = record_playback_cache_id(item.identifier or "")
+        source_minted_at = time.time()
+        pending_source = descriptor
 
         async def async_mp4_source() -> RecordHlsDescriptor:
-            source = await async_record_hls_descriptor()
+            # Avoid minting the same short-lived URL twice while resolving; remux
+            # retries and later plays request a fresh one instead.
+            nonlocal pending_source
+            source = pending_source
+            pending_source = None
+            if source is None or time.time() - source_minted_at > SOURCE_REUSE_SECONDS:
+                source = await async_record_hls_descriptor()
             signed_playlist = await async_create_record_hls_proxy_playlist_url(
                 self.hass,
                 source.playlist_url,
