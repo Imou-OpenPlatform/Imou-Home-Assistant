@@ -6,9 +6,11 @@ import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from time import monotonic
+from typing import TYPE_CHECKING
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -20,7 +22,6 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     CONF_HD,
-    CONF_HTTPS,
     DOMAIN,
     PARAM_DOWNLOAD_SNAP_WAIT_TIME,
     PARAM_HEADER_DETECT,
@@ -31,15 +32,27 @@ from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 from .helpers import camera_channel_devices
 
+if TYPE_CHECKING:
+    from homeassistant.components.stream import Stream
+
 PARALLEL_UPDATES = 1
 
 # An established pull keeps the cloud ticket valid. About 10s after the last
 # viewer, drop the cached Stream so the next open fetches a new URL.
 STREAM_IDLE_CHECK = timedelta(seconds=10)
+# Matches homeassistant.components.stream.const.OUTPUT_STARTUP_TIMEOUT (60).
+_STREAM_OUTPUT_STARTUP_TIMEOUT = 60
+STREAM_IDLE_MAX_RESCHEDULES = max(
+    1, _STREAM_OUTPUT_STARTUP_TIMEOUT // int(STREAM_IDLE_CHECK.total_seconds())
+)
 
 # The cloud still is one picture. Opening the camera again inside this window
 # shows that picture instead of asking for another snapshot.
 SNAPSHOT_REUSE = timedelta(seconds=30)
+
+# Same live address as 1.3, over HTTP. This Home Assistant's ffmpeg rejects the
+# cloud HTTPS certificate when it opens HLS segments, so HTTPS never starts.
+_LIVE_PROTOCOL = "http"
 
 
 def _iter_cameras(
@@ -73,7 +86,10 @@ class ImouCamera(ImouEntity, Camera):
         """Initialize the camera entity."""
         Camera.__init__(self)
         ImouEntity.__init__(self, coordinator, config_entry, entity_type, device)
+        # Cloud HTTPS live addresses use a certificate store ffmpeg rejects.
+        self.stream_options[CONF_VERIFY_SSL] = False
         self._idle_unsub: Callable[[], None] | None = None
+        self._idle_output_reschedules = 0
         self._snapshot: bytes | None = None
         self._snapshot_at = 0.0
         self._snapshot_task: asyncio.Task[bytes] | None = None
@@ -85,18 +101,26 @@ class ImouCamera(ImouEntity, Camera):
         self.async_on_remove(self._cancel_snapshot)
 
     async def stream_source(self) -> str | None:
-        """Return a live stream URL and watch for the last viewer leaving."""
+        """Return the live URL. Only a shared RTSP ticket is aged out."""
         url = await self._async_fetch_stream_url()
-        self._schedule_idle_check()
+        if url.startswith("rtsp://"):
+            self._idle_output_reschedules = 0
+            self._schedule_idle_check()
+        else:
+            self._cancel_idle_check()
         return url
 
     async def _async_fetch_stream_url(self) -> str:
-        """Ask the cloud for a live stream URL."""
+        """Ask the cloud for a live stream URL.
+
+        Owner cameras prefer continuous FLV, then HTTP HLS. Shared cameras
+        receive getStreamUrl; that ticket is dropped when idle.
+        """
         try:
             return await self.coordinator.device_manager.async_get_device_stream(
                 self.device,
                 self._config_entry.options.get(PARAM_LIVE_RESOLUTION, CONF_HD),
-                CONF_HTTPS,
+                _LIVE_PROTOCOL,
             )
         except ImouException as e:
             self._raise_imou_ha_error(e, "stream_source_failed")
@@ -121,12 +145,28 @@ class ImouCamera(ImouEntity, Camera):
         """Keep the URL while someone is watching; drop it when they leave."""
         self._idle_unsub = None
         stream = self.stream
-        if stream is not None and stream.outputs():
+        if stream is not None and self._should_keep_stream(stream):
             self._schedule_idle_check()
             return
         if stream is not None:
-            await stream.stop()
+            # Clear before awaiting stop so a concurrent create_stream does not
+            # reuse this instance (and its expired RTSP URL) while shutdown yields.
+            self._idle_output_reschedules = 0
             self.stream = None
+            await stream.stop()
+
+    def _should_keep_stream(self, stream: Stream) -> bool:
+        """Return whether an idle timer should wait before dropping the stream."""
+        if stream.dynamic_stream_settings.preload_stream:
+            return True
+        outputs = stream.outputs()
+        if not outputs:
+            return False
+        if any(output.last_segment is not None for output in outputs.values()):
+            self._idle_output_reschedules = 0
+            return True
+        self._idle_output_reschedules += 1
+        return self._idle_output_reschedules <= STREAM_IDLE_MAX_RESCHEDULES
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
