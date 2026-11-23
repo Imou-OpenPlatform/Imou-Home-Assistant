@@ -61,18 +61,11 @@ def test_ai_insight_select_filters_non_insight_cameras() -> None:
     assert labels == ["cam-insight"]
 
 
-def test_ai_insight_select_skips_offline_channels() -> None:
-    from pyimouapi.const import PARAM_STATE
-    from pyimouapi.ha_device import DeviceStatus
-
+def test_ai_insight_select_includes_offline_insight_channels() -> None:
     offline = _camera("cam-off")
     offline.insight_features_active = True
-    offline.sensors = {"status": {PARAM_STATE: DeviceStatus.OFFLINE.value}}
-    online = _camera("cam-on")
-    online.insight_features_active = True
-    online.sensors = {"status": {PARAM_STATE: DeviceStatus.ONLINE.value}}
-    filtered = ai_insight_channel_devices([offline, online])
-    assert [d.device_id for d in filtered] == ["cam-on"]
+    filtered = ai_insight_channel_devices([offline])
+    assert [d.device_id for d in filtered] == ["cam-off"]
 
 
 def test_ai_insight_select_includes_cloud_plan_only() -> None:

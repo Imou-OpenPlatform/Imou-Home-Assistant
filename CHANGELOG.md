@@ -22,7 +22,7 @@
 #### Changed
 
 - Requires **pyimouapi 2.0.0**, installed automatically with this integration.
-- **Briefing** and **Search** list a camera when **AI Insight** or **AI Insight cloud storage** is active, and only while that channel is online.
+- **Briefing** and **Search** list a camera when **AI Insight** or **AI Insight cloud storage** is active or paused, including when the channel is offline.
 - **AI Insight cloud storage** can show **Paused** when the current cloud plan is paused.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
@@ -400,7 +400,7 @@
 #### 变更
 
 - 需要 **pyimouapi 2.0.0**，随本集成自动安装。
-- **简报** 与 **搜索** 在 **AI智见** 或 **AI智见云存储** 为已开通且通道在线时列出该摄像头。
+- **简报** 与 **搜索** 在 **AI智见** 或 **AI智见云存储** 为已开通或暂停中时会列出该摄像头，通道离线时也可查询。
 - **AI智见云存储** 在云套餐为暂停状态时显示 **暂停中**。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
