@@ -109,9 +109,6 @@ async def _async_try_hls_playback(
     if "stream" not in hass.config.components:
         return None
     try:
-        # Hand the browser a Stream URL right away (same feel as early media-browser
-        # local playback). Waiting here for the first localvod segment made resolve
-        # sit for tens of seconds before anything appeared to load.
         signed_playlist = await async_create_record_hls_proxy_playlist_url(
             hass,
             descriptor.playlist_url,
@@ -119,6 +116,9 @@ async def _async_try_hls_playback(
             entry_id=entry_id,
             expires_at=descriptor.expires_at,
         )
+        # Hand the browser a Stream URL right away (same feel as early media-browser
+        # local playback). Waiting here for the first localvod segment made resolve
+        # sit for tens of seconds before anything appeared to load.
         proxy_origin = record_hls_proxy_origin(hass, fallback_url=get_url)
         playlist_source = f"{proxy_origin}{signed_playlist}"
         stream = create_stream(
@@ -138,9 +138,7 @@ async def _async_try_hls_playback(
         TimeoutError,
         ValueError,
     ) as err:
-        _LOGGER.debug(
-            "Imou recording HLS via Stream failed (%s), will try MP4", err
-        )
+        _LOGGER.debug("Imou recording HLS setup failed (%s), will try MP4", err)
         return None
 
 
@@ -323,19 +321,6 @@ class ImouRecordMediaSource(MediaSource):
                 translation_key="record_playback_failed",
             ) from err
         clip_label = f"{device_id} {begin_time}–{end_time}"
-        hls_play = await _async_try_hls_playback(
-            self.hass,
-            descriptor,
-            async_record_hls_descriptor,
-            entry_id,
-            clip_label,
-        )
-        if hls_play is not None:
-            _LOGGER.debug(
-                "Imou recording playback %s – %s (HLS via Stream)", begin_time, end_time
-            )
-            async_delete_record_playback_issue(self.hass, entry_id)
-            return hls_play
         cache_id = record_playback_cache_id(item.identifier or "")
 
         async def async_mp4_source() -> RecordHlsDescriptor:
@@ -354,6 +339,28 @@ class ImouRecordMediaSource(MediaSource):
                 proxy_origin,
             )
 
+        if kind == KIND_CLOUD:
+            # A cloud clip is finite VOD, but Stream only ever exposes a live
+            # window and restarts ended sources, so the player cannot stop it,
+            # seek, or finish: it loops the last fragment. Remux once to MP4 so
+            # the browser gets native stop/seek and a real duration instead.
+            register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)
+            _LOGGER.debug("Imou recording playback %s – %s (MP4)", begin_time, end_time)
+            async_delete_record_playback_issue(self.hass, entry_id)
+            return PlayMedia(signed_record_playback_url(self.hass, cache_id), MIME_MP4)
+        hls_play = await _async_try_hls_playback(
+            self.hass,
+            descriptor,
+            async_record_hls_descriptor,
+            entry_id,
+            clip_label,
+        )
+        if hls_play is not None:
+            _LOGGER.debug(
+                "Imou recording playback %s – %s (HLS via Stream)", begin_time, end_time
+            )
+            async_delete_record_playback_issue(self.hass, entry_id)
+            return hls_play
         register_playback_source(self.hass, cache_id, entry_id, async_mp4_source)
         _LOGGER.info(
             "Imou recording %s: HLS unavailable, using MP4 fallback", clip_label

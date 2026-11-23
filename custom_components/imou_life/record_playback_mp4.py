@@ -32,6 +32,7 @@ CACHE_SUBDIR = Path("imou_life") / "playback_cache"
 _LEGACY_PUBLIC_CACHE_SUBDIR = Path("www") / "imou" / "playback"
 _REMUX_TIMEOUT = 900
 _PROCESS_STOP_TIMEOUT = 5
+_PROBE_TIMEOUT = 30
 _CACHE_TTL_SECONDS = 24 * 3600
 _CACHE_MAX_FILES = 32
 
@@ -140,7 +141,9 @@ def signed_record_playback_url(hass: HomeAssistant, cache_id: str) -> str:
     )
 
 
-def _remux_command(source_url: str, output: Path) -> list[str]:
+def _remux_command(
+    source_url: str, output: Path, *, video_codec: str | None = None
+) -> list[str]:
     """Build the ffmpeg remux command."""
     parsed = urlsplit(source_url)
     if (
@@ -172,6 +175,16 @@ def _remux_command(source_url: str, output: Path) -> list[str]:
             source_url,
             "-c",
             "copy",
+        ]
+    )
+    if video_codec == "hevc":
+        # Browsers expect the hvc1 tag (Home Assistant Stream forces it too);
+        # ffmpeg labels copied HEVC as hev1 by default.
+        cmd.extend(["-tag:v", "hvc1"])
+    cmd.extend(
+        [
+            "-bsf:a",
+            "aac_adtstoasc",
             "-f",
             "mp4",
             "-movflags",
@@ -219,10 +232,48 @@ async def _async_stop_process(process: asyncio.subprocess.Process) -> None:
         await process.wait()
 
 
-async def _async_remux_source_to_mp4(source_url: str, output: Path) -> None:
+async def _async_probe_video_codec(source_url: str) -> str | None:
+    """Return the first video stream codec, or None when it cannot be probed."""
+    process: asyncio.subprocess.Process | None = None
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v",
+            "error",
+            "-protocol_whitelist",
+            "http,https,tcp,tls,crypto",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=nw=1:nk=1",
+            source_url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        async with asyncio.timeout(_PROBE_TIMEOUT):
+            stdout, _ = await process.communicate()
+    except asyncio.CancelledError:
+        if process is not None:
+            await _async_stop_process(process)
+        raise
+    except (OSError, TimeoutError):
+        if process is not None:
+            await _async_stop_process(process)
+        return None
+    if process.returncode != 0:
+        return None
+    lines = stdout.decode(errors="replace").strip().splitlines()
+    return lines[0].strip() if lines else None
+
+
+async def _async_remux_source_to_mp4(
+    source_url: str, output: Path, *, video_codec: str | None = None
+) -> None:
     """Remux one source with a child process that cannot survive cancellation."""
     process = await asyncio.create_subprocess_exec(
-        *_remux_command(source_url, output),
+        *_remux_command(source_url, output, video_codec=video_codec),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -315,8 +366,11 @@ async def async_prepare_record_mp4(
                     async_create_record_playback_issue(hass, entry_id, err)
                     raise
                 _validate_local_hls_proxy_source(source)
+                video_codec = await _async_probe_video_codec(source.playlist_url)
                 try:
-                    await _async_remux_source_to_mp4(source.playlist_url, partial)
+                    await _async_remux_source_to_mp4(
+                        source.playlist_url, partial, video_codec=video_codec
+                    )
                 except (OSError, TimeoutError):
                     if not _source_is_expired(source):
                         raise
@@ -327,7 +381,10 @@ async def async_prepare_record_mp4(
                         async_create_record_playback_issue(hass, entry_id, refresh_err)
                         raise
                     _validate_local_hls_proxy_source(source)
-                    await _async_remux_source_to_mp4(source.playlist_url, partial)
+                    video_codec = await _async_probe_video_codec(source.playlist_url)
+                    await _async_remux_source_to_mp4(
+                        source.playlist_url, partial, video_codec=video_codec
+                    )
                 if not partial.is_file() or partial.stat().st_size < 1:
                     raise OSError("ffmpeg produced an empty recording file")
                 partial.replace(output)

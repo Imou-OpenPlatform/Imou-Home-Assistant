@@ -38,6 +38,9 @@ DATA_RECORD_HLS_PROXY_TIMER = "imou_life_record_hls_proxy_timer"
 DATA_RECORD_HLS_PROXY_TIMER_TOKEN = "imou_life_record_hls_proxy_timer_token"
 SESSION_TTL_SECONDS = 600
 PLAYLIST_FOLLOW_MIN_SECONDS = 2.0
+# Cloud segment tokens expire within seconds; allow a fresh upstream request
+# once the cooldown has passed instead of giving up after the first refresh.
+REFRESH_COOLDOWN_SECONDS = 5.0
 _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
 _LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
 
@@ -127,7 +130,7 @@ class RecordHlsSession:
     refresh_task: asyncio.Task[RecordHlsDescriptor | str] | None = None
     refreshed_segments: dict[str, HlsSegment] | None = None
     refreshed_resources: dict[str, HlsResource] | None = None
-    refresh_attempted: bool = False
+    last_refresh_at: float = 0.0
     generation: int = 0
     active: bool = True
     media_playlist_url: str = ""
@@ -879,7 +882,8 @@ async def _async_upstream_first_segment_ready(
         len(loaded.segment_urls),
     )
     for index in range(1, warm_through):
-        if (body := await _async_fetch_playlist_segment_body(hass, loaded, index)) is None:
+        body = await _async_fetch_playlist_segment_body(hass, loaded, index)
+        if body is None:
             break
         prefetch[index] = body
     return PreparedRecordHlsPlayback(loaded, prefetch)
@@ -903,9 +907,7 @@ async def async_prepare_local_record_playback(
         prepared = await _async_upstream_first_segment_ready(hass, loaded)
         if prepared is not None:
             elapsed = max_wait - (deadline - time.time())
-            _LOGGER.debug(
-                "Imou local recording segments ready after %.1fs", elapsed
-            )
+            _LOGGER.debug("Imou local recording segments ready after %.1fs", elapsed)
             return prepared
         now = time.time()
         if now - last_log >= 5.0:
@@ -1020,15 +1022,19 @@ async def _async_refresh_record_hls_session(
     record: RecordHlsSession,
     generation: int,
 ) -> bool:
-    """Refresh one session once and preserve its original signed handles."""
+    """Refresh one session and preserve its original signed handles."""
     async with record.refresh_lock:
         if not record.active or _sessions(hass).get(session_id) is not record:
             raise web.HTTPNotFound()
         if generation != record.generation:
             return True
-        if record.refresh_attempted or record.refresh is None:
+        now = time.time()
+        if (
+            record.refresh is None
+            or now - record.last_refresh_at < REFRESH_COOLDOWN_SECONDS
+        ):
             return False
-        record.refresh_attempted = True
+        record.last_refresh_at = now
         try:
 
             async def async_refresh() -> RecordHlsDescriptor | str:

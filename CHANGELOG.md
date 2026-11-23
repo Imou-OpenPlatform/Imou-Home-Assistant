@@ -41,7 +41,8 @@
 - **Restart** appears when the device can be restarted. Pressing it restarts the device.
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
-- **Local recordings** play from this Home Assistant, the same way **Cloud recordings** do. Opening a clip returns a playable address right away; Stream fills in while the player starts. Server-side fetches use loopback on the API port so remote web clients do not depend on the public URL reaching back into this host.
+- **Local recordings** play through Stream on this Home Assistant. Stream fetches use loopback on the API port so remote web clients do not depend on the public URL reaching back into this host.
+- **Cloud recordings** are remuxed once into an MP4 on this Home Assistant and play natively in the browser: the player can stop, seek, and ends the clip instead of restarting it. The remux is cached, and expired cloud segment tokens are fetched again while it runs.
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 
 ### [1.4.4]
@@ -419,7 +420,8 @@
 - **重启** 在设备可以重启时出现。按下后重启设备。
 - **直播** 的预览和下载的抓图显示完整画面。
 - 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
-- **本地录像**和**云录像**一样，从这台 Home Assistant 播放。点开片段会马上给出可播地址，Stream 在播放器启动时再缓冲。服务端取流走 API 端口回环，远程网页播放不再依赖公网地址能否从本机访问自己。
+- **本地录像**通过这台 Home Assistant 的 Stream 播放。服务端取流走 API 端口回环，远程网页播放不再依赖公网地址能否从本机访问自己。
+- **云录像**会先在这台 Home Assistant 上转封装成 MP4，再由浏览器原生播放：可以停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段。转封装结果会缓存，过程中云端过期的分片令牌会自动重新获取。
 - **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
 
 ### [1.4.4]
