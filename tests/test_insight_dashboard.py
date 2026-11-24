@@ -90,6 +90,65 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
     assert {action["service"] for action in actions} == {"imou_life.search_ai_alarms"}
 
 
+def test_each_account_gets_its_own_search_card() -> None:
+    """Two accounts share the filters but keep separate pickers and paging."""
+    accounts = [
+        InsightDashboardAccount(
+            title="家庭",
+            select_entity="select.home",
+            briefing_entity="sensor.home_brief",
+            search_entity="sensor.home_search",
+            trial_entity="button.home_trial",
+            trial_note="",
+        ),
+        InsightDashboardAccount(
+            title="办公室",
+            select_entity="select.office",
+            briefing_entity="sensor.office_brief",
+            search_entity="sensor.office_search",
+            trial_entity="button.office_trial",
+            trial_note="",
+        ),
+    ]
+    config = build_insight_dashboard(
+        accounts,
+        date_entity="input_datetime.imou_insight_briefing_end",
+        keyword_entity="input_text.imou_insight_search_keyword",
+        search_begin_entity="input_datetime.imou_insight_search_begin",
+        search_end_entity="input_datetime.imou_insight_search_end",
+        copy={**_COPY_DEFAULTS, "view_search": "搜索"},
+    )
+    view_cards = config["views"][1]["cards"]
+    conditions = view_cards[0]["cards"][0]
+    assert conditions["type"] == "entities"
+    assert conditions["title"] == "搜索"
+    assert [row["entity"] for row in conditions["entities"]] == [
+        "input_text.imou_insight_search_keyword",
+        "input_datetime.imou_insight_search_begin",
+        "input_datetime.imou_insight_search_end",
+    ]
+
+    groups = view_cards[1:]
+    assert [group["cards"][0]["title"] for group in groups] == ["家庭", "办公室"]
+    for group, select_entity, result_entity in zip(
+        groups,
+        ["select.home", "select.office"],
+        ["sensor.home_search", "sensor.office_search"],
+        strict=True,
+    ):
+        picker, actions, result = group["cards"]
+        assert picker["entities"] == [{"entity": select_entity, "name": "Camera"}]
+        assert [button["name"] for button in actions["cards"]] == [
+            "Previous",
+            "Search",
+            "Next",
+        ]
+        assert {
+            button["tap_action"]["target"]["entity_id"] for button in actions["cards"]
+        } == {select_entity}
+        assert result_entity in result["content"]
+
+
 def test_search_reads_the_text_box_when_keyword_is_omitted() -> None:
     """The search button does not template the text box, so the service reads it."""
     hass = MagicMock()

@@ -146,6 +146,52 @@ def _search_button(
     }
 
 
+def _search_actions(copy: Mapping[str, str], select_entity: str) -> dict[str, Any]:
+    """Previous, search, and next all act on one account's device picker."""
+    return {
+        "type": "horizontal-stack",
+        "cards": [
+            _search_button(
+                copy["previous"],
+                "mdi:chevron-left",
+                select_entity,
+                {"page": "previous"},
+            ),
+            _search_button(
+                copy["search"],
+                "mdi:magnify",
+                select_entity,
+                {},
+            ),
+            _search_button(
+                copy["next"],
+                "mdi:chevron-right",
+                select_entity,
+                {"page": "next"},
+            ),
+        ],
+    }
+
+
+def _account_search_card(
+    account: InsightDashboardAccount, copy: Mapping[str, str]
+) -> dict[str, Any]:
+    """One account's picker, paging buttons, and results, under its own title."""
+    select_entity = account.select_entity
+    assert select_entity is not None
+    cards: list[dict[str, Any]] = [
+        {
+            "type": "entities",
+            "title": account.title,
+            "entities": [{"entity": select_entity, "name": copy["device"]}],
+        },
+        _search_actions(copy, select_entity),
+    ]
+    if account.search_entity:
+        cards.append(_markdown_card(copy["results"], account.search_entity))
+    return {"type": "vertical-stack", "cards": cards}
+
+
 def build_insight_dashboard(
     accounts: list[InsightDashboardAccount],
     *,
@@ -167,54 +213,22 @@ def build_insight_dashboard(
         select_entity = account.select_entity
         if select_entity is None:
             continue
-        device_name = copy["device"] if single else account.title
-        briefing_rows.append({"entity": select_entity, "name": device_name})
-        search_rows.append({"entity": select_entity, "name": device_name})
-        button_name = copy["search"]
-        if not single:
-            button_name = f"{button_name} · {account.title}"
-        if not single:
-            previous_name = f"{copy['previous']} · {account.title}"
-            next_name = f"{copy['next']} · {account.title}"
+        briefing_name = copy["device"] if single else account.title
+        briefing_rows.append({"entity": select_entity, "name": briefing_name})
+        if single:
+            search_rows.append({"entity": select_entity, "name": copy["device"]})
+            search_actions.append(_search_actions(copy, select_entity))
         else:
-            previous_name = copy["previous"]
-            next_name = copy["next"]
-        search_actions.append(
-            {
-                "type": "horizontal-stack",
-                "cards": [
-                    _search_button(
-                        previous_name,
-                        "mdi:chevron-left",
-                        select_entity,
-                        {"page": "previous"},
-                    ),
-                    _search_button(
-                        button_name,
-                        "mdi:magnify",
-                        select_entity,
-                        {},
-                    ),
-                    _search_button(
-                        next_name,
-                        "mdi:chevron-right",
-                        select_entity,
-                        {"page": "next"},
-                    ),
-                ],
-            }
-        )
-        briefing_title = copy["briefing"]
-        results_title = copy["results"]
-        if not single:
-            briefing_title = f"{briefing_title} · {account.title}"
-            results_title = f"{results_title} · {account.title}"
+            search_cards.append(_account_search_card(account, copy))
         if account.briefing_entity:
+            briefing_title = copy["briefing"]
+            if not single:
+                briefing_title = f"{briefing_title} · {account.title}"
             briefing_cards.append(
                 _markdown_card(briefing_title, account.briefing_entity)
             )
-        if account.search_entity:
-            search_cards.append(_markdown_card(results_title, account.search_entity))
+        if single and account.search_entity:
+            search_cards.append(_markdown_card(copy["results"], account.search_entity))
     if ready:
         briefing_rows.append({"entity": date_entity, "name": copy["date"]})
         search_rows.append({"entity": keyword_entity, "name": copy["keyword"]})
