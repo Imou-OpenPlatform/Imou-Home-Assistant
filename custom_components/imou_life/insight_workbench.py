@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -30,7 +31,6 @@ from .helpers import async_display_language, fill_template, selector_option_labe
 from .insight_account import camera_select_options
 from .insight_briefing_view import briefing_card
 from .insight_dashboard import keyword_entity_id, search_date_entity_ids
-from .media_view import media_root
 from .pic_thumbnail import async_maybe_decrypt_thumbnail
 from .runtime_data import ImouRuntimeData, get_runtime_data
 
@@ -391,7 +391,7 @@ async def async_handle_refresh_briefing(hass: HomeAssistant, call: ServiceCall) 
             translation_placeholders={"error": err.message or str(err)},
         ) from err
     briefing = parse_alarm_message_statistics(raw)
-    chart_dir = media_root(hass) / "imou"
+    chart_dir = Path(hass.config.path("www", "imou"))
     language = await async_display_language(hass)
     summary, markdown = await hass.async_add_executor_job(
         briefing_card, chart_dir, entry.entry_id, briefing, language

@@ -183,12 +183,6 @@ class ImouSelect(ImouEntity, SelectEntity):
 
     @property
     @override
-    def available(self) -> bool:
-        """A select without known options cannot be changed from Home Assistant."""
-        return bool(self.options) and super().available
-
-    @property
-    @override
     def current_option(self) -> str | None:
         """Return the selected option."""
         state = self.device.selects[self._entity_type]
@@ -205,7 +199,7 @@ class ImouSelect(ImouEntity, SelectEntity):
             and PARAM_COLLECTION_POINT_PROMPT in options
         ):
             return PARAM_COLLECTION_POINT_PROMPT
-        return None
+        return options[0] if options else None
 
     @override
     async def async_select_option(self, option: str) -> None:

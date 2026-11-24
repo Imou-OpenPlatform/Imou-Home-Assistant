@@ -33,7 +33,7 @@ async def test_trial_copy_china(hass: HomeAssistant) -> None:
     entry = MagicMock()
     entry.data = {PARAM_API_URL: CONF_API_URL_HZ}
     title, body = await async_trial_dialog_copy(hass, entry)
-    assert title == "AI Insight trial"
+    assert title == "智见试用"
     assert "17799860785" in body
 
 

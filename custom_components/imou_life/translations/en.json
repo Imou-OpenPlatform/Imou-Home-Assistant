@@ -266,8 +266,8 @@
     },
     "insight_trial_dialog": {
       "options": {
-        "china_title": "AI Insight trial",
-        "china_message": "AI Insight adds smart search and a daily briefing to your cameras. Add the official WeChat account 17799860785 to request a trial.",
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
         "intl_title": "AI Insight trial",
         "intl_message": "AI Insight adds smart search and a daily briefing for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
       }

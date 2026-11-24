@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from aiohttp import ClientError
+from aiohttp import ClientError, ClientTimeout
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pyimouapi.const import ERROR_CODE_OPEN_API_QUOTA_EXCEEDED
 from pyimouapi.exceptions import ImouException
 from pyimouapi.snap_detect import DeviceSnapDetectResult, parse_device_snap_detect_data
@@ -26,17 +27,10 @@ from .helpers import (
     resolve_ha_device_name,
     selector_option_label,
 )
-from .record_http_fetch import (
-    UrlFetchBodyTooLargeError,
-    UrlFetchUnsafeError,
-    async_fetch_url_response,
-)
 from .runtime_data import get_runtime_data
 from .snap_boxes import annotate_snap_jpeg, annotated_snap_url, write_annotated_snap
 
 _LOGGER = logging.getLogger(__name__)
-_MAX_SNAP_BYTES = 8_000_000
-_SNAP_DOWNLOAD_TIMEOUT = 20
 _DRAWER_TARGETS = frozenset(
     {"notify.persistent_notification", "persistent_notification.create"}
 )
@@ -130,24 +124,20 @@ def _box_names(labels: dict[str, str]) -> dict[str, str]:
 
 
 async def _async_download_snap(hass: HomeAssistant, url: str) -> bytes | None:
-    """Download the snapshot that deviceSnapDetect returned, with a size cap."""
+    """Download the snapshot that deviceSnapDetect returned."""
+    session = async_get_clientsession(hass)
     try:
-        response = await async_fetch_url_response(
-            hass,
-            url,
-            max_bytes=_MAX_SNAP_BYTES,
-            timeout_seconds=_SNAP_DOWNLOAD_TIMEOUT,
-        )
-    except (UrlFetchBodyTooLargeError, UrlFetchUnsafeError):
-        _LOGGER.debug("Snap picture URL rejected or too large")
-        return None
-    except (TimeoutError, ClientError, OSError, ValueError):
+        async with session.get(url, timeout=ClientTimeout(total=20)) as response:
+            if response.status != 200:
+                _LOGGER.debug("Snap picture HTTP %s", response.status)
+                return None
+            data = await response.read()
+    except (TimeoutError, ClientError):
         _LOGGER.debug("Snap picture download failed", exc_info=True)
         return None
-    if response.status != 200 or not response.body:
-        _LOGGER.debug("Snap picture HTTP %s", response.status)
+    if not data or len(data) > 8_000_000:
         return None
-    return response.body
+    return data
 
 
 async def _async_annotated_picture_url(

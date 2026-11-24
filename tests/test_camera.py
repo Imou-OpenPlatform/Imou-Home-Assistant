@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -390,52 +389,17 @@ async def test_snapshot_is_reused_until_30_seconds(hass: HomeAssistant) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_failed_snapshot_is_requested_again(hass: HomeAssistant) -> None:
-    """Once the short failure window passes, the next open asks the cloud again."""
+    """A failed grab is not kept, so the next open tries the cloud again."""
     device = _device()
     camera = _camera(hass, device)
     fetch = AsyncMock(side_effect=[ImouException("no picture"), b"jpeg-1"])
     camera.coordinator.device_manager.async_get_device_image = fetch
-    camera_module = sys.modules["custom_components.imou_life.camera"]
-    expiry = camera_module.SNAPSHOT_FAILURE_REUSE + timedelta(seconds=1)
 
-    with (
-        pytest.raises(HomeAssistantError),
-        patch.object(
-            camera_module,
-            "monotonic",
-            side_effect=[0.0, 0.0, expiry.total_seconds()],
-        ),
-    ):
+    with pytest.raises(HomeAssistantError):
         await camera.async_camera_image()
-
     assert await camera.async_camera_image() == b"jpeg-1"
+
     assert fetch.await_count == 2
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_failed_snapshot_is_not_requested_again_immediately(
-    hass: HomeAssistant,
-) -> None:
-    """The camera card re-renders often; one cloud failure must not become a storm."""
-    device = _device()
-    camera = _camera(hass, device)
-    fetch = AsyncMock(side_effect=ImouException("no picture"))
-    camera.coordinator.device_manager.async_get_device_image = fetch
-    camera_module = sys.modules["custom_components.imou_life.camera"]
-
-    with (
-        pytest.raises(HomeAssistantError),
-        patch.object(camera_module, "monotonic", side_effect=[0.0, 0.0, 1.0]),
-    ):
-        await camera.async_camera_image()
-
-    with (
-        pytest.raises(HomeAssistantError),
-        patch.object(camera_module, "monotonic", return_value=1.0),
-    ):
-        await camera.async_camera_image()
-
-    assert fetch.await_count == 1
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

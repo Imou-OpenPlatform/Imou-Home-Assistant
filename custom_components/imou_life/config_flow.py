@@ -79,10 +79,6 @@ from .helpers import (
     resolve_ui_language,
     selector_option_label,
 )
-from .repairs import (
-    async_create_event_push_callback_failed_issue,
-    async_delete_event_push_issues,
-)
 from .runtime_data import get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -944,11 +940,6 @@ class ImouOptionsFlow(OptionsFlow):
                     if error_key:
                         errors["base"] = error_key
                         error_detail = self._callback_error
-                        async_create_event_push_callback_failed_issue(
-                            self.hass, self.config_entry
-                        )
-                    else:
-                        async_delete_event_push_issues(self.hass, self.config_entry)
             if not errors:
                 self._save_options(**flat)
                 return await self.async_step_init()

@@ -395,11 +395,9 @@ async def async_fetch_url_bytes(hass: HomeAssistant, url: str) -> bytes:
     return response.body
 
 
-async def async_fetch_url_text(
-    hass: HomeAssistant, url: str, *, max_bytes: int | None = None
-) -> str:
+async def async_fetch_url_text(hass: HomeAssistant, url: str) -> str:
     """GET text (m3u8) from Imou media CDN."""
-    response = await async_fetch_url_response(hass, url, max_bytes=max_bytes)
+    response = await async_fetch_url_response(hass, url)
     if response.status >= 400:
         raise OSError(f"HTTP {response.status} fetching outbound media")
     return UrlFetchText(response.body.decode(), response.final_url or url)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -48,11 +47,7 @@ from .devices import (
     async_remove_account_placeholder_device,
     is_account_device_row,
 )
-from .event_push import (
-    async_disable_cloud_callback,
-    async_setup_event_push,
-    async_teardown_event_push,
-)
+from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import (
     alarm_pictures_enabled,
     dormant_write_retry_wait_seconds,
@@ -66,7 +61,6 @@ from .insight_dashboard import (
 )
 from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
-from .media_view import ImouMediaView
 from .record_hls_proxy import async_remove_record_hls_proxy_sessions
 from .record_playback_mp4 import async_remove_record_playback_sources
 from .repairs import (
@@ -220,35 +214,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.debug("Added missing webhook_id to config entry %s", entry.entry_id)
 
     hass.config_entries.async_update_entry(entry, data=data, version=2)
-    return True
-
-
-def _remove_legacy_public_media(hass: HomeAssistant) -> None:
-    """Delete plaintext media that older versions left under unauthenticated www."""
-    www = Path(hass.config.path("www"))
-    for folder in (www / "imou_life" / "thumbs", www / "imou_life" / "snap"):
-        if not folder.is_dir():
-            continue
-        for path in folder.iterdir():
-            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".svg"}:
-                try:
-                    path.unlink()
-                except OSError:
-                    _LOGGER.debug("Could not remove legacy media %s", path)
-    for path in (www / "imou").glob("briefing-*.svg"):
-        try:
-            path.unlink()
-        except OSError:
-            _LOGGER.debug("Could not remove legacy media %s", path)
-
-
-async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Register the authenticated media endpoint once per Home Assistant."""
-    data = hass.data.setdefault(DOMAIN, {})
-    if not data.get("media_view"):
-        hass.http.register_view(ImouMediaView())
-        data["media_view"] = True
-    await hass.async_add_executor_job(_remove_legacy_public_media, hass)
     return True
 
 
@@ -527,8 +492,3 @@ async def async_remove_config_entry_device(
 
     _LOGGER.debug("Removed device %s from selected_devices", device_id)
     return True
-
-
-async def async_remove_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> None:
-    """Turn off an Imou callback that still targets the removed entry."""
-    await async_disable_cloud_callback(hass, entry)

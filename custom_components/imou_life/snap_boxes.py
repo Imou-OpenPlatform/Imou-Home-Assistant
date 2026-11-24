@@ -11,14 +11,12 @@ from homeassistant.util import dt as dt_util
 from PIL import Image, ImageDraw
 from pyimouapi.snap_detect import SnapDetectTarget
 
-from .media_view import media_root, media_url_for_path
 from .pic_thumbnail import public_media_url
 
 _LOGGER = logging.getLogger(__name__)
 
 _SNAP_SUBDIR = Path("imou_life") / "snap"
 _MAX_SNAPS = 30
-_MAX_IMAGE_PIXELS = 30_000_000
 _BOX_COLORS = {
     "human": (255, 64, 64),
     "vehicle": (64, 160, 255),
@@ -68,12 +66,8 @@ def annotate_snap_jpeg(
 ) -> bytes | None:
     """Return a jpeg with detection boxes, or None when nothing can be drawn."""
     try:
-        opened = Image.open(BytesIO(jpeg))
-        if opened.width * opened.height > _MAX_IMAGE_PIXELS:
-            _LOGGER.debug("Snap detect picture is too large to annotate")
-            return None
-        image = opened.convert("RGB")
-    except (OSError, ValueError, Image.DecompressionBombError):
+        image = Image.open(BytesIO(jpeg)).convert("RGB")
+    except (OSError, ValueError):
         _LOGGER.debug("Snap detect picture is not an image", exc_info=True)
         return None
     draw = ImageDraw.Draw(image)
@@ -106,8 +100,9 @@ def annotate_snap_jpeg(
 def write_annotated_snap(
     hass: HomeAssistant, device_id: str, channel_id: str | None, jpeg: bytes
 ) -> str | None:
-    """Save an annotated jpeg in authenticated media storage and return its URL."""
-    snap_dir = media_root(hass) / _SNAP_SUBDIR
+    """Save an annotated jpeg under ``/local/`` and return that path."""
+    www_dir = Path(hass.config.path("www"))
+    snap_dir = www_dir / _SNAP_SUBDIR
     snap_dir.mkdir(parents=True, exist_ok=True)
     _prune_snaps(snap_dir)
     stamp = dt_util.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -120,7 +115,7 @@ def write_annotated_snap(
     except OSError:
         _LOGGER.warning("Could not write snap detect picture %s", dest, exc_info=True)
         return None
-    return media_url_for_path(hass, dest)
+    return f"/local/{_SNAP_SUBDIR.as_posix()}/{filename}"
 
 
 def annotated_snap_url(hass: HomeAssistant, local_path: str) -> str:
