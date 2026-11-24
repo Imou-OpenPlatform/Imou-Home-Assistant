@@ -168,7 +168,7 @@ PARAM_STATUS = "status"
 PARAM_AI_INSIGHT_STATUS = "ai_insight_status"
 PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS = "ai_insight_cloud_storage_status"
 PARAM_CLOUD_STORAGE_STATUS = "cloud_storage_status"
-AI_INSIGHT_STATUS_OPTIONS = ("active", "inactive", "unavailable")
+AI_INSIGHT_STATUS_OPTIONS = ("active", "paused", "inactive", "unavailable")
 AI_INSIGHT_CLOUD_STORAGE_STATUS_OPTIONS = (
     "active",
     "paused",

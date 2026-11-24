@@ -539,6 +539,7 @@
         "name": "AI Insight",
         "state": {
           "active": "Attivo",
+          "paused": "In pausa",
           "inactive": "Non attivo",
           "unavailable": "Non disponibile"
         }

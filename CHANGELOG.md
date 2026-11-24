@@ -46,6 +46,7 @@
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 - With more than one Imou Life account, **AI Briefing** and **Smart Messages** put the account and camera on the same card. Search buttons and results stay for that account.
 - The sidebar tabs are **AI Briefing**, **Smart Messages**, and **Request a trial**.
+- **AI Insight** can show **Paused** when the plan is paused. **AI Briefing** and **Smart Messages** still list that camera.
 
 ### [1.4.4]
 
@@ -427,6 +428,7 @@
 - **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
 - 添加了多个 Imou Life 账号时，**AI简报**和**智慧消息**把账号和摄像头放在同一张卡上。搜索按钮和结果仍只显示这个账号的。
 - 侧边栏页签为 **AI简报**、**智慧消息**、**申请试用**。
+- **AI 智见**在套餐暂停时可显示 **暂停中**。**AI简报**和**智慧消息**仍会列出该摄像头。
 
 ### [1.4.4]
 
