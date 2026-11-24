@@ -43,6 +43,7 @@ PLAYLIST_FOLLOW_MIN_SECONDS = 2.0
 REFRESH_COOLDOWN_SECONDS = 5.0
 _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
 _LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
+_MAX_PLAYLIST_BYTES = 2 * 1024 * 1024
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
@@ -422,7 +423,9 @@ async def _async_follow_live_playlist(
         return
     playlist_url = session.media_playlist_url
     try:
-        body = await async_fetch_url_text(hass, playlist_url)
+        body = await async_fetch_url_text(
+            hass, playlist_url, max_bytes=_MAX_PLAYLIST_BYTES
+        )
     except (OSError, TimeoutError, ValueError):
         _LOGGER.debug("Imou live recording playlist was not reloaded")
         return
@@ -924,7 +927,7 @@ async def async_prepare_local_record_playback(
 async def _load_media_playlist(
     hass: HomeAssistant, playlist_url: str
 ) -> _LoadedMediaPlaylist:
-    body = await async_fetch_url_text(hass, playlist_url)
+    body = await async_fetch_url_text(hass, playlist_url, max_bytes=_MAX_PLAYLIST_BYTES)
     media_playlist_url = getattr(body, "final_url", playlist_url)
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     if segment_urls:
@@ -934,7 +937,7 @@ async def _load_media_playlist(
     if variant is None:
         return _LoadedMediaPlaylist(body, segment_urls, media_playlist_url)
     await async_pin_public_url(hass, variant)
-    body = await async_fetch_url_text(hass, variant)
+    body = await async_fetch_url_text(hass, variant, max_bytes=_MAX_PLAYLIST_BYTES)
     media_playlist_url = getattr(body, "final_url", variant)
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     await _async_pin_segment_urls(hass, segment_urls)

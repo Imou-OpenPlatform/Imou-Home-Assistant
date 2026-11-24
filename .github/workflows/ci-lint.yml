@@ -2,9 +2,9 @@ name: Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     - cron: "0 0 * * *"
@@ -137,16 +137,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Core built-in imou still pins pyimouapi==1.4.0; Imou Life ships ==1.4.3.
       - name: Run hassfest
-        id: hassfest
-        continue-on-error: true
         uses: home-assistant/actions/hassfest@master
-      - name: Note pyimouapi skew with Core imou
-        if: steps.hassfest.outcome == 'failure'
-        run: >-
-          echo "::warning::Hassfest reported requirements skew (pyimouapi 1.4.3 vs Core 1.4.0).
-          HACS Imou Life installs pyimouapi==1.4.3; this is expected until Core bumps built-in imou."
 
   hacs:
     name: HACS

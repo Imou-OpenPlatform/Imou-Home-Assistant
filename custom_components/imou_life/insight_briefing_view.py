@@ -12,6 +12,8 @@ from pyimouapi.insight.statistics import (
     detection_totals,
 )
 
+from .media_view import URL_PREFIX as MEDIA_URL_PREFIX
+
 _SERIES_ZH = (
     ("人", "human", "#3b82c4"),
     ("车", "vehicle", "#2a9d8f"),
@@ -215,7 +217,7 @@ def _write_chart(
         old.unlink()
     name = f"briefing-{safe_id}-{_chart_stamp(briefing.daily)}.svg"
     (folder / name).write_text(_render_svg(briefing, language), encoding="utf-8")
-    return f"/local/imou/{name}"
+    return f"{MEDIA_URL_PREFIX}/imou/{name}"
 
 
 def _chart_stamp(daily: tuple[DailyAlarmRollup, ...]) -> str:

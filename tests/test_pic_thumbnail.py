@@ -242,7 +242,7 @@ async def test_decrypt_without_a_stored_password_uses_the_serial(
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 def test_sync_decrypt_and_write_success(hass: HomeAssistant) -> None:
-    """Ciphertext we downloaded is decrypted locally and written under www."""
+    """Ciphertext is decrypted and written to authenticated media storage."""
     runtime, decoder = _runtime_with_decoder()
     _entry(hass)
 
@@ -258,8 +258,10 @@ def test_sync_decrypt_and_write_success(hass: HomeAssistant) -> None:
         False,
     )
 
-    assert result == ("/local/imou_life/thumbs/alarm123.jpg", 0)
-    dest = Path(hass.config.path("www", "imou_life", "thumbs", "alarm123.jpg"))
+    assert result == ("/imou_media/imou_life/thumbs/alarm123.jpg", 0)
+    dest = Path(
+        hass.config.path("imou_life_media", "imou_life", "thumbs", "alarm123.jpg")
+    )
     assert dest.read_bytes() == JPEG
     last = Path(hass.config.path("imou_life", "last_alarm", "SN1_0.jpg"))
     assert last.read_bytes() == JPEG
@@ -291,7 +293,7 @@ def test_sync_decrypt_and_write_sha256_filename(hass: HomeAssistant) -> None:
         False,
     )
 
-    assert result == (f"/local/imou_life/thumbs/{digest}.jpg", 0)
+    assert result == (f"/imou_media/imou_life/thumbs/{digest}.jpg", 0)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -325,11 +327,13 @@ def test_sync_decrypt_and_write_hashes_unsafe_alarm_id(hass: HomeAssistant) -> N
         False,
     )
 
-    assert result == (f"/local/imou_life/thumbs/{digest}.jpg", 0)
-    thumbs = Path(hass.config.path("www", "imou_life", "thumbs"))
+    assert result == (f"/imou_media/imou_life/thumbs/{digest}.jpg", 0)
+    thumbs = Path(hass.config.path("imou_life_media", "imou_life", "thumbs"))
     assert (thumbs / f"{digest}.jpg").is_file()
     assert not (thumbs.parent.parent / "escape.jpg").exists()
-    dest = Path(hass.config.path("www", "imou_life", "thumbs", f"{digest}.jpg"))
+    dest = Path(
+        hass.config.path("imou_life_media", "imou_life", "thumbs", f"{digest}.jpg")
+    )
     assert dest.read_bytes() == JPEG
 
 
@@ -1123,3 +1127,46 @@ def test_public_media_url_warns_when_no_url_is_available(
 
     assert url == "/local/imou_life/thumbs/a.jpg"
     assert "external url" in caplog.text.lower()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+def test_public_media_url_signs_authenticated_media(hass: HomeAssistant) -> None:
+    """A phone outside the LAN gets a short-lived signature, not an open path."""
+    hass.config.external_url = "https://ha.example.com"
+    hass.data["http.auth"] = "refresh-token-id"
+
+    url = public_media_url(hass, "/imou_media/imou_life/thumbs/a.jpg")
+
+    assert url.startswith("https://ha.example.com/imou_media/imou_life/thumbs/a.jpg?")
+    assert "authSig=" in url
+    legacy = public_media_url(hass, "/local/imou_life/thumbs/a.jpg")
+    assert "authSig=" not in legacy
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_media_view_requires_authentication(
+    hass: HomeAssistant, hass_client, hass_client_no_auth
+) -> None:
+    """Decrypted media must not be readable without a Home Assistant login."""
+    from custom_components.imou_life import async_setup as imou_setup
+    from custom_components.imou_life.media_view import media_root
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "http", {})
+    await imou_setup(hass, {})
+    path = media_root(hass) / "imou_life" / "thumbs" / "a.jpg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"jpeg")
+
+    anonymous = await hass_client_no_auth()
+    response = await anonymous.get("/imou_media/imou_life/thumbs/a.jpg")
+    assert response.status == 401
+
+    client = await hass_client()
+    response = await client.get("/imou_media/imou_life/thumbs/a.jpg")
+    assert response.status == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert await response.read() == b"jpeg"
+
+    missing = await client.get("/imou_media/../secret.txt")
+    assert missing.status == 404

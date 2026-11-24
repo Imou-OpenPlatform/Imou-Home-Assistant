@@ -266,8 +266,8 @@
     },
     "insight_trial_dialog": {
       "options": {
-        "china_title": "智见试用",
-        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
+        "china_title": "AI Insight-Testversion",
+        "china_message": "AI Insight bietet intelligente Suche und eine tägliche Zusammenfassung für Ihre Kameras. Fügen Sie den offiziellen WeChat-Account 17799860785 hinzu, um eine Testversion anzufordern.",
         "intl_title": "AI Insight testen",
         "intl_message": "AI Insight ergänzt die intelligente Suche und einen Tagesbericht für deine Kameras. Füge das offizielle WhatsApp +86 19106884129 hinzu, um einen Test zu starten."
       }

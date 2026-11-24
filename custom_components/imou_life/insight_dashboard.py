@@ -37,7 +37,6 @@ from .coordinator import ImouConfigEntry
 from .helpers import (
     async_display_language,
     selector_option_label,
-    translated_name_override,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -516,26 +515,6 @@ async def _republish_current(hass: HomeAssistant) -> None:
     await _publish(hass, *_dashboard_inputs(data))
 
 
-def _apply_language_names(hass: HomeAssistant, copy: Mapping[str, str]) -> None:
-    """Point helper and script names at the current user or system language."""
-    registry = er.async_get(hass)
-    pairs = list(_LANGUAGE_ENTITIES)
-    automation = registry.async_get_entity_id(
-        "automation", "automation", _MORNING_AUTOMATION_ID
-    )
-    if automation is not None:
-        pairs.append((automation, "morning_refresh"))
-    for entity_id, key in pairs:
-        entry = registry.async_get(entity_id)
-        translated = copy.get(key)
-        if entry is None or not translated:
-            continue
-        desired = translated_name_override(entry.original_name, translated)
-        if entry.name == desired:
-            continue
-        registry.async_update_entity(entity_id, name=desired)
-
-
 async def _ensure_helpers(hass: HomeAssistant) -> tuple[str, str, str, str]:
     await async_setup_component(hass, "input_datetime", {})
     await async_setup_component(hass, "input_text", {})
@@ -639,7 +618,6 @@ async def _publish(
     search_end_entity: str,
 ) -> None:
     copy = await _copy(hass)
-    _apply_language_names(hass, copy)
     await async_setup_component(hass, "lovelace", {})
     collection = _storage_collection(hass, "lovelace/dashboards/create")
     if collection is None:

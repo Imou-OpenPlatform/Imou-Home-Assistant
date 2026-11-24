@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -49,6 +48,9 @@ STREAM_IDLE_MAX_RESCHEDULES = max(
 # The cloud still is one picture. Opening the camera again inside this window
 # shows that picture instead of asking for another snapshot.
 SNAPSHOT_REUSE = timedelta(seconds=30)
+# A failed grab is retried only after a short pause; the camera card asks
+# again on every render, which must not turn one cloud failure into a storm.
+SNAPSHOT_FAILURE_REUSE = timedelta(seconds=10)
 
 # Same live address as 1.3, over HTTP. This Home Assistant's ffmpeg rejects the
 # cloud HTTPS certificate when it opens HLS segments, so HTTPS never starts.
@@ -86,12 +88,11 @@ class ImouCamera(ImouEntity, Camera):
         """Initialize the camera entity."""
         Camera.__init__(self)
         ImouEntity.__init__(self, coordinator, config_entry, entity_type, device)
-        # Cloud HTTPS live addresses use a certificate store ffmpeg rejects.
-        self.stream_options[CONF_VERIFY_SSL] = False
         self._idle_unsub: Callable[[], None] | None = None
         self._idle_output_reschedules = 0
         self._snapshot: bytes | None = None
         self._snapshot_at = 0.0
+        self._snapshot_error: tuple[float, HomeAssistantError] | None = None
         self._snapshot_task: asyncio.Task[bytes] | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -177,6 +178,12 @@ class ImouCamera(ImouEntity, Camera):
         """
         now = monotonic()
         if (
+            self._snapshot_error is not None
+            and now - self._snapshot_error[0] < SNAPSHOT_FAILURE_REUSE.total_seconds()
+            and self._snapshot_task is None
+        ):
+            raise self._snapshot_error[1]
+        if (
             self._snapshot is not None
             and now - self._snapshot_at < SNAPSHOT_REUSE.total_seconds()
         ):
@@ -200,9 +207,14 @@ class ImouCamera(ImouEntity, Camera):
                 self._config_entry.options.get(PARAM_DOWNLOAD_SNAP_WAIT_TIME, 3),
             )
         except ImouException as e:
-            self._raise_imou_ha_error(e, "camera_image_failed")
+            try:
+                self._raise_imou_ha_error(e, "camera_image_failed")
+            except HomeAssistantError as err:
+                self._snapshot_error = (monotonic(), err)
+                raise
         self._snapshot = image
         self._snapshot_at = monotonic()
+        self._snapshot_error = None
         return image
 
     @callback

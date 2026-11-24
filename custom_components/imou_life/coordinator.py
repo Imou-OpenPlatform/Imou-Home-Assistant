@@ -287,13 +287,14 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ) from err
         except (TimeoutError, ImouException) as err:
             async_notify_imou_api_error(self.hass, self.config_entry, err)
-            # last_update_success stays true, so entities keep the last state
-            # instead of all going unavailable until the next interval.
             _LOGGER.warning(
                 "Could not update Imou device status: %s",
                 getattr(err, "message", None) or err,
             )
-            return
+            raise UpdateFailed(
+                f"Could not update Imou device status: "
+                f"{getattr(err, 'message', None) or err}"
+            ) from err
         else:
             if isinstance(fetched, set) and fetched:
                 self._v2_state_snapshots.update(fetched)

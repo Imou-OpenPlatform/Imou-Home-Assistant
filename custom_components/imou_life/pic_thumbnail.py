@@ -1,4 +1,4 @@
-"""Decrypt alarm push thumbnails and write them under www for Companion notify."""
+"""Decrypt alarm push thumbnails and write them to authenticated media storage."""
 
 from __future__ import annotations
 
@@ -35,6 +35,15 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .helpers import fill_template, selector_option_label
+from .media_view import (
+    URL_PREFIX as MEDIA_URL_PREFIX,
+)
+from .media_view import (
+    media_file_path,
+    media_root,
+    media_url_for_path,
+    signed_media_path,
+)
 from .record_http_fetch import (
     UrlFetchBodyTooLargeError,
     UrlFetchUnsafeError,
@@ -48,8 +57,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _THUMB_SUBDIR = Path("imou_life") / "thumbs"
 _THUMB_MAX_AGE_SECONDS = 24 * 60 * 60
-_LOCAL_PREFIX = "/local/"
-# Push alarm ids become www filenames; reject path separators and traversal.
+# Push alarm ids become media filenames; reject path separators and traversal.
 _SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
 _DOWNLOAD_TIMEOUT_SECONDS = 20
@@ -120,15 +128,9 @@ def read_last_alarm_image(
 
 
 def jpeg_from_local_url(hass: HomeAssistant, local_url: str) -> bytes | None:
-    """Read a jpeg previously written under /local/, or None if it is gone."""
-    if not local_url.startswith(_LOCAL_PREFIX):
-        return None
-    rel = Path(local_url[len(_LOCAL_PREFIX) :])
-    if rel.is_absolute() or ".." in rel.parts:
-        return None
-    www = Path(hass.config.path("www")).resolve()
-    path = (www / rel).resolve()
-    if not path.is_relative_to(www) or not path.is_file():
+    """Read a jpeg previously written by this integration, or None if gone."""
+    path = media_file_path(hass, local_url)
+    if path is None:
         return None
     try:
         data = path.read_bytes()
@@ -376,15 +378,8 @@ def _write_thumb(
     pic_url: str,
     jpeg: bytes,
 ) -> str | None:
-    www_dir = Path(hass.config.path("www"))
-    www_existed = www_dir.is_dir()
-    thumbs_dir = www_dir / _THUMB_SUBDIR
+    thumbs_dir = media_root(hass) / _THUMB_SUBDIR
     thumbs_dir.mkdir(parents=True, exist_ok=True)
-    if not www_existed:
-        _LOGGER.warning(
-            "Created %s; restart Home Assistant for /local/ to serve alarm thumbnails",
-            www_dir,
-        )
     _prune_old_thumbs(thumbs_dir)
     filename = _thumb_filename(event_data.get("alarm_id"), pic_url)
     thumbs_root = thumbs_dir.resolve()
@@ -398,7 +393,9 @@ def _write_thumb(
         _LOGGER.warning("Could not write alarm thumb %s", dest, exc_info=True)
         return None
 
-    local_url = f"/local/{_THUMB_SUBDIR.as_posix()}/{filename}"
+    media_url = media_url_for_path(hass, dest)
+    if media_url is None:
+        return None
     device_key = imou_life_device_key_from_ids(
         event_data.get("device_id"),
         event_data.get("channel_id"),
@@ -406,8 +403,8 @@ def _write_thumb(
     )
     if device_key:
         persist_last_alarm_image(hass, device_key, jpeg)
-    _LOGGER.debug("Wrote decrypted alarm thumb %s (%s bytes)", local_url, len(jpeg))
-    return local_url
+    _LOGGER.debug("Wrote decrypted alarm thumb %s (%s bytes)", media_url, len(jpeg))
+    return media_url
 
 
 def _sync_decrypt_and_write(
@@ -421,10 +418,10 @@ def _sync_decrypt_and_write(
     device_id: str,
     use_tcm: bool,
 ) -> tuple[str | None, int | None]:
-    """Decrypt ciphertext this integration downloaded, then write it under www.
+    """Decrypt ciphertext this integration downloaded, then write it to media.
 
-    Returns the ``/local/`` URL and the SDK code, so the caller can tell a
-    wrong device password from one worth reporting differently.
+    Returns the authenticated media URL and the SDK code, so the caller can tell
+    a wrong device password from one worth reporting differently.
     """
     try:
         jpeg = decoder.decrypt_bytes(
@@ -544,7 +541,7 @@ async def _async_download_picture(
 
 
 def public_media_url(hass: HomeAssistant, local_path: str) -> str:
-    """Turn ``/local/...`` into an absolute URL phones can fetch off-LAN.
+    """Turn a media path into an absolute URL phones can fetch off-LAN.
 
     The phone fetches this URL itself, so a LAN address means no picture on
     cellular. ``get_url(prefer_external=True)`` quietly falls back to the
@@ -557,6 +554,8 @@ def public_media_url(hass: HomeAssistant, local_path: str) -> str:
         return local_path
     if not local_path.startswith("/"):
         return local_path
+    if local_path.startswith(f"{MEDIA_URL_PREFIX}/"):
+        local_path = signed_media_path(hass, local_path)
     try:
         return f"{get_url(hass, allow_internal=False).rstrip('/')}{local_path}"
     except NoURLAvailableError:
@@ -590,7 +589,7 @@ async def async_maybe_decrypt_thumbnail(
     ignore_switch: bool = False,
     retry: bool = True,
 ) -> str | None:
-    """Decrypt an alarm picture; return /local/... URL or None.
+    """Decrypt an alarm picture; return its media URL or None.
 
     Pictures are always decrypted. ``ignore_switch`` is kept so existing
     callers stay valid; the old per-account switch is no longer consulted.

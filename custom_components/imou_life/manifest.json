@@ -12,6 +12,7 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "http",
     "media_player",
     "media_source",
     "persistent_notification",

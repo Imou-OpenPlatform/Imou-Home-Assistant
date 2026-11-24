@@ -26,7 +26,7 @@ def test_briefing_card_writes_a_bar_chart(tmp_path) -> None:
     )
     summary, markdown = briefing_card(tmp_path, "ENTRY1", briefing)
     assert summary == "2026-11-15 · 全部 12"
-    assert markdown.startswith("![智见简报](/local/imou/briefing-ENTRY1-")
+    assert markdown.startswith("![智见简报](/imou_media/imou/briefing-ENTRY1-")
     chart = next(tmp_path.glob("briefing-ENTRY1-*.svg")).read_text(encoding="utf-8")
     assert "今天没有异常情况" in chart
     assert "老人" not in chart

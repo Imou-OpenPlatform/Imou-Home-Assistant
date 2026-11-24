@@ -57,3 +57,31 @@ def test_collection_point_falls_back_to_prompt() -> None:
         PARAM_COLLECTION_POINT,
     )
     assert entity.current_option == PARAM_COLLECTION_POINT_PROMPT
+
+
+def test_unknown_current_option_is_not_reported_as_the_first_option() -> None:
+    """Showing the first option would claim a value the device never reported."""
+    entity = _select_entity(
+        {
+            PARAM_NIGHT_VISION_MODE: {
+                PARAM_OPTIONS: ["intelligent", "off"],
+                PARAM_CURRENT_OPTION: "not-a-mode",
+            }
+        },
+        PARAM_NIGHT_VISION_MODE,
+    )
+    assert entity.current_option is None
+
+
+def test_select_without_options_is_unavailable() -> None:
+    """A capability listed before its detail arrives cannot be changed yet."""
+    entity = _select_entity(
+        {
+            PARAM_NIGHT_VISION_MODE: {
+                PARAM_OPTIONS: [],
+                PARAM_CURRENT_OPTION: "",
+            }
+        },
+        PARAM_NIGHT_VISION_MODE,
+    )
+    assert not entity.available
