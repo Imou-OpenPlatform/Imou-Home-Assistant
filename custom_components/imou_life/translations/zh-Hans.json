@@ -272,6 +272,12 @@
         "intl_message": "AI 智见为摄像头提供智能搜索和每日简报。添加官方 WhatsApp +86 19106884129，即可开始试用。"
       }
     },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "抓图 AI 检测试用",
+        "message": "当前账号暂未开通抓图 AI 检测。联系商务申请试用：\n\n💬 微信：17799860785\n📱 WhatsApp：+86 19106884129"
+      }
+    },
     "insight_dashboard": {
       "options": {
         "title": "AI 智见",
@@ -304,8 +310,8 @@
         "sure_very": "很确定",
         "date_name": "智见简报日期",
         "keyword_name": "智见搜索词",
-        "search_begin": "开始日期",
-        "search_end": "结束日期",
+        "search_begin": "开始",
+        "search_end": "结束",
         "search_begin_name": "智见搜索开始日期",
         "search_end_name": "智见搜索结束日期",
         "search_alarms": "搜索智见告警",
@@ -717,6 +723,9 @@
       },
       "siren_stop": {
         "name": "关闭警笛"
+      },
+      "snap_detect": {
+        "name": "抓图 AI 检测"
       },
       "ai_insight_trial": {
         "name": "AI 智见试用"

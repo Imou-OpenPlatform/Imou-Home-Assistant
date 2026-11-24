@@ -33,9 +33,9 @@ views:
               - entity: input_text.imou_insight_search_keyword
                 name: Keyword
               - entity: input_datetime.imou_insight_search_begin
-                name: Start date
+                name: Start
               - entity: input_datetime.imou_insight_search_end
-                name: End date
+                name: End
           - type: horizontal-stack
             cards:
               - type: button

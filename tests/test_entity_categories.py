@@ -9,6 +9,7 @@ from custom_components.imou_life.button import ImouButton
 from custom_components.imou_life.const import (
     PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
     PARAM_RESTART_DEVICE,
+    PARAM_SNAP_DETECT,
     PARAM_STATUS,
 )
 from custom_components.imou_life.number import ImouCountdownNumber, ImouOverchargeNumber
@@ -91,6 +92,7 @@ def test_overcharge_number_is_configuration() -> None:
     ("entity_type", "expected"),
     [
         (PARAM_RESTART_DEVICE, EntityCategory.CONFIG),
+        (PARAM_SNAP_DETECT, None),
         ("ptz_up", None),
         ("mute", None),
     ],

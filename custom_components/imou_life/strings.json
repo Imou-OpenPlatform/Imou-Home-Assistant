@@ -272,6 +272,12 @@
         "intl_message": "AI Insight adds smart search and a daily briefing for your cameras. Add official WhatsApp +86 19106884129 to start a trial."
       }
     },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "Snapshot AI detection trial",
+        "message": "Snapshot AI detection is not enabled for this account. Contact sales for a trial:\n\n💬 WeChat: 17799860785\n📱 WhatsApp: +86 19106884129"
+      }
+    },
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
@@ -304,8 +310,8 @@
         "sure_very": "Very sure",
         "date_name": "Briefing date",
         "keyword_name": "Search text",
-        "search_begin": "Start date",
-        "search_end": "End date",
+        "search_begin": "Start",
+        "search_end": "End",
         "search_begin_name": "Search start date",
         "search_end_name": "Search end date",
         "search_alarms": "Search alarms",
@@ -708,6 +714,9 @@
       },
       "restart_device": {
         "name": "Restart device"
+      },
+      "snap_detect": {
+        "name": "Snapshot AI detection"
       },
       "ai_insight_trial": {
         "name": "AI Insight trial"

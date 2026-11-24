@@ -68,11 +68,21 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
     assert "button" not in rendered
     search = config["views"][1]["cards"][0]
     assert search["type"] == "vertical-stack"
-    actions = [card["tap_action"] for card in search["cards"][1]["cards"]]
+    search_cards = search["cards"]
+    actions = [
+        button["tap_action"]
+        for card in search_cards
+        if card["type"] == "horizontal-stack"
+        for button in card["cards"]
+    ]
     assert [action["data"] for action in actions] == [
         {"page": "previous"},
         {},
         {"page": "next"},
+    ]
+    assert search_cards[0]["entities"][-2:] == [
+        {"entity": "input_datetime.imou_insight_search_begin", "name": "Start"},
+        {"entity": "input_datetime.imou_insight_search_end", "name": "End"},
     ]
     rendered = str(search)
     assert "input_datetime.imou_insight_search_begin" in rendered

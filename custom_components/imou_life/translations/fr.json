@@ -272,6 +272,12 @@
         "intl_message": "AI Insight ajoute la recherche intelligente et une synthèse quotidienne pour vos caméras. Ajoutez le WhatsApp officiel +86 19106884129 pour commencer un essai."
       }
     },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "Essayer la détection IA par capture",
+        "message": "La détection IA par capture n'est pas activée pour ce compte. Contactez le service commercial pour un essai :\n\n💬 WeChat : 17799860785\n📱 WhatsApp : +86 19106884129"
+      }
+    },
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
@@ -304,8 +310,8 @@
         "sure_very": "Très sûr",
         "date_name": "Date de la synthèse",
         "keyword_name": "Texte de recherche",
-        "search_begin": "Date de début",
-        "search_end": "Date de fin",
+        "search_begin": "Début",
+        "search_end": "Fin",
         "search_begin_name": "Début de la recherche",
         "search_end_name": "Fin de la recherche",
         "search_alarms": "Rechercher des alarmes",
@@ -717,6 +723,9 @@
       },
       "siren_stop": {
         "name": "Arrêter la sirène"
+      },
+      "snap_detect": {
+        "name": "Détection IA par capture"
       },
       "ai_insight_trial": {
         "name": "Essai AI Insight"

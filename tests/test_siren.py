@@ -8,11 +8,13 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from custom_components.imou_life.button import _iter_buttons
+from custom_components.imou_life.button import ImouButton, _iter_buttons
 from custom_components.imou_life.const import (
     DOMAIN,
     EVENT_IMOU_ALARM,
     PARAM_SIREN,
+    PARAM_SNAP_DETECT,
+    SERVICE_DEVICE_SNAP_DETECT,
     SIREN_OFF_DELAY,
 )
 from custom_components.imou_life.siren import (
@@ -29,6 +31,7 @@ from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
+    async_mock_service,
 )
 
 from . import USER_INPUT
@@ -110,7 +113,40 @@ def test_iter_buttons_skips_siren_controls() -> None:
     """Start/stop buttons must not duplicate the siren entity."""
     device = _device(channel_id="0", buttons={PARAM_SIREN_START: {}, "mute": {}})
     pairs = _iter_buttons(_coordinator([device]))
-    assert [button_type for button_type, _device in pairs] == ["mute"]
+    assert [button_type for button_type, _device in pairs] == [
+        "mute",
+        PARAM_SNAP_DETECT,
+    ]
+
+
+def test_iter_buttons_adds_snap_detect_only_to_camera_channels() -> None:
+    """Each channel gets detection, while plugs and parent devices do not."""
+    camera = _device(channel_id="0", buttons={})
+    accessory = _device(channel_id=None, device_id="SN2", buttons={})
+    pairs = _iter_buttons(_coordinator([camera, accessory]))
+    assert pairs == [(PARAM_SNAP_DETECT, camera)]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_snap_detect_button_calls_the_service(hass: HomeAssistant) -> None:
+    """The device-page button targets itself through the detection service."""
+    device = _device(channel_id="0", buttons={})
+    coordinator = _coordinator([device])
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    button = ImouButton(coordinator, entry, PARAM_SNAP_DETECT, device)
+    button.hass = hass
+    button.entity_id = "button.front_snap_detect"
+    calls = async_mock_service(hass, DOMAIN, SERVICE_DEVICE_SNAP_DETECT)
+
+    await button.async_press()
+
+    assert len(calls) == 1
+    assert calls[0].domain == DOMAIN
+    assert calls[0].service == SERVICE_DEVICE_SNAP_DETECT
+    assert calls[0].data == {"entity_id": "button.front_snap_detect"}
+    coordinator.device_manager.async_press_button.assert_not_awaited()
+    assert button.icon == "mdi:image-search"
 
 
 def test_siren_entity_supports_turn_on_off() -> None:

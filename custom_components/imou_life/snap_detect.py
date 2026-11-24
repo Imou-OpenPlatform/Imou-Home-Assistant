@@ -12,10 +12,11 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from pyimouapi.const import ERROR_CODE_OPEN_API_QUOTA_EXCEEDED
 from pyimouapi.exceptions import ImouException
 from pyimouapi.snap_detect import DeviceSnapDetectResult, parse_device_snap_detect_data
 
-from .const import DOMAIN, SERVICE_DEVICE_SNAP_DETECT
+from .const import DOMAIN, EVENT_AI_INSIGHT_TRIAL, SERVICE_DEVICE_SNAP_DETECT
 from .coordinator import ImouConfigEntry
 from .detection_present import confidence_line, detection_labels, seen_line
 from .helpers import (
@@ -198,6 +199,32 @@ def _notify_targets(hass: HomeAssistant, runtime_services: list[str]) -> list[st
     return _with_drawer(targets)
 
 
+async def _async_trial_dialog(hass: HomeAssistant) -> tuple[str, str]:
+    """Return the contact prompt shown when detection is not enabled."""
+    language = await async_display_language(hass)
+    await translation.async_get_translations(
+        hass, language, "selector", integrations={DOMAIN}
+    )
+    title = selector_option_label(
+        hass,
+        language,
+        "snap_detect_trial_dialog",
+        "title",
+        "Snapshot AI detection trial",
+    )
+    message = selector_option_label(
+        hass,
+        language,
+        "snap_detect_trial_dialog",
+        "message",
+        "Snapshot AI detection is not enabled for this account. "
+        "Contact sales for a trial:\n\n"
+        "💬 WeChat: 17799860785\n"
+        "📱 WhatsApp: +86 19106884129",
+    )
+    return title, message
+
+
 def _resolve_device_target(
     hass: HomeAssistant, call: ServiceCall, device_id: str
 ) -> tuple[ImouConfigEntry, str, str | None, list[str]]:
@@ -260,11 +287,6 @@ def _resolve_call(
             translation_domain=DOMAIN,
             translation_key="snap_detect_entity_not_found",
         )
-    if not entity_id.startswith(f"{DOMAIN}."):
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="snap_detect_entity_not_found",
-        )
     entry = hass.config_entries.async_get_entry(entity_entry.config_entry_id)
     if entry is None or entry.domain != DOMAIN:
         raise ServiceValidationError(
@@ -317,6 +339,13 @@ async def async_handle_device_snap_detect(
             )
         )
     except ImouException as err:
+        if err.api_code == ERROR_CODE_OPEN_API_QUOTA_EXCEEDED:
+            title, message = await _async_trial_dialog(hass)
+            hass.bus.async_fire(
+                EVENT_AI_INSIGHT_TRIAL,
+                {"title": title, "message": message},
+            )
+            return
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="snap_detect_failed",

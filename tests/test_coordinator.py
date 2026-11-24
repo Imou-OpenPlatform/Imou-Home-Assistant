@@ -169,8 +169,8 @@ async def test_coordinator_skips_poll_when_all_entities_disabled(
     )
     entity_registry = er.async_get(hass)
     entity_registry.async_get_or_create(
-        DOMAIN,
         "sensor",
+        DOMAIN,
         f"{device_key}$status",
         config_entry=coordinator.config_entry,
         device_id=device_entry.id,
@@ -268,8 +268,8 @@ async def test_deselecting_a_device_removes_it_from_the_registry(
     )
     entity_registry = er.async_get(hass)
     entity_registry.async_get_or_create(
-        DOMAIN,
         "sensor",
+        DOMAIN,
         f"{filtered_key}$status",
         config_entry=entry,
         device_id=filtered.id,
@@ -284,7 +284,7 @@ async def test_deselecting_a_device_removes_it_from_the_registry(
     gone = device_registry.async_get(filtered.id)
     assert gone is None or entry.entry_id not in gone.config_entries
     assert (
-        entity_registry.async_get_entity_id(DOMAIN, "sensor", f"{filtered_key}$status")
+        entity_registry.async_get_entity_id("sensor", DOMAIN, f"{filtered_key}$status")
         is None
     )
 

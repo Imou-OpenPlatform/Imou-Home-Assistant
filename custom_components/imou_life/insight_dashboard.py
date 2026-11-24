@@ -63,8 +63,8 @@ _COPY_DEFAULTS = {
     "device": "Camera",
     "date": "Date",
     "keyword": "Search text",
-    "search_begin": "Start date",
-    "search_end": "End date",
+    "search_begin": "Start",
+    "search_end": "End",
     "date_name": "Briefing date",
     "keyword_name": "Search text",
     "search_begin_name": "Search start date",
@@ -344,7 +344,7 @@ def _search_view(
     actions: list[dict[str, Any]],
     cards: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Device and keyword stay in a list. Search and paging are real buttons."""
+    """Conditions stay in one list. Search and paging are real buttons."""
     if not rows:
         return cards
     return [

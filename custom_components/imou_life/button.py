@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.const import EntityCategory
+from homeassistant.const import ATTR_ENTITY_ID, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
@@ -21,11 +21,14 @@ from .const import (
     PARAM_AI_INSIGHT_TRIAL,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
+    PARAM_SNAP_DETECT,
     PARAM_TRIAL_CONTACT_URL,
     SERVICE_CONTROL_MOVE_PTZ,
+    SERVICE_DEVICE_SNAP_DETECT,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
 from .insight_account import ImouAccountEntity, async_trial_dialog_copy
 
 _LOGGER = logging.getLogger(__package__)
@@ -41,12 +44,17 @@ def _iter_buttons(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
     """Return (button_type, device) pairs for supported buttons."""
-    return [
+    buttons = [
         (button_type, device)
         for device in coordinator.devices
         for button_type in device.buttons
         if button_type not in _HIDDEN_BUTTONS
     ]
+    buttons.extend(
+        (PARAM_SNAP_DETECT, device)
+        for device in camera_channel_devices(coordinator.devices)
+    )
+    return buttons
 
 
 async def async_setup_entry(
@@ -98,7 +106,22 @@ class ImouButton(ImouEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
+        if self._entity_type == PARAM_SNAP_DETECT:
+            await self.hass.services.async_call(
+                DOMAIN,
+                SERVICE_DEVICE_SNAP_DETECT,
+                {ATTR_ENTITY_ID: self.entity_id},
+                blocking=True,
+            )
+            return
         await self._async_do_press(500)
+
+    @property
+    def icon(self) -> str | None:
+        """Return the snapshot detection icon."""
+        if self._entity_type == PARAM_SNAP_DETECT:
+            return "mdi:image-search"
+        return None
 
     @property
     def device_class(self) -> ButtonDeviceClass | None:

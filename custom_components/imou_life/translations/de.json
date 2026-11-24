@@ -272,6 +272,12 @@
         "intl_message": "AI Insight ergänzt die intelligente Suche und einen Tagesbericht für deine Kameras. Füge das offizielle WhatsApp +86 19106884129 hinzu, um einen Test zu starten."
       }
     },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "Snapshot-KI-Erkennung testen",
+        "message": "Die Snapshot-KI-Erkennung ist für dieses Konto noch nicht verfügbar. Kontaktieren Sie den Vertrieb für eine Testversion:\n\n💬 WeChat: 17799860785\n📱 WhatsApp: +86 19106884129"
+      }
+    },
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
@@ -304,8 +310,8 @@
         "sure_very": "Sehr sicher",
         "date_name": "Berichtsdatum",
         "keyword_name": "Suchtext",
-        "search_begin": "Startdatum",
-        "search_end": "Enddatum",
+        "search_begin": "Start",
+        "search_end": "Ende",
         "search_begin_name": "Suchbeginn",
         "search_end_name": "Suchende",
         "search_alarms": "Alarme suchen",
@@ -717,6 +723,9 @@
       },
       "siren_stop": {
         "name": "Sirene stoppen"
+      },
+      "snap_detect": {
+        "name": "Snapshot-KI-Erkennung"
       },
       "ai_insight_trial": {
         "name": "AI Insight testen"
