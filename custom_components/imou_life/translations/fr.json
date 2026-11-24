@@ -285,6 +285,8 @@
         "view_search": "Recherche",
         "view_trial": "Essai",
         "device": "Caméra",
+        "account": "Compte",
+        "account_name": "Compte Insight",
         "date": "Date",
         "keyword": "Texte de recherche",
         "search_empty": "Aucune alarme ne correspond à « {keyword} ».",

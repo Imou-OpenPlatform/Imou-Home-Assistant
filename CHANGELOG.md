@@ -44,6 +44,7 @@
 - **Local recordings** are muxed into an MP4 on this Home Assistant while the clip plays, so playback starts within seconds, can be stopped or paused, ends when the clip ends, and replays from the cached file with seeking. Imou produces local clips in real time, so the cache is complete only after the clip has played once.
 - **Cloud recordings** are remuxed once into an MP4 on this Home Assistant and play natively in the browser: the player can stop, seek, and ends the clip instead of restarting it. The remux is cached, and expired cloud segment tokens are fetched again while it runs.
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
+- With more than one Imou Life account, **Briefing** and **Search** start with the account. The camera list, search buttons, and results are the ones for that account.
 
 ### [1.4.4]
 
@@ -423,6 +424,7 @@
 - **本地录像**通过这台 Home Assistant 的 Stream 播放。服务端取流走 API 端口回环，远程网页播放不再依赖公网地址能否从本机访问自己。
 - **云录像**会先在这台 Home Assistant 上转封装成 MP4，再由浏览器原生播放：可以停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段。转封装结果会缓存，过程中云端过期的分片令牌会自动重新获取。
 - **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
+- 添加了多个 Imou Life 账号时，**简报**和**搜索**先选账号。摄像头、搜索按钮和结果都只显示这个账号的。
 
 ### [1.4.4]
 

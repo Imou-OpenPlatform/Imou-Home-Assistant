@@ -285,6 +285,8 @@
         "view_search": "Ricerca",
         "view_trial": "Prova",
         "device": "Telecamera",
+        "account": "Account",
+        "account_name": "Account Insight",
         "date": "Data",
         "keyword": "Testo di ricerca",
         "search_empty": "Nessun allarme corrisponde a «{keyword}».",

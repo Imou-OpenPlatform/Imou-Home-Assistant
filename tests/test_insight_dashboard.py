@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from custom_components.imou_life.insight_dashboard import (
     _COPY_DEFAULTS,
     InsightDashboardAccount,
+    account_option_labels,
     build_insight_dashboard,
 )
 from custom_components.imou_life.insight_workbench import _search_keyword
@@ -88,6 +89,72 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
     assert "input_datetime.imou_insight_search_begin" in rendered
     assert "input_datetime.imou_insight_search_end" in rendered
     assert {action["service"] for action in actions} == {"imou_life.search_ai_alarms"}
+
+
+def _account(title: str, suffix: str, entry_id: str = "") -> InsightDashboardAccount:
+    return InsightDashboardAccount(
+        title=title,
+        select_entity=f"select.{suffix}",
+        briefing_entity=f"sensor.brief_{suffix}",
+        search_entity=f"sensor.search_{suffix}",
+        trial_entity=None,
+        entry_id=entry_id,
+    )
+
+
+def test_several_accounts_pick_the_account_before_the_camera() -> None:
+    """One account row, then only that account's camera, buttons, and result."""
+    copy = {**_COPY_DEFAULTS, "account": "账号", "view_search": "搜索"}
+    config = build_insight_dashboard(
+        [
+            _account("Imou Life Official", "sg", "lc27d061aaaa"),
+            _account("Imou Life Official", "cn", "lc1e8f13bbbb"),
+        ],
+        date_entity="input_datetime.imou_insight_briefing_end",
+        keyword_entity="input_text.imou_insight_search_keyword",
+        search_begin_entity="input_datetime.imou_insight_search_begin",
+        search_end_entity="input_datetime.imou_insight_search_end",
+        copy=copy,
+        account_entity="input_select.imou_insight_account",
+    )
+    search = config["views"][1]["cards"][0]
+    assert search["type"] == "vertical-stack"
+    shared = search["cards"][0]["entities"]
+    assert shared[0] == {
+        "entity": "input_select.imou_insight_account",
+        "name": "账号",
+    }
+    assert [row["entity"] for row in shared[1:]] == [
+        "input_text.imou_insight_search_keyword",
+        "input_datetime.imou_insight_search_begin",
+        "input_datetime.imou_insight_search_end",
+    ]
+    switches = [card for card in search["cards"][1:] if card["type"] == "conditional"]
+    assert [card["conditions"][0]["state"] for card in switches] == [
+        "Imou Life Official (lc27d0)",
+        "Imou Life Official (lc1e8f)",
+    ]
+    first = switches[0]["card"]
+    assert first["cards"][0]["entities"] == [{"entity": "select.sg", "name": "Camera"}]
+    actions = first["cards"][1]["cards"]
+    assert [button["name"] for button in actions] == ["Previous", "Search", "Next"]
+    assert actions[1]["tap_action"]["target"] == {"entity_id": "select.sg"}
+    assert "sensor.search_cn" not in str(first)
+    briefing = config["views"][0]["cards"][0]
+    assert briefing["cards"][0]["entities"][0]["name"] == "账号"
+    assert briefing["cards"][1]["conditions"][0]["state"].startswith("Imou Life")
+
+
+def test_repeated_account_titles_stay_distinct() -> None:
+    """Two accounts with the same name need different picker options."""
+    accounts = [
+        _account("Imou Life", "a", "abcdef123456"),
+        _account("Imou Life", "b", "123456abcdef"),
+    ]
+    assert account_option_labels(accounts) == [
+        "Imou Life (abcdef)",
+        "Imou Life (123456)",
+    ]
 
 
 def test_search_reads_the_text_box_when_keyword_is_omitted() -> None:

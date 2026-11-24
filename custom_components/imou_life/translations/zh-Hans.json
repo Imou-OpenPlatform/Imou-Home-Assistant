@@ -285,6 +285,8 @@
         "view_search": "搜索",
         "view_trial": "试用",
         "device": "摄像头",
+        "account": "账号",
+        "account_name": "智见账号",
         "date": "日期",
         "keyword": "搜索词",
         "search_empty": "没有找到和「{keyword}」相关的告警。",

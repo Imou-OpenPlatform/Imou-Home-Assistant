@@ -285,6 +285,8 @@
         "view_search": "Search",
         "view_trial": "Trial",
         "device": "Camera",
+        "account": "Account",
+        "account_name": "Insight account",
         "date": "Date",
         "keyword": "Search text",
         "search_empty": "No alarms match \"{keyword}\".",

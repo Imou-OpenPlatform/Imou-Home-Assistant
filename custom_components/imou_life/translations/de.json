@@ -285,6 +285,8 @@
         "view_search": "Suche",
         "view_trial": "Test",
         "device": "Kamera",
+        "account": "Konto",
+        "account_name": "Insight-Konto",
         "date": "Datum",
         "keyword": "Suchtext",
         "search_empty": "Keine Alarme passen zu „{keyword}“.",
