@@ -898,9 +898,8 @@ class ImouOptionsFlow(OptionsFlow):
             self._callback_url_on_cloud = str(data.get("callbackUrl") or "")
             self._callback_read_ok = True
             _LOGGER.debug(
-                "getMessageCallback snapshot flags=%s url=%s",
+                "getMessageCallback snapshot flags=%s",
                 sorted(self._callback_flags),
-                self._callback_url_on_cloud,
             )
         except Exception:
             _LOGGER.warning(

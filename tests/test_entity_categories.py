@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from custom_components.imou_life.button import ImouButton
 from custom_components.imou_life.const import (
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
     PARAM_RESTART_DEVICE,
     PARAM_STATUS,
 )
@@ -39,6 +40,7 @@ DIAGNOSTIC_SENSORS = {
     "battery",
     "storage_used",
     "ai_insight_status",
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
     "cloud_storage_status",
 }
 

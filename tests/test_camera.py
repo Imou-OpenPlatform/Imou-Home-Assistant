@@ -208,9 +208,7 @@ async def test_owner_hls_is_returned_directly(
         assert await camera.stream_source() == hls
         camera.coordinator.device_manager.async_get_device_stream.assert_awaited_once()
         assert (
-            camera.coordinator.device_manager.async_get_device_stream.await_args.args[
-                2
-            ]
+            camera.coordinator.device_manager.async_get_device_stream.await_args.args[2]
             == "http"
         )
         async_fire_time_changed(

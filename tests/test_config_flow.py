@@ -23,6 +23,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pyimouapi.exceptions import RequestFailedException
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import LOGIN_INPUT, USER_INPUT, patch_async_setup_entry
 
@@ -86,6 +87,39 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     assert PARAM_WEBHOOK_ID in result["data"]
     assert len(mock_setup_entry.mock_calls) == 1
     await hass.async_block_till_done()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_callback_snapshot_log_omits_webhook_id(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+    imou_config_flow: MagicMock,
+) -> None:
+    """Callback diagnostics must not disclose the secret webhook path."""
+    webhook_id = "secret-webhook-id"
+    callback_url = f"https://ha.example.com/api/webhook/{webhook_id}"
+    client = imou_config_flow.return_value
+    client.async_get_message_callback.return_value = {
+        "callbackFlag": "alarm",
+        "callbackUrl": callback_url,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: webhook_id},
+    )
+    entry.add_to_hass(hass)
+
+    with caplog.at_level("DEBUG", logger="custom_components.imou_life.config_flow"):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"next_step_id": "event_push"}
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "event_push"
+    client.async_get_message_callback.assert_awaited_once_with()
+    assert webhook_id not in caplog.text
+    assert callback_url not in caplog.text
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")

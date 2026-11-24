@@ -14,12 +14,11 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
-from aiohttp import ClientError, ClientTimeout
+from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from pyimouapi.pic_decode import (
     CLIENT_LIB,
@@ -36,6 +35,11 @@ from .const import (
     imou_life_device_keys_from_ids,
 )
 from .helpers import fill_template, selector_option_label
+from .record_http_fetch import (
+    UrlFetchBodyTooLargeError,
+    UrlFetchUnsafeError,
+    async_fetch_url_response,
+)
 
 if TYPE_CHECKING:
     from .runtime_data import ImouRuntimeData
@@ -49,7 +53,6 @@ _LOCAL_PREFIX = "/local/"
 _SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
 _DOWNLOAD_TIMEOUT_SECONDS = 20
-_DOWNLOAD_CHUNK_BYTES = 64 * 1024
 _MAX_PICTURE_BYTES = 20 * 1024 * 1024
 # The alarm notification waits on the download, so this budget stays short.
 _DOWNLOAD_RETRY_DELAYS = (1.0, 2.0, 4.0)
@@ -175,11 +178,27 @@ def native_support_status(hass: HomeAssistant, language: str) -> str:
 
 
 def _redact_picture_url(url: str) -> str:
-    """Drop the query string before a picture URL is written to the log."""
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return url
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    """Keep only a validated authority when a picture URL is logged."""
+    if any(not character.isprintable() or character.isspace() for character in url):
+        return "***"
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname or ""
+        port = parsed.port
+    except ValueError:
+        return "***"
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or "%" in hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port == 0
+    ):
+        return "***"
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    authority = f"{host}:{port}" if port is not None else host
+    return f"{parsed.scheme}://{authority}"
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -436,7 +455,10 @@ def _sync_decrypt_and_write(
 
 
 def _content_length(headers: Mapping[str, Any]) -> int | None:
-    raw = headers.get("Content-Length")
+    raw = next(
+        (value for name, value in headers.items() if name.lower() == "content-length"),
+        None,
+    )
     try:
         return int(raw) if raw is not None else None
     except (TypeError, ValueError):
@@ -451,36 +473,33 @@ class _DownloadFailure(NamedTuple):
 
 
 async def _async_try_download_picture(
-    session: Any, pic_url: str
+    hass: HomeAssistant, pic_url: str
 ) -> bytes | _DownloadFailure:
-    """Fetch the picture once, or report why it did not arrive.
+    """Safely fetch the picture once, or report why it did not arrive.
 
-    The decrypt rejects a short read as corrupt, so the body has to be read to
-    the end and checked against Content-Length rather than taken from a single
-    read() that only returns what has arrived so far.
+    Every redirect is validated and DNS-pinned by the shared media fetcher. Its
+    streaming and curl limits stop an oversized body before it is buffered.
     """
     try:
-        async with session.get(
-            pic_url, timeout=ClientTimeout(total=_DOWNLOAD_TIMEOUT_SECONDS)
-        ) as response:
-            if response.status != 200:
-                return _DownloadFailure(f"HTTP {response.status}", True)
-            expected = _content_length(response.headers)
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_BYTES):
-                total += len(chunk)
-                if total > _MAX_PICTURE_BYTES:
-                    return _DownloadFailure(
-                        f"larger than {_MAX_PICTURE_BYTES} bytes", False
-                    )
-                chunks.append(chunk)
-    except (TimeoutError, ClientError) as err:
+        response = await async_fetch_url_response(
+            hass,
+            pic_url,
+            max_bytes=_MAX_PICTURE_BYTES,
+            timeout_seconds=_DOWNLOAD_TIMEOUT_SECONDS,
+        )
+    except UrlFetchBodyTooLargeError:
+        return _DownloadFailure(f"larger than {_MAX_PICTURE_BYTES} bytes", False)
+    except UrlFetchUnsafeError as err:
+        return _DownloadFailure(f"{type(err).__name__}: {err}", False)
+    except (TimeoutError, ClientError, OSError, ValueError) as err:
         return _DownloadFailure(f"{type(err).__name__}: {err}", True)
 
-    data = b"".join(chunks)
+    if response.status != 200:
+        return _DownloadFailure(f"HTTP {response.status}", True)
+    data = response.body
     if not data:
         return _DownloadFailure("empty body", True)
+    expected = _content_length(response.headers)
     if expected is not None and len(data) != expected:
         return _DownloadFailure(f"truncated: got {len(data)} of {expected} bytes", True)
     return data
@@ -494,14 +513,13 @@ async def _async_download_picture(
     Alarm pushes often arrive before the picture is on the CDN, so those
     downloads retry a short 404. Search already has a stored URL and does not.
     """
-    session = async_get_clientsession(hass)
     started = time.monotonic()
     attempts = 0
     last_reason = ""
     delays = (*_DOWNLOAD_RETRY_DELAYS, None) if retry else (None,)
     for delay in delays:
         attempts += 1
-        result = await _async_try_download_picture(session, pic_url)
+        result = await _async_try_download_picture(hass, pic_url)
         if not isinstance(result, _DownloadFailure):
             _LOGGER.debug(
                 "Downloaded encrypted alarm picture (%s bytes, attempt %s, %.1fs)",

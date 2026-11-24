@@ -53,7 +53,7 @@ def device_option_label(device: ImouHaDevice) -> str:
 def ai_insight_channel_devices(
     devices: list[ImouHaDevice],
 ) -> list[ImouHaDevice]:
-    """Camera channels that can use briefing or search (insight on, paused, or offline)."""
+    """Camera channels that can use insight briefing or search."""
     return [
         device
         for device in camera_channel_devices(devices)

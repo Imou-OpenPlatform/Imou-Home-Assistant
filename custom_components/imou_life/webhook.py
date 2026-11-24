@@ -555,7 +555,7 @@ def _is_security_alarm(msg_type: str | None) -> bool:
 
 
 def _v2_capability_event_allowed(ha_device: ImouHaDevice | None, event_id: str) -> bool:
-    """Gate V2 pushes on capability.list events, else page ids when the list is empty."""
+    """Gate V2 pushes on capabilities, falling back to page ids when absent."""
     if ha_device is None:
         return True
     if ha_device.capability_set is not None:

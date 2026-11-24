@@ -17,7 +17,7 @@
 - **AI Insight** on camera channels — diagnostic **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
 - **AI Insight** sidebar (**Briefing**, **Search**, and **Trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **Briefing** refreshes that day's summary, from 00:00:00 through 23:59:59, including risk periods, the hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Search** uses a start date and an end date, from 00:00:00 on the start date through 23:59:59 on the end date, and steps through results with **Previous** and **Next**. **Trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
 - Service **`device_snap_detect`** — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, draws detection boxes on the picture, and sends it to your notification targets (defaults to the Home Assistant web notification drawer and signed-in Companion Apps when omitted).
-- Login **server region** adds **Imou Life (default)**, pre-selected for new setups.
+- Login **server region** adds **Imou Life (default)**, preselected for new setups.
 
 #### Changed
 

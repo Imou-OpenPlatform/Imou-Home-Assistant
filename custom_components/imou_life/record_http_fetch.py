@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 import shutil
@@ -13,14 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
-from aiohttp import ClientSession, ClientTimeout, TCPConnector
+from aiohttp import ClientSession, ClientTimeout, StreamReader, TCPConnector
 from aiohttp.abc import AbstractResolver, ResolveResult
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-_CURL_TIMEOUT = "120"
-_CURL_MAX_FILESIZE = "268435456"
+_CURL_TIMEOUT_SECONDS = 120
+_CURL_MAX_FILESIZE = 256 * 1024 * 1024
+_FETCH_CHUNK_BYTES = 64 * 1024
 _MAX_REDIRECTS = 5
 
 
@@ -32,6 +34,14 @@ class UrlFetchResponse:
     headers: Mapping[str, str]
     body: bytes
     final_url: str | None = None
+
+
+class UrlFetchBodyTooLargeError(ValueError):
+    """Raised when a response exceeds the caller's configured body limit."""
+
+
+class UrlFetchUnsafeError(ValueError):
+    """Raised when a URL or its resolved addresses are unsafe to fetch."""
 
 
 class UrlFetchText(str):
@@ -100,8 +110,12 @@ def _lechange_cdn_url(url: str) -> bool:
 
 
 def _sync_curl_response(
-    pinned: PinnedUrl, range_header: str | None = None
+    pinned: PinnedUrl,
+    range_header: str | None = None,
+    max_bytes: int | None = None,
+    timeout_seconds: float = _CURL_TIMEOUT_SECONDS,
 ) -> UrlFetchResponse:
+    max_filesize = _CURL_MAX_FILESIZE if max_bytes is None else max_bytes
     with tempfile.TemporaryDirectory() as temp_dir:
         header_path = Path(temp_dir) / "headers"
         body_path = Path(temp_dir) / "body"
@@ -109,9 +123,9 @@ def _sync_curl_response(
             "curl",
             "-sS",
             "--max-time",
-            _CURL_TIMEOUT,
+            str(timeout_seconds),
             "--max-filesize",
-            _CURL_MAX_FILESIZE,
+            str(max_filesize),
             "--http1.1",
             "--proto",
             "=http,https",
@@ -143,6 +157,10 @@ def _sync_curl_response(
             check=False,
             capture_output=True,
         )
+        if completed.returncode == 63:  # CURLE_FILESIZE_EXCEEDED
+            raise UrlFetchBodyTooLargeError(
+                f"Response body exceeds {max_filesize} bytes"
+            )
         if completed.returncode != 0:
             msg = f"curl failed ({completed.returncode})"
             raise OSError(msg)
@@ -168,12 +186,50 @@ def _sync_curl_response(
             if ":" in line
             for name, value in [line.split(":", 1)]
         }
-        return UrlFetchResponse(status, headers, body_path.read_bytes())
+        body = body_path.read_bytes()
+        if len(body) > max_filesize:
+            raise UrlFetchBodyTooLargeError(
+                f"Response body exceeds {max_filesize} bytes"
+            )
+        return UrlFetchResponse(status, headers, body)
+
+
+async def _async_read_response_body(
+    content: StreamReader,
+    headers: Mapping[str, str],
+    max_bytes: int | None,
+) -> bytes:
+    """Drain a response without buffering more than the configured limit."""
+    if max_bytes is not None:
+        raw_length = next(
+            (
+                value
+                for name, value in headers.items()
+                if name.lower() == "content-length"
+            ),
+            None,
+        )
+        try:
+            expected = int(raw_length) if raw_length is not None else None
+        except (TypeError, ValueError):
+            expected = None
+        if expected is not None and expected > max_bytes:
+            raise UrlFetchBodyTooLargeError(f"Response body exceeds {max_bytes} bytes")
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in content.iter_chunked(_FETCH_CHUNK_BYTES):
+        total += len(chunk)
+        if max_bytes is not None and total > max_bytes:
+            raise UrlFetchBodyTooLargeError(f"Response body exceeds {max_bytes} bytes")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _async_aiohttp_get_response(
     pinned: PinnedUrl,
     range_header: str | None = None,
+    max_bytes: int | None = None,
+    timeout_seconds: float = _CURL_TIMEOUT_SECONDS,
 ) -> UrlFetchResponse:
     headers = {"Range": range_header} if range_header is not None else None
     connector = TCPConnector(
@@ -184,27 +240,28 @@ async def _async_aiohttp_get_response(
         ClientSession(connector=connector) as session,
         session.get(
             pinned.url,
-            timeout=ClientTimeout(total=120),
+            timeout=ClientTimeout(total=timeout_seconds),
             headers=headers,
             allow_redirects=False,
         ) as response,
     ):
-        return UrlFetchResponse(
-            response.status,
-            dict(response.headers),
-            await response.read(),
+        body = await _async_read_response_body(
+            response.content, dict(response.headers), max_bytes
         )
+        return UrlFetchResponse(response.status, dict(response.headers), body)
 
 
 async def async_pin_public_url(hass: HomeAssistant, url: str) -> PinnedUrl:
     """Validate a URL and pin its complete public DNS answer."""
-    if url != url.strip() or any(ord(character) < 32 for character in url):
-        raise ValueError("Unsafe outbound media URL")
+    if url != url.strip() or any(
+        ord(character) < 32 or 127 <= ord(character) <= 159 for character in url
+    ):
+        raise UrlFetchUnsafeError("Unsafe outbound media URL")
     try:
         parsed = urlsplit(url)
         explicit_port = parsed.port
     except ValueError as err:
-        raise ValueError("Unsafe outbound media URL") from err
+        raise UrlFetchUnsafeError("Unsafe outbound media URL") from err
     if (
         parsed.scheme.lower() not in {"http", "https"}
         or parsed.hostname is None
@@ -212,7 +269,7 @@ async def async_pin_public_url(hass: HomeAssistant, url: str) -> PinnedUrl:
         or parsed.password is not None
         or explicit_port == 0
     ):
-        raise ValueError("Unsafe outbound media URL")
+        raise UrlFetchUnsafeError("Unsafe outbound media URL")
     port = explicit_port or (443 if parsed.scheme.lower() == "https" else 80)
     host = parsed.hostname
     try:
@@ -236,7 +293,7 @@ async def async_pin_public_url(hass: HomeAssistant, url: str) -> PinnedUrl:
     if not addresses or any(
         not ipaddress.ip_address(address).is_global for address in addresses
     ):
-        raise ValueError("Outbound media host is not public")
+        raise UrlFetchUnsafeError("Outbound media host is not public")
     return PinnedUrl(url, host, port, addresses)
 
 
@@ -257,9 +314,18 @@ async def _async_fetch_pinned_once(
     hass: HomeAssistant,
     pinned: PinnedUrl,
     range_header: str | None,
+    max_bytes: int | None = None,
+    timeout_seconds: float = _CURL_TIMEOUT_SECONDS,
 ) -> UrlFetchResponse:
     try:
-        return await _async_aiohttp_get_response(pinned, range_header)
+        return await _async_aiohttp_get_response(
+            pinned,
+            range_header,
+            max_bytes=max_bytes,
+            timeout_seconds=timeout_seconds,
+        )
+    except UrlFetchBodyTooLargeError:
+        raise
     except Exception:
         if not _curl_available():
             raise OSError("aiohttp media fetch failed") from None
@@ -267,7 +333,9 @@ async def _async_fetch_pinned_once(
             "aiohttp media fetch failed for host %s; trying curl",
             pinned.host,
         )
-    return await hass.async_add_executor_job(_sync_curl_response, pinned, range_header)
+    return await hass.async_add_executor_job(
+        _sync_curl_response, pinned, range_header, max_bytes, timeout_seconds
+    )
 
 
 async def async_fetch_url_response(
@@ -275,26 +343,46 @@ async def async_fetch_url_response(
     url: str,
     *,
     range_header: str | None = None,
+    max_bytes: int | None = None,
+    timeout_seconds: float = _CURL_TIMEOUT_SECONDS,
 ) -> UrlFetchResponse:
     """GET an Imou media URL while retaining status and response headers."""
     if range_header is not None and ("\r" in range_header or "\n" in range_header):
         msg = "Invalid Range header"
         raise ValueError(msg)
+    if max_bytes is not None and max_bytes <= 0:
+        msg = "max_bytes must be positive"
+        raise ValueError(msg)
+    if timeout_seconds <= 0:
+        msg = "timeout_seconds must be positive"
+        raise ValueError(msg)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_seconds
     current_url = url
-    for redirect_count in range(_MAX_REDIRECTS + 1):
-        pinned = await async_pin_public_url(hass, current_url)
-        response = await _async_fetch_pinned_once(hass, pinned, range_header)
-        location = _redirect_location(response)
-        if location is None:
-            return UrlFetchResponse(
-                response.status,
-                response.headers,
-                response.body,
-                current_url,
+    async with asyncio.timeout_at(deadline):
+        for redirect_count in range(_MAX_REDIRECTS + 1):
+            pinned = await async_pin_public_url(hass, current_url)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError
+            response = await _async_fetch_pinned_once(
+                hass,
+                pinned,
+                range_header,
+                max_bytes=max_bytes,
+                timeout_seconds=remaining,
             )
-        if redirect_count == _MAX_REDIRECTS:
-            raise OSError("Too many outbound media redirects")
-        current_url = urljoin(current_url, location)
+            location = _redirect_location(response)
+            if location is None:
+                return UrlFetchResponse(
+                    response.status,
+                    response.headers,
+                    response.body,
+                    current_url,
+                )
+            if redirect_count == _MAX_REDIRECTS:
+                raise OSError("Too many outbound media redirects")
+            current_url = urljoin(current_url, location)
     raise OSError("Too many outbound media redirects")
 
 

@@ -139,9 +139,8 @@ class RecordHlsSession:
     last_playlist_fetch_at: float = 0
     segment_prefetch: dict[int, bytes] = field(default_factory=dict)
     upstream_fetch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    # Local clips are generated at real time, so their session must outlive the
-    # clip instead of expiring after the generic idle TTL.
-    live_ttl_seconds: float | None = None
+    # Progressive remuxing can outlive both the signed source and the idle TTL.
+    stream_ttl_seconds: float | None = None
 
     def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
         """Release callbacks and cancel an in-progress refresh."""
@@ -224,6 +223,24 @@ def _schedule_cleanup(hass: HomeAssistant) -> None:
         max(0, min(session.expires_at for session in sessions.values()) - time.time()),
         async_cleanup_expired_sessions,
     )
+
+
+async def async_remove_record_hls_proxy_playlist_session(
+    hass: HomeAssistant, playlist_url: str
+) -> None:
+    """Release the proxy session backing one generated playlist URL."""
+    path = urlsplit(playlist_url).path
+    prefix = "/api/imou_life/record_hls/"
+    suffix = "/playlist.m3u8"
+    if not path.startswith(prefix) or not path.endswith(suffix):
+        return
+    session_id = path[len(prefix) : -len(suffix)]
+    if not session_id or "/" in session_id:
+        return
+    task = _remove_session(hass, session_id)
+    _schedule_cleanup(hass)
+    if task is not None:
+        await asyncio.gather(task, return_exceptions=True)
 
 
 async def async_remove_record_hls_proxy_sessions(
@@ -399,8 +416,8 @@ async def _async_follow_live_playlist(
     if not session.live or not session.media_playlist_url:
         return
     now = time.time()
-    if session.live_ttl_seconds:
-        session.expires_at = max(session.expires_at, now + session.live_ttl_seconds)
+    if session.stream_ttl_seconds:
+        session.expires_at = max(session.expires_at, now + session.stream_ttl_seconds)
     if not force and now - session.last_playlist_fetch_at < PLAYLIST_FOLLOW_MIN_SECONDS:
         return
     playlist_url = session.media_playlist_url
@@ -932,7 +949,7 @@ async def async_create_record_hls_proxy_playlist_url(
     entry_id: str,
     expires_at: float | None = None,
     prepared_playback: PreparedRecordHlsPlayback | None = None,
-    live_ttl_seconds: float | None = None,
+    stream_ttl_seconds: float | None = None,
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
     _prune_sessions(hass)
@@ -962,8 +979,8 @@ async def async_create_record_hls_proxy_playlist_url(
         segment_urls,
         expires_at,
     )
-    if live and live_ttl_seconds is not None:
-        session_expiry = max(session_expiry, time.time() + live_ttl_seconds)
+    if stream_ttl_seconds is not None:
+        session_expiry = max(session_expiry, time.time() + stream_ttl_seconds)
     session = RecordHlsSession(
         entry_id=entry_id,
         segments=segments,
@@ -976,13 +993,13 @@ async def async_create_record_hls_proxy_playlist_url(
         live=live,
         window_indexes=list(range(len(segments))),
         last_playlist_fetch_at=time.time(),
-        live_ttl_seconds=live_ttl_seconds if live else None,
+        stream_ttl_seconds=stream_ttl_seconds,
     )
     _sessions(hass)[session_id] = session
     if prepared_playback is not None:
-        for index, body in prepared_playback.segment_prefetch.items():
+        for index, prefetched_body in prepared_playback.segment_prefetch.items():
             if 0 <= index < len(session.segments):
-                session.segment_prefetch[index] = body
+                session.segment_prefetch[index] = prefetched_body
     elif not live and session.segments:
         hass.async_create_task(
             _async_prefetch_upstream_segments(hass, session, [0]),
@@ -1077,6 +1094,10 @@ async def _async_refresh_record_hls_session(
                 segment_urls,
                 descriptor.expires_at,
             )
+            if record.stream_ttl_seconds is not None:
+                record.expires_at = max(
+                    record.expires_at, now + record.stream_ttl_seconds
+                )
             record.segment_prefetch.clear()
             record.generation += 1
             _schedule_cleanup(hass)
