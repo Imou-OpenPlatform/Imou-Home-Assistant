@@ -281,9 +281,9 @@
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
-        "view_briefing": "Riepilogo",
-        "view_search": "Ricerca",
-        "view_trial": "Prova",
+        "view_briefing": "Riepilogo IA",
+        "view_search": "Messaggi intelligenti",
+        "view_trial": "Richiedi prova",
         "device": "Telecamera",
         "account": "Account",
         "account_name": "Account Insight",

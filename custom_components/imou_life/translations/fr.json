@@ -281,9 +281,9 @@
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
-        "view_briefing": "Synthèse",
-        "view_search": "Recherche",
-        "view_trial": "Essai",
+        "view_briefing": "Synthèse IA",
+        "view_search": "Messages intelligents",
+        "view_trial": "Demander un essai",
         "device": "Caméra",
         "account": "Compte",
         "account_name": "Compte Insight",

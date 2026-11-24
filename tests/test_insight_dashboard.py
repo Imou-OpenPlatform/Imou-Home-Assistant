@@ -24,9 +24,9 @@ def _config() -> dict:
     )
     copy = {
         **_COPY_DEFAULTS,
-        "view_briefing": "简报",
-        "view_search": "搜索",
-        "view_trial": "试用",
+        "view_briefing": "AI简报",
+        "view_search": "智慧消息",
+        "view_trial": "申请试用",
         "trial_markdown": "✨ pick a date and the briefing appears",
     }
     return build_insight_dashboard(
@@ -44,7 +44,7 @@ def test_briefing_follows_the_date_without_a_refresh_button() -> None:
     config = _config()
     briefing = config["views"][0]
     assert briefing["path"] == "briefing"
-    assert briefing["title"] == "简报"
+    assert briefing["title"] == "AI简报"
     rendered = str(briefing)
     assert "input_datetime.imou_insight_briefing_end" in rendered
     assert "refresh_ai_insight_briefing" not in rendered
@@ -60,7 +60,7 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
         "search",
         "trial",
     ]
-    assert trial["title"] == "试用"
+    assert trial["title"] == "申请试用"
     assert len(trial["cards"]) == 1
     rendered = trial["cards"][0]["content"]
     assert "✨" in rendered
@@ -103,8 +103,8 @@ def _account(title: str, suffix: str, entry_id: str = "") -> InsightDashboardAcc
 
 
 def test_several_accounts_pick_the_account_before_the_camera() -> None:
-    """One account row, then only that account's camera, buttons, and result."""
-    copy = {**_COPY_DEFAULTS, "account": "账号", "view_search": "搜索"}
+    """Account and camera share one card; buttons and results follow the account."""
+    copy = {**_COPY_DEFAULTS, "account": "账号", "view_search": "智慧消息"}
     config = build_insight_dashboard(
         [
             _account("Imou Life Official", "sg", "lc27d061aaaa"),
@@ -124,7 +124,10 @@ def test_several_accounts_pick_the_account_before_the_camera() -> None:
         "entity": "input_select.imou_insight_account",
         "name": "账号",
     }
-    assert [row["entity"] for row in shared[1:]] == [
+    assert [row["type"] for row in shared[1:3]] == ["conditional", "conditional"]
+    assert shared[1]["row"] == {"entity": "select.sg", "name": "Camera"}
+    assert shared[2]["row"] == {"entity": "select.cn", "name": "Camera"}
+    assert [row["entity"] for row in shared[3:]] == [
         "input_text.imou_insight_search_keyword",
         "input_datetime.imou_insight_search_begin",
         "input_datetime.imou_insight_search_end",
@@ -134,15 +137,21 @@ def test_several_accounts_pick_the_account_before_the_camera() -> None:
         "Imou Life Official (lc27d0)",
         "Imou Life Official (lc1e8f)",
     ]
-    first = switches[0]["card"]
-    assert first["cards"][0]["entities"] == [{"entity": "select.sg", "name": "Camera"}]
-    actions = first["cards"][1]["cards"]
-    assert [button["name"] for button in actions] == ["Previous", "Search", "Next"]
-    assert actions[1]["tap_action"]["target"] == {"entity_id": "select.sg"}
-    assert "sensor.search_cn" not in str(first)
-    briefing = config["views"][0]["cards"][0]
-    assert briefing["cards"][0]["entities"][0]["name"] == "账号"
-    assert briefing["cards"][1]["conditions"][0]["state"].startswith("Imou Life")
+    first_actions = switches[0]["card"]["cards"]
+    assert [button["name"] for button in first_actions] == [
+        "Previous",
+        "Search",
+        "Next",
+    ]
+    assert first_actions[1]["tap_action"]["target"] == {"entity_id": "select.sg"}
+    result_cards = config["views"][1]["cards"][1:]
+    assert all(card["type"] == "conditional" for card in result_cards)
+    assert "sensor.search_cn" not in str(result_cards[0])
+    briefing_rows = config["views"][0]["cards"][0]["entities"]
+    assert briefing_rows[0]["name"] == "账号"
+    assert briefing_rows[1]["type"] == "conditional"
+    assert briefing_rows[1]["row"]["entity"] == "select.sg"
+    assert briefing_rows[-1]["entity"] == "input_datetime.imou_insight_briefing_end"
 
 
 def test_repeated_account_titles_stay_distinct() -> None:

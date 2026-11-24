@@ -281,9 +281,9 @@
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
-        "view_briefing": "Briefing",
-        "view_search": "Search",
-        "view_trial": "Trial",
+        "view_briefing": "AI Briefing",
+        "view_search": "Smart Messages",
+        "view_trial": "Request a trial",
         "device": "Camera",
         "account": "Account",
         "account_name": "Insight account",

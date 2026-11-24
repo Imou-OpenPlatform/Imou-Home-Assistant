@@ -5,11 +5,11 @@
 
 title: AI Insight
 views:
-  - title: Briefing
+  - title: AI Briefing
     path: briefing
     cards:
       - type: entities
-        title: Briefing
+        title: AI Briefing
         entities:
           - entity: select.imou_life_insight_workbench_device
             name: Camera
@@ -20,13 +20,13 @@ views:
         content: >
           {{ state_attr('sensor.imou_life_insight_briefing', 'markdown')
              or states('sensor.imou_life_insight_briefing') }}
-  - title: Search
+  - title: Smart Messages
     path: search
     cards:
       - type: vertical-stack
         cards:
           - type: entities
-            title: Search
+            title: Smart Messages
             entities:
               - entity: select.imou_life_insight_workbench_device
                 name: Camera
@@ -74,7 +74,7 @@ views:
         content: >
           {{ state_attr('sensor.imou_life_insight_search_result', 'markdown')
              or states('sensor.imou_life_insight_search_result') }}
-  - title: Trial
+  - title: Request a trial
     path: trial
     cards:
       - type: markdown

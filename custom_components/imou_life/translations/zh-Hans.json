@@ -281,9 +281,9 @@
     "insight_dashboard": {
       "options": {
         "title": "AI 智见",
-        "view_briefing": "简报",
-        "view_search": "搜索",
-        "view_trial": "试用",
+        "view_briefing": "AI简报",
+        "view_search": "智慧消息",
+        "view_trial": "申请试用",
         "device": "摄像头",
         "account": "账号",
         "account_name": "智见账号",

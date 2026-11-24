@@ -281,9 +281,9 @@
     "insight_dashboard": {
       "options": {
         "title": "AI Insight",
-        "view_briefing": "Bericht",
-        "view_search": "Suche",
-        "view_trial": "Test",
+        "view_briefing": "AI-Bericht",
+        "view_search": "Intelligente Meldungen",
+        "view_trial": "Testversion beantragen",
         "device": "Kamera",
         "account": "Konto",
         "account_name": "Insight-Konto",

@@ -59,9 +59,9 @@ _ACCOUNT_ENTITY_KEY = "insight_dashboard_account_entity"
 
 _COPY_DEFAULTS = {
     "title": "AI Insight",
-    "view_briefing": "Briefing",
-    "view_search": "Search",
-    "view_trial": "Trial",
+    "view_briefing": "AI Briefing",
+    "view_search": "Smart Messages",
+    "view_trial": "Request a trial",
     "device": "Camera",
     "account": "Account",
     "account_name": "Insight account",
@@ -183,13 +183,24 @@ def build_insight_dashboard(
     search_actions: list[dict[str, Any]] = []
     briefing_cards: list[dict[str, Any]] = []
     search_cards: list[dict[str, Any]] = []
-    briefing_switches: list[dict[str, Any]] = []
-    search_switches: list[dict[str, Any]] = []
+    if not single:
+        briefing_rows.append({"entity": account_entity, "name": copy["account"]})
+        search_rows.append({"entity": account_entity, "name": copy["account"]})
     for account, label in zip(ready, labels, strict=True):
         select_entity = account.select_entity
         if select_entity is None:
             continue
         device_row = {"entity": select_entity, "name": copy["device"]}
+        if single:
+            briefing_rows.append(device_row)
+            search_rows.append(device_row)
+        else:
+            briefing_rows.append(
+                _device_row_for_account(account_entity, label, device_row)
+            )
+            search_rows.append(
+                _device_row_for_account(account_entity, label, device_row)
+            )
         actions = {
             "type": "horizontal-stack",
             "cards": [
@@ -219,43 +230,29 @@ def build_insight_dashboard(
             else None
         )
         if single:
-            briefing_rows.append(device_row)
-            search_rows.append(device_row)
             search_actions.append(actions)
             if briefing_card is not None:
                 briefing_cards.append(briefing_card)
             if search_card is not None:
                 search_cards.append(search_card)
             continue
-        briefing_switches.append(
-            _account_conditional(
-                account_entity,
-                label,
-                [
-                    {"type": "entities", "entities": [device_row]},
-                    *([briefing_card] if briefing_card is not None else []),
-                ],
+        if briefing_card is not None:
+            briefing_cards.append(
+                _account_conditional(account_entity, label, [briefing_card])
             )
-        )
-        search_switches.append(
-            _account_conditional(
-                account_entity,
-                label,
-                [
-                    {"type": "entities", "entities": [device_row]},
-                    actions,
-                    *([search_card] if search_card is not None else []),
-                ],
+        search_actions.append(_account_conditional(account_entity, label, [actions]))
+        if search_card is not None:
+            search_cards.append(
+                _account_conditional(account_entity, label, [search_card])
             )
-        )
-    if ready and single:
+    if ready:
         briefing_rows.append({"entity": date_entity, "name": copy["date"]})
         search_rows.append({"entity": keyword_entity, "name": copy["keyword"]})
         search_rows.append(
             {"entity": search_begin_entity, "name": copy["search_begin"]}
         )
         search_rows.append({"entity": search_end_entity, "name": copy["search_end"]})
-    elif not ready:
+    else:
         briefing_cards.append({"type": "markdown", "content": copy["empty"]})
         search_cards.append({"type": "markdown", "content": copy["empty"]})
 
@@ -280,36 +277,10 @@ def build_insight_dashboard(
     if tail:
         trial_markdown = f"{trial_markdown}\n\n---\n\n{tail}"
 
-    if single:
-        briefing_view = _entities_then(
-            copy["view_briefing"], briefing_rows, briefing_cards
-        )
-        search_view = _search_view(
-            copy["view_search"], search_rows, search_actions, search_cards
-        )
-    else:
-        briefing_view = [
-            _account_page(
-                copy["view_briefing"],
-                [
-                    {"entity": account_entity, "name": copy["account"]},
-                    {"entity": date_entity, "name": copy["date"]},
-                ],
-                briefing_switches,
-            )
-        ]
-        search_view = [
-            _account_page(
-                copy["view_search"],
-                [
-                    {"entity": account_entity, "name": copy["account"]},
-                    {"entity": keyword_entity, "name": copy["keyword"]},
-                    {"entity": search_begin_entity, "name": copy["search_begin"]},
-                    {"entity": search_end_entity, "name": copy["search_end"]},
-                ],
-                search_switches,
-            )
-        ]
+    briefing_view = _entities_then(copy["view_briefing"], briefing_rows, briefing_cards)
+    search_view = _search_view(
+        copy["view_search"], search_rows, search_actions, search_cards
+    )
     views = [
         {
             "title": copy["view_briefing"],
@@ -386,30 +357,30 @@ async def async_unload_insight_dashboard(
         _LOGGER.exception("Unable to update the AI Insight dashboard")
 
 
-def _account_conditional(
-    account_entity: str, label: str, cards: list[dict[str, Any]]
+def _account_state_conditions(account_entity: str, label: str) -> list[dict[str, str]]:
+    return [{"condition": "state", "entity": account_entity, "state": label}]
+
+
+def _device_row_for_account(
+    account_entity: str, label: str, device_row: dict[str, Any]
 ) -> dict[str, Any]:
-    """Show this account's camera and result only while it is selected."""
-    card = cards[0] if len(cards) == 1 else {"type": "vertical-stack", "cards": cards}
+    """Keep the camera on the same card as the account; show one at a time."""
     return {
         "type": "conditional",
-        "conditions": [
-            {"condition": "state", "entity": account_entity, "state": label}
-        ],
-        "card": card,
+        "conditions": _account_state_conditions(account_entity, label),
+        "row": device_row,
     }
 
 
-def _account_page(
-    title: str, rows: list[dict[str, Any]], switches: list[dict[str, Any]]
+def _account_conditional(
+    account_entity: str, label: str, cards: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Account, shared fields, then the camera and result for the selection."""
+    """Show this account's buttons or result only while it is selected."""
+    card = cards[0] if len(cards) == 1 else {"type": "vertical-stack", "cards": cards}
     return {
-        "type": "vertical-stack",
-        "cards": [
-            {"type": "entities", "title": title, "entities": rows},
-            *switches,
-        ],
+        "type": "conditional",
+        "conditions": _account_state_conditions(account_entity, label),
+        "card": card,
     }
 
 
