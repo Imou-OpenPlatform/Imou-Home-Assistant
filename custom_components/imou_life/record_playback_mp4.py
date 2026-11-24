@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
+from typing import Any, BinaryIO
 from urllib.parse import parse_qs, urlsplit
 
 from aiohttp import web
@@ -28,6 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DATA_RECORD_PLAYBACK_MP4 = "imou_life_record_playback_mp4"
 PLAYBACK_URL = "/api/imou_life/record_play/{cache_id}.mp4"
+STREAM_URL = "/api/imou_life/record_stream/{cache_id}.mp4"
 CACHE_SUBDIR = Path("imou_life") / "playback_cache"
 _LEGACY_PUBLIC_CACHE_SUBDIR = Path("www") / "imou" / "playback"
 _REMUX_TIMEOUT = 900
@@ -35,6 +37,15 @@ _PROCESS_STOP_TIMEOUT = 5
 _PROBE_TIMEOUT = 30
 _CACHE_TTL_SECONDS = 24 * 3600
 _CACHE_MAX_FILES = 32
+# Local clips arrive at real time, so they are muxed while they play. The
+# growing fragmented file is streamed to the player; the ffmpeg child is
+# stopped once nobody has been reading it for this long.
+_LIVE_SPOOL_SUFFIX = ".live.part.mp4"
+_STREAM_STOP_GRACE_SECONDS = 60
+_STREAM_POLL_SECONDS = 0.2
+_STREAM_CHUNK_BYTES = 256 * 1024
+_STREAM_FIRST_BYTES_TIMEOUT = 45
+_STREAM_SIGNED_SECONDS = 2 * 3600
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +54,34 @@ class PlaybackSource:
 
     entry_id: str
     provider: Callable[[], Awaitable[RecordHlsDescriptor]]
+
+
+@dataclass(slots=True)
+class LivePlaybackJob:
+    """One live remux feeding progressive MP4 playback of a local clip."""
+
+    cache_id: str
+    entry_id: str
+    spool: Path
+    output: Path
+    task: asyncio.Task[None] | None = None
+    viewers: int = 0
+    finished: bool = False
+    stop_timer: asyncio.TimerHandle | None = None
+
+
+def _store(hass: HomeAssistant) -> dict[str, Any]:
+    return hass.data.setdefault(
+        DATA_RECORD_PLAYBACK_MP4,
+        {
+            "closed": set(),
+            "locks": {},
+            "owners": {},
+            "sources": {},
+            "tasks": {},
+            "streams": {},
+        },
+    )
 
 
 def _cache_dir(hass: HomeAssistant) -> Path:
@@ -66,6 +105,12 @@ def _prune_playback_cache(
     retained: list[tuple[float, Path]] = []
     for candidate in cache_dir.glob("*.mp4"):
         if candidate.name.endswith(".part.mp4"):
+            try:
+                spool_mtime = candidate.stat().st_mtime
+            except OSError:
+                continue
+            if now - spool_mtime > _CACHE_TTL_SECONDS:
+                candidate.unlink(missing_ok=True)
             continue
         stem = candidate.stem
         if stem in protected:
@@ -105,13 +150,8 @@ def async_register_record_playback_mp4(hass: HomeAssistant) -> None:
         lambda: _prune_playback_cache(cache_dir, legacy_public_dir=legacy_dir)
     )
     hass.http.register_view(ImouRecordPlaybackMp4View())
-    hass.data[DATA_RECORD_PLAYBACK_MP4] = {
-        "closed": set(),
-        "locks": {},
-        "owners": {},
-        "sources": {},
-        "tasks": {},
-    }
+    hass.http.register_view(ImouRecordStreamMp4View())
+    _store(hass)
 
 
 @callback
@@ -122,10 +162,7 @@ def register_playback_source(
     source_provider: Callable[[], Awaitable[RecordHlsDescriptor]],
 ) -> None:
     """Remember how to request a stream URL until the MP4 cache file exists."""
-    store = hass.data.setdefault(
-        DATA_RECORD_PLAYBACK_MP4,
-        {"closed": set(), "locks": {}, "owners": {}, "sources": {}, "tasks": {}},
-    )
+    store = _store(hass)
     store["closed"].discard(cache_id)
     store["owners"][cache_id] = entry_id
     store["sources"][cache_id] = PlaybackSource(entry_id, source_provider)
@@ -141,10 +178,18 @@ def signed_record_playback_url(hass: HomeAssistant, cache_id: str) -> str:
     )
 
 
-def _remux_command(
-    source_url: str, output: Path, *, video_codec: str | None = None
-) -> list[str]:
-    """Build the ffmpeg remux command."""
+def signed_record_stream_url(hass: HomeAssistant, cache_id: str) -> str:
+    """Return an authenticated URL for progressive playback of a local clip."""
+    return async_sign_path(
+        hass,
+        STREAM_URL.format(cache_id=cache_id),
+        timedelta(seconds=_STREAM_SIGNED_SECONDS),
+        use_content_user=True,
+    )
+
+
+def _validate_proxy_source_url(source_url: str) -> None:
+    """Reject anything but a generated, signed local proxy playlist URL."""
     parsed = urlsplit(source_url)
     if (
         parsed.scheme not in {"http", "https"}
@@ -160,39 +205,94 @@ def _remux_command(
         or parsed.fragment
     ):
         raise ValueError("MP4 source must be a generated local HLS proxy URL")
+
+
+def _copy_options(video_codec: str | None) -> list[str]:
+    """Return the stream-copy options shared by every remux."""
+    options = ["-c", "copy"]
+    if video_codec == "hevc":
+        # Browsers expect the hvc1 tag (Home Assistant Stream forces it too);
+        # ffmpeg labels copied HEVC as hev1 by default.
+        options.extend(["-tag:v", "hvc1"])
+    return options
+
+
+def _remux_command(
+    source_url: str, output: Path, *, video_codec: str | None = None
+) -> list[str]:
+    """Build the ffmpeg remux command for a complete clip."""
+    _validate_proxy_source_url(source_url)
     cmd = [
         "ffmpeg",
         "-hide_banner",
         "-y",
         "-loglevel",
         "error",
+        "-protocol_whitelist",
+        "http,https,tcp,tls,crypto",
+        "-i",
+        source_url,
+        *_copy_options(video_codec),
+        "-bsf:a",
+        "aac_adtstoasc",
+        "-f",
+        "mp4",
+        "-movflags",
+        "+faststart",
+        str(output),
     ]
-    cmd.extend(
-        [
-            "-protocol_whitelist",
-            "http,https,tcp,tls,crypto",
-            "-i",
-            source_url,
-            "-c",
-            "copy",
-        ]
-    )
-    if video_codec == "hevc":
-        # Browsers expect the hvc1 tag (Home Assistant Stream forces it too);
-        # ffmpeg labels copied HEVC as hev1 by default.
-        cmd.extend(["-tag:v", "hvc1"])
-    cmd.extend(
-        [
-            "-bsf:a",
-            "aac_adtstoasc",
-            "-f",
-            "mp4",
-            "-movflags",
-            "+faststart",
-            str(output),
-        ]
-    )
     return cmd
+
+
+def _live_remux_command(
+    source_url: str, output: Path, *, video_codec: str | None = None
+) -> list[str]:
+    """Build the ffmpeg command that muxes a clip while it plays."""
+    _validate_proxy_source_url(source_url)
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-y",
+        "-loglevel",
+        "error",
+        "-protocol_whitelist",
+        "http,https,tcp,tls,crypto",
+        # The proxy playlist starts at the clip's first segment; ffmpeg's
+        # default (-3) would jump to the live edge and lose the opening.
+        "-live_start_index",
+        "0",
+        "-i",
+        source_url,
+        *_copy_options(video_codec),
+        "-bsf:a",
+        "aac_adtstoasc",
+        "-f",
+        "mp4",
+        "-movflags",
+        "+frag_keyframe+empty_moov+default_base_moof",
+        str(output),
+    ]
+
+
+def _finalize_command(
+    spool: Path, output: Path, *, video_codec: str | None = None
+) -> list[str]:
+    """Build the command that adds duration metadata to a finished spool."""
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-y",
+        "-loglevel",
+        "error",
+        "-i",
+        str(spool),
+        *_copy_options(video_codec),
+        "-f",
+        "mp4",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
 
 
 def _validate_local_hls_proxy_source(source: RecordHlsDescriptor) -> None:
@@ -331,10 +431,7 @@ async def async_prepare_record_mp4(
     cache_dir = _cache_dir(hass)
     cache_dir.mkdir(parents=True, exist_ok=True)
     output = cache_dir / f"{cache_id}.mp4"
-    store = hass.data.setdefault(
-        DATA_RECORD_PLAYBACK_MP4,
-        {"closed": set(), "locks": {}, "owners": {}, "sources": {}, "tasks": {}},
-    )
+    store = _store(hass)
     if cache_id in store["closed"]:
         raise LookupError(cache_id)
     store["owners"].setdefault(cache_id, entry_id)
@@ -403,6 +500,249 @@ async def async_prepare_record_mp4(
             store["tasks"].pop(cache_id, None)
 
 
+def _remove_file(path: Path) -> None:
+    path.unlink(missing_ok=True)
+
+
+def _file_ready(path: Path) -> bool:
+    return path.is_file() and path.stat().st_size > 0
+
+
+def _replace_with_spool(spool: Path, output: Path) -> None:
+    output.unlink(missing_ok=True)
+    spool.replace(output)
+
+
+async def _async_finalize_live_mp4(
+    hass: HomeAssistant,
+    spool: Path,
+    output: Path,
+    *,
+    video_codec: str | None = None,
+) -> None:
+    """Give a finished live spool real duration metadata when possible."""
+    await hass.async_add_executor_job(_remove_file, output)
+    process: asyncio.subprocess.Process | None = None
+    stderr: bytes | None = None
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *_finalize_command(spool, output, video_codec=video_codec),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        async with asyncio.timeout(_REMUX_TIMEOUT):
+            _, stderr = await process.communicate()
+    except asyncio.CancelledError:
+        if process is not None:
+            await _async_stop_process(process)
+        raise
+    except (OSError, TimeoutError):
+        if process is not None:
+            await _async_stop_process(process)
+        process = None
+    if (
+        process is None
+        or process.returncode != 0
+        or not await hass.async_add_executor_job(_file_ready, output)
+    ):
+        detail = (stderr or b"").decode(errors="replace").strip()
+        # The fragmented file already plays; only duration/seek are missing.
+        _LOGGER.warning(
+            "Imou recording MP4 finalize failed (%s); keeping fragmented file",
+            detail or "ffmpeg error",
+        )
+        await hass.async_add_executor_job(_replace_with_spool, spool, output)
+
+
+async def _async_run_live_playback(
+    hass: HomeAssistant,
+    job: LivePlaybackJob,
+    source_provider: Callable[[], Awaitable[RecordHlsDescriptor]],
+) -> None:
+    """Mux one local clip while it plays, then keep a seekable MP4 cache."""
+    store = _store(hass)
+    cache_dir = _cache_dir(hass)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        try:
+            source = await source_provider()
+            _validate_local_hls_proxy_source(source)
+            video_codec = await _async_probe_video_codec(source.playlist_url)
+            process = await asyncio.create_subprocess_exec(
+                *_live_remux_command(
+                    source.playlist_url,
+                    job.spool,
+                    video_codec=video_codec,
+                ),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                _, stderr = await process.communicate()
+            except asyncio.CancelledError:
+                await _async_stop_process(process)
+                raise
+            if process.returncode != 0:
+                detail = (stderr or b"").decode(errors="replace").strip()
+                raise OSError(detail or f"ffmpeg failed ({process.returncode})")
+            if not job.spool.is_file() or job.spool.stat().st_size < 1:
+                raise OSError("ffmpeg produced an empty recording file")
+            await _async_finalize_live_mp4(
+                hass,
+                job.spool,
+                job.output,
+                video_codec=video_codec,
+            )
+            await hass.async_add_executor_job(
+                lambda: _prune_playback_cache(cache_dir, keep_cache_ids={job.cache_id})
+            )
+            async_delete_record_playback_issue(hass, job.entry_id)
+            store["sources"].pop(job.cache_id, None)
+        except asyncio.CancelledError:
+            job.spool.unlink(missing_ok=True)
+            raise
+        except Exception as err:
+            _LOGGER.warning("Imou live recording %s failed: %s", job.cache_id, err)
+            job.spool.unlink(missing_ok=True)
+            async_create_record_playback_issue(hass, job.entry_id, err)
+    finally:
+        job.finished = True
+        if job.stop_timer is not None:
+            job.stop_timer.cancel()
+            job.stop_timer = None
+        if store["streams"].get(job.cache_id) is job:
+            store["streams"].pop(job.cache_id, None)
+        if job.viewers <= 0:
+            job.spool.unlink(missing_ok=True)
+
+
+async def _async_ensure_live_job(
+    hass: HomeAssistant,
+    cache_id: str,
+    entry_id: str,
+    source_provider: Callable[[], Awaitable[RecordHlsDescriptor]],
+) -> LivePlaybackJob:
+    """Return the running remux for this clip, starting one when needed."""
+    store = _store(hass)
+    if cache_id in store["closed"]:
+        raise LookupError(cache_id)
+    existing = store["streams"].get(cache_id)
+    if existing is not None and not existing.finished:
+        if existing.stop_timer is not None:
+            existing.stop_timer.cancel()
+            existing.stop_timer = None
+        return existing
+    cache_dir = _cache_dir(hass)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    job = LivePlaybackJob(
+        cache_id=cache_id,
+        entry_id=entry_id,
+        spool=cache_dir / f"{cache_id}{_LIVE_SPOOL_SUFFIX}",
+        output=cache_dir / f"{cache_id}.mp4",
+    )
+    job.spool.unlink(missing_ok=True)
+    store["streams"][cache_id] = job
+    job.task = hass.async_create_task(
+        _async_run_live_playback(hass, job, source_provider)
+    )
+    return job
+
+
+@callback
+def _async_cancel_idle_live_job(hass: HomeAssistant, job: LivePlaybackJob) -> None:
+    """Stop a remux nobody is reading anymore."""
+    job.stop_timer = None
+    if job.viewers > 0:
+        return
+    if job.finished:
+        job.spool.unlink(missing_ok=True)
+        return
+    store = hass.data.get(DATA_RECORD_PLAYBACK_MP4)
+    if store and store.get("streams", {}).get(job.cache_id) is job:
+        store["streams"].pop(job.cache_id, None)
+    if job.task is not None and not job.task.done():
+        job.task.cancel()
+
+
+def _open_spool_prefix(spool: Path) -> tuple[BinaryIO | None, bytes]:
+    """Open the growing spool and read whatever bytes already exist."""
+    try:
+        spool_file = spool.open("rb")
+    except FileNotFoundError:
+        return None, b""
+    try:
+        return spool_file, spool_file.read(_STREAM_CHUNK_BYTES)
+    except BaseException:
+        spool_file.close()
+        raise
+
+
+async def _async_serve_live_mp4(
+    hass: HomeAssistant, request: web.Request, job: LivePlaybackJob
+) -> web.StreamResponse:
+    """Stream a fragmented MP4 as the remux writes it."""
+    job.viewers += 1
+    if job.stop_timer is not None:
+        job.stop_timer.cancel()
+        job.stop_timer = None
+    spool_file: BinaryIO | None = None
+    response: web.StreamResponse | None = None
+    try:
+        deadline = time.monotonic() + _STREAM_FIRST_BYTES_TIMEOUT
+        spool_file, first = await hass.async_add_executor_job(
+            _open_spool_prefix, job.spool
+        )
+        while not first and not job.finished and time.monotonic() < deadline:
+            await asyncio.sleep(_STREAM_POLL_SECONDS)
+            spool_file, first = await hass.async_add_executor_job(
+                _open_spool_prefix, job.spool
+            )
+        if not first:
+            if job.output.is_file() and job.output.stat().st_size > 0:
+                return web.FileResponse(job.output)
+            raise web.HTTPServiceUnavailable()
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": "video/mp4",
+                "Cache-Control": "no-store",
+                "Accept-Ranges": "none",
+            },
+        )
+        await response.prepare(request)
+        await response.write(first)
+        while True:
+            chunk = await hass.async_add_executor_job(
+                spool_file.read, _STREAM_CHUNK_BYTES
+            )
+            if chunk:
+                await response.write(chunk)
+                continue
+            if job.finished:
+                break
+            await asyncio.sleep(_STREAM_POLL_SECONDS)
+        await response.write_eof()
+        return response
+    except ConnectionResetError:
+        if response is not None:
+            return response
+        raise
+    finally:
+        if spool_file is not None:
+            await hass.async_add_executor_job(spool_file.close)
+        job.viewers -= 1
+        if job.viewers <= 0:
+            if job.finished:
+                job.spool.unlink(missing_ok=True)
+            else:
+                job.stop_timer = hass.loop.call_later(
+                    _STREAM_STOP_GRACE_SECONDS,
+                    _async_cancel_idle_live_job,
+                    hass,
+                    job,
+                )
+
+
 async def async_remove_record_playback_sources(
     hass: HomeAssistant, entry_id: str
 ) -> None:
@@ -424,6 +764,19 @@ async def async_remove_record_playback_sources(
         for task in store["tasks"].get(cache_id, set())
         if task is not current
     }
+    streams = store.get("streams", {})
+    for cache_id, job in list(streams.items()):
+        if job.entry_id != entry_id:
+            continue
+        cache_ids.add(cache_id)
+        store["closed"].add(cache_id)
+        streams.pop(cache_id, None)
+        if job.stop_timer is not None:
+            job.stop_timer.cancel()
+            job.stop_timer = None
+        if job.task is not None and not job.task.done():
+            job.task.cancel()
+            tasks.add(job.task)
     for task in tasks:
         task.cancel()
     if tasks:
@@ -437,6 +790,7 @@ async def async_remove_record_playback_sources(
         for cache_id in cache_ids:
             (cache_dir / f"{cache_id}.mp4").unlink(missing_ok=True)
             (cache_dir / f"{cache_id}.part.mp4").unlink(missing_ok=True)
+            (cache_dir / f"{cache_id}{_LIVE_SPOOL_SUFFIX}").unlink(missing_ok=True)
 
     await hass.async_add_executor_job(remove_cached_files)
 
@@ -474,3 +828,36 @@ class ImouRecordPlaybackMp4View(HomeAssistantView):
         if not path.is_file() or path.stat().st_size == 0:
             raise web.HTTPNotFound()
         return web.FileResponse(path)
+
+
+class ImouRecordStreamMp4View(HomeAssistantView):
+    """Stream a local recording while it is muxed into progressive MP4."""
+
+    requires_auth = True
+    url = STREAM_URL
+    name = "api:imou_life_record_stream"
+    cors_allowed = True
+
+    async def get(self, request: web.Request, cache_id: str) -> web.StreamResponse:
+        """Serve the cached MP4 or start live muxing for this clip."""
+        hass = request.app["hass"]
+        if "/" in cache_id or "\\" in cache_id or ".." in cache_id:
+            raise web.HTTPBadRequest()
+        store = _store(hass)
+        if cache_id not in store["owners"]:
+            raise web.HTTPNotFound()
+        path = _cache_dir(hass) / f"{cache_id}.mp4"
+        if path.is_file() and path.stat().st_size > 0:
+            return web.FileResponse(path)
+        if cache_id in store["closed"]:
+            raise web.HTTPNotFound()
+        source = store["sources"].get(cache_id)
+        if not source:
+            raise web.HTTPNotFound()
+        try:
+            job = await _async_ensure_live_job(
+                hass, cache_id, source.entry_id, source.provider
+            )
+        except LookupError as err:
+            raise web.HTTPNotFound() from err
+        return await _async_serve_live_mp4(hass, request, job)

@@ -137,9 +137,11 @@ class RecordHlsSession:
     live: bool = False
     window_indexes: list[int] = field(default_factory=list)
     last_playlist_fetch_at: float = 0
-    tracked_media_sequence: int | None = None
     segment_prefetch: dict[int, bytes] = field(default_factory=dict)
     upstream_fetch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # Local clips are generated at real time, so their session must outlive the
+    # clip instead of expiring after the generic idle TTL.
+    live_ttl_seconds: float | None = None
 
     def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
         """Release callbacks and cancel an in-progress refresh."""
@@ -313,18 +315,6 @@ def _absolute_proxy_url(hass: HomeAssistant, signed_path: str) -> str:
     return f"{origin}{path}"
 
 
-def _media_sequence(body: str) -> int | None:
-    for line in body.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("#EXT-X-MEDIA-SEQUENCE:"):
-            continue
-        try:
-            return int(stripped.split(":", 1)[1])
-        except ValueError:
-            return None
-    return None
-
-
 def _is_sliding_playlist(body: str) -> bool:
     """A public playlist that keeps moving until the clip ends."""
     if "#EXT-X-ENDLIST" in body:
@@ -409,6 +399,8 @@ async def _async_follow_live_playlist(
     if not session.live or not session.media_playlist_url:
         return
     now = time.time()
+    if session.live_ttl_seconds:
+        session.expires_at = max(session.expires_at, now + session.live_ttl_seconds)
     if not force and now - session.last_playlist_fetch_at < PLAYLIST_FOLLOW_MIN_SECONDS:
         return
     playlist_url = session.media_playlist_url
@@ -418,17 +410,12 @@ async def _async_follow_live_playlist(
         _LOGGER.debug("Imou live recording playlist was not reloaded")
         return
     media_playlist_url = getattr(body, "final_url", playlist_url)
-    media_sequence = _media_sequence(body)
-    if (
-        not force
-        and media_sequence is not None
-        and media_sequence == session.tracked_media_sequence
-    ):
-        session.last_playlist_fetch_at = now
-        return
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     if not segment_urls:
         return
+    # Compare the whole body, not just the media sequence: while the clip is
+    # being produced the window grows without the sequence changing, and a
+    # frozen proxy playlist makes the player treat a later jump as the end.
     if not force and str(body) == session.playlist_body:
         session.last_playlist_fetch_at = now
         return
@@ -443,7 +430,6 @@ async def _async_follow_live_playlist(
         if not session.active or not session.live:
             return
         _replace_sliding_window(session, body, segment_urls, media_playlist_url)
-        session.tracked_media_sequence = media_sequence
         session.last_playlist_fetch_at = now
 
 
@@ -946,6 +932,7 @@ async def async_create_record_hls_proxy_playlist_url(
     entry_id: str,
     expires_at: float | None = None,
     prepared_playback: PreparedRecordHlsPlayback | None = None,
+    live_ttl_seconds: float | None = None,
 ) -> str:
     """Fetch Imou m3u8 and return a signed HA playlist URL Stream can open."""
     _prune_sessions(hass)
@@ -970,23 +957,26 @@ async def async_create_record_hls_proxy_playlist_url(
     await _async_validate_playlist_targets(hass, resources)
     session_id = secrets.token_hex(16)
     live = _is_sliding_playlist(body)
+    session_expiry = _session_expiry(
+        upstream_playlist_url,
+        segment_urls,
+        expires_at,
+    )
+    if live and live_ttl_seconds is not None:
+        session_expiry = max(session_expiry, time.time() + live_ttl_seconds)
     session = RecordHlsSession(
         entry_id=entry_id,
         segments=segments,
         resources=resources,
         playlist_body=body,
-        expires_at=_session_expiry(
-            upstream_playlist_url,
-            segment_urls,
-            expires_at,
-        ),
+        expires_at=session_expiry,
         refresh=refresh,
         refresh_lock=asyncio.Lock(),
         media_playlist_url=media_playlist_url,
         live=live,
         window_indexes=list(range(len(segments))),
-        tracked_media_sequence=_media_sequence(body),
         last_playlist_fetch_at=time.time(),
+        live_ttl_seconds=live_ttl_seconds if live else None,
     )
     _sessions(hass)[session_id] = session
     if prepared_playback is not None:

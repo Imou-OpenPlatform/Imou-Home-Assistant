@@ -1,4 +1,4 @@
-"""Cloud clips play as MP4; local clips use HLS with an MP4 fallback."""
+"""Cloud clips cache as MP4; local clips stream progressively while they mux."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from custom_components.imou_life.media_source import (
     MIME_MP4,
     SOURCE_REUSE_SECONDS,
     ImouRecordMediaSource,
+    _local_live_ttl_seconds,
 )
 from custom_components.imou_life.record_hls_proxy import (
     DATA_RECORD_HLS_PROXY,
@@ -34,6 +35,13 @@ from custom_components.imou_life.record_hls_proxy import (
 from custom_components.imou_life.record_playback_mp4 import (
     DATA_RECORD_PLAYBACK_MP4,
     ImouRecordPlaybackMp4View,
+    ImouRecordStreamMp4View,
+    LivePlaybackJob,
+    _async_ensure_live_job,
+    _async_run_live_playback,
+    _async_serve_live_mp4,
+    _finalize_command,
+    _live_remux_command,
     _remux_command,
     async_prepare_record_mp4,
     async_remove_record_playback_sources,
@@ -2077,14 +2085,6 @@ async def test_expiry_during_segment_fetch_does_not_refresh(
     refresh.assert_not_awaited()
 
 
-def _opened_stream() -> MagicMock:
-    """A Stream double."""
-    stream = MagicMock()
-    stream.add_provider.return_value = MagicMock()
-    stream.endpoint_url.return_value = "/api/hls/imou_rec/playlist.m3u8"
-    return stream
-
-
 @pytest.mark.asyncio
 async def test_resolve_cloud_clip_uses_mp4(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
@@ -2109,9 +2109,6 @@ async def test_resolve_cloud_clip_uses_mp4(hass: HomeAssistant) -> None:
             return_value=signed_playlist,
         ) as proxy_mock,
         patch(
-            "custom_components.imou_life.media_source.create_stream",
-        ) as create_mock,
-        patch(
             "custom_components.imou_life.media_source.register_playback_source",
         ) as register_mock,
         patch(
@@ -2126,7 +2123,6 @@ async def test_resolve_cloud_clip_uses_mp4(hass: HomeAssistant) -> None:
         play = await source.async_resolve_media(item)
         descriptor = await register_mock.call_args.args[3]()
 
-    create_mock.assert_not_called()
     register_mock.assert_called_once()
     signed_mock.assert_called_once()
     assert now + 29 <= proxy_mock.await_args.kwargs["expires_at"] <= now + 31
@@ -2193,13 +2189,11 @@ async def test_resolve_cloud_clip_mints_fresh_source_when_play_is_delayed(
 
 
 @pytest.mark.asyncio
-async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
-    hass: HomeAssistant,
-) -> None:
+async def test_resolve_local_clip_uses_live_stream(hass: HomeAssistant) -> None:
+    """Local clips stream as progressive MP4; the source is minted on play."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
     object.__setattr__(entry, "state", ConfigEntryState.LOADED)
-    hass.config.components.add("stream")
     runtime = _runtime_with_hls_url()
     source = ImouRecordMediaSource(hass)
     item = MediaSourceItem(
@@ -2208,7 +2202,10 @@ async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
         LOCAL_IDENTIFIER.format(entry=entry.entry_id),
         None,
     )
-    stream_mock = _opened_stream()
+    create_hls = (
+        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
+    )
+    prepared = object()
 
     with (
         patch(
@@ -2216,32 +2213,59 @@ async def test_resolve_local_clip_refresh_rebuilds_same_descriptor(
             return_value=runtime,
         ),
         patch(
+            "custom_components.imou_life.media_source.async_prepare_local_record_playback",
+            new_callable=AsyncMock,
+            return_value=prepared,
+        ) as prepare_mock,
+        patch(
             "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
             new_callable=AsyncMock,
             return_value="/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x",
         ) as proxy_mock,
         patch(
             "custom_components.imou_life.media_source.get_url",
-            return_value="http://example.local:8123",
+            return_value="http://ha.local:8123",
         ),
         patch(
-            "custom_components.imou_life.media_source.create_stream",
-            return_value=stream_mock,
-        ),
+            "custom_components.imou_life.media_source.register_playback_source",
+        ) as register_mock,
+        patch(
+            "custom_components.imou_life.media_source.signed_record_stream_url",
+            return_value="/api/imou_life/record_stream/abc.mp4?authSig=x",
+        ) as signed_mock,
     ):
         play = await source.async_resolve_media(item)
-        await proxy_mock.await_args.kwargs["refresh"]()
+        assert create_hls.await_count == 0
+        descriptor = await register_mock.call_args.args[3]()
 
-    create_hls = (
-        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
+    register_mock.assert_called_once()
+    signed_mock.assert_called_once()
+    create_hls.assert_awaited_once()
+    prepare_mock.assert_awaited_once()
+    assert create_hls.await_args.kwargs["record_type"] == "localRecord"
+    assert create_hls.await_args.kwargs["file_name"] == "/record/file.dav"
+    # 75 s clip plus a safety margin, never below 30 minutes.
+    assert proxy_mock.await_args.kwargs["live_ttl_seconds"] == 1875.0
+    assert proxy_mock.await_args.kwargs["expires_at"] is None
+    assert proxy_mock.await_args.kwargs["prepared_playback"] is prepared
+    assert descriptor.playlist_url == (
+        "http://ha.local:8123/api/imou_life/record_hls/sid/playlist.m3u8?authSig=x"
     )
-    calls = create_hls.await_args_list
-    assert len(calls) == 2
-    for call in calls:
-        assert call.kwargs["record_type"] == "localRecord"
-        assert call.kwargs["file_name"] == "/record/file.dav"
-    assert play.url == "/api/hls/imou_rec/playlist.m3u8"
-    assert "lechange.com" not in play.url
+    assert play.mime_type == MIME_MP4
+    assert play.url == "/api/imou_life/record_stream/abc.mp4?authSig=x"
+
+
+def test_local_live_ttl_covers_the_clip() -> None:
+    assert _local_live_ttl_seconds("2026-11-01 00:00:00", "2026-11-01 00:00:30") == (
+        1830.0
+    )
+    assert _local_live_ttl_seconds("2026-11-01 00:00:00", "2026-11-01 01:00:00") == (
+        5400.0
+    )
+    assert _local_live_ttl_seconds("2026-11-01 00:00:00", "2026-11-02 23:00:00") == (
+        86400.0
+    )
+    assert _local_live_ttl_seconds("not-a-date", "2026-11-01 00:00:00") == 14400.0
 
 
 @pytest.mark.asyncio
@@ -2277,7 +2301,7 @@ async def test_resolve_cloud_clip_mp4_without_stream_component(
 
 
 @pytest.mark.asyncio
-async def test_resolve_local_clip_mp4_uses_home_assistant_address(
+async def test_resolve_local_clip_uses_home_assistant_address(
     hass: HomeAssistant,
 ) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
@@ -2297,8 +2321,13 @@ async def test_resolve_local_clip_mp4_uses_home_assistant_address(
             "custom_components.imou_life.media_source.register_playback_source",
         ) as register_mock,
         patch(
-            "custom_components.imou_life.media_source.signed_record_playback_url",
-            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+            "custom_components.imou_life.media_source.async_prepare_local_record_playback",
+            new_callable=AsyncMock,
+            return_value=object(),
+        ),
+        patch(
+            "custom_components.imou_life.media_source.signed_record_stream_url",
+            return_value="/api/imou_life/record_stream/abc.mp4?authSig=x",
         ),
         patch(
             "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
@@ -2313,23 +2342,21 @@ async def test_resolve_local_clip_mp4_uses_home_assistant_address(
         play = await source.async_resolve_media(item)
         descriptor = await register_mock.call_args.args[3]()
 
-    create_hls = (
-        runtime.coordinator.device_manager.delegate.async_create_device_record_hls
-    )
-    assert create_hls.await_args.kwargs["record_type"] == "localRecord"
     assert "lechange.com" not in play.url
-    assert play.url.startswith("/api/imou_life/record_play/")
+    assert play.url.startswith("/api/imou_life/record_stream/")
     assert descriptor.playlist_url == (
         "http://ha.local:8123/api/imou_life/record_hls/sid/playlist.m3u8?authSig=y"
     )
 
 
 @pytest.mark.asyncio
-async def test_resolve_local_clip_mp4_when_hls_setup_fails(hass: HomeAssistant) -> None:
+async def test_resolve_local_clip_stream_needs_no_stream_component(
+    hass: HomeAssistant,
+) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
     object.__setattr__(entry, "state", ConfigEntryState.LOADED)
-    hass.config.components.add("stream")
+    assert "stream" not in hass.config.components
 
     source = ImouRecordMediaSource(hass)
     item = MediaSourceItem(
@@ -2342,22 +2369,18 @@ async def test_resolve_local_clip_mp4_when_hls_setup_fails(hass: HomeAssistant) 
             return_value=_runtime_with_hls_url(),
         ),
         patch(
-            "custom_components.imou_life.media_source.async_create_record_hls_proxy_playlist_url",
-            new_callable=AsyncMock,
-            side_effect=ValueError("no segments"),
-        ),
-        patch(
             "custom_components.imou_life.media_source.register_playback_source",
         ) as register_mock,
         patch(
-            "custom_components.imou_life.media_source.signed_record_playback_url",
-            return_value="/api/imou_life/record_play/abc.mp4?authSig=x",
+            "custom_components.imou_life.media_source.signed_record_stream_url",
+            return_value="/api/imou_life/record_stream/abc.mp4?authSig=x",
         ),
     ):
         play = await source.async_resolve_media(item)
 
     register_mock.assert_called_once()
     assert play.mime_type == MIME_MP4
+    assert play.url == "/api/imou_life/record_stream/abc.mp4?authSig=x"
 
 
 @pytest.mark.asyncio
@@ -3142,3 +3165,340 @@ def test_prune_playback_cache_drops_stale_excess_and_legacy_www_files(
     assert len(remaining) == 32
     assert "clip-00.mp4" not in remaining
     assert "clip-35.mp4" in remaining
+
+
+@pytest.mark.asyncio
+async def test_live_session_ttl_covers_real_time_clip(hass: HomeAssistant) -> None:
+    """A local clip session lives as long as the clip instead of the idle TTL."""
+    playlist = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:1
+#EXT-X-TARGETDURATION:2
+#EXTINF:2,
+https://media.example/clip?userid=seg_1.ts&proto=https
+"""
+    segment_urls = ["https://media.example/clip?userid=seg_1.ts&proto=https"]
+    follower = playlist.replace("MEDIA-SEQUENCE:1", "MEDIA-SEQUENCE:3").replace(
+        "seg_1", "seg_3"
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(playlist, segment_urls),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=follower,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.get_url",
+            return_value="http://ha.local:8123",
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/local.m3u8",
+            refresh=AsyncMock(return_value="https://media.example/local.m3u8"),
+            entry_id="entry-a",
+            live_ttl_seconds=3600,
+        )
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        session = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+        assert session.expires_at >= time.time() + 3590
+        session.expires_at = time.time() + 5
+        session.last_playlist_fetch_at = 0.0
+        await ImouRecordHlsPlaylistView().get(_segment_request(hass), session_id)
+
+    assert session.live
+    assert session.expires_at >= time.time() + 3590
+
+
+def test_live_remux_uses_fragmented_mp4(tmp_path: Path) -> None:
+    command = _live_remux_command(
+        LOCAL_HLS_PROXY, tmp_path / "spool.mp4", video_codec="hevc"
+    )
+
+    assert command[command.index("-movflags") + 1] == (
+        "+frag_keyframe+empty_moov+default_base_moof"
+    )
+    assert command[command.index("-f") + 1] == "mp4"
+    assert command[command.index("-tag:v") + 1] == "hvc1"
+    assert command[command.index("-bsf:a") + 1] == "aac_adtstoasc"
+    assert command[command.index("-live_start_index") + 1] == "0"
+    assert command.index("-live_start_index") < command.index("-i")
+    with pytest.raises(ValueError, match="local HLS proxy"):
+        _live_remux_command("https://evil.example/x.m3u8", tmp_path / "x.mp4")
+
+
+def test_finalize_command_adds_faststart(tmp_path: Path) -> None:
+    command = _finalize_command(tmp_path / "spool.mp4", tmp_path / "out.mp4")
+
+    assert command[command.index("-movflags") + 1] == "+faststart"
+    assert "-bsf:a" not in command
+    assert "-tag:v" not in command
+
+
+@pytest.mark.asyncio
+async def test_live_follow_adopts_a_growing_window(hass: HomeAssistant) -> None:
+    """The window grows before the media sequence moves; still adopt it."""
+    playlist = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-TARGETDURATION:2
+#EXTINF:2,
+https://media.example/clip?userid=seg_0.ts&proto=https
+#EXTINF:2,
+https://media.example/clip?userid=seg_1.ts&proto=https
+"""
+    grown = (
+        playlist
+        + """#EXTINF:2,
+https://media.example/clip?userid=seg_2.ts&proto=https
+"""
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                playlist,
+                [
+                    "https://media.example/clip?userid=seg_0.ts&proto=https",
+                    "https://media.example/clip?userid=seg_1.ts&proto=https",
+                ],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=grown,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.get_url",
+            return_value="http://ha.local:8123",
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/local.m3u8",
+            refresh=AsyncMock(return_value="https://media.example/local.m3u8"),
+            entry_id="entry-a",
+        )
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        session = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+        session.last_playlist_fetch_at = 0.0
+        playlist_response = await ImouRecordHlsPlaylistView().get(
+            _segment_request(hass), session_id
+        )
+
+    assert session.window_indexes == [0, 1, 2]
+    segment_lines = [
+        line
+        for line in playlist_response.text.splitlines()
+        if line and not line.startswith("#")
+    ]
+    assert len(segment_lines) == 3
+    assert session.live
+
+
+@pytest.mark.asyncio
+async def test_live_playback_job_caches_finished_clip(hass: HomeAssistant) -> None:
+    cache_id = f"live-{time.time_ns()}"
+    cache_dir = Path(hass.config.path("imou_life/playback_cache"))
+    job = LivePlaybackJob(
+        cache_id=cache_id,
+        entry_id="entry-a",
+        spool=cache_dir / f"{cache_id}.live.part.mp4",
+        output=cache_dir / f"{cache_id}.mp4",
+    )
+    provider = AsyncMock(return_value=_local_hls_descriptor("live"))
+
+    def spawn(*args: object, **_kwargs: object) -> MagicMock:
+        process = MagicMock(returncode=0)
+        if "+frag_keyframe+empty_moov+default_base_moof" in args:
+
+            async def write_spool() -> tuple[bytes, bytes]:
+                await hass.async_add_executor_job(job.spool.write_bytes, b"fragmented")
+                return b"", b""
+
+            process.communicate = AsyncMock(side_effect=write_spool)
+        else:
+
+            async def write_output() -> tuple[bytes, bytes]:
+                await hass.async_add_executor_job(job.output.write_bytes, b"faststart")
+                return b"", b""
+
+            process.communicate = AsyncMock(side_effect=write_output)
+        return process
+
+    with patch(
+        "custom_components.imou_life.record_playback_mp4.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        side_effect=spawn,
+    ):
+        await _async_run_live_playback(hass, job, provider)
+
+    assert job.finished
+    assert await hass.async_add_executor_job(job.output.read_bytes) == b"faststart"
+    assert not await hass.async_add_executor_job(job.spool.exists)
+    provider.assert_awaited_once_with()
+
+
+class _FakeStreamResponse:
+    """Capture what the live stream handler writes."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self.chunks: list[bytes] = []
+
+    async def prepare(self, _request: object) -> None:
+        return None
+
+    async def write(self, data: bytes) -> bool:
+        self.chunks.append(data)
+        return True
+
+    async def write_eof(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_live_stream_copies_finished_spool(hass: HomeAssistant) -> None:
+    cache_id = f"serve-{time.time_ns()}"
+    cache_dir = Path(hass.config.path("imou_life/playback_cache"))
+
+    def write_spool() -> Path:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        spool = cache_dir / f"{cache_id}.live.part.mp4"
+        spool.write_bytes(b"fragmented")
+        return spool
+
+    spool = await hass.async_add_executor_job(write_spool)
+    job = LivePlaybackJob(
+        cache_id=cache_id,
+        entry_id="entry-a",
+        spool=spool,
+        output=cache_dir / f"{cache_id}.mp4",
+    )
+    job.finished = True
+
+    with patch(
+        "custom_components.imou_life.record_playback_mp4.web.StreamResponse",
+        _FakeStreamResponse,
+    ):
+        response = await _async_serve_live_mp4(hass, SimpleNamespace(), job)
+
+    assert b"".join(response.chunks) == b"fragmented"
+    assert job.viewers == 0
+    assert not await hass.async_add_executor_job(spool.exists)
+
+
+@pytest.mark.asyncio
+async def test_live_stream_fails_when_mux_produced_nothing(
+    hass: HomeAssistant,
+) -> None:
+    cache_id = f"empty-{time.time_ns()}"
+    cache_dir = Path(hass.config.path("imou_life/playback_cache"))
+    job = LivePlaybackJob(
+        cache_id=cache_id,
+        entry_id="entry-a",
+        spool=cache_dir / f"{cache_id}.live.part.mp4",
+        output=cache_dir / f"{cache_id}.mp4",
+    )
+    job.finished = True
+
+    with pytest.raises(web.HTTPServiceUnavailable):
+        await _async_serve_live_mp4(hass, SimpleNamespace(), job)
+
+    assert job.viewers == 0
+
+
+@pytest.mark.asyncio
+async def test_stream_view_serves_completed_cache(hass: HomeAssistant) -> None:
+    cache_id = f"cached-{time.time_ns()}"
+    register_playback_source(
+        hass, cache_id, "entry-a", AsyncMock(return_value=_local_hls_descriptor())
+    )
+    cache_dir = Path(hass.config.path("imou_life/playback_cache"))
+
+    def write_cache() -> None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / f"{cache_id}.mp4").write_bytes(b"mp4")
+
+    await hass.async_add_executor_job(write_cache)
+
+    response = await ImouRecordStreamMp4View().get(_segment_request(hass), cache_id)
+
+    assert isinstance(response, web.FileResponse)
+
+
+@pytest.mark.asyncio
+async def test_stream_view_rejects_unknown_or_unloaded_clip(
+    hass: HomeAssistant,
+) -> None:
+    with pytest.raises(web.HTTPNotFound):
+        await ImouRecordStreamMp4View().get(_segment_request(hass), "missing")
+
+    register_playback_source(
+        hass, "gone", "entry-a", AsyncMock(return_value=_local_hls_descriptor())
+    )
+    await async_remove_record_playback_sources(hass, "entry-a")
+    with pytest.raises(web.HTTPNotFound):
+        await ImouRecordStreamMp4View().get(_segment_request(hass), "gone")
+
+
+@pytest.mark.asyncio
+async def test_unload_cancels_running_live_job(hass: HomeAssistant) -> None:
+    cache_id = f"unload-live-{time.time_ns()}"
+    started = asyncio.Event()
+
+    async def provider() -> RecordHlsDescriptor:
+        started.set()
+        await asyncio.Event().wait()
+        return _local_hls_descriptor()
+
+    register_playback_source(hass, cache_id, "entry-a", provider)
+    job = await _async_ensure_live_job(hass, cache_id, "entry-a", provider)
+    await started.wait()
+
+    await async_remove_record_playback_sources(hass, "entry-a")
+
+    assert job.finished
+    with pytest.raises(asyncio.CancelledError):
+        await job.task
+    assert not await hass.async_add_executor_job(job.spool.exists)
+
+
+def test_prune_playback_cache_drops_stale_live_spool(tmp_path: Path) -> None:
+    import os
+
+    from custom_components.imou_life.record_playback_mp4 import _prune_playback_cache
+
+    cache_dir = tmp_path / "imou_life" / "playback_cache"
+    cache_dir.mkdir(parents=True)
+    stale = cache_dir / "old.live.part.mp4"
+    stale.write_bytes(b"stale")
+    old = time.time() - 48 * 3600
+    os.utime(stale, (old, old))
+    fresh = cache_dir / "new.live.part.mp4"
+    fresh.write_bytes(b"fresh")
+
+    _prune_playback_cache(cache_dir)
+
+    assert not stale.exists()
+    assert fresh.exists()

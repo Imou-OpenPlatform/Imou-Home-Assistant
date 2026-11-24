@@ -41,7 +41,7 @@
 - **Restart** appears when the device can be restarted. Pressing it restarts the device.
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
-- **Local recordings** play through Stream on this Home Assistant. Stream fetches use loopback on the API port so remote web clients do not depend on the public URL reaching back into this host.
+- **Local recordings** are muxed into an MP4 on this Home Assistant while the clip plays, so playback starts within seconds, can be stopped or paused, ends when the clip ends, and replays from the cached file with seeking. Imou produces local clips in real time, so the cache is complete only after the clip has played once.
 - **Cloud recordings** are remuxed once into an MP4 on this Home Assistant and play natively in the browser: the player can stop, seek, and ends the clip instead of restarting it. The remux is cached, and expired cloud segment tokens are fetched again while it runs.
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 
