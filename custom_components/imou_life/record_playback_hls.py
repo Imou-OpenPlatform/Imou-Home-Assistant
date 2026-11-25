@@ -45,6 +45,7 @@ _FILE_SIGNED_SECONDS = 24 * 3600
 _STOP_GRACE_SECONDS = 60
 _FIRST_SEGMENT_TIMEOUT = 45.0
 _POLL_SECONDS = 0.2
+_POLL_MAX_SECONDS = 1.0
 _SEGMENT_FILE_RE = re.compile(r"(?:init\.mp4|seg_\d{5}\.m4s)")
 _PLAYLIST_FILE = "index.m3u8"
 _INIT_FILE = "init.mp4"
@@ -581,6 +582,7 @@ async def _async_wait_for_first_segments(
 ) -> str | None:
     """Wait until ffmpeg published the first playable playlist."""
     deadline = time.monotonic() + _FIRST_SEGMENT_TIMEOUT
+    delay = _POLL_SECONDS
     while time.monotonic() < deadline:
         for path in (job.part_dir / _PLAYLIST_FILE, job.final_dir / _PLAYLIST_FILE):
             body = await _async_read_playlist(hass, path)
@@ -588,7 +590,8 @@ async def _async_wait_for_first_segments(
                 return body
         if job.task is not None and job.task.done():
             break
-        await asyncio.sleep(_POLL_SECONDS)
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, _POLL_MAX_SECONDS)
     final = await _async_read_playlist(hass, job.final_dir / _PLAYLIST_FILE)
     if final is not None and _has_segments(final):
         return final
@@ -676,13 +679,15 @@ class ImouRecordPlaybackFileView(HomeAssistantView):
         if job is not None and not job.finished:
             _touch_job(hass, job)
             deadline = time.monotonic() + _FIRST_SEGMENT_TIMEOUT
+            delay = _POLL_SECONDS
             while time.monotonic() < deadline:
                 path = _find_segment_file(hass, cache_id, name)
                 if path is not None:
                     return self._file_response(path, live=True)
                 if job.task is not None and job.task.done():
                     break
-                await asyncio.sleep(_POLL_SECONDS)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, _POLL_MAX_SECONDS)
         path = _find_segment_file(hass, cache_id, name)
         if path is None:
             raise web.HTTPNotFound()

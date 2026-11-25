@@ -280,16 +280,18 @@ def notify_entity_target(hass: HomeAssistant, target: str) -> str | None:
 
 
 def default_notify_service_targets(hass: HomeAssistant) -> list[str]:
-    """Default alarm/detect notify targets: web drawer + mobile companion apps."""
+    """Default alarm/detect notify targets: web drawer + companion app services.
+
+    Companion apps also expose notify entities, but their services reach the
+    same phones; keeping the default to service ids avoids two messages per
+    alarm while notify entities remain selectable for other integrations.
+    """
     targets = ["notify.persistent_notification"]
     notify = hass.services.async_services().get("notify", {})
     for name in notify:
         if name.startswith("mobile_app_"):
             targets.append(f"notify.{name}")
-    for entry in _enabled_notify_entities(hass):
-        if entry.platform == "mobile_app":
-            targets.append(entry.entity_id)
-    return sorted(set(targets))
+    return sorted(targets)
 
 
 async def async_deliver_message_to_targets(

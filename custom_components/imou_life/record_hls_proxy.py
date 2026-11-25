@@ -41,6 +41,11 @@ PLAYLIST_FOLLOW_MIN_SECONDS = 2.0
 # Cloud segment tokens expire within seconds; allow a fresh upstream request
 # once the cooldown has passed instead of giving up after the first refresh.
 REFRESH_COOLDOWN_SECONDS = 5.0
+# Failed refreshes back off exponentially and stop after a few attempts so an
+# expired clip cannot keep spending API quota on every segment request.
+_REFRESH_MAX_BACKOFF_SECONDS = 60.0
+_REFRESH_MAX_FAILURES = 6
+_SIGNED_PATH_REFRESH_MARGIN_SECONDS = 60.0
 _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
 _LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
 
@@ -131,6 +136,8 @@ class RecordHlsSession:
     refreshed_segments: dict[str, HlsSegment] | None = None
     refreshed_resources: dict[str, HlsResource] | None = None
     last_refresh_at: float = 0.0
+    refresh_failures: int = 0
+    refresh_backoff: float = REFRESH_COOLDOWN_SECONDS
     generation: int = 0
     active: bool = True
     media_playlist_url: str = ""
@@ -138,6 +145,7 @@ class RecordHlsSession:
     window_indexes: list[int] = field(default_factory=list)
     last_playlist_fetch_at: float = 0
     segment_prefetch: dict[int, bytes] = field(default_factory=dict)
+    signed_paths: dict[tuple[str, int], tuple[str, float]] = field(default_factory=dict)
     upstream_fetch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Progressive remuxing can outlive both the signed source and the idle TTL.
     stream_ttl_seconds: float | None = None
@@ -153,6 +161,7 @@ class RecordHlsSession:
         self.segments.clear()
         self.window_indexes.clear()
         self.segment_prefetch.clear()
+        self.signed_paths.clear()
         if self.refreshed_segments is not None:
             self.refreshed_segments.clear()
         for resources in self.resources.values():
@@ -450,12 +459,36 @@ async def _async_follow_live_playlist(
         session.last_playlist_fetch_at = now
 
 
+def _signed_proxy_path(
+    hass: HomeAssistant,
+    session: RecordHlsSession,
+    key: tuple[str, int],
+    path: str,
+) -> str:
+    """Sign one proxy path, reusing the signature until it nears expiry."""
+    now = time.time()
+    cached = session.signed_paths.get(key)
+    if cached is not None and cached[1] - now > _SIGNED_PATH_REFRESH_MARGIN_SECONDS:
+        return cached[0]
+    remaining_ttl = max(0, session.expires_at - now)
+    signed = _absolute_proxy_url(
+        hass,
+        async_sign_path(
+            hass,
+            path,
+            timedelta(seconds=remaining_ttl),
+            use_content_user=True,
+        ),
+    )
+    session.signed_paths[key] = (signed, now + remaining_ttl)
+    return signed
+
+
 def _build_proxy_playlist(
     hass: HomeAssistant,
     session_id: str,
     session: RecordHlsSession,
 ) -> str:
-    remaining_ttl = max(0, session.expires_at - time.time())
     lines: list[str] = []
     segment_index = 0
     resource_indexes = {"key": 0, "map": 0}
@@ -476,15 +509,7 @@ def _build_proxy_playlist(
             resource_path = RESOURCE_URL.format(
                 session_id=session_id, kind=kind, index=index
             )
-            signed = _absolute_proxy_url(
-                hass,
-                async_sign_path(
-                    hass,
-                    resource_path,
-                    timedelta(seconds=remaining_ttl),
-                    use_content_user=True,
-                ),
-            )
+            signed = _signed_proxy_path(hass, session, (kind, index), resource_path)
             lines.append(re.sub(r'URI="[^"]*"', f'URI="{signed}"', original, count=1))
             continue
         if stripped and not stripped.startswith("#"):
@@ -503,14 +528,8 @@ def _build_proxy_playlist(
                 session_id=session_id, index=absolute_index
             )
             lines.append(
-                _absolute_proxy_url(
-                    hass,
-                    async_sign_path(
-                        hass,
-                        segment_path,
-                        timedelta(seconds=remaining_ttl),
-                        use_content_user=True,
-                    ),
+                _signed_proxy_path(
+                    hass, session, ("segment", absolute_index), segment_path
                 )
             )
             segment_index += 1
@@ -620,11 +639,11 @@ def _segment_descriptors(
             identity = None
         segments.append(HlsSegment(url, identity, segment_range, valid))
 
+    identity_counts = Counter(
+        segment.identity for segment in segments if segment.identity is not None
+    )
     duplicate_identities = {
-        identity
-        for identity in (segment.identity for segment in segments)
-        if identity is not None
-        and sum(candidate.identity == identity for candidate in segments) > 1
+        identity for identity, count in identity_counts.items() if count > 1
     }
     if duplicate_identities:
         segments = [
@@ -1040,7 +1059,8 @@ async def _async_refresh_record_hls_session(
         now = time.time()
         if (
             record.refresh is None
-            or now - record.last_refresh_at < REFRESH_COOLDOWN_SECONDS
+            or record.refresh_failures >= _REFRESH_MAX_FAILURES
+            or now - record.last_refresh_at < record.refresh_backoff
         ):
             return False
         record.last_refresh_at = now
@@ -1101,11 +1121,18 @@ async def _async_refresh_record_hls_session(
                     record.expires_at, now + record.stream_ttl_seconds
                 )
             record.segment_prefetch.clear()
+            record.signed_paths.clear()
+            record.refresh_failures = 0
+            record.refresh_backoff = REFRESH_COOLDOWN_SECONDS
             record.generation += 1
             _schedule_cleanup(hass)
         except web.HTTPException:
             raise
         except Exception:
+            record.refresh_failures += 1
+            record.refresh_backoff = min(
+                record.refresh_backoff * 2, _REFRESH_MAX_BACKOFF_SECONDS
+            )
             _LOGGER.warning("Imou HLS session refresh failed", exc_info=True)
             return False
         return True

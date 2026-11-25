@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
@@ -24,14 +26,19 @@ from .runtime_data import get_runtime_data
 _LOGGER = logging.getLogger(__name__)
 
 DATA_RECORD_COVERS = "imou_life_record_covers"
+DATA_RECORD_COVER_LISTINGS = "imou_life_record_cover_listings"
+DATA_RECORD_COVER_LISTING_TASKS = "imou_life_record_cover_listing_tasks"
 COVER_URL = "/api/imou_life/record_cover/{token}"
 _MAX_COVERS = 128
 # The cover CDN rejects a share of freshly signed URLs with 401 and serves the
 # same file under the URL signing from a later listing, so a failed download
 # asks the API for a new URL before giving up.
 _COVER_REFRESH_RETRIES = 2
-_COVER_WINDOW_MARGIN = timedelta(minutes=1)
+# One day listing serves every rejected cover of that device and day, so the
+# retries of a media browser page do not each spend an API call.
+_COVER_LIST_TTL_SECONDS = 60.0
 _RECORD_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+_RECORD_DATE_FORMAT = "%Y-%m-%d"
 
 
 @dataclass
@@ -45,6 +52,12 @@ class _RecordCover:
     end_time: str = ""
     body: bytes | None = None
     content_type: str | None = None
+
+
+@dataclass
+class _CoverListing:
+    expires_at: float
+    covers: dict[tuple[str, str], str]
 
 
 def async_register_record_covers(hass: HomeAssistant) -> None:
@@ -156,40 +169,85 @@ async def _async_download_cover(
 
 
 async def _async_refresh_cover_url(hass: HomeAssistant, cover: _RecordCover) -> bool:
-    """Re-list the clip so its cover URL is signed again, and update it."""
+    """Swap in this clip's cover URL from a freshly signed day listing."""
     if cover.kind != "cloud" or not cover.begin_time or not cover.end_time:
         return False
+    covers = await _async_cover_listing(hass, cover)
+    if covers is None:
+        return False
+    thumb_url = covers.get((cover.begin_time, cover.end_time))
+    if not thumb_url:
+        return False
+    cover.url = thumb_url
+    return True
+
+
+async def _async_cover_listing(
+    hass: HomeAssistant, cover: _RecordCover
+) -> dict[tuple[str, str], str] | None:
+    """Return one cached listing of the device's clip covers for that day."""
+    day = cover.begin_time[:10]
+    key = (cover.entry_id, cover.device_id, cover.channel_id, day)
+    listings: dict[tuple[str, str, str, str], _CoverListing] = hass.data.setdefault(
+        DATA_RECORD_COVER_LISTINGS, {}
+    )
+    now = time.monotonic()
+    cached = listings.get(key)
+    if cached is not None and cached.expires_at > now:
+        return cached.covers
+    tasks: dict[
+        tuple[str, str, str, str], asyncio.Task[dict[tuple[str, str], str] | None]
+    ] = hass.data.setdefault(DATA_RECORD_COVER_LISTING_TASKS, {})
+    task = tasks.get(key)
+    if task is None or task.done():
+        task = hass.async_create_task(_async_list_day_covers(hass, cover, day))
+        tasks[key] = task
+        task.add_done_callback(lambda _task: tasks.pop(key, None))
+    covers = await asyncio.shield(task)
+    if covers is None:
+        return None
+    listings[key] = _CoverListing(time.monotonic() + _COVER_LIST_TTL_SECONDS, covers)
+    for expired in [
+        listing_key
+        for listing_key, listing in listings.items()
+        if listing.expires_at <= now
+    ]:
+        listings.pop(expired, None)
+    return covers
+
+
+async def _async_list_day_covers(
+    hass: HomeAssistant, cover: _RecordCover, day: str
+) -> dict[tuple[str, str], str] | None:
+    """List one device/channel day and index its cover URLs by clip."""
     entry = hass.config_entries.async_get_entry(cover.entry_id)
     runtime = get_runtime_data(entry) if entry is not None else None
     if runtime is None:
-        return False
+        return None
     try:
-        begin = datetime.strptime(cover.begin_time, _RECORD_TIME_FORMAT)
-        end = datetime.strptime(cover.end_time, _RECORD_TIME_FORMAT)
+        day_start = datetime.strptime(day, _RECORD_DATE_FORMAT)
     except ValueError:
-        return False
+        return None
     manager = runtime.coordinator.device_manager.delegate
     try:
         segments = await manager.async_list_cloud_record_segments(
             cover.device_id,
             cover.channel_id,
-            begin_time=(begin - _COVER_WINDOW_MARGIN).strftime(_RECORD_TIME_FORMAT),
-            end_time=(end + _COVER_WINDOW_MARGIN).strftime(_RECORD_TIME_FORMAT),
+            begin_time=day_start.strftime(_RECORD_TIME_FORMAT),
+            end_time=(day_start + timedelta(days=1, minutes=1)).strftime(
+                _RECORD_TIME_FORMAT
+            ),
         )
     except Exception:
         _LOGGER.debug(
             "Recording cover list failed for %s", cover.device_id, exc_info=True
         )
-        return False
-    for segment in segments:
-        if (
-            segment.begin_time == cover.begin_time
-            and segment.end_time == cover.end_time
-            and segment.thumb_url
-        ):
-            cover.url = segment.thumb_url
-            return True
-    return False
+        return None
+    return {
+        (segment.begin_time, segment.end_time): segment.thumb_url
+        for segment in segments
+        if segment.thumb_url
+    }
 
 
 async def _decrypt_cover(

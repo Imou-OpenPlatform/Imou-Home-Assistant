@@ -23,6 +23,8 @@ from custom_components.imou_life.media_source import (
     _local_stream_ttl_seconds,
 )
 from custom_components.imou_life.record_hls_proxy import (
+    _REFRESH_MAX_BACKOFF_SECONDS,
+    _REFRESH_MAX_FAILURES,
     DATA_RECORD_HLS_PROXY,
     ImouRecordHlsPlaylistView,
     ImouRecordHlsResourceView,
@@ -41,6 +43,7 @@ from custom_components.imou_life.record_playback_hls import (
     ImouRecordPlaybackFileView,
     ImouRecordPlaybackHlsView,
     _async_stop_idle_job,
+    _async_wait_for_first_segments,
     _hls_command,
     _prune_playback_cache,
     _validate_proxy_source,
@@ -473,6 +476,31 @@ async def test_refresh_failure_returns_502_and_is_not_repeated(
 
 
 @pytest.mark.asyncio
+async def test_repeated_refresh_failures_stop_after_the_cap(
+    hass: HomeAssistant,
+) -> None:
+    """An unrecoverable clip stops spending API calls on refreshes."""
+    refresh = AsyncMock(side_effect=OSError("refresh failed"))
+    session_id = await _create_refreshable_session(hass, refresh)
+    session = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+        new_callable=AsyncMock,
+        return_value=_upstream_response(403),
+    ):
+        for _ in range(_REFRESH_MAX_FAILURES + 2):
+            session.last_refresh_at = 0.0
+            with pytest.raises(web.HTTPBadGateway):
+                await ImouRecordHlsSegmentView().get(
+                    _segment_request(hass), session_id, "0"
+                )
+
+    assert refresh.await_count == _REFRESH_MAX_FAILURES
+    assert session.refresh_backoff == _REFRESH_MAX_BACKOFF_SECONDS
+
+
+@pytest.mark.asyncio
 async def test_concurrent_expired_segments_share_one_refresh(
     hass: HomeAssistant,
 ) -> None:
@@ -805,6 +833,38 @@ https://media.example/segment.ts
         "https://media.example/segment.ts",
         range_header="bytes=150-174",
     )
+
+
+@pytest.mark.asyncio
+async def test_playlist_reuses_signed_segment_urls_until_they_near_expiry(
+    hass: HomeAssistant,
+) -> None:
+    """Repeated playlist reads reuse signatures instead of signing every line."""
+    playlist = """#EXTM3U
+#EXTINF:2,
+https://media.example/segment.ts?token=old
+#EXT-X-ENDLIST
+"""
+    session_id = await _create_session_from_playlist(
+        hass,
+        playlist,
+        ["https://media.example/segment.ts?token=old"],
+    )
+    session = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+    view = ImouRecordHlsPlaylistView()
+
+    with patch(
+        "custom_components.imou_life.record_hls_proxy.async_sign_path",
+        side_effect=lambda _hass, path, *_args, **_kwargs: path,
+    ) as sign:
+        await view.get(_segment_request(hass), session_id)
+        await view.get(_segment_request(hass), session_id)
+        assert sign.call_count == 1
+        signed_url, _valid_until = session.signed_paths[("segment", 0)]
+        session.signed_paths[("segment", 0)] = (signed_url, time.time() + 5)
+        await view.get(_segment_request(hass), session_id)
+
+    assert sign.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -2840,6 +2900,72 @@ async def test_file_view_serves_cached_segment_with_range_support(
     assert response.headers["Content-Type"] == "video/mp4"
     assert response.headers["Cache-Control"] == "private, max-age=86400"
     assert Path(response._path) == directory / "seg_00000.m4s"
+
+
+@pytest.mark.asyncio
+async def test_live_file_view_backs_off_while_ffmpeg_writes_the_segment(
+    hass: HomeAssistant,
+) -> None:
+    """Waiting for a live segment polls with growing delays, not in a spin."""
+    cache_id = record_playback_cache_id("waiting-file")
+    register_playback_source(
+        hass, cache_id, "entry-a", AsyncMock(return_value=_local_hls_descriptor())
+    )
+    job = HlsPlaybackJob(
+        cache_id=cache_id,
+        entry_id="entry-a",
+        part_dir=Path(hass.config.path()) / CACHE_SUBDIR / "part",
+        final_dir=Path(hass.config.path()) / CACHE_SUBDIR / cache_id,
+    )
+    hass.data[DATA_RECORD_PLAYBACK_HLS]["jobs"][cache_id] = job
+    segment = job.part_dir / "seg_00000.m4s"
+
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_hls._find_segment_file",
+            side_effect=[None, None, segment],
+        ),
+        patch(
+            "custom_components.imou_life.record_playback_hls.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as sleep_mock,
+    ):
+        response = await ImouRecordPlaybackFileView().get(
+            _segment_request(hass), cache_id, "seg_00000.m4s"
+        )
+
+    if job.stop_timer is not None:
+        job.stop_timer.cancel()
+    assert Path(response._path) == segment
+    assert [call.args[0] for call in sleep_mock.await_args_list] == [0.2, 0.4]
+
+
+@pytest.mark.asyncio
+async def test_first_segment_wait_backs_off_while_ffmpeg_starts(
+    hass: HomeAssistant,
+) -> None:
+    """The first playlist is polled with growing delays until it appears."""
+    job = SimpleNamespace(
+        part_dir=Path(hass.config.path()) / CACHE_SUBDIR / "part",
+        final_dir=Path(hass.config.path()) / CACHE_SUBDIR / "final",
+        task=None,
+    )
+
+    with (
+        patch(
+            "custom_components.imou_life.record_playback_hls._async_read_playlist",
+            new_callable=AsyncMock,
+            side_effect=[None, None, None, None, LIVE_PLAYBACK_PLAYLIST],
+        ),
+        patch(
+            "custom_components.imou_life.record_playback_hls.asyncio.sleep",
+            new_callable=AsyncMock,
+        ) as sleep_mock,
+    ):
+        body = await _async_wait_for_first_segments(hass, job)
+
+    assert body == LIVE_PLAYBACK_PLAYLIST
+    assert [call.args[0] for call in sleep_mock.await_args_list] == [0.2, 0.4]
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -69,9 +70,99 @@ async def test_cover_url_is_refreshed_from_a_new_listing(
     manager.async_list_cloud_record_segments.assert_awaited_once_with(
         "SN1",
         "0",
-        begin_time="2026-11-23 09:58:05",
-        end_time="2026-11-23 10:00:40",
+        begin_time="2026-11-23 00:00:00",
+        end_time="2026-11-24 00:01:00",
     )
+
+
+async def test_cover_relist_is_shared_by_all_clips_of_the_day(
+    hass: HomeAssistant,
+) -> None:
+    """One day listing refreshes every rejected cover of that device."""
+    entry, manager = _entry_with_manager(hass)
+    first = _cover(entry.entry_id)
+    second = _RecordCover(
+        entry.entry_id,
+        "SN1",
+        "0",
+        "https://example.test/later.dav",
+        kind="cloud",
+        begin_time="2026-11-23 10:30:00",
+        end_time="2026-11-23 10:30:30",
+    )
+    manager.async_list_cloud_record_segments = AsyncMock(
+        return_value=[
+            CloudRecordSegment(
+                record_id="r1",
+                begin_time="2026-11-23 09:59:05",
+                end_time="2026-11-23 09:59:40",
+                thumb_url="https://example.test/new.dav",
+            ),
+            CloudRecordSegment(
+                record_id="r2",
+                begin_time="2026-11-23 10:30:00",
+                end_time="2026-11-23 10:30:30",
+                thumb_url="https://example.test/later-new.dav",
+            ),
+        ]
+    )
+
+    assert await _async_refresh_cover_url(hass, first) is True
+    assert await _async_refresh_cover_url(hass, second) is True
+
+    manager.async_list_cloud_record_segments.assert_awaited_once()
+    assert first.url == "https://example.test/new.dav"
+    assert second.url == "https://example.test/later-new.dav"
+
+
+async def test_concurrent_cover_refreshes_share_one_listing(
+    hass: HomeAssistant,
+) -> None:
+    """Covers rejected together wait on the same in-flight day listing."""
+    entry, manager = _entry_with_manager(hass)
+    first = _cover(entry.entry_id)
+    second = _RecordCover(
+        entry.entry_id,
+        "SN1",
+        "0",
+        "https://example.test/later.dav",
+        kind="cloud",
+        begin_time="2026-11-23 10:30:00",
+        end_time="2026-11-23 10:30:30",
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _list(*_args: object, **_kwargs: object) -> list[CloudRecordSegment]:
+        started.set()
+        await release.wait()
+        return [
+            CloudRecordSegment(
+                record_id="r1",
+                begin_time="2026-11-23 09:59:05",
+                end_time="2026-11-23 09:59:40",
+                thumb_url="https://example.test/new.dav",
+            ),
+            CloudRecordSegment(
+                record_id="r2",
+                begin_time="2026-11-23 10:30:00",
+                end_time="2026-11-23 10:30:30",
+                thumb_url="https://example.test/later-new.dav",
+            ),
+        ]
+
+    manager.async_list_cloud_record_segments = AsyncMock(side_effect=_list)
+
+    first_task = asyncio.create_task(_async_refresh_cover_url(hass, first))
+    await started.wait()
+    second_task = asyncio.create_task(_async_refresh_cover_url(hass, second))
+    release.set()
+
+    assert await first_task is True
+    assert await second_task is True
+    manager.async_list_cloud_record_segments.assert_awaited_once()
+    assert first.url == "https://example.test/new.dav"
+    assert second.url == "https://example.test/later-new.dav"
 
 
 async def test_local_cover_is_not_refreshed_from_cloud_records(

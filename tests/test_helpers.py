@@ -100,16 +100,24 @@ def test_parse_notify_services_normalizes_legacy_and_list(raw, expected) -> None
 def test_default_notify_targets_include_persistent_and_mobile(
     hass: HomeAssistant,
 ) -> None:
-    """Unset notify options default to the web drawer and companion apps."""
+    """Unset notify options default to the web drawer and companion app services."""
     from homeassistant.core import ServiceCall
 
     async def _notify(_call: ServiceCall) -> None:
         return None
 
     hass.services.async_register("notify", "mobile_app_phone", _notify)
+    phone = er.async_get(hass).async_get_or_create(
+        "notify",
+        "mobile_app",
+        "phone-default",
+        suggested_object_id="pixel_default",
+        original_name="Pixel",
+    )
     targets = default_notify_service_targets(hass)
     assert "notify.persistent_notification" in targets
     assert "notify.mobile_app_phone" in targets
+    assert phone.entity_id not in targets
 
 
 @pytest.mark.parametrize(
@@ -199,9 +207,9 @@ def test_notify_selector_lists_notify_entities(hass: HomeAssistant) -> None:
     by_value = {item["value"]: item["label"] for item in options}
     assert by_value[phone.entity_id] == "Pixel"
     assert by_value[other.entity_id] == "Telegram"
-    assert default_notify_service_targets(hass) == sorted(
-        {"notify.persistent_notification", phone.entity_id}
-    )
+    # Companion app entities duplicate their notify services, so they are not
+    # part of the default targets.
+    assert default_notify_service_targets(hass) == ["notify.persistent_notification"]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
