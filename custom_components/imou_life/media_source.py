@@ -767,7 +767,7 @@ class ImouRecordMediaSource(MediaSource):
                             segment.end_time,
                         ]
                     )
-                    title = f"{segment.begin_time} - {segment.end_time}"
+                    title = f"{segment.begin_time[11:19]} - {segment.end_time[11:19]}"
                     children.append(
                         BrowseMediaSource(
                             domain=DOMAIN,
@@ -782,6 +782,9 @@ class ImouRecordMediaSource(MediaSource):
                                 device_id,
                                 channel_id,
                                 segment.thumb_url,
+                                kind=KIND_CLOUD,
+                                begin_time=segment.begin_time,
+                                end_time=segment.end_time,
                             ),
                         )
                     )
@@ -825,6 +828,9 @@ class ImouRecordMediaSource(MediaSource):
                                 device_id,
                                 channel_id,
                                 segment.thumb_url,
+                                kind=KIND_LOCAL,
+                                begin_time=segment.begin_time,
+                                end_time=segment.end_time,
                             ),
                         )
                     )
@@ -855,7 +861,15 @@ class ImouRecordMediaSource(MediaSource):
         )
 
     def _cover_thumbnail(
-        self, entry_id: str, device_id: str, channel_id: str, url: str | None
+        self,
+        entry_id: str,
+        device_id: str,
+        channel_id: str,
+        url: str | None,
+        *,
+        kind: str,
+        begin_time: str,
+        end_time: str,
     ) -> str | None:
         if not url:
             return None
@@ -865,6 +879,9 @@ class ImouRecordMediaSource(MediaSource):
             device_id=device_id,
             channel_id=channel_id,
             url=url,
+            kind=kind,
+            begin_time=begin_time,
+            end_time=end_time,
         )
 
     def _camera(self, runtime, device_id: str, channel_id: str) -> ImouHaDevice | None:

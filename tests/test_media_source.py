@@ -22,6 +22,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.cloud_record import CloudRecordSegment
 from pyimouapi.const import PARAM_STATE, PARAM_STATUS
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.exceptions import ImouException
@@ -384,6 +385,36 @@ async def test_local_day_uses_aggregate_record_list(
     assert dav_path not in (child.identifier or "")
 
 
+async def test_cloud_day_titles_clips_with_the_time_range_only(
+    hass: HomeAssistant,
+) -> None:
+    """The day folder carries the date, so a cloud clip title shows only times."""
+    source, entry, coordinator = _record_browse_source(hass, [])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_cloud_record_segments = AsyncMock(
+        return_value=[
+            CloudRecordSegment(
+                record_id="rec-1",
+                begin_time="2026-11-24 14:29:00",
+                end_time="2026-11-24 14:33:12",
+            )
+        ]
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "cloud",
+            "month:2026-11",
+            "day:24",
+        ]
+    )
+
+    assert len(browse.children or []) == 1
+    assert (browse.children or [])[0].title == "14:29:00 - 14:33:12"
+
+
 async def test_local_day_is_empty_when_aggregate_fails(
     hass: HomeAssistant,
 ) -> None:
@@ -476,6 +507,11 @@ async def test_local_clip_shows_a_cover_when_the_record_has_one(
 
     thumbnail = (browse.children or [])[0].thumbnail or ""
     assert thumbnail.startswith("/api/imou_life/record_cover/")
+    token = thumbnail.rsplit("/", 1)[-1]
+    cover = hass.data["imou_life_record_covers"][token]
+    assert cover.kind == "local"
+    assert cover.begin_time == "2026-11-01 08:00:00"
+    assert cover.end_time == "2026-11-01 08:10:00"
 
 
 async def test_local_month_bitmap_forwards_product_id(

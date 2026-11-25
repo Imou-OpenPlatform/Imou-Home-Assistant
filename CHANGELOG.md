@@ -42,6 +42,8 @@
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
 - **Local recordings** and **Cloud recordings** play as **HLS** on this Home Assistant (including Safari and the iOS Companion app). The first play remuxes the clip into a playlist and segments that are then cached; local clips remux as Imou produces them in real time. The player can stop, seek, and ends the clip instead of restarting it. Expired cloud segment tokens are fetched again while remux runs. A clip whose audio track is shorter than the video, or has gaps where the camera sent no audio, gets a continuous audio timeline padded with silence so playback does not stop early.
+- **Clip covers** in the media browser ask the cloud for a freshly signed cover URL when the first download is refused, so fewer clip tiles show an empty cover.
+- **Cloud recordings** clip tiles show only the start and end time, like **Local recordings**, so the title fits the tile. The day header already shows the date.
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 - With more than one Imou Life account, **AI Briefing** and **Smart Messages** put the account and camera on the same card. Search buttons and results stay for that account.
 - The sidebar tabs are **AI Briefing**, **Smart Messages**, and **Request a trial**.
@@ -423,6 +425,8 @@
 - **直播** 的预览和下载的抓图显示完整画面。
 - 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
 - **本地录像**和**云录像**统一用 **HLS** 播放，Safari 与 iOS App 也走同一路径。首次播放时由这台 Home Assistant 把片段转封装成播放列表并缓存，可停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段；本地录像边生成边转封装，云录像过程中过期的分片令牌会自动重新获取；音频轨比视频短、或中间有摄像头没发音频的空档时，会补齐为连续的音频轨并补静音，避免播到音轨结尾提前停下。
+- **录像封面**：云端拒绝第一次签名地址时会重新获取新地址再下载，媒体库里的空白封面更少。
+- **云录像**片段的标题和**本地录像**一样只显示起止时间，标题不再被日期挤断；日期在当天的文件夹标题上。
 - **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
 - 添加了多个 Imou Life 账号时，**AI简报**和**智慧消息**把账号和摄像头放在同一张卡上。搜索按钮和结果仍只显示这个账号的。
 - 侧边栏页签为 **AI简报**、**智慧消息**、**申请试用**。
