@@ -109,7 +109,7 @@ Open **Media**, pick your **Imou Life** account, then a camera channel. You get 
 | Local recordings | When the device reports local recording file access |
 | Record on alarm | Clips this Home Assistant saved under Media after an alarm |
 
-Drill down by month → days with clips → individual segments. Playback uses **HLS** through the **Stream** integration. If nothing plays, confirm **Stream** is enabled and check integration logs.
+Drill down by month → days with clips → individual segments. Playback uses **HLS** for every client, including Safari and the iOS app. This Home Assistant remuxes the clip into an HLS playlist on first play; the result is cached. If nothing plays, check integration logs.
 
 ### AI Insight workbench
 
@@ -270,7 +270,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 | 本地录像 | 设备上报本地录像文件能力时 |
 | 告警时录像 | 本机在告警后保存到媒体目录的片段 |
 
-按 月 → 有录像的日期 → 片段逐级进入，用 **Stream** 以 **HLS** 播放。播不出来时确认已启用 **Stream**，并查看集成日志。
+按 月 → 有录像的日期 → 片段逐级进入。播放统一使用 **HLS**（含 Safari 与 iOS App）。首次播放时由这台 Home Assistant 把片段转封装成播放列表并缓存。播不出来时查看集成日志。
 
 <a id="ai-insight-zh"></a>
 

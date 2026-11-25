@@ -62,7 +62,7 @@ from .insight_dashboard import (
 from .insight_frontend import async_register_insight_trial_frontend
 from .insight_workbench import async_register_insight_workbench_services
 from .record_hls_proxy import async_remove_record_hls_proxy_sessions
-from .record_playback_mp4 import async_remove_record_playback_sources
+from .record_playback_hls import async_remove_record_playback_sources
 from .repairs import (
     async_delete_decrypt_library_issues,
     async_delete_quota_issue,

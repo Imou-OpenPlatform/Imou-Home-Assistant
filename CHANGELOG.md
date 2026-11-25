@@ -41,8 +41,7 @@
 - **Restart** appears when the device can be restarted. Pressing it restarts the device.
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
-- **Local recordings** are muxed into an MP4 on this Home Assistant while the clip plays, so playback starts within seconds, can be stopped or paused, ends when the clip ends, and replays from the cached file with seeking. Imou produces local clips in real time, so the cache is complete only after the clip has played once.
-- **Cloud recordings** are remuxed once into an MP4 on this Home Assistant and play natively in the browser: the player can stop, seek, and ends the clip instead of restarting it. The remux is cached, and expired cloud segment tokens are fetched again while it runs.
+- **Local recordings** and **Cloud recordings** play as **HLS** on this Home Assistant (including Safari and the iOS Companion app). The first play remuxes the clip into a playlist and segments that are then cached; local clips remux as Imou produces them in real time. The player can stop, seek, and ends the clip instead of restarting it. Expired cloud segment tokens are fetched again while remux runs. A clip whose audio track is shorter than the video, or has gaps where the camera sent no audio, gets a continuous audio timeline padded with silence so playback does not stop early.
 - **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
 - With more than one Imou Life account, **AI Briefing** and **Smart Messages** put the account and camera on the same card. Search buttons and results stay for that account.
 - The sidebar tabs are **AI Briefing**, **Smart Messages**, and **Request a trial**.
@@ -423,8 +422,7 @@
 - **重启** 在设备可以重启时出现。按下后重启设备。
 - **直播** 的预览和下载的抓图显示完整画面。
 - 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
-- **本地录像**通过这台 Home Assistant 的 Stream 播放。服务端取流走 API 端口回环，远程网页播放不再依赖公网地址能否从本机访问自己。
-- **云录像**会先在这台 Home Assistant 上转封装成 MP4，再由浏览器原生播放：可以停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段。转封装结果会缓存，过程中云端过期的分片令牌会自动重新获取。
+- **本地录像**和**云录像**统一用 **HLS** 播放，Safari 与 iOS App 也走同一路径。首次播放时由这台 Home Assistant 把片段转封装成播放列表并缓存，可停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段；本地录像边生成边转封装，云录像过程中过期的分片令牌会自动重新获取；音频轨比视频短、或中间有摄像头没发音频的空档时，会补齐为连续的音频轨并补静音，避免播到音轨结尾提前停下。
 - **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
 - 添加了多个 Imou Life 账号时，**AI简报**和**智慧消息**把账号和摄像头放在同一张卡上。搜索按钮和结果仍只显示这个账号的。
 - 侧边栏页签为 **AI简报**、**智慧消息**、**申请试用**。

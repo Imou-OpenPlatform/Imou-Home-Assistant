@@ -451,7 +451,9 @@ async def _async_follow_live_playlist(
 
 
 def _build_proxy_playlist(
-    hass: HomeAssistant, session_id: str, session: RecordHlsSession
+    hass: HomeAssistant,
+    session_id: str,
+    session: RecordHlsSession,
 ) -> str:
     remaining_ttl = max(0, session.expires_at - time.time())
     lines: list[str] = []

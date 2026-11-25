@@ -57,13 +57,12 @@ from .record_hls_proxy import (
     async_register_record_hls_proxy,
     record_hls_proxy_origin,
 )
-from .record_playback_mp4 import (
+from .record_playback_hls import (
     RECORD_REMUX_TIMEOUT_SECONDS,
-    async_register_record_playback_mp4,
+    async_register_record_playback_hls,
     record_playback_cache_id,
     register_playback_source,
-    signed_record_playback_url,
-    signed_record_stream_url,
+    signed_record_playlist_url,
 )
 from .repairs import (
     RecordPlaybackEmptySourceError,
@@ -77,6 +76,7 @@ _LOGGER = logging.getLogger(__name__)
 
 MEDIA_SOURCE_NAME = "Imou Life"
 MIME_MP4 = "video/mp4"
+MIME_HLS = "application/x-mpegURL"
 
 KIND_CLOUD = "cloud"
 KIND_LOCAL = "local"
@@ -89,8 +89,8 @@ SOURCE_EXPIRY_MARGIN_SECONDS = 5.0
 LOCAL_LIVE_DEADLINE_GRACE_SECONDS = 120.0
 LOCAL_LIVE_TIMEOUT_MIN_SECONDS = 300.0
 # A localvod ticket lists no segments until the device starts producing them.
-# Wait briefly before opening the proxy; the stream view gives up on the first
-# bytes after 45 s, so stay under that.
+# Wait briefly before opening the proxy; the playlist view gives up on the first
+# segments after 45 s, so stay under that.
 LOCAL_SEGMENT_WAIT_SECONDS = 30.0
 
 
@@ -98,7 +98,7 @@ async def async_get_media_source(hass: HomeAssistant) -> ImouRecordMediaSource:
     """Register Imou media source."""
     async_register_saved_record_view(hass)
     async_register_record_hls_proxy(hass)
-    async_register_record_playback_mp4(hass)
+    async_register_record_playback_hls(hass)
     async_register_record_covers(hass)
     return ImouRecordMediaSource(hass)
 
@@ -309,7 +309,7 @@ class ImouRecordMediaSource(MediaSource):
         pending_source: RecordHlsDescriptor | None = None
         source_minted_at = 0.0
 
-        async def async_mp4_source() -> RecordHlsDescriptor:
+        async def async_hls_source() -> RecordHlsDescriptor:
             # Avoid minting the same short-lived URL twice while resolving; remux
             # retries and later plays request a fresh one instead.
             nonlocal pending_source
@@ -353,24 +353,23 @@ class ImouRecordMediaSource(MediaSource):
             )
 
         if kind == KIND_LOCAL:
-            # A local clip is finite, but Imou only produces it while it streams
-            # and Stream restarts ended sources. Mux it into a fragmented MP4
-            # while the player reads it: playback can be stopped and ends at
-            # ENDLIST, and the finished file becomes a seekable cache entry.
+            # Imou only produces local segments while the clip streams, so keep
+            # the source alive for the clip and remux it as it arrives.
             register_playback_source(
                 self.hass,
                 cache_id,
                 entry_id,
-                async_mp4_source,
+                async_hls_source,
                 live_timeout_seconds=live_timeout_seconds,
             )
             _LOGGER.debug(
-                "Imou local recording playback %s – %s (live MP4)",
-                begin_time,
-                end_time,
+                "Imou local recording playback %s – %s (HLS)", begin_time, end_time
             )
             async_delete_record_playback_issue(self.hass, entry_id)
-            return PlayMedia(signed_record_stream_url(self.hass, cache_id), MIME_MP4)
+            return PlayMedia(
+                signed_record_playlist_url(self.hass, cache_id, stream_ttl_seconds),
+                MIME_HLS,
+            )
 
         try:
             descriptor = await async_record_hls_descriptor()
@@ -391,20 +390,22 @@ class ImouRecordMediaSource(MediaSource):
             )
         pending_source = descriptor
         source_minted_at = time.time()
-        # Stream cannot reliably stop or finish finite VOD. Send fragmented
-        # MP4 while the clip downloads, then cache the finalized seekable file.
+        # HLS is the one playback format every client handles itself: Safari and
+        # iOS play it natively and hls.js covers the rest, so web, Android and
+        # iPhone share the same path.
         register_playback_source(
             self.hass,
             cache_id,
             entry_id,
-            async_mp4_source,
+            async_hls_source,
             live_timeout_seconds=live_timeout_seconds,
         )
-        _LOGGER.debug(
-            "Imou recording playback %s – %s (progressive MP4)", begin_time, end_time
-        )
+        _LOGGER.debug("Imou recording playback %s – %s (HLS)", begin_time, end_time)
         async_delete_record_playback_issue(self.hass, entry_id)
-        return PlayMedia(signed_record_playback_url(self.hass, cache_id), MIME_MP4)
+        return PlayMedia(
+            signed_record_playlist_url(self.hass, cache_id, stream_ttl_seconds),
+            MIME_HLS,
+        )
 
     @override
     async def async_browse_media(self, item: MediaSourceItem) -> BrowseMediaSource:
