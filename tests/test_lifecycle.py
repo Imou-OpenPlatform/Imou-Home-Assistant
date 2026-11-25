@@ -77,9 +77,12 @@ async def test_trial_frontend_registers_once(hass: HomeAssistant) -> None:
         assert await async_register_insight_trial_frontend(hass) is True
         assert await async_register_insight_trial_frontend(hass) is True
 
-    register.assert_called_once()
-    add_js.assert_called_once()
-    assert add_js.call_args.args[1].endswith("trial-dialog.js?v=3")
+    assert register.call_count == 2
+    assert add_js.call_count == 2
+    assert [call.args[1] for call in add_js.call_args_list] == [
+        "/imou_life_static/trial-dialog.js?v=3",
+        "/imou_life_static/insight-form.js?v=1",
+    ]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
