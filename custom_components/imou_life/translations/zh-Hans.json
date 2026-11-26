@@ -602,6 +602,11 @@
       "device_volume": {
         "name": "音量",
         "state": {
+          "1": "档 1",
+          "2": "档 2",
+          "3": "档 3",
+          "4": "档 4",
+          "5": "档 5",
           "high": "高",
           "low": "低",
           "medium": "中",
@@ -617,7 +622,8 @@
           "intelligent": "智能夜视",
           "lowlight": "微光夜视",
           "off": "关闭",
-          "smartlowlight": "智能微光夜视"
+          "smartlowlight": "智能微光夜视",
+          "starlight": "黑光全彩夜视"
         }
       },
       "collection_point": {

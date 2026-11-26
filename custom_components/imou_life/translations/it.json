@@ -602,6 +602,11 @@
       "device_volume": {
         "name": "Volume",
         "state": {
+          "1": "Livello 1",
+          "2": "Livello 2",
+          "3": "Livello 3",
+          "4": "Livello 4",
+          "5": "Livello 5",
           "high": "Alto",
           "low": "Basso",
           "medium": "Medio",
@@ -617,7 +622,8 @@
           "intelligent": "Visione notturna intelligente",
           "lowlight": "Visione notturna in bassa luce",
           "off": "Disattivato",
-          "smartlowlight": "Visione notturna intelligente in bassa luce"
+          "smartlowlight": "Visione notturna intelligente in bassa luce",
+          "starlight": "Visione notturna a colori starlight"
         }
       },
       "collection_point": {

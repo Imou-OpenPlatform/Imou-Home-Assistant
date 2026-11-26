@@ -602,6 +602,11 @@
       "device_volume": {
         "name": "Lautstärke",
         "state": {
+          "1": "Stufe 1",
+          "2": "Stufe 2",
+          "3": "Stufe 3",
+          "4": "Stufe 4",
+          "5": "Stufe 5",
           "high": "Hoch",
           "low": "Niedrig",
           "medium": "Mittel",
@@ -617,7 +622,8 @@
           "intelligent": "Intelligente Nachtsicht",
           "lowlight": "Schwachlicht-Nachtsicht",
           "off": "Aus",
-          "smartlowlight": "Intelligente Schwachlicht-Nachtsicht"
+          "smartlowlight": "Intelligente Schwachlicht-Nachtsicht",
+          "starlight": "Sternenlicht-Vollfarb-Nachtsicht"
         }
       },
       "collection_point": {

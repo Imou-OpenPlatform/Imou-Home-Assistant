@@ -602,6 +602,11 @@
       "device_volume": {
         "name": "Volume",
         "state": {
+          "1": "Level 1",
+          "2": "Level 2",
+          "3": "Level 3",
+          "4": "Level 4",
+          "5": "Level 5",
           "high": "High",
           "low": "Low",
           "medium": "Medium",
@@ -617,7 +622,8 @@
           "intelligent": "Smart night vision",
           "lowlight": "Low-light night vision",
           "off": "Off",
-          "smartlowlight": "Smart low-light night vision"
+          "smartlowlight": "Smart low-light night vision",
+          "starlight": "Starlight full-color night vision"
         }
       },
       "collection_point": {
