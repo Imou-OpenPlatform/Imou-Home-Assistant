@@ -1273,6 +1273,107 @@ https://media.example/clip?userid=seg_4.ts&proto=https
 
 
 @pytest.mark.asyncio
+async def test_live_follow_drops_a_rewound_segment_before_endlist(
+    hass: HomeAssistant,
+) -> None:
+    """Mid-clip live windows must filter PTS rewinds, not only the final ENDLIST."""
+    first = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-TARGETDURATION:4
+#EXTINF:2,
+https://media.example/clip?userid=seg_0.ts&proto=https
+#EXTINF:2,
+https://media.example/clip?userid=seg_1.ts&proto=https
+#EXTINF:2,
+https://media.example/clip?userid=seg_2.ts&proto=https
+"""
+    # Still live (no ENDLIST). seg_3 re-serves seg_2's span under a new number —
+    # the jump users see as 32:58 going back to 32:56.
+    second = """#EXTM3U
+#EXT-X-MEDIA-SEQUENCE:1
+#EXT-X-TARGETDURATION:4
+#EXTINF:2,
+https://media.example/clip?userid=seg_1.ts&proto=https
+#EXTINF:2,
+https://media.example/clip?userid=seg_2.ts&proto=https
+#EXTINF:2,
+https://media.example/clip?userid=seg_3.ts&proto=https
+"""
+
+    def segment_url(name: str) -> str:
+        return f"https://media.example/clip?userid={name}.ts&proto=https"
+
+    bodies = {
+        segment_url("seg_0"): _ts_segment(0.0),
+        segment_url("seg_1"): _ts_segment(2.0),
+        segment_url("seg_2"): _ts_segment(4.0),
+        segment_url("seg_3"): _ts_segment(4.0),
+    }
+
+    async def fetch_body(
+        _hass: HomeAssistant, segment: str, **_kwargs: object
+    ) -> SimpleNamespace:
+        return _upstream_response(200, bodies[segment])
+
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy._load_media_playlist",
+            new_callable=AsyncMock,
+            return_value=(
+                first,
+                [segment_url("seg_0"), segment_url("seg_1"), segment_url("seg_2")],
+            ),
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_text",
+            new_callable=AsyncMock,
+            return_value=second,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            new_callable=AsyncMock,
+            side_effect=fetch_body,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_sign_path",
+            side_effect=lambda _hass, path, *_args, **_kwargs: path,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.get_url",
+            return_value="http://ha.local:8123",
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_call_later",
+        ),
+    ):
+        signed = await async_create_record_hls_proxy_playlist_url(
+            hass,
+            "https://media.example/local.m3u8",
+            refresh=AsyncMock(return_value="https://media.example/local.m3u8"),
+            entry_id="entry-a",
+        )
+        await hass.async_block_till_done()
+        session_id = signed.split("/record_hls/", 1)[1].split("/", 1)[0]
+        session = hass.data[DATA_RECORD_HLS_PROXY][session_id]
+        from custom_components.imou_life.record_hls_proxy import (
+            _async_follow_live_playlist,
+        )
+
+        assert await _async_follow_live_playlist(hass, session, force=True)
+
+    assert [segment.url for segment in session.segments] == [
+        segment_url("seg_0"),
+        segment_url("seg_1"),
+        segment_url("seg_2"),
+    ]
+    assert session.max_listed_pts == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
 async def test_live_playlist_serves_a_segment_once_it_is_published(
     hass: HomeAssistant,
 ) -> None:

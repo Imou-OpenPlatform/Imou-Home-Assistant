@@ -46,11 +46,6 @@ REFRESH_COOLDOWN_SECONDS = 5.0
 _REFRESH_MAX_BACKOFF_SECONDS = 60.0
 _REFRESH_MAX_FAILURES = 6
 _SIGNED_PATH_REFRESH_MARGIN_SECONDS = 60.0
-# Failed refreshes back off exponentially and stop after a few attempts so an
-# expired clip cannot keep spending API quota on every segment request.
-_REFRESH_MAX_BACKOFF_SECONDS = 60.0
-_REFRESH_MAX_FAILURES = 6
-_SIGNED_PATH_REFRESH_MARGIN_SECONDS = 60.0
 _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
 _LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
 # Live clips are buffered locally so a player that opens late can still fetch
@@ -688,6 +683,11 @@ async def _async_prefetch_upstream_segments(
         if 200 <= upstream_response.status < 300 and upstream_response.body:
             session.segment_prefetch[index] = upstream_response.body
             total_bytes += len(upstream_response.body)
+            start = _first_presentation_time(upstream_response.body)
+            if start is not None and (
+                session.max_listed_pts is None or start > session.max_listed_pts
+            ):
+                session.max_listed_pts = start
 
     for index in indexes:
         await async_prefetch(index)
@@ -789,17 +789,32 @@ async def _async_buffer_window_segments(
     hass: HomeAssistant,
     session: RecordHlsSession,
     incoming: list[HlsSegment],
+    *,
+    probe_known: bool = True,
 ) -> tuple[list[float | None], dict[str, bytes]]:
-    """Download the incoming window and read each segment's start time."""
+    """Download window segments and read each start time.
+
+    When ``probe_known`` is false, segments already listed on the session skip
+    the network fetch (their PTS watermark was recorded when they were kept).
+    """
     times: list[float | None] = []
     bodies: dict[str, bytes] = {}
+    known_identities = {
+        segment.identity for segment in session.segments if segment.identity is not None
+    }
     for segment in incoming:
         key = segment.content or segment.identity
         body: bytes | None = None
+        already_listed = (
+            segment.content is not None and segment.content in session.content_indexes
+        ) or (segment.identity is not None and segment.identity in known_identities)
         if segment.content is not None:
             known = session.content_indexes.get(segment.content)
             if known is not None:
                 body = session.segment_prefetch.get(known)
+        if already_listed and body is None and not probe_known:
+            times.append(None)
+            continue
         if body is None and segment.byte_range is None:
             try:
                 async with session.upstream_fetch_lock:
@@ -810,9 +825,11 @@ async def _async_buffer_window_segments(
                 upstream_response = None
             if upstream_response is not None and 200 <= upstream_response.status < 300:
                 body = upstream_response.body
-        if body is not None and key is not None:
+        # An empty 200 means the segment is listed but not published yet; keep
+        # it out of ``bodies`` so live windows still append and retry on serve.
+        if body and key is not None:
             bodies[key] = body
-        times.append(_first_presentation_time(body) if body is not None else None)
+        times.append(_first_presentation_time(body) if body else None)
     return times, bodies
 
 
@@ -863,17 +880,20 @@ async def _async_follow_live_playlist(
         if missing := _unlisted_window_segments(session, incoming):
             incoming = missing + incoming
             blocks = [split_blocks[0]] * len(missing) + split_blocks
-        if _is_sliding_playlist(body):
-            # Downloading takes longer than the window lives; bodies are read
-            # when the segment is served instead of before it is listed.
-            blocks = blocks or None
         else:
-            # Only the final window is verified: its trailing entries are
-            # listed past the clip's end and never get bytes.
-            window_times, window_bodies = await _async_buffer_window_segments(
-                hass, session, incoming
-            )
-            blocks = blocks or split_blocks
+            blocks = split_blocks
+        # Probe PTS while the clip is still live. Skipping this left mid-clip
+        # rewinds (for example 32:58 → 32:56) in the playlist until ENDLIST.
+        # Re-download known segments only until the watermark is seeded.
+        window_times, window_bodies = await _async_buffer_window_segments(
+            hass,
+            session,
+            incoming,
+            probe_known=session.max_listed_pts is None,
+        )
+        if not _is_sliding_playlist(body):
+            # Trailing entries on the final window are listed past the clip's
+            # end and never get bytes.
             while incoming and not window_bodies.get(
                 incoming[-1].content or incoming[-1].identity or ""
             ):
