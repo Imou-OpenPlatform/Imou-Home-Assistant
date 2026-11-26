@@ -184,7 +184,10 @@ def _search_window(hass: HomeAssistant, call: ServiceCall) -> tuple[str, str]:
 
 @dataclass
 class _SearchSession:
-    """One keyword search, including the cursor for each page already seen."""
+    """One keyword search and the cursor for the next page only.
+
+    The cloud search API only pages forward, so earlier pages are not kept.
+    """
 
     device_id: str
     channel: str
@@ -193,7 +196,6 @@ class _SearchSession:
     begin: str
     end: str
     page: int
-    history: list[str | None]
     next_index: str | None
     alarm_ids: tuple[str, ...]
 
@@ -204,29 +206,23 @@ def _usable_next_index(value: str | None) -> str | None:
     return value
 
 
-def _page_direction(call: ServiceCall) -> str:
+def _wants_next_page(call: ServiceCall) -> bool:
     direction = str(call.data.get("page") or "").strip().lower()
-    if direction in {"next", "previous"}:
-        return direction
-    return ""
+    if direction == "previous":
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="insight_search_forward_only",
+        )
+    return direction == "next"
 
 
-def _page_target(
-    session: _SearchSession | None, direction: str
-) -> tuple[str | None, int]:
-    """Return the cursor and page number for a next or previous step."""
+def _next_page_target(session: _SearchSession | None) -> tuple[str | None, int]:
+    """Return the forward cursor and page number for the next API request."""
     if session is None:
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="insight_search_page_unavailable",
         )
-    if direction == "previous":
-        if session.page <= 1:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="insight_search_first_page",
-            )
-        return session.history[session.page - 2], session.page - 1
     if not session.next_index:
         raise ServiceValidationError(
             translation_domain=DOMAIN,
@@ -246,16 +242,16 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
         )
     runtime = get_runtime_data(entry)
     assert runtime is not None
-    direction = _page_direction(call)
+    go_next = _wants_next_page(call)
     session = runtime.search_session
-    if direction:
+    if go_next:
         if (
             not isinstance(session, _SearchSession)
             or session.device_id != device.device_id
             or session.channel != str(channel)
         ):
             session = None
-        cursor, page = _page_target(session, direction)
+        cursor, page = _next_page_target(session)
         assert session is not None
         keyword = session.keyword
         begin, end = session.begin, session.end
@@ -290,7 +286,7 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
     next_index, hits = parse_search_ai_alarms(raw)
     alarm_ids = tuple(hit.alarm_id or "" for hit in hits)
     if (
-        direction == "next"
+        go_next
         and session is not None
         and (not hits or alarm_ids == session.alarm_ids)
     ):
@@ -307,15 +303,6 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
     search_sensor = runtime.workbench_search_sensor
     if search_sensor is not None:
         search_sensor.set_markdown(summary, markdown)
-    history = list(session.history) if session is not None else []
-    while len(history) < page:
-        history.append(None)
-    history[page - 1] = cursor
-    if direction == "previous" and page < len(history):
-        stored_next = history[page]
-    else:
-        stored_next = None
-        history = history[:page]
     runtime.search_session = _SearchSession(
         device_id=device.device_id,
         channel=str(channel),
@@ -324,8 +311,7 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
         begin=begin,
         end=end,
         page=page,
-        history=history,
-        next_index=stored_next or _usable_next_index(next_index),
+        next_index=_usable_next_index(next_index),
         alarm_ids=alarm_ids,
     )
     runtime.search_revision += 1

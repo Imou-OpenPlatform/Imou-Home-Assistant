@@ -879,8 +879,8 @@
     "insight_search_page_unavailable": {
       "message": "Cherchez d'abord, puis changez de page."
     },
-    "insight_search_first_page": {
-      "message": "C'est la première page."
+    "insight_search_forward_only": {
+      "message": "Messages intelligents ne peut avancer que vers la page suivante."
     },
     "insight_search_last_page": {
       "message": "Aucun autre résultat."

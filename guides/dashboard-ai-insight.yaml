@@ -39,17 +39,6 @@ views:
           - type: horizontal-stack
             cards:
               - type: button
-                name: Previous
-                icon: mdi:chevron-left
-                icon_height: 24px
-                tap_action:
-                  action: call-service
-                  service: imou_life.search_ai_alarms
-                  target:
-                    entity_id: select.imou_life_insight_workbench_device
-                  data:
-                    page: previous
-              - type: button
                 name: Search
                 icon: mdi:magnify
                 icon_height: 24px

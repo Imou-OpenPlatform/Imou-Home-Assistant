@@ -213,15 +213,10 @@ def build_insight_dashboard(
             search_devices.append(
                 _device_row_for_account(account_entity, label, device_row)
             )
+        # Cloud search only pages forward; do not offer a Previous control.
         actions = {
             "type": "horizontal-stack",
             "cards": [
-                _search_button(
-                    copy["previous"],
-                    "mdi:chevron-left",
-                    select_entity,
-                    {"page": "previous"},
-                ),
                 _search_button(copy["search"], "mdi:magnify", select_entity, {}),
                 _search_button(
                     copy["next"],

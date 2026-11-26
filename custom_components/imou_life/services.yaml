@@ -51,7 +51,6 @@ search_ai_alarms:
         select:
           options:
             - next
-            - previous
 refresh_ai_insight_briefing:
   target:
     entity:

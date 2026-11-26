@@ -77,7 +77,6 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
         for button in card["cards"]
     ]
     assert [action["data"] for action in actions] == [
-        {"page": "previous"},
         {},
         {"page": "next"},
     ]
@@ -147,7 +146,6 @@ def test_several_accounts_pick_the_account_before_the_camera() -> None:
     ]
     first_actions = switches[0]["card"]["cards"]
     assert [button["name"] for button in first_actions] == [
-        "Previous",
         "Search",
         "Next",
     ]

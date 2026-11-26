@@ -879,8 +879,8 @@
     "insight_search_page_unavailable": {
       "message": "请先搜索，再翻页。"
     },
-    "insight_search_first_page": {
-      "message": "已经是第一页。"
+    "insight_search_forward_only": {
+      "message": "智慧消息只能向后翻页。"
     },
     "insight_search_last_page": {
       "message": "没有更多结果。"
