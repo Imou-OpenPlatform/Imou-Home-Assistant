@@ -81,9 +81,11 @@ def test_trial_page_shows_the_dialog_copy_without_a_button() -> None:
         {},
         {"page": "next"},
     ]
-    assert search_cards[0]["entities"][-2:] == [
-        {"entity": "input_datetime.imou_insight_search_begin", "name": "Start"},
-        {"entity": "input_datetime.imou_insight_search_end", "name": "End"},
+    assert search_cards[0]["entities"][-4:] == [
+        {"type": "section", "label": "Start date"},
+        {"entity": "input_datetime.imou_insight_search_begin", "name": " "},
+        {"type": "section", "label": "End date"},
+        {"entity": "input_datetime.imou_insight_search_end", "name": " "},
     ]
     rendered = str(search)
     assert "input_datetime.imou_insight_search_begin" in rendered
@@ -120,17 +122,23 @@ def test_several_accounts_pick_the_account_before_the_camera() -> None:
     search = config["views"][1]["cards"][0]
     assert search["type"] == "vertical-stack"
     shared = search["cards"][0]["entities"]
-    assert shared[0] == {
-        "entity": "input_select.imou_insight_account",
-        "name": "账号",
-    }
-    assert [row["type"] for row in shared[1:3]] == ["conditional", "conditional"]
-    assert shared[1]["row"] == {"entity": "select.sg", "name": "Camera"}
-    assert shared[2]["row"] == {"entity": "select.cn", "name": "Camera"}
-    assert [row["entity"] for row in shared[3:]] == [
+    assert shared[0:2] == [
+        {"type": "section", "label": "账号"},
+        {"entity": "input_select.imou_insight_account", "name": " "},
+    ]
+    assert shared[2] == {"type": "section", "label": "Camera"}
+    assert [row["type"] for row in shared[3:5]] == ["conditional", "conditional"]
+    assert shared[3]["row"] == {"entity": "select.sg", "name": " "}
+    assert shared[4]["row"] == {"entity": "select.cn", "name": " "}
+    assert [row.get("entity") for row in shared[5:] if "entity" in row] == [
         "input_text.imou_insight_search_keyword",
         "input_datetime.imou_insight_search_begin",
         "input_datetime.imou_insight_search_end",
+    ]
+    assert [row["label"] for row in shared[5:] if row.get("type") == "section"] == [
+        "Search text",
+        "Start date",
+        "End date",
     ]
     switches = [card for card in search["cards"][1:] if card["type"] == "conditional"]
     assert [card["conditions"][0]["state"] for card in switches] == [
@@ -148,10 +156,17 @@ def test_several_accounts_pick_the_account_before_the_camera() -> None:
     assert all(card["type"] == "conditional" for card in result_cards)
     assert "sensor.search_cn" not in str(result_cards[0])
     briefing_rows = config["views"][0]["cards"][0]["entities"]
-    assert briefing_rows[0]["name"] == "账号"
-    assert briefing_rows[1]["type"] == "conditional"
-    assert briefing_rows[1]["row"]["entity"] == "select.sg"
-    assert briefing_rows[-1]["entity"] == "input_datetime.imou_insight_briefing_end"
+    assert briefing_rows[0:2] == [
+        {"type": "section", "label": "账号"},
+        {"entity": "input_select.imou_insight_account", "name": " "},
+    ]
+    assert briefing_rows[2] == {"type": "section", "label": "Camera"}
+    assert briefing_rows[3]["type"] == "conditional"
+    assert briefing_rows[3]["row"]["entity"] == "select.sg"
+    assert briefing_rows[-2:] == [
+        {"type": "section", "label": "Date"},
+        {"entity": "input_datetime.imou_insight_briefing_end", "name": " "},
+    ]
 
 
 def test_repeated_account_titles_stay_distinct() -> None:

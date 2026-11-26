@@ -67,12 +67,12 @@ _COPY_DEFAULTS = {
     "account_name": "Insight account",
     "date": "Date",
     "keyword": "Search text",
-    "search_begin": "Start",
-    "search_end": "End",
+    "search_begin": "Start date",
+    "search_end": "End date",
     "date_name": "Briefing date",
     "keyword_name": "Search text",
-    "search_begin_name": "Start",
-    "search_end_name": "End",
+    "search_begin_name": "Start date",
+    "search_end_name": "End date",
     "search_alarms": "Search alarms",
     "refresh_briefing": "Refresh the briefing",
     "morning_refresh": "Refresh the briefing each morning",
@@ -164,6 +164,12 @@ def account_option_labels(accounts: list[InsightDashboardAccount]) -> list[str]:
     return labels
 
 
+def _sectioned_control(label: str, row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Put the label on its own row so the control can use the full width."""
+    control = {**row, "name": " "}
+    return [{"type": "section", "label": label}, control]
+
+
 def build_insight_dashboard(
     accounts: list[InsightDashboardAccount],
     *,
@@ -183,22 +189,28 @@ def build_insight_dashboard(
     search_actions: list[dict[str, Any]] = []
     briefing_cards: list[dict[str, Any]] = []
     search_cards: list[dict[str, Any]] = []
+    briefing_devices: list[dict[str, Any]] = []
+    search_devices: list[dict[str, Any]] = []
     if not single:
-        briefing_rows.append({"entity": account_entity, "name": copy["account"]})
-        search_rows.append({"entity": account_entity, "name": copy["account"]})
+        briefing_rows.extend(
+            _sectioned_control(copy["account"], {"entity": account_entity})
+        )
+        search_rows.extend(
+            _sectioned_control(copy["account"], {"entity": account_entity})
+        )
     for account, label in zip(ready, labels, strict=True):
         select_entity = account.select_entity
         if select_entity is None:
             continue
-        device_row = {"entity": select_entity, "name": copy["device"]}
+        device_row = {"entity": select_entity, "name": " "}
         if single:
-            briefing_rows.append(device_row)
-            search_rows.append(device_row)
+            briefing_devices.append(device_row)
+            search_devices.append(device_row)
         else:
-            briefing_rows.append(
+            briefing_devices.append(
                 _device_row_for_account(account_entity, label, device_row)
             )
-            search_rows.append(
+            search_devices.append(
                 _device_row_for_account(account_entity, label, device_row)
             )
         actions = {
@@ -245,13 +257,22 @@ def build_insight_dashboard(
             search_cards.append(
                 _account_conditional(account_entity, label, [search_card])
             )
+    if briefing_devices:
+        briefing_rows.append({"type": "section", "label": copy["device"]})
+        briefing_rows.extend(briefing_devices)
+        search_rows.append({"type": "section", "label": copy["device"]})
+        search_rows.extend(search_devices)
     if ready:
-        briefing_rows.append({"entity": date_entity, "name": copy["date"]})
-        search_rows.append({"entity": keyword_entity, "name": copy["keyword"]})
-        search_rows.append(
-            {"entity": search_begin_entity, "name": copy["search_begin"]}
+        briefing_rows.extend(_sectioned_control(copy["date"], {"entity": date_entity}))
+        search_rows.extend(
+            _sectioned_control(copy["keyword"], {"entity": keyword_entity})
         )
-        search_rows.append({"entity": search_end_entity, "name": copy["search_end"]})
+        search_rows.extend(
+            _sectioned_control(copy["search_begin"], {"entity": search_begin_entity})
+        )
+        search_rows.extend(
+            _sectioned_control(copy["search_end"], {"entity": search_end_entity})
+        )
     else:
         briefing_cards.append({"type": "markdown", "content": copy["empty"]})
         search_cards.append({"type": "markdown", "content": copy["empty"]})
