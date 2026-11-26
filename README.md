@@ -100,7 +100,7 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - **Motion** — on cameras that support picture change or human detection. Shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears. Pet and vehicle alarms do not change it. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable. Distinct from the **Picture change** / **Human detection** switches (those turn detection on or off)
   - **Call** — an event on a channel that can receive a call. An incoming call fires it; unanswered calls do not. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable
   - **Alarm picture** (`image`) — last decrypted alarm still for that lens. Pin it on a dashboard. Needs **Enable event push** with **Device capability events**; if push is off the entity stays but is unavailable. Empty until a push includes a picture this Home Assistant can decrypt. Does not take a live snapshot
-  - Privacy mode, night vision, flip image, wide dynamic range (`select`), smart tracking
+  - Privacy mode, **Night vision mode** (including **Starlight full-color night vision** where supported), **Volume** (Level 1–5 or Mute / Low / Medium / High, depending on the device), flip image, wide dynamic range (`select`), smart tracking
   - **White light** (`light`) on cameras that have a floodlight; on or off only
   - Color bulbs appear as one **Light**: on/off, brightness, color temperature or color, and scenes, plus a countdown. Adjusting color temperature switches the bulb to white light. White brightness and color brightness stay independent. Color bulbs do not show **Notify on alarm**
   - Alarm-linked white light, alarm-linked siren (configuration switches)
@@ -253,7 +253,7 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - **动态侦测** — 支持画面变化或人形检测的通道上出现。摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。宠物和车辆告警不会改变它。需 **启用事件推送** 且勾选 **设备能力事件**；关掉推送时实体仍在，但是不可用。和 **画面变化**、**人形检测** 开关不同（开关是开不开检测）
   - **呼叫** — 能接呼叫的通道上的事件。有来电时触发，未接听不会。需 **启用事件推送** 且勾选 **设备能力事件**；关掉推送时实体仍在，但是不可用
   - **告警图片**（`image`）— 该镜头最近一张已解密的告警图，可钉在仪表盘。需 **启用事件推送** 且勾选 **设备能力事件**；关掉时实体仍在，但是不可用。要等一次带图且本机解密成功的推送才会有画面。不会去拍直播快照
-  - 隐私模式、夜视、画面翻转、宽动态（选择框）、智能追踪
+  - 隐私模式、**夜视模式**（支持时含 **黑光全彩夜视**）、**音量**（按设备为档 1～档 5，或静音 / 低 / 中 / 高）、画面翻转、宽动态（选择框）、智能追踪
   - **白光灯**（`light`），仅在有补光灯的摄像头上出现，只能开关
   - 彩色灯泡显示为一盏 **灯**：可开关、调节亮度、选择色温或颜色、选择场景，灯泡上还有倒计时。调节色温会切到白光。白光亮度和彩光亮度互不影响。彩色灯泡不显示 **告警时通知**
   - 告警联动白光灯、告警联动警笛（配置区开关）

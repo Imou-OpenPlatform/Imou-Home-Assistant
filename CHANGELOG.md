@@ -22,6 +22,8 @@
 #### Changed
 
 - Requires **pyimouapi 2.0.0**, installed automatically with this integration.
+- **Night vision mode** includes **Starlight full-color night vision** on devices that support it.
+- **Volume** follows the device: five-level models show **Level 1**–**Level 5**; other models keep **Mute** / **Low** / **Medium** / **High**.
 - **AI Briefing** and **Smart Messages** list a camera when **AI Insight** or **AI Insight cloud storage** is active or paused, including when the channel is offline.
 - **AI Insight cloud storage** can show **Paused** when the current cloud plan is paused.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
@@ -405,6 +407,8 @@
 #### 变更
 
 - 需要 **pyimouapi 2.0.0**，随本集成自动安装。
+- **夜视模式** 在支持的设备上包含 **黑光全彩夜视**。
+- **音量** 按设备能力显示：五档机型为 **档 1**～**档 5**；其他机型仍为 **静音** / **低** / **中** / **高**。
 - **AI简报** 与 **智慧消息** 在 **AI智见** 或 **AI智见云存储** 为已开通或暂停中时会列出该摄像头，通道离线时也可查询。
 - **AI智见云存储** 在云套餐为暂停状态时显示 **暂停中**。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
