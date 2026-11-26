@@ -13,43 +13,37 @@
 
 #### Added
 
-- **Media browser** — browse **Cloud recordings**, **Local recordings** (when the device supports local recording access), and **Record on alarm** clips per camera channel under **Media**.
-- **AI Insight** on camera channels — diagnostic **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** sensors; alarm notifications show who was detected and a picture description when the alarm includes them.
-- **AI Insight** sidebar (**AI Briefing**, **Smart Messages**, and **Request a trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. Picking a date on **AI Briefing** refreshes that day's summary, from 00:00:00 through 23:59:59, including risk periods, the hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Smart Messages** uses a start date and an end date, from 00:00:00 on the start date through 23:59:59 on the end date, and steps through results with **Previous** and **Next**. **Request a trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
-- Service **`device_snap_detect`** — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, draws detection boxes on the picture, and sends it to your notification targets (defaults to the Home Assistant web notification drawer and signed-in Companion Apps when omitted).
+- **Media browser** — browse **Cloud recordings**, **Local recordings** (when the device supports local recording access), and **Record on alarm** clips per camera channel under **Media**. Playback uses **HLS** on this Home Assistant for web, Android, and iOS (including Safari). The first play remuxes the clip into a playlist and segments that are then cached; local clips remux as Imou produces them. The player can stop, seek, and ends the clip instead of restarting it.
+- **AI Insight** on camera channels — diagnostic **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** sensors. **AI Insight** / **AI Insight cloud storage** can show **Paused** when the plan is paused. Alarm notifications show who was detected and a picture description when the alarm includes them.
+- **AI Insight** sidebar (**AI Briefing**, **Smart Messages**, and **Request a trial**) plus services **`search_ai_alarms`** and **`refresh_ai_insight_briefing`**. **AI Briefing** picks a day (00:00:00–23:59:59) and shows risk periods, the hourly breakdown, and alarm counts (**person**, **vehicle**, **pet**, **package**, and **total**). **Smart Messages** uses **Start date** and **End date** (00:00:00 on the start date through 23:59:59 on the end date), names who was seen with an icon, and shows a 10-step risk bar; results page forward with **Next** only (the cloud search API does not support going back). With more than one Imou Life account, the account and camera sit on the same card. Cameras stay in the pickers when **AI Insight** or **AI Insight cloud storage** is active or paused, including when the channel is offline. **Request a trial** explains how to start a trial via the official WeChat or WhatsApp. Example dashboard: [`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml).
+- Service **`device_snap_detect`** (**Capture and detect**) — captures a cloud snapshot on the targeted camera, runs person / vehicle / pet detection, always posts the picture to the notification drawer and signed-in Companion Apps, and draws a box only when the result is at least 85% sure. Detection names and icons match **Smart Messages**, alarm notifications, and the daily briefing chart.
 - Login **server region** adds **Imou Life (default)**, preselected for new setups.
 
 #### Changed
 
 - Requires **pyimouapi 2.0.0**, installed automatically with this integration.
-- **Night vision mode** includes **Starlight full-color night vision** on devices that support it.
-- **Volume** follows the device: five-level models show **Level 1**–**Level 5**; other models keep **Mute** / **Low** / **Medium** / **High**.
-- **AI Briefing** and **Smart Messages** list a camera when **AI Insight** or **AI Insight cloud storage** is active or paused, including when the channel is offline.
-- **AI Insight cloud storage** can show **Paused** when the current cloud plan is paused.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
+- **Night vision mode** includes **Starlight full-color night vision** on devices that support it.
+- **Volume** follows the device: five-level models show **Level 1**–**Level 5**; other models keep **Mute** / **Low** / **Medium** / **High**.
 - Alarm pictures are decrypted on this Home Assistant whenever an alarm includes one. **Configure** no longer has a separate Alarm pictures page. The picture password is read when Imou Life loads; if you change it in the Imou app, reload this integration before pictures use the new password. A picture that still cannot be opened is tried with the device serial.
 - Clip length for **Record on alarm** is set under **Configure → Alarm push and notifications**. Each camera's switch stays on its device page.
+- Default alarm notify targets are the Home Assistant web notification drawer and Companion App services, so phones are not messaged twice.
 - **Sleep control retry wait** is set under **Configure → Polling and cameras → Camera defaults**.
 - **Motion** shows **Detected** when the camera reports motion, then **Clear** after about 15 seconds, or right away when PIR clears.
 - When the two official `.so` libraries for alarm pictures are missing, **Settings → System → Repairs** explains where to download and place them. A host that is not linux x86-64 gets a repair noting that pictures stay encrypted.
+- **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
+- **Restart** appears when the device can be restarted.
 
 #### Fixed
 
 - The **Live** camera reuses the last still for 30 seconds. Opening it again in that window shows the same picture without spending another snapshot call.
-- **Capture and detect** always posts the picture to the notification drawer and to signed-in phone apps. The service no longer asks for notification targets. It names what was found and draws a box only when the result is at least 85% sure. A box given as a fraction of the picture is drawn at that place on the picture.
-- **Smart Messages** names who was seen on each alarm, with an icon, and shows a 10-step risk bar plus a short description from low to severe.
-- **Capture and detect**, **Smart Messages**, and alarm notifications name a person, a vehicle, a pet, and a package the same way, with the same icons. **Capture and detect** also shows how sure the result is on that 10-step bar. The daily briefing chart uses those same names.
-- **Restart** appears when the device can be restarted. Pressing it restarts the device.
 - **Live** preview and a downloaded snapshot show the whole picture.
 - A camera that cannot list which days have recordings shows a folder for each day, through today in the current month. Open a day to load that day's clips.
-- **Local recordings** and **Cloud recordings** play as **HLS** on this Home Assistant (including Safari and the iOS Companion app). The first play remuxes the clip into a playlist and segments that are then cached; local clips remux as Imou produces them in real time. The player can stop, seek, and ends the clip instead of restarting it. Expired cloud segment tokens are fetched again while remux runs. A clip whose audio track is shorter than the video, or has gaps where the camera sent no audio, gets a continuous audio timeline padded with silence so playback does not stop early.
 - **Clip covers** in the media browser ask the cloud for a freshly signed cover URL when the first download is refused, so fewer clip tiles show an empty cover.
 - **Cloud recordings** clip tiles show only the start and end time, like **Local recordings**, so the title fits the tile. The day header already shows the date.
-- **Live** for owner cameras uses cloud HLS. Shared cameras still use the cloud RTSP address.
-- With more than one Imou Life account, **AI Briefing** and **Smart Messages** put the account and camera on the same card. Search buttons and results stay for that account.
-- The sidebar tabs are **AI Briefing**, **Smart Messages**, and **Request a trial**.
-- **AI Insight** can show **Paused** when the plan is paused. **AI Briefing** and **Smart Messages** still list that camera.
+- Expired cloud segment tokens are fetched again while remux runs. A clip whose audio track is shorter than the video, or has gaps where the camera sent no audio, gets a continuous audio timeline padded with silence so playback does not stop early.
+- Recording day listings and cover retries share work so Open Platform calls are not repeated for every blank tile.
 
 ### [1.4.4]
 
@@ -398,43 +392,37 @@
 
 #### 新增
 
-- **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。
-- **智见**（摄像头通道）— 诊断用 **AI智见**、**AI智见云存储**、**云存储** 传感器；告警通知在告警附带识别信息时显示检测到的对象与画面描述。
-- **AI 智见** 侧边栏（**AI简报**、**智慧消息**、**申请试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。在 **AI简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动刷新概览、风险时段、两小时分段与告警统计（**人**、**车**、**宠物**、**包裹**、**全部**）。**智慧消息** 选定开始日期和结束日期，从开始日 00:00:00 查到结束日 23:59:59，并用 **上一页**、**下一页** 翻页。**申请试用** 页说明添加官方微信或 WhatsApp 获取试用的方式。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
-- 服务 **`device_snap_detect`** — 对指定摄像头云端抓图并做人 / 车 / 宠检测，把检测框画到图片上并发送到通知目标（省略时默认发送到 Home Assistant 网页通知栏与已登录的手机 App）。
+- **媒体浏览器** — 在 **媒体** 中按摄像头通道浏览 **云录像**、**本地录像**（设备支持本地录像访问时显示）和 **告警时录像**。网页、Android 与 iOS（含 Safari）统一用本机 **HLS** 播放；首次播放时由这台 Home Assistant 转封装成播放列表并缓存，本地录像边生成边转封装；可停止、拖动进度条，播到结尾会正常结束。
+- **智见**（摄像头通道）— 诊断用 **AI智见**、**AI智见云存储**、**云存储** 传感器。套餐暂停时 **AI智见** / **AI智见云存储** 可显示 **暂停中**。告警附带识别信息时，通知会显示检测到的对象与画面描述。
+- **AI 智见** 侧边栏（**AI简报**、**智慧消息**、**申请试用**）及服务 **`search_ai_alarms`**、**`refresh_ai_insight_briefing`**。**AI简报** 选定一天（00:00:00～23:59:59）后显示风险时段、分时段统计与告警数量（**人**、**车**、**宠物**、**包裹**、**全部**）。**智慧消息** 使用 **开始日期** 与 **结束日期**（开始日 00:00:00 到结束日 23:59:59），每条结果标出识别对象与 10 格风险条；只能用 **下一页** 继续向后翻（云端搜索不支持回翻）。多账号时账号与摄像头在同一张卡上。**AI智见** 或 **AI智见云存储** 为已开通或暂停中时，离线通道也会出现在选择列表里。**申请试用** 说明如何通过官方微信或 WhatsApp 开通试用。仪表盘示例：[`guides/dashboard-ai-insight.yaml`](guides/dashboard-ai-insight.yaml)。
+- 服务 **`device_snap_detect`**（**抓图检测**）— 对指定摄像头云端抓图并做人 / 车 / 宠检测；图片总会发到通知栏与已登录的 Companion App，把握达到 85% 才画框。检测名称与图标与 **智慧消息**、告警通知、每日简报图表一致。
 - 登录 **服务器区域** 新增 **Imou Life（默认）**，新安装时预选。
 
 #### 变更
 
 - 需要 **pyimouapi 2.0.0**，随本集成自动安装。
-- **夜视模式** 在支持的设备上包含 **黑光全彩夜视**。
-- **音量** 按设备能力显示：五档机型为 **档 1**～**档 5**；其他机型仍为 **静音** / **低** / **中** / **高**。
-- **AI简报** 与 **智慧消息** 在 **AI智见** 或 **AI智见云存储** 为已开通或暂停中时会列出该摄像头，通道离线时也可查询。
-- **AI智见云存储** 在云套餐为暂停状态时显示 **暂停中**。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
+- **夜视模式** 在支持的设备上包含 **黑光全彩夜视**。
+- **音量** 按设备能力显示：五档机型为 **档 1**～**档 5**；其他机型仍为 **静音** / **低** / **中** / **高**。
 - 告警图片只要推送里带图就会在本机解密，**配置** 里不再单独设「告警图片」页。图片密码在 Imou Life 加载时读取；在乐橙 App 里修改密码后，重新加载本集成才会使用新密码。仍解不开的图片会尝试设备序列号。
 - **告警时录像** 的片段时长改在 **配置 → 告警推送与通知** 里设置，各摄像头的开关仍在设备页。
+- 告警通知的默认目标是网页通知栏与 Companion App 服务，手机不会收到两条。
 - **休眠控制重试等待** 改在 **配置 → 轮询与摄像头 → 摄像头默认** 里设置。
 - **动态侦测** 在摄像头上报移动时显示 **检测到**，约 15 秒后回到 **清除**，PIR 清除会立刻回到 **清除**。
 - 告警图片缺少两个官方 `.so` 库时，**设置 → 系统 → 修复** 会说明下载地址与放置目录；非 linux x86-64 主机会提示图片保持加密。
+- **直播**：自有设备使用云端 HLS；分享设备仍用云端 RTSP。
+- **重启** 在设备可以重启时出现。
 
 #### 修复
 
 - **直播** 会将最近一张静止画面保留 30 秒，这段时间内再次打开直接复用，不会重复请求云端抓图。
-- **抓图检测** 总会把图片发到通知栏和已登录的手机，服务里不再单独选通知目标。把握达到 85% 才写出检测结果并画框。位置按画面比例给出时，框画在对应的人、车或宠物上。
-- **智慧消息** 在每条告警上写出识别到的对象（带图标），并用 10 格风险条和简短说明标出风险等级，从较低到很高。
-- **抓图检测**、**智慧消息**和告警通知用同一套名字和图标标出人、车、宠物和包裹。**抓图检测**再用这 10 格标出把握。每日简报的图表也用同样的名字。
-- **重启** 在设备可以重启时出现。按下后重启设备。
 - **直播** 的预览和下载的抓图显示完整画面。
 - 不能按月列出有录像的日期时，每一天都有一个文件夹，当前月只到今天。点进某一天再加载当天的片段。
-- **本地录像**和**云录像**统一用 **HLS** 播放，Safari 与 iOS App 也走同一路径。首次播放时由这台 Home Assistant 把片段转封装成播放列表并缓存，可停止、拖动进度条，播放到结尾会正常结束，不再反复重播最后一段；本地录像边生成边转封装，云录像过程中过期的分片令牌会自动重新获取；音频轨比视频短、或中间有摄像头没发音频的空档时，会补齐为连续的音频轨并补静音，避免播到音轨结尾提前停下。
 - **录像封面**：云端拒绝第一次签名地址时会重新获取新地址再下载，媒体库里的空白封面更少。
 - **云录像**片段的标题和**本地录像**一样只显示起止时间，标题不再被日期挤断；日期在当天的文件夹标题上。
-- **直播**：自有设备使用云端 HLS。分享设备仍用云端 RTSP。
-- 添加了多个 Imou Life 账号时，**AI简报**和**智慧消息**把账号和摄像头放在同一张卡上。搜索按钮和结果仍只显示这个账号的。
-- 侧边栏页签为 **AI简报**、**智慧消息**、**申请试用**。
-- **AI 智见**在套餐暂停时可显示 **暂停中**。**AI简报**和**智慧消息**仍会列出该摄像头。
+- 云录像转封装过程中过期的分片令牌会自动重新获取；音频轨比视频短、或中间有摄像头没发音频的空档时，会补齐为连续的音频轨并补静音，避免播到音轨结尾提前停下。
+- 按日列出录像与封面重试会共用结果，不再为每张空白封面重复调用开放平台。
 
 ### [1.4.4]
 

@@ -113,7 +113,7 @@ Drill down by month → days with clips → individual segments. Playback uses *
 
 ### AI Insight workbench
 
-**AI Insight** (smart search and daily briefings) needs the channel on an **AI Insight** or **cloud storage** plan. Check **AI Insight** / **Cloud storage** on the camera device page.
+**AI Insight** (smart search and daily briefings) needs the channel on an **AI Insight** or **cloud storage** plan. Check **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** on the camera device page (sensors can show **Paused**).
 
 Per account (integration device page):
 
@@ -126,10 +126,10 @@ Per account (integration device page):
 
 | Service | Fields | Default window |
 | --- | --- | --- |
-| `imou_life.search_ai_alarms` | `keyword` (required), `begin_date`, `end_date` (`YYYY-MM-DD`), `days`, `page` (`next` or `previous`) | 00:00:00 on the start date through 23:59:59 on the end date. With no dates, the last 7 calendar days |
+| `imou_life.search_ai_alarms` | `keyword` (required), `begin_date`, `end_date` (`YYYY-MM-DD`), `days`, `page` (`next` only) | 00:00:00 on the start date through 23:59:59 on the end date. With no dates, the last 7 calendar days |
 | `imou_life.refresh_ai_insight_briefing` | `end_date` (`YYYY-MM-DD`, defaults to today) | that day, 00:00:00 through 23:59:59 |
 
-The sidebar gains **AI Insight**, with **Briefing**, **Search**, and **Trial**. Picking a date on **Briefing** refreshes that day, from 00:00:00 through 23:59:59. **Search** uses the start and end dates on the page the same way: 00:00:00 on the start date through 23:59:59 on the end date. Each match names who was seen, with an icon, and shows a 10-step risk bar. **Previous** and **Next** move through the matches. **Trial** explains that adding the official WeChat or WhatsApp starts a trial.
+The sidebar gains **AI Insight**, with **AI Briefing**, **Smart Messages**, and **Request a trial**. Picking a date on **AI Briefing** refreshes that day, from 00:00:00 through 23:59:59. **Smart Messages** uses **Start date** and **End date** the same way: 00:00:00 on the start date through 23:59:59 on the end date. Each match names who was seen, with an icon, and shows a 10-step risk bar. **Next** pages forward only (the cloud search API does not support going back). With more than one account, the account and camera sit on the same card. **Request a trial** explains that adding the official WeChat or WhatsApp starts a trial.
 
 | Option | What it does |
 | --- | --- |
@@ -276,7 +276,7 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 ### 智见工作台
 
-**智见**（智能搜索与每日简报）需要该通道已开通 **AI智见** 或 **云存储**。可在摄像头设备页看 **AI智见**、**云存储** 传感器。
+**智见**（智能搜索与每日简报）需要该通道已开通 **AI智见** 或 **云存储**。可在摄像头设备页看 **AI智见**、**AI智见云存储**、**云存储** 传感器（可显示 **暂停中**）。
 
 每个账号（集成设备页）：
 
@@ -289,10 +289,10 @@ iOS 上未展开的通知只显示小缩略图，**长按或下拉展开才是�
 
 | 服务 | 字段 | 默认时间范围 |
 | --- | --- | --- |
-| `imou_life.search_ai_alarms` | `keyword`（必填）、`begin_date`、`end_date`（`YYYY-MM-DD`）、`days`、`page`（`next` 下一页或 `previous` 上一页） | 开始日 00:00:00 到结束日 23:59:59。未选日期时为最近 7 个自然日 |
+| `imou_life.search_ai_alarms` | `keyword`（必填）、`begin_date`、`end_date`（`YYYY-MM-DD`）、`days`、`page`（仅 `next` 下一页） | 开始日 00:00:00 到结束日 23:59:59。未选日期时为最近 7 个自然日 |
 | `imou_life.refresh_ai_insight_briefing` | `end_date`（`YYYY-MM-DD`，默认当天） | 当天 00:00:00 到 23:59:59 |
 
-侧边栏会出现 **AI 智见**，分页是 **简报**、**搜索**、**试用**。在 **简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动重算。**搜索** 选定开始日期和结束日期后，从开始日 00:00:00 查到结束日 23:59:59。每条结果会标出识别到的对象，并用 10 格标出风险等级。一次显示一页，用 **上一页** 和 **下一页** 继续看。**试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
+侧边栏会出现 **AI 智见**，页签是 **AI简报**、**智慧消息**、**申请试用**。在 **AI简报** 里选定日期后，按当天 00:00:00 到 23:59:59 自动重算。**智慧消息** 选定 **开始日期** 和 **结束日期** 后，从开始日 00:00:00 查到结束日 23:59:59。每条结果会标出识别到的对象，并用 10 格标出风险等级。一次显示一页，只能用 **下一页** 继续向后翻（云端搜索不支持回翻）。多账号时账号与摄像头在同一张卡上。**申请试用** 页写明添加官方微信或 WhatsApp 即可获取试用。
 
 | 选项 | 作用 |
 | --- | --- |

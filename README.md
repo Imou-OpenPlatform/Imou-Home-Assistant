@@ -86,13 +86,13 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Optional webhook callback for real-time messages from Imou cloud (requires public HA URL or manual callback URL)
   - **Configure → Alarm push and notifications** — callback URL (suggested URL; replace hostname and port if it is not public), message types, and phone notify.
   - Home Assistant events: `imou_life_event` (all accepted pushes), `imou_life_alarm` (alarm-type only)
-  - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications**. Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
+  - Optional alarm notifications: pick Companion App or other notify targets under **Configure → Alarm push and notifications** (defaults to the web notification drawer and Companion App services so phones are not messaged twice). Silence one device with **Notify on alarm** on its device page (default on). Companion App: tap opens that camera/accessory's Home Assistant device page
   - Alarm pictures are decrypted on this Home Assistant (**linux x86-64 only**). [Download the official libraries](#obtain-the-official-decrypt-libraries) and place both `.so` files in `/config/imou_life/native/`. Many motion pushes have no picture URL; those stay text-only. Full setup: [Configure reference](guides/configuration.md#english)
   - Choose push message types (**Device capability events** and **Device online/offline**). With **Device capability events** checked, smart plugs, bulbs, and sensors update from real-time state push instead of interval polling; messages also sync to the Imou Life app
   - **Record on alarm** — built-in: per-camera switch (default off), duration under **Configure → Alarm push and notifications**. Clips are saved under Media and shown in the media browser. No YAML automation. Setup: [Configure reference](guides/configuration.md#record-on-alarm)
 * **Camera**
-  - Status (name, online, storage, battery, …)
-  - Live video
+  - Status (name, online, storage, battery, …) — entities appear only for features that device reports
+  - **Live** — owner cameras use cloud HLS; shared cameras use cloud RTSP. The last still is reused for 30 seconds
   - PTZ (direction buttons)
   - **Collection points** — **Go to collection point** lists points from the device / Imou Life app; choose one to move the camera (current position is not read back)
   - Detection: picture change, human, pet, PIR
@@ -106,9 +106,9 @@ The link yields a zip. After you extract it, the two libraries are under `Open-P
   - Alarm-linked white light, alarm-linked siren (configuration switches)
   - Manual siren via `siren` entity (`siren.turn_on` / `siren.turn_off`) on supported devices; does not require event push for manual control. Entity state auto-clears after about 15 seconds, or immediately when a siren-cleared push arrives
   - Audio recording, prompt sound, abnormal sound alarm
-  - Restart device
-  - **Media browser** — cloud, local, and post-alarm recordings per channel under **Media** ([details](guides/configuration.md#media-browser))
-  - **AI Insight** — **AI Insight** / **Cloud storage** sensors, detected-object and picture descriptions in alarm notifications, sidebar (**Briefing**, **Search**, **Trial**), and [`device_snap_detect`](guides/configuration.md#capture-and-detect) ([details](guides/configuration.md#ai-insight-workbench))
+  - **Restart** when the device can be restarted
+  - **Media browser** — **Cloud recordings**, **Local recordings**, and **Record on alarm** per channel under **Media**; playback is **HLS** on this Home Assistant for web, Android, and iOS ([details](guides/configuration.md#media-browser))
+  - **AI Insight** — **AI Insight**, **AI Insight cloud storage**, and **Cloud storage** sensors (can show **Paused**); detected-object and picture descriptions in alarm notifications; sidebar **AI Briefing** / **Smart Messages** / **Request a trial** (**Start date** / **End date**, page forward with **Next** only); multi-account puts the account and camera on the same card; [`device_snap_detect`](guides/configuration.md#capture-and-detect) (**Capture and detect**) ([details](guides/configuration.md#ai-insight-workbench))
 * **Alarm sensors**
   - Status (name, online, battery, …)
   - Arming — `alarm_control_panel` (home / away / disarm)
@@ -239,13 +239,13 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 可选 Webhook 回调接收 Imou 云端实时消息（需公网可访问的 HA 地址或手动填写回调 URL）
   - **配置 → 告警推送与通知** — 回调地址（建议地址；不可达时改主机名和端口）、消息类型、手机通知。
   - Home Assistant 事件：`imou_life_event`（所有已接受推送）、`imou_life_alarm`（仅告警类）
-  - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
+  - 可选告警通知：在 **配置 → 告警推送与通知** 中选择 Companion App 等通知目标（默认网页通知栏与 Companion App 服务，手机不会收到两条）；某台不想推可在设备页关掉 **告警时通知**（默认开）。Companion App：点通知打开该设备在 Home Assistant 中的设备页
   - 告警图片在本机解密（**仅 linux x86-64**）。[自行下载官方库](#获取官方解密库)，把两个 `.so` 放到 `/config/imou_life/native/`。许多移动侦测推送没有图片 URL，此时仍为纯文本。完整步骤：[配置项参考](guides/configuration.md#zh-hans)
   - 可选择推送消息类型（**设备能力事件** 与 **设备上下线**）。勾选 **设备能力事件** 时，智能插座、灯泡、传感器等通过实时状态推送即时更新，不再按轮询间隔拉取；消息也会同步到乐橙 App
   - **告警时录像** — 内置：每路镜头一个开关（默认关），时长在 **配置 → 告警推送与通知**。片段保存在媒体目录，在媒体浏览器查看。不用写 YAML 自动化。完整步骤：[配置项参考](guides/configuration.md#record-on-alarm-zh)
 * **摄像头**
-  - 状态（名称、在线、存储、电量等）
-  - 直播
+  - 状态（名称、在线、存储、电量等）— 只为该设备上报支持的功能创建实体
+  - **直播** — 自有设备用云端 HLS，分享设备用云端 RTSP；最近一张静止画面保留 30 秒
   - 云台（方向按钮，按一次转动 500 毫秒）
   - **收藏点** — **转到收藏点** 列出设备 / 乐橙 App 中的收藏点，选择后跳转（无法读取当前是否在某一收藏点）
   - 检测：画面变化、人形、宠物、PIR
@@ -259,9 +259,9 @@ README 只写安装和功能列表。选项说明在 [配置项参考](guides/co
   - 告警联动白光灯、告警联动警笛（配置区开关）
   - 支持警笛的设备提供 `siren` 实体（`siren.turn_on` / `siren.turn_off`）；手动开关**不依赖**事件推送。实体状态约 15 秒后自动复位，收到警笛解除推送时会立即复位
   - 音频录制、设备提示音、异常音告警
-  - 重启设备
-  - **媒体浏览器** — 在 **媒体** 中按通道浏览云录像、本地录像和告警时录像（[说明](guides/configuration.md#media-browser-zh)）
-  - **智见** — **AI智见** / **云存储** 传感器、告警通知中的识别对象与画面描述、侧边栏（简报、搜索、试用）与 [`device_snap_detect`](guides/configuration.md#snap-detect-zh)（[说明](guides/configuration.md#ai-insight-zh)）
+  - 设备可重启时提供 **重启**
+  - **媒体浏览器** — 在 **媒体** 中按通道浏览 **云录像**、**本地录像**、**告警时录像**；网页 / Android / iOS 统一本机 **HLS** 播放（[说明](guides/configuration.md#media-browser-zh)）
+  - **智见** — **AI智见**、**AI智见云存储**、**云存储** 传感器（可显示 **暂停中**）；告警通知中的识别对象与画面描述；侧边栏 **AI简报** / **智慧消息** / **申请试用**（**开始日期** / **结束日期**，仅 **下一页** 向后翻）；多账号时账号与摄像头同一张卡；[`device_snap_detect`](guides/configuration.md#snap-detect-zh)（**抓图检测**）（[说明](guides/configuration.md#ai-insight-zh)）
 * **告警传感器**
   - 状态（名称、在线、电量等）
   - 布防 — `alarm_control_panel`（在家 / 离家 / 撤防）
