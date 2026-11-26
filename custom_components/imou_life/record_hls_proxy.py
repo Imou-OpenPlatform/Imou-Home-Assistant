@@ -10,7 +10,7 @@ import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from aiohttp import web
@@ -46,8 +46,36 @@ REFRESH_COOLDOWN_SECONDS = 5.0
 _REFRESH_MAX_BACKOFF_SECONDS = 60.0
 _REFRESH_MAX_FAILURES = 6
 _SIGNED_PATH_REFRESH_MARGIN_SECONDS = 60.0
+# Failed refreshes back off exponentially and stop after a few attempts so an
+# expired clip cannot keep spending API quota on every segment request.
+_REFRESH_MAX_BACKOFF_SECONDS = 60.0
+_REFRESH_MAX_FAILURES = 6
+_SIGNED_PATH_REFRESH_MARGIN_SECONDS = 60.0
 _LOCAL_PLAYBACK_PREPARE_MAX_SECONDS = 120.0
 _LOCAL_PLAYBACK_PREPARE_POLL_SECONDS = 0.75
+# Live clips are buffered locally so a player that opens late can still fetch
+# the opening segments after the upstream window has slid past them.
+_LIVE_PREFETCH_MAX_SEGMENTS = 30
+_LIVE_PREFETCH_MAX_BYTES = 32 * 1024 * 1024
+# The upstream window of three segments slides every 4-6 s while players only
+# reload after draining it, so segments listed in between would never be seen.
+_LIVE_FOLLOW_INTERVAL_SECONDS = 1.0
+_LIVE_FOLLOW_MAX_FAILURES = 12
+# Every segment of a local clip shares one signed URL shape and differs only
+# by this number, so a window that slid past a poll can still be completed.
+_SEGMENT_NUMBER_RE = re.compile(r"(?<![A-Za-z])seg_(\d+)\.ts")
+_WINDOW_GAP_MAX_SEGMENTS = 60
+# Upstream lists the segments past a clip's end before it appends ENDLIST.
+_UNPUBLISHED_SEGMENT_RETRIES = 2
+_UNPUBLISHED_SEGMENT_RETRY_SECONDS = 1.0
+# Imou's live transcoder occasionally re-serves an already published span under
+# a new segment number. ffmpeg then sees PTS go backwards and ffmpeg's HLS
+# muxer stretches the duplicated span instead of dropping it, so the proxy
+# filters such segments out by their presentation time.
+_TS_PACKET_SIZE = 188
+_TS_SYNC_BYTE = 0x47
+_TS_NULL_PID = 0x1FFF
+_REWIND_TOLERANCE_SECONDS = 0.5
 
 PLAYLIST_URL = "/api/imou_life/record_hls/{session_id}/playlist.m3u8"
 SEGMENT_URL = "/api/imou_life/record_hls/{session_id}/segment/{index}.ts"
@@ -110,6 +138,9 @@ class HlsSegment:
     identity: str | None
     byte_range: HlsByteRange | None
     valid: bool = True
+    # Content fingerprint (program date time or path + range) used to detect a
+    # playlist that restarts or rewinds after a refresh.
+    content: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,18 +180,44 @@ class RecordHlsSession:
     upstream_fetch_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Progressive remuxing can outlive both the signed source and the idle TTL.
     stream_ttl_seconds: float | None = None
+    # Local recordings arrive as a rolling live window; keeping issued segments
+    # (and their tag lines) lets a player that opens late still start at the
+    # clip's beginning.
+    following: bool = False
+    playlist_header: list[str] | None = None
+    playlist_trailer: list[str] | None = None
+    segment_blocks: list[list[str]] = field(default_factory=list)
+    content_indexes: dict[str, int] = field(default_factory=dict)
+    # Latest presentation time among listed live segments; a new segment that
+    # starts at or before it repeats content the player has already received.
+    max_listed_pts: float | None = None
+    prefetch_task: asyncio.Task[None] | None = None
+    follow_timer: Callable[[], None] | None = None
+    follow_failures: int = 0
 
     def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
         """Release callbacks and cancel an in-progress refresh."""
         self.active = False
         self.refresh = None
+        if (cancel_follow := self.follow_timer) is not None:
+            cancel_follow()
+        self.follow_timer = None
         refresh_task = self.refresh_task
         if refresh_task is not None:
             refresh_task.cancel()
         self.refresh_task = None
+        if self.prefetch_task is not None:
+            self.prefetch_task.cancel()
+        self.prefetch_task = None
         self.segments.clear()
         self.window_indexes.clear()
         self.segment_prefetch.clear()
+        self.signed_paths.clear()
+        self.segment_blocks.clear()
+        self.playlist_header = None
+        self.playlist_trailer = None
+        self.content_indexes.clear()
+        self.max_listed_pts = None
         self.signed_paths.clear()
         if self.refreshed_segments is not None:
             self.refreshed_segments.clear()
@@ -341,6 +398,14 @@ def _absolute_proxy_url(hass: HomeAssistant, signed_path: str) -> str:
     return f"{origin}{path}"
 
 
+def _first_program_date_time(body: str) -> str | None:
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
+            return stripped.split(":", 1)[1]
+    return None
+
+
 def _is_sliding_playlist(body: str) -> bool:
     """A public playlist that keeps moving until the clip ends."""
     if "#EXT-X-ENDLIST" in body:
@@ -350,15 +415,117 @@ def _is_sliding_playlist(body: str) -> bool:
     )
 
 
-def _replace_sliding_window(
+_SEGMENT_PREFIX_TAGS = ("#EXTINF:", "#EXT-X-PROGRAM-DATE-TIME:")
+_ENCRYPTION_TAGS = ("#EXT-X-KEY:", "#EXT-X-MAP:")
+
+
+def _split_playlist_segments(
+    body: str,
+) -> tuple[list[str], list[list[str]], list[str]]:
+    """Split a media playlist into header, per-segment tags, and trailer lines."""
+    header: list[str] = []
+    blocks: list[list[str]] = []
+    pending: list[str] = []
+    started = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            if not started and stripped.startswith(_SEGMENT_PREFIX_TAGS):
+                started = True
+            (pending if started else header).append(line)
+            continue
+        blocks.append(pending)
+        pending = []
+        started = True
+    if not started or not blocks:
+        return [], [], []
+    return header, blocks, pending
+
+
+def _is_encrypted_playlist(body: str) -> bool:
+    return any(line.strip().startswith(_ENCRYPTION_TAGS) for line in body.splitlines())
+
+
+def _first_presentation_time(body: bytes) -> float | None:
+    """Return the earliest PES presentation time (seconds) in a TS segment."""
+    earliest: float | None = None
+    offset = 0
+    limit = len(body) - _TS_PACKET_SIZE
+    while offset <= limit:
+        if body[offset] != _TS_SYNC_BYTE:
+            offset += 1
+            continue
+        packet = body[offset : offset + _TS_PACKET_SIZE]
+        offset += _TS_PACKET_SIZE
+        if (
+            not packet[1] & 0x40
+            or ((packet[1] & 0x1F) << 8 | packet[2]) == _TS_NULL_PID
+        ):
+            continue
+        adaptation = (packet[3] >> 4) & 0x03
+        position = 4
+        if adaptation & 0x02:
+            position += 1 + packet[4]
+        if not adaptation & 0x01 or position + 14 > _TS_PACKET_SIZE:
+            continue
+        payload = packet[position:]
+        if payload[:3] != b"\x00\x00\x01" or not payload[7] & 0x80:
+            continue
+        stamp = payload[9:14]
+        presentation_time = (
+            ((stamp[0] >> 1) & 0x07) << 30
+            | stamp[1] << 22
+            | ((stamp[2] >> 1) << 15)
+            | stamp[3] << 7
+            | stamp[4] >> 1
+        ) / 90000
+        if earliest is None or presentation_time < earliest:
+            earliest = presentation_time
+    return earliest
+
+
+def _drop_rewound_segments(
+    segments: list[HlsSegment],
+    blocks: list[list[str]],
+    segment_prefetch: dict[int, bytes],
+) -> tuple[list[HlsSegment], list[list[str]], dict[int, bytes], float | None]:
+    """Remove opening segments whose presentation time repeats prior content."""
+    kept: list[HlsSegment] = []
+    kept_blocks: list[list[str]] = []
+    kept_prefetch: dict[int, bytes] = {}
+    latest: float | None = None
+    dropped = 0
+    for index, segment in enumerate(segments):
+        body = segment_prefetch.get(index)
+        start = _first_presentation_time(body) if body is not None else None
+        if (
+            start is not None
+            and latest is not None
+            and start <= latest + _REWIND_TOLERANCE_SECONDS
+        ):
+            dropped += 1
+            continue
+        if start is not None:
+            latest = start
+        if body is not None:
+            kept_prefetch[len(kept)] = body
+        kept.append(segment)
+        if index < len(blocks):
+            kept_blocks.append(blocks[index])
+    if dropped:
+        _LOGGER.debug("Imou live window dropped %s rewound opening segment(s)", dropped)
+    return kept, kept_blocks, kept_prefetch, latest
+
+
+def _adopt_sliding_window(
     session: RecordHlsSession,
     body: str,
     segment_urls: list[str],
     media_playlist_url: str,
 ) -> None:
-    """Keep issued segment indexes and serve the playlist's current window."""
-    if not segment_urls:
-        return
+    """Serve only the upstream window (fallback for encrypted live playlists)."""
     incoming = _segment_descriptors(body, segment_urls)
     known: dict[str, int] = {}
     for index, segment in enumerate(session.segments):
@@ -376,23 +543,133 @@ def _replace_sliding_window(
                 known[segment.identity] = index
         window.append(index)
     session.window_indexes = window
+    session.playlist_header = None
+    session.playlist_trailer = None
+    session.segment_blocks.clear()
     session.playlist_body = body
     session.media_playlist_url = media_playlist_url
     session.live = _is_sliding_playlist(body)
+    session.following = False
+    _LOGGER.debug(
+        "Imou live window adopted: %s segments, first %s (PDT %s)",
+        len(window),
+        window[0] if window else None,
+        _first_program_date_time(body) or "none",
+    )
+
+
+def _replace_sliding_window(
+    session: RecordHlsSession,
+    body: str,
+    segment_urls: list[str],
+    media_playlist_url: str,
+    *,
+    incoming: list[HlsSegment] | None = None,
+    window_times: list[float | None] | None = None,
+    window_bodies: dict[str, bytes] | None = None,
+    blocks: list[list[str]] | None = None,
+) -> None:
+    """Merge the upstream window without dropping or duplicating issued segments."""
+    if not segment_urls:
+        return
+    if not session.following:
+        _adopt_sliding_window(session, body, segment_urls, media_playlist_url)
+        return
+    if incoming is None:
+        incoming = _segment_descriptors(body, segment_urls)
+    header, split_blocks, trailer = _split_playlist_segments(body)
+    if blocks is None:
+        blocks = split_blocks
+    if len(blocks) != len(incoming) or not header:
+        _LOGGER.debug("Imou live window had an unexpected shape; keeping the old one")
+        return
+    if window_times is None:
+        window_times = [None] * len(incoming)
+    identity_indexes: dict[str, int] = {}
+    for known_index, known_segment in enumerate(session.segments):
+        if known_segment.identity and known_segment.identity not in identity_indexes:
+            identity_indexes[known_segment.identity] = known_index
+    appended = 0
+    rewound = 0
+    unpublished = 0
+    for segment, block, start in zip(incoming, blocks, window_times, strict=True):
+        index: int | None = None
+        if segment.content is not None:
+            index = session.content_indexes.get(segment.content)
+        if index is None and segment.identity is not None:
+            index = identity_indexes.get(segment.identity)
+        if index is None:
+            listed = segment.content or segment.identity
+            if (
+                window_bodies is not None
+                and listed is not None
+                and listed in window_bodies
+                and not window_bodies[listed]
+            ):
+                # Upstream lists a segment before its bytes are published; stop
+                # here so the window stays in order and retry on the next pass.
+                unpublished += 1
+                break
+            if (
+                start is not None
+                and session.max_listed_pts is not None
+                and start <= session.max_listed_pts + _REWIND_TOLERANCE_SECONDS
+            ):
+                # The upstream transcoder repeated an already published span
+                # under a new segment number; ffmpeg cannot drop the overlap.
+                rewound += 1
+                continue
+            index = len(session.segments)
+            session.segments.append(segment)
+            session.segment_blocks.append(block)
+            appended += 1
+        else:
+            session.segments[index] = segment
+            session.segment_blocks[index] = block
+        if start is not None and (
+            session.max_listed_pts is None or start > session.max_listed_pts
+        ):
+            session.max_listed_pts = start
+        if window_bodies is not None:
+            key = segment.content or segment.identity
+            if key is not None and key in window_bodies:
+                session.segment_prefetch.setdefault(index, window_bodies[key])
+        if segment.content is not None:
+            session.content_indexes.setdefault(segment.content, index)
+        if segment.identity is not None:
+            identity_indexes.setdefault(segment.identity, index)
+    session.window_indexes = list(range(len(session.segments)))
+    session.playlist_header = header
+    session.playlist_trailer = trailer
+    if not unpublished:
+        # Keeping the previous body makes the next refresh re-read this window
+        # once the missing segment has been published.
+        session.playlist_body = body
+    session.media_playlist_url = media_playlist_url
+    session.live = _is_sliding_playlist(body)
+    _LOGGER.debug(
+        "Imou live window: %s segments, appended %s, rewound %s, pending %s (PDT %s)",
+        len(session.window_indexes),
+        appended,
+        rewound,
+        unpublished,
+        _first_program_date_time(body) or "none",
+    )
 
 
 async def _async_prefetch_upstream_segments(
     hass: HomeAssistant, session: RecordHlsSession, indexes: list[int]
 ) -> None:
-    """Warm the first segment while the player is still opening the playlist."""
-
-    if session.live:
-        return
+    """Warm early segments while the player is still opening the playlist."""
+    total_bytes = sum(len(body) for body in session.segment_prefetch.values())
 
     async def async_prefetch(index: int) -> None:
+        nonlocal total_bytes
         if index < 0 or index >= len(session.segments):
             return
         if index in session.segment_prefetch:
+            return
+        if session.live and total_bytes >= _LIVE_PREFETCH_MAX_BYTES:
             return
         segment = session.segments[index]
         range_header: str | None = None
@@ -408,11 +685,135 @@ async def _async_prefetch_upstream_segments(
         except (OSError, TimeoutError, ValueError):
             _LOGGER.debug("Imou HLS segment %s prefetch skipped", index)
             return
-        if 200 <= upstream_response.status < 300:
+        if 200 <= upstream_response.status < 300 and upstream_response.body:
             session.segment_prefetch[index] = upstream_response.body
+            total_bytes += len(upstream_response.body)
 
     for index in indexes:
         await async_prefetch(index)
+
+
+def _schedule_live_prefetch(hass: HomeAssistant, session: RecordHlsSession) -> None:
+    """Buffer the start of a live clip before the upstream window slides past it."""
+    if not session.following:
+        return
+    if session.prefetch_task is not None and not session.prefetch_task.done():
+        return
+    pending = [
+        index
+        for index in session.window_indexes
+        if index < _LIVE_PREFETCH_MAX_SEGMENTS and index not in session.segment_prefetch
+    ]
+    if not pending:
+        return
+    session.prefetch_task = hass.async_create_task(
+        _async_prefetch_upstream_segments(hass, session, pending)
+    )
+
+
+def _schedule_live_follow(hass: HomeAssistant, session: RecordHlsSession) -> None:
+    """Track the upstream window on a timer rather than on player requests."""
+    if (
+        not session.active
+        or not session.following
+        or not session.live
+        or session.follow_timer is not None
+    ):
+        return
+
+    async def async_follow_tick(_now: datetime) -> None:
+        session.follow_timer = None
+        if not session.active or not session.following or not session.live:
+            return
+        if not await _async_follow_live_playlist(hass, session, force=True):
+            session.follow_failures += 1
+            if session.follow_failures >= _LIVE_FOLLOW_MAX_FAILURES:
+                _LOGGER.debug("Imou live window follow stopped after failures")
+                return
+        else:
+            session.follow_failures = 0
+        _schedule_live_follow(hass, session)
+
+    session.follow_timer = async_call_later(
+        hass, _LIVE_FOLLOW_INTERVAL_SECONDS, async_follow_tick
+    )
+
+
+def _unlisted_window_segments(
+    session: RecordHlsSession, incoming: list[HlsSegment]
+) -> list[HlsSegment]:
+    """Derive the segments a window slid past between two playlist reads."""
+    if not incoming or not session.segments:
+        return []
+    template = incoming[0]
+    if (
+        template.byte_range is not None
+        or not template.valid
+        or template.content is None
+        or _SEGMENT_NUMBER_RE.search(template.content) is None
+    ):
+        return []
+    shape = _SEGMENT_NUMBER_RE.sub("seg_%d.ts", template.url)
+    numbers: list[int] = []
+    for segment in incoming:
+        if (
+            segment.byte_range is not None
+            or _SEGMENT_NUMBER_RE.sub("seg_%d.ts", segment.url) != shape
+        ):
+            return []
+        numbers.append(int(_SEGMENT_NUMBER_RE.search(segment.url).group(1)))  # type: ignore[union-attr]
+    highest = -1
+    for segment in session.segments:
+        if (
+            segment.byte_range is None
+            and _SEGMENT_NUMBER_RE.sub("seg_%d.ts", segment.url) == shape
+            and (found := _SEGMENT_NUMBER_RE.search(segment.url)) is not None
+        ):
+            highest = max(highest, int(found.group(1)))
+    first = min(numbers)
+    if first <= highest + 1 or first - highest - 1 > _WINDOW_GAP_MAX_SEGMENTS:
+        return []
+    return [
+        HlsSegment(
+            _SEGMENT_NUMBER_RE.sub(f"seg_{number}.ts", template.url),
+            None,
+            None,
+            True,
+            _SEGMENT_NUMBER_RE.sub(f"seg_{number}.ts", template.content),
+        )
+        for number in range(highest + 1, first)
+    ]
+
+
+async def _async_buffer_window_segments(
+    hass: HomeAssistant,
+    session: RecordHlsSession,
+    incoming: list[HlsSegment],
+) -> tuple[list[float | None], dict[str, bytes]]:
+    """Download the incoming window and read each segment's start time."""
+    times: list[float | None] = []
+    bodies: dict[str, bytes] = {}
+    for segment in incoming:
+        key = segment.content or segment.identity
+        body: bytes | None = None
+        if segment.content is not None:
+            known = session.content_indexes.get(segment.content)
+            if known is not None:
+                body = session.segment_prefetch.get(known)
+        if body is None and segment.byte_range is None:
+            try:
+                async with session.upstream_fetch_lock:
+                    upstream_response = await async_fetch_url_response(
+                        hass, segment.url
+                    )
+            except (OSError, TimeoutError, ValueError):
+                upstream_response = None
+            if upstream_response is not None and 200 <= upstream_response.status < 300:
+                body = upstream_response.body
+        if body is not None and key is not None:
+            bodies[key] = body
+        times.append(_first_presentation_time(body) if body is not None else None)
+    return times, bodies
 
 
 async def _async_follow_live_playlist(
@@ -420,43 +821,81 @@ async def _async_follow_live_playlist(
     session: RecordHlsSession,
     *,
     force: bool = False,
-) -> None:
+) -> bool:
     """Re-read a moving public playlist and adopt its current window."""
     if not session.live or not session.media_playlist_url:
-        return
+        return True
     now = time.time()
     if session.stream_ttl_seconds:
         session.expires_at = max(session.expires_at, now + session.stream_ttl_seconds)
     if not force and now - session.last_playlist_fetch_at < PLAYLIST_FOLLOW_MIN_SECONDS:
-        return
+        return True
     playlist_url = session.media_playlist_url
     try:
         body = await async_fetch_url_text(hass, playlist_url)
     except (OSError, TimeoutError, ValueError):
         _LOGGER.debug("Imou live recording playlist was not reloaded")
-        return
+        return False
     media_playlist_url = getattr(body, "final_url", playlist_url)
     segment_urls = parse_hls_media_segment_urls(body, media_playlist_url)
     if not segment_urls:
-        return
+        return True
     # Compare the whole body, not just the media sequence: while the clip is
     # being produced the window grows without the sequence changing, and a
     # frozen proxy playlist makes the player treat a later jump as the end.
-    if not force and str(body) == session.playlist_body:
+    if str(body) == session.playlist_body:
         session.last_playlist_fetch_at = now
-        return
+        return True
     try:
         await _async_pin_segment_urls(hass, segment_urls)
     except ValueError:
         _LOGGER.debug("Imou live recording playlist pin skipped")
-        return
+        return False
     if not session.active:
-        return
+        return True
+    blocks: list[list[str]] | None = None
+    window_times: list[float | None] | None = None
+    window_bodies: dict[str, bytes] | None = None
+    incoming: list[HlsSegment] | None = None
+    if session.following:
+        incoming = _segment_descriptors(body, segment_urls)
+        _header, split_blocks, _trailer = _split_playlist_segments(body)
+        if missing := _unlisted_window_segments(session, incoming):
+            incoming = missing + incoming
+            blocks = [split_blocks[0]] * len(missing) + split_blocks
+        if _is_sliding_playlist(body):
+            # Downloading takes longer than the window lives; bodies are read
+            # when the segment is served instead of before it is listed.
+            blocks = blocks or None
+        else:
+            # Only the final window is verified: its trailing entries are
+            # listed past the clip's end and never get bytes.
+            window_times, window_bodies = await _async_buffer_window_segments(
+                hass, session, incoming
+            )
+            blocks = blocks or split_blocks
+            while incoming and not window_bodies.get(
+                incoming[-1].content or incoming[-1].identity or ""
+            ):
+                incoming.pop()
+                window_times.pop()
+                blocks.pop()
     async with session.refresh_lock:
         if not session.active or not session.live:
-            return
-        _replace_sliding_window(session, body, segment_urls, media_playlist_url)
+            return True
+        _replace_sliding_window(
+            session,
+            body,
+            segment_urls,
+            media_playlist_url,
+            incoming=incoming,
+            window_times=window_times,
+            window_bodies=window_bodies,
+            blocks=blocks,
+        )
         session.last_playlist_fetch_at = now
+        _schedule_live_prefetch(hass, session)
+    return True
 
 
 def _signed_proxy_path(
@@ -484,6 +923,21 @@ def _signed_proxy_path(
     return signed
 
 
+def _session_playlist_body(session: RecordHlsSession) -> str:
+    """Return the playlist text, retaining every issued live segment."""
+    if not session.following or session.playlist_header is None:
+        return session.playlist_body
+    lines = list(session.playlist_header)
+    for index in session.window_indexes:
+        if index < len(session.segment_blocks):
+            lines.extend(session.segment_blocks[index])
+        if index < len(session.segments):
+            lines.append(session.segments[index].url)
+    if session.playlist_trailer:
+        lines.extend(session.playlist_trailer)
+    return "\n".join(lines) + "\n"
+
+
 def _build_proxy_playlist(
     hass: HomeAssistant,
     session_id: str,
@@ -493,11 +947,17 @@ def _build_proxy_playlist(
     segment_index = 0
     resource_indexes = {"key": 0, "map": 0}
     pending_range_line: int | None = None
-    for original in session.playlist_body.splitlines():
+    for original in _session_playlist_body(session).splitlines():
         stripped = original.strip()
         if stripped.startswith("#EXT-X-BYTERANGE:"):
             pending_range_line = len(lines)
             lines.append(original)
+            continue
+        if stripped.startswith("#EXT-X-MEDIA-SEQUENCE:") and session.following:
+            # Never pass a rewound upstream sequence through: the proxy window
+            # only grows, so its sequence must too.
+            first = session.window_indexes[0] if session.window_indexes else 0
+            lines.append(f"#EXT-X-MEDIA-SEQUENCE:{first}")
             continue
         if stripped.startswith(("#EXT-X-KEY:", "#EXT-X-MAP:")):
             kind = "key" if stripped.startswith("#EXT-X-KEY:") else "map"
@@ -619,6 +1079,12 @@ def _segment_descriptors(
 
     paths = [urlsplit(url).path for url in segment_urls]
     path_counts = Counter(paths)
+    # Imou serves every segment from one path and names it in ``userid``; it is
+    # the only stable discriminator once auth query tokens rotate.
+    segment_ids = [
+        (parse_qs(urlsplit(url).query).get("userid") or [""])[0] for url in segment_urls
+    ]
+    id_counts = Counter(segment_ids)
     segments: list[HlsSegment] = []
     for index, (url, path) in enumerate(zip(segment_urls, paths, strict=True)):
         segment_range, segment_time, valid = metadata[index]
@@ -637,7 +1103,17 @@ def _segment_descriptors(
             identity = f"path:{path}|range:{range_identity}|time:{segment_time or ''}"
         else:
             identity = None
-        segments.append(HlsSegment(url, identity, segment_range, valid))
+        if segment_time is not None:
+            content = f"time:{segment_time}"
+        elif segment_range is not None:
+            content = f"path:{path}|range:{range_identity}"
+        elif path_counts[path] == 1:
+            content = f"path:{path}"
+        elif segment_ids[index] and id_counts[segment_ids[index]] == 1:
+            content = f"path:{path}|userid:{segment_ids[index]}"
+        else:
+            content = None
+        segments.append(HlsSegment(url, identity, segment_range, valid, content))
 
     identity_counts = Counter(
         segment.identity for segment in segments if segment.identity is not None
@@ -652,6 +1128,7 @@ def _segment_descriptors(
                 None if segment.identity in duplicate_identities else segment.identity,
                 segment.byte_range,
                 segment.valid,
+                segment.content,
             )
             for segment in segments
         ]
@@ -995,6 +1472,31 @@ async def async_create_record_hls_proxy_playlist_url(
     await _async_validate_playlist_targets(hass, resources)
     session_id = secrets.token_hex(16)
     live = _is_sliding_playlist(body)
+    header, blocks, trailer = _split_playlist_segments(body) if live else ([], [], [])
+    following = (
+        live and not _is_encrypted_playlist(body) and len(blocks) == len(segments)
+    )
+    segment_prefetch: dict[int, bytes] = {}
+    if prepared_playback is not None:
+        for index, prefetched_body in prepared_playback.segment_prefetch.items():
+            if 0 <= index < len(segments):
+                segment_prefetch[index] = prefetched_body
+    max_listed_pts: float | None = None
+    if following and segment_prefetch:
+        segments, blocks, segment_prefetch, max_listed_pts = _drop_rewound_segments(
+            segments, blocks, segment_prefetch
+        )
+    content_indexes: dict[str, int] = {}
+    for index, segment in enumerate(segments):
+        if segment.content is not None:
+            content_indexes.setdefault(segment.content, index)
+    _LOGGER.debug(
+        "Imou HLS session: %s segments, first PDT %s, live=%s, following=%s",
+        len(segments),
+        _first_program_date_time(body) or "none",
+        live,
+        following,
+    )
     session_expiry = _session_expiry(
         upstream_playlist_url,
         segment_urls,
@@ -1015,16 +1517,21 @@ async def async_create_record_hls_proxy_playlist_url(
         window_indexes=list(range(len(segments))),
         last_playlist_fetch_at=time.time(),
         stream_ttl_seconds=stream_ttl_seconds,
+        following=following,
+        playlist_header=header if following else None,
+        playlist_trailer=trailer if following else None,
+        segment_blocks=blocks if following else [],
+        content_indexes=content_indexes,
+        max_listed_pts=max_listed_pts,
     )
     _sessions(hass)[session_id] = session
-    if prepared_playback is not None:
-        for index, prefetched_body in prepared_playback.segment_prefetch.items():
-            if 0 <= index < len(session.segments):
-                session.segment_prefetch[index] = prefetched_body
-    elif not live and session.segments:
+    session.segment_prefetch.update(segment_prefetch)
+    if prepared_playback is None and not live and session.segments:
         hass.async_create_task(
             _async_prefetch_upstream_segments(hass, session, [0]),
         )
+    _schedule_live_prefetch(hass, session)
+    _schedule_live_follow(hass, session)
     _schedule_cleanup(hass)
     playlist_path = PLAYLIST_URL.format(session_id=session_id)
     signed_playlist = async_sign_path(
@@ -1120,7 +1627,7 @@ async def _async_refresh_record_hls_session(
                 record.expires_at = max(
                     record.expires_at, now + record.stream_ttl_seconds
                 )
-            record.segment_prefetch.clear()
+            # Prefetched bodies are segment content, not URLs; they stay valid.
             record.signed_paths.clear()
             record.refresh_failures = 0
             record.refresh_backoff = REFRESH_COOLDOWN_SECONDS
@@ -1191,6 +1698,17 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             raise web.HTTPNotFound()
         segment = record.segments[seg_index]
         identity = segment.identity
+        # Prefetched bytes survive a refresh and bypass expiring upstream URLs.
+        if (
+            segment.byte_range is None
+            and request.headers.get("Range") is None
+            and (cached := record.segment_prefetch.get(seg_index)) is not None
+        ):
+            return web.Response(
+                body=cached,
+                status=200,
+                headers={"Content-Type": "video/mp2t"},
+            )
         if record.refreshed_segments is None:
             upstream = segment.url
         else:
@@ -1205,23 +1723,21 @@ class ImouRecordHlsSegmentView(HomeAssistantView):
             range_header = _upstream_range_header(segment, request.headers.get("Range"))
         except ValueError as err:
             raise web.HTTPBadGateway() from err
-        if (
-            range_header is None
-            and segment.byte_range is None
-            and (cached := record.segment_prefetch.get(seg_index)) is not None
-        ):
-            return web.Response(
-                body=cached,
-                status=200,
-                headers={"Content-Type": "video/mp2t"},
-            )
         generation = record.generation
         try:
-            upstream_response = await async_fetch_url_response(
-                hass,
-                upstream,
-                range_header=range_header,
-            )
+            for _ in range(_UNPUBLISHED_SEGMENT_RETRIES + 1):
+                upstream_response = await async_fetch_url_response(
+                    hass,
+                    upstream,
+                    range_header=range_header,
+                )
+                if (
+                    not 200 <= upstream_response.status < 300
+                    or upstream_response.body
+                    or not record.live
+                ):
+                    break
+                await asyncio.sleep(_UNPUBLISHED_SEGMENT_RETRY_SECONDS)
         except (OSError, TimeoutError, ValueError) as err:
             _LOGGER.warning("Imou HLS segment %s fetch failed: %s", seg_index, err)
             raise web.HTTPBadGateway() from err
