@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 from collections.abc import Callable, Iterable
 from datetime import timedelta
@@ -15,13 +14,20 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.device import compose_iot_device_id
 from pyimouapi.exceptions import ImouException, InvalidAppIdOrSecretException
-from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.ha_device import (
+    ImouHaDevice,
+    ImouHaDeviceManager,
+    device_is_iot,
+)
 
 from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DISCOVERY_INTERVAL,
     DOMAIN,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     PARAM_ENABLE_POLLING,
     PARAM_UPDATE_INTERVAL,
     UPDATE_TIMEOUT,
@@ -32,12 +38,13 @@ from .devices import (
     registry_row_for_key_on_entry,
 )
 from .helpers import (
+    event_push_type_active,
     get_excluded_device_ids,
     get_selected_device_ids,
-    iot_property_push_active,
 )
+from .pic_thumbnail import async_remember_picture_passwords
 from .repairs import async_delete_quota_issue, async_notify_imou_api_error
-from .runtime_data import ImouRuntimeData
+from .runtime_data import ImouRuntimeData, get_runtime_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,7 +114,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         self.devices_by_key: dict[str, ImouHaDevice] = {}
         self._devices_initialized = False
         self._last_discovery: float | None = None
-        self._iot_detail_fetched: set[str] = set()
+        self._v2_state_snapshots: set[str] = set()
         self.new_device_callbacks: list[Callable[[list[ImouHaDevice]], None]] = []
 
     @property
@@ -154,17 +161,18 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
     async def _async_discover_devices(self) -> None:
         """Refresh which devices the account holds.
 
-        Ability-ref detail calls are only needed to register entities for a
-        device Home Assistant has not seen yet. A rediscovery that finds the
-        same keys therefore lists without spending those calls; when something
-        new appears, only that device's ids are queried again.
+        Entity registration uses ``device.capability.list``.
         """
         _LOGGER.debug("Listing Imou devices")
         first_discovery = not self._devices_initialized
+        selected = get_selected_device_ids(self.config_entry)
+        excluded = get_excluded_device_ids(self.config_entry)
+        configure_ids = None if selected is None else set(selected) - excluded
         try:
             async with asyncio.timeout(UPDATE_TIMEOUT):
                 fresh_devices = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=first_discovery
+                    configure_device_ids=configure_ids,
+                    skip_device_ids=excluded,
                 )
         except TimeoutError as err:
             if first_discovery:
@@ -191,78 +199,51 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
 
         self._last_discovery = monotonic()
-        account_by_key = {imou_life_device_key(d): d for d in fresh_devices}
+        self._debug_log_capability_lists(fresh_devices)
         filtered_list = self._filter_devices(fresh_devices)
         fresh_by_key = {imou_life_device_key(d): d for d in filtered_list}
 
         if first_discovery:
-            await self._async_prefetch_event_maps(filtered_list)
-            self._async_add_remove_devices(fresh_by_key, account_by_key)
+            self._async_add_remove_devices(fresh_by_key)
+            await self._async_remember_picture_passwords()
             return
 
-        new_keys = set(fresh_by_key) - set(self.devices_by_key)
-        if new_keys:
-            new_ids = {fresh_by_key[key].device_id for key in new_keys}
-            try:
-                async with asyncio.timeout(UPDATE_TIMEOUT):
-                    detailed = await self._device_manager.async_get_devices(
-                        fetch_ability_refs=new_ids
-                    )
-            except TimeoutError as err:
-                _LOGGER.warning(
-                    "Timeout while loading new Imou device details: %s", err
-                )
-                for key in new_keys:
-                    fresh_by_key.pop(key, None)
-                self._last_discovery = None
-                self._async_add_remove_devices(fresh_by_key, account_by_key)
-                return
-            except InvalidAppIdOrSecretException as err:
-                raise ConfigEntryAuthFailed(
-                    translation_domain=DOMAIN,
-                    translation_key="invalid_auth",
-                ) from err
-            except ImouException as err:
-                async_notify_imou_api_error(self.hass, self.config_entry, err)
-                # Keep removals from the shallow list. Leave brand-new keys out
-                # until detail succeeds (shallow IoT shells have no configured
-                # refs yet) and rewind the discovery clock to retry soon.
-                _LOGGER.warning(
-                    "Could not load new Imou device details: %s", err.message or err
-                )
-                for key in new_keys:
-                    fresh_by_key.pop(key, None)
-                self._last_discovery = None
-                self._async_add_remove_devices(fresh_by_key, account_by_key)
-                return
-            # Merge into the shallow account map; never replace it with a
-            # partial list if a future library change returns only new ids.
-            for device in detailed:
-                account_by_key[imou_life_device_key(device)] = device
-            detailed_by_key = {
-                imou_life_device_key(d): d for d in self._filter_devices(detailed)
-            }
-            for key in new_keys:
-                if key in detailed_by_key:
-                    fresh_by_key[key] = detailed_by_key[key]
-
-        if new_keys:
-            await self._async_prefetch_event_maps(
-                [fresh_by_key[key] for key in new_keys if key in fresh_by_key]
-            )
-        self._async_add_remove_devices(fresh_by_key, account_by_key)
+        self._async_add_remove_devices(fresh_by_key)
         await self._async_refresh_known_devices(fresh_by_key)
-        await self._async_retry_event_maps()
+        await self._async_remember_picture_passwords()
 
-    async def _async_prefetch_event_maps(self, devices: Iterable[ImouHaDevice]) -> None:
-        """Fetch product-model events so doorbell / motion can be gated at setup."""
-        seen: set[str] = set()
+    def _debug_log_capability_lists(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Log each channel's capability.list result on the integration logger.
+
+        The library logs the same call on ``pyimouapi``. Home Assistant only
+        shows that when that logger is set to debug, so the device page is
+        hard to compare with the list that actually came back.
+        """
         for device in devices:
-            product_id = device.product_id
-            if not product_id or product_id in seen:
+            name = device.channel_name or device.device_name
+            capability = device.capability_set
+            if not isinstance(capability, CapabilitySet):
+                _LOGGER.debug(
+                    "device.capability.list missing %s ch%s (%s) ability=%s",
+                    device.device_id,
+                    device.channel_id,
+                    name,
+                    device.channel_ability,
+                )
                 continue
-            seen.add(product_id)
-            await self._device_manager.delegate.async_ensure_event_map(product_id)
+            _LOGGER.debug(
+                "device.capability.list %s ch%s (%s) properties=%s services=%s "
+                "events=%s switches=%s buttons=%s ability=%s",
+                device.device_id,
+                device.channel_id,
+                name,
+                sorted(capability.properties),
+                sorted(capability.services),
+                sorted(capability.events),
+                sorted(device.switches),
+                sorted(device.buttons),
+                device.channel_ability,
+            )
 
     async def _async_update_data(self) -> None:
         """Fetch latest device status from Imou cloud."""
@@ -283,9 +264,12 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         if not devices_to_update:
             return
 
+        property_push = event_push_type_active(
+            self.config_entry, EVENT_PUSH_TYPE_CAPABILITY_EVENT
+        )
         skip_ids = (
-            set(self._iot_detail_fetched)
-            if iot_property_push_active(self.config_entry)
+            set(self._v2_state_snapshots) & self._iot_physical_ids()
+            if property_push
             else None
         )
         try:
@@ -312,36 +296,31 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             return
         else:
             if isinstance(fetched, set) and fetched:
-                self._iot_detail_fetched.update(fetched)
+                self._v2_state_snapshots.update(fetched)
             async_delete_quota_issue(self.hass, self.config_entry)
             runtime = getattr(self.config_entry, "runtime_data", None)
             if runtime is not None:
                 runtime.countdown.sync_all(self.hass, self)
 
-    def _async_add_remove_devices(
-        self,
-        fresh_by_key: dict[str, ImouHaDevice],
-        account_by_key: dict[str, ImouHaDevice],
-    ) -> None:
-        """Add new devices and drop ones no longer selected for polling.
+    def _async_add_remove_devices(self, fresh_by_key: dict[str, ImouHaDevice]) -> None:
+        """Add devices selected for polling and drop the rest.
 
-        Registry detach uses the unfiltered account list: deselecting a device
-        only stops polling. Devices deleted in the Imou app are still removed.
+        The picker still lists every account device. Anything not in this map
+        leaves the Home Assistant device list, including a device deleted in
+        the Imou app and one the user left unchecked.
         """
         if not self._devices_initialized:
             self.devices_by_key = fresh_by_key
             self._devices_initialized = True
-            # Unload leaves registry entries in place by design. After reload the
-            # coordinator starts empty, so the first discovery must still detach
-            # devices that are no longer on the account.
-            self._async_detach_registry_devices_missing_from(account_by_key)
+            # Unload leaves registry entries in place. After reload the
+            # coordinator starts empty, so the first discovery must still
+            # detach devices that are not being polled.
+            self._async_detach_registry_devices_missing_from(fresh_by_key)
             return
 
         current_keys = set(fresh_by_key)
         known_keys = set(self.devices_by_key)
-        # A device that is not being polled can still leave the account. The
-        # polling set does not change, so this has to run even when the keys match.
-        self._async_detach_registry_devices_missing_from(account_by_key)
+        self._async_detach_registry_devices_missing_from(fresh_by_key)
 
         if current_keys == known_keys:
             return
@@ -353,7 +332,7 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             for device_key in removed_keys:
                 del self.devices_by_key[device_key]
-            self._forget_iot_details(removed_devices)
+            self._forget_v2_state_snapshots(removed_devices)
 
         if new_keys := current_keys - known_keys:
             _LOGGER.debug("New Imou device(s) found: %s", ", ".join(new_keys))
@@ -365,13 +344,13 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 callback(new_devices)
 
     def _async_detach_registry_devices_missing_from(
-        self, account_by_key: dict[str, ImouHaDevice]
+        self, kept_by_key: dict[str, ImouHaDevice]
     ) -> None:
-        """Detach config-entry devices whose Imou keys are not on the account."""
+        """Detach config-entry devices that are not being polled."""
         device_registry = dr.async_get(self.hass)
         # A multi-channel device also has a row of its own, keyed by the bare
         # account device id rather than by one of its channels.
-        account_device_ids = {device.device_id for device in account_by_key.values()}
+        kept_device_ids = {device.device_id for device in kept_by_key.values()}
         for device in dr.async_entries_for_config_entry(
             device_registry, self.config_entry.entry_id
         ):
@@ -380,25 +359,45 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
             ]
             if not imou_keys:
                 continue
-            if any(
-                key in account_by_key or key in account_device_ids for key in imou_keys
-            ):
+            if any(key in kept_by_key or key in kept_device_ids for key in imou_keys):
                 continue
             device_registry.async_update_device(
                 device_id=device.id,
                 remove_config_entry_id=self.config_entry.entry_id,
             )
 
+    async def _async_remember_picture_passwords(self) -> None:
+        """Read picture passwords for devices that do not have one yet."""
+        runtime = get_runtime_data(self.config_entry)
+        if runtime is None:
+            return
+        await async_remember_picture_passwords(runtime, self.devices_by_key.values())
+
     async def _async_refresh_known_devices(
         self, fresh_by_key: dict[str, ImouHaDevice]
     ) -> None:
-        """Update name and firmware, and reload abilities when they change."""
+        """Update identity and merge complete capability snapshots."""
         identity_changed: list[ImouHaDevice] = []
-        ability_ids: set[str] = set()
+        refreshed: dict[str, ImouHaDevice] = {}
         for key, fresh in fresh_by_key.items():
             current = self.devices_by_key.get(key)
             if current is None:
                 continue
+            token = fresh.play_token_v2
+            if isinstance(token, str) and token:
+                current.set_play_token_v2(token)
+            source = fresh.source
+            if isinstance(source, str) and source:
+                current.set_source(source)
+            device_caps = fresh.device_capability_ids
+            if isinstance(device_caps, frozenset) and (
+                device_caps or isinstance(fresh.capability_ids, frozenset)
+            ):
+                current.set_device_capability_ids(device_caps)
+            if fresh.cs_status is not None:
+                current.set_cs_status(fresh.cs_status)
+            if fresh.ai_insight_status is not None:
+                current.set_ai_insight_status(fresh.ai_insight_status)
             current_identity = _device_identity(current)
             fresh_identity = _device_identity(fresh)
             if (
@@ -415,73 +414,41 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
                 and fresh_ability is not None
                 and current_ability != fresh_ability
             ):
-                ability_ids.add(fresh.device_id)
+                current.set_device_ability(fresh.device_ability)
+                if isinstance(fresh.channel_ability, str):
+                    current.set_channel_ability(fresh.channel_ability)
+            if (
+                isinstance(fresh.capability_ids, frozenset)
+                or isinstance(fresh.capability_set, CapabilitySet)
+            ) and current.capability_snapshot != fresh.capability_snapshot:
+                removed = current.replace_capabilities(fresh)
+                self._async_remove_entity_suffixes(key, removed)
+                refreshed[key] = current
         if identity_changed:
             async_register_imou_devices(self.hass, self.config_entry, identity_changed)
-        if not ability_ids:
-            return
-        try:
-            async with asyncio.timeout(UPDATE_TIMEOUT):
-                detailed = await self._device_manager.async_get_devices(
-                    fetch_ability_refs=ability_ids
-                )
-        except InvalidAppIdOrSecretException as err:
-            raise ConfigEntryAuthFailed(
-                translation_domain=DOMAIN,
-                translation_key="invalid_auth",
-            ) from err
-        except (TimeoutError, ImouException) as err:
-            _LOGGER.warning("Could not refresh changed Imou device abilities: %s", err)
-            return
-        refreshed: list[ImouHaDevice] = []
-        for device in self._filter_devices(detailed):
-            key = imou_life_device_key(device)
-            current = self.devices_by_key.get(key)
-            if current is None:
-                continue
-            removed = current.replace_capabilities(device)
-            self._async_remove_entity_suffixes(key, removed)
-            refreshed.append(current)
-        for callback in self.new_device_callbacks:
-            callback(refreshed)
+        if refreshed:
+            ready = list(refreshed.values())
+            for callback in self.new_device_callbacks:
+                callback(ready)
 
-    async def _async_retry_event_maps(self) -> None:
-        """Retry product-model events that failed earlier, then add entities."""
-        delegate = self._device_manager.delegate
-        ensure = getattr(delegate, "async_ensure_event_map", None)
-        cached = getattr(delegate, "cached_event_map", None)
-        if not inspect.iscoroutinefunction(ensure) or not callable(cached):
-            return
-        gained: set[str] = set()
-        seen: set[str] = set()
-        for device in self.devices_by_key.values():
-            product_id = device.product_id
-            if not product_id or product_id in seen:
-                continue
-            seen.add(product_id)
-            if cached(product_id):
-                continue
-            await ensure(product_id)
-            if cached(product_id):
-                gained.add(product_id)
-        if not gained:
-            return
-        ready = [
-            device
+    def _forget_v2_state_snapshots(self, devices: Iterable[ImouHaDevice]) -> None:
+        """Allow a device that left to fetch a state snapshot when it returns."""
+        remaining = {
+            compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
             for device in self.devices_by_key.values()
-            if device.product_id in gained
-        ]
-        for callback in self.new_device_callbacks:
-            callback(ready)
-
-    def _forget_iot_details(self, devices: Iterable[ImouHaDevice]) -> None:
-        """Allow a device that left to fetch detail again when it returns."""
-        resolve = self._device_manager._resolve_device_id
-        remaining = {resolve(device) for device in self.devices_by_key.values()}
+        }
         for device in devices:
-            physical_id = resolve(device)
+            physical_id = compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
             if physical_id not in remaining:
-                self._iot_detail_fetched.discard(physical_id)
+                self._v2_state_snapshots.discard(physical_id)
 
     def _async_remove_entity_suffixes(
         self, device_key: str, suffixes: list[str]
@@ -496,6 +463,18 @@ class ImouDataUpdateCoordinator(DataUpdateCoordinator[None]):
         ):
             if entity.unique_id in wanted:
                 registry.async_remove(entity.entity_id)
+
+    def _iot_physical_ids(self) -> set[str]:
+        """Physical ids whose entity values arrive on capability pushes."""
+        return {
+            compose_iot_device_id(
+                device.device_id,
+                device.parent_device_id,
+                device.parent_product_id,
+            )
+            for device in self.devices_by_key.values()
+            if device_is_iot(device)
+        }
 
     def _should_skip_device_update(self, device: ImouHaDevice) -> bool:
         """Skip cloud status poll when every HA entity for this device is disabled."""

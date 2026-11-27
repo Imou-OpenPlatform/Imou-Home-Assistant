@@ -30,16 +30,19 @@ def _imported_components(path: Path) -> set[str]:
 
 def test_every_imported_component_is_declared() -> None:
     """A component the code imports has to be a declared dependency."""
-    declared = set(MANIFEST.get("dependencies", []))
+    declared = set(MANIFEST.get("dependencies", [])) | set(
+        MANIFEST.get("after_dependencies", [])
+    )
     for path in sorted(COMPONENT.glob("*.py")):
         for component in _imported_components(path):
-            # A platform file importing its own platform is the platform
-            # itself, which needs no declaring.
-            if component == path.stem:
+            # Components implemented as this integration's own platforms are
+            # loaded by config entry forwarding, not manifest dependencies.
+            if (COMPONENT / f"{component}.py").is_file():
                 continue
             assert component in declared, (
                 f"{path.name} imports homeassistant.components.{component}, "
-                f"so the manifest must list it under dependencies"
+                "so the manifest must list it under dependencies or "
+                "after_dependencies"
             )
 
 

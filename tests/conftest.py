@@ -19,6 +19,20 @@ IMOU_TOKEN_RETURN = {
     "currentDomain": "https://openapi.imoulife.com:443",
 }
 
+_MESSAGE_CALLBACK_FLAGS = "alarm,deviceStatus,iot,capabilityEvent"
+
+
+def _imou_client_instance() -> MagicMock:
+    """Shared mock client for config flow tests."""
+    instance = MagicMock()
+    instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
+    instance.async_get_message_callback = AsyncMock(
+        return_value={"callbackFlag": _MESSAGE_CALLBACK_FLAGS}
+    )
+    instance.async_set_message_callback = AsyncMock()
+    instance.async_close = AsyncMock()
+    return instance
+
 
 @pytest.fixture
 def imou_config_flow() -> Generator[MagicMock]:
@@ -32,10 +46,7 @@ def imou_config_flow() -> Generator[MagicMock]:
             AsyncMock(return_value={}),
         ),
     ):
-        instance = MagicMock()
-        instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_set_message_callback = AsyncMock()
-        instance.async_close = AsyncMock()
+        instance = _imou_client_instance()
         mock_client.return_value = instance
         yield mock_client
 
@@ -57,10 +68,7 @@ def imou_config_flow_with_devices() -> Generator[MagicMock]:
             ),
         ),
     ):
-        instance = MagicMock()
-        instance.async_get_token = AsyncMock(return_value=IMOU_TOKEN_RETURN)
-        instance.async_set_message_callback = AsyncMock()
-        instance.async_close = AsyncMock()
+        instance = _imou_client_instance()
         mock_client.return_value = instance
         yield mock_client
 
@@ -117,11 +125,18 @@ def setup_imou_runtime(
 ) -> ImouRuntimeData:
     """Attach ImouRuntimeData to a mock config entry for webhook tests."""
     from custom_components.imou_life.const import (
+        EVENT_PUSH_TYPES_ALL,
         PARAM_ENABLE_EVENT_PUSH,
+        PARAM_EVENT_PUSH_TYPES,
         PARAM_SELECTED_DEVICES,
     )
 
     entry_options = {PARAM_ENABLE_EVENT_PUSH: push_enabled, **(options or {})}
+    if (
+        entry_options.get(PARAM_ENABLE_EVENT_PUSH)
+        and PARAM_EVENT_PUSH_TYPES not in entry_options
+    ):
+        entry_options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
     # Webhook filters by entry.options; keep the helper argument as the source
     # of truth unless the caller already set selected_devices in options.
     if selected_devices is not None and PARAM_SELECTED_DEVICES not in entry_options:

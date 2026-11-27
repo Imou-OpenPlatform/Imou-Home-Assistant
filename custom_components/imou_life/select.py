@@ -6,19 +6,30 @@ from typing import override
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
+from pyimouapi.const import (
+    PARAM_COLLECTION_POINT_PROMPT,
+    PARAM_CURRENT_OPTION,
+    PARAM_OPTIONS,
+)
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.select_option import to_friendly
 
 from .const import (
+    DOMAIN,
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
+    PARAM_INSIGHT_WORKBENCH_DEVICE,
     PARAM_NIGHT_VISION_MODE,
+    PARAM_WIDE_DYNAMIC,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .insight_account import ImouAccountEntity, camera_select_options
+from .runtime_data import get_runtime_data
 
 PARALLEL_UPDATES = 1
 
@@ -33,6 +44,11 @@ SELECT_TYPES: tuple[SelectEntityDescription, ...] = (
     SelectEntityDescription(
         key=PARAM_NIGHT_VISION_MODE,
         translation_key=PARAM_NIGHT_VISION_MODE,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SelectEntityDescription(
+        key=PARAM_WIDE_DYNAMIC,
+        translation_key=PARAM_WIDE_DYNAMIC,
         entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
@@ -61,6 +77,86 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou select entities."""
     async_add_imou_entities(entry, async_add_entities, ImouSelect, _iter_selects)
+    added = False
+
+    @callback
+    def _add_workbench() -> None:
+        nonlocal added
+        if added:
+            return
+        entity = ImouInsightWorkbenchSelect(entry.runtime_data.coordinator, entry)
+        if not entity.options:
+            return
+        added = True
+        async_add_entities([entity])
+
+    _add_workbench()
+    entry.async_on_unload(
+        entry.runtime_data.coordinator.async_add_listener(_add_workbench)
+    )
+
+
+class ImouInsightWorkbenchSelect(ImouAccountEntity, SelectEntity):
+    """Pick which camera channel the AI Insight workbench uses."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_INSIGHT_WORKBENCH_DEVICE)
+        self._label_to_key: dict[str, str] = {}
+        self._refresh_options()
+
+    def _refresh_options(self) -> None:
+        labels, mapping = camera_select_options(self.coordinator.devices)
+        self._label_to_key = mapping
+        self._attr_options = labels
+        runtime = get_runtime_data(self._config_entry)
+        if runtime is not None and runtime.workbench_device_key:
+            for label, key in mapping.items():
+                if key == runtime.workbench_device_key:
+                    self._attr_current_option = label
+                    self._sync_workbench_device_key()
+                    return
+            runtime.workbench_device_key = None
+        if labels:
+            self._attr_current_option = labels[0]
+        else:
+            self._attr_current_option = None
+        self._sync_workbench_device_key()
+
+    def _sync_workbench_device_key(self) -> None:
+        runtime = get_runtime_data(self._config_entry)
+        if runtime is None:
+            return
+        option = self._attr_current_option
+        if option and option in self._label_to_key:
+            runtime.workbench_device_key = self._label_to_key[option]
+        else:
+            runtime.workbench_device_key = None
+
+    def _handle_coordinator_update(self) -> None:
+        self._refresh_options()
+        super()._handle_coordinator_update()
+
+    async def async_select_option(self, option: str) -> None:
+        key = self._label_to_key.get(option)
+        if key is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="insight_workbench_unknown_device",
+            )
+        self._attr_current_option = option
+        self._sync_workbench_device_key()
+        self.async_write_ha_state()
+
+    @property
+    @override
+    def available(self) -> bool:
+        return bool(self._attr_options) and super().available
 
 
 class ImouSelect(ImouEntity, SelectEntity):
@@ -89,7 +185,21 @@ class ImouSelect(ImouEntity, SelectEntity):
     @override
     def current_option(self) -> str | None:
         """Return the selected option."""
-        return self.device.selects[self._entity_type][PARAM_CURRENT_OPTION]
+        state = self.device.selects[self._entity_type]
+        current = state[PARAM_CURRENT_OPTION]
+        options = state[PARAM_OPTIONS]
+        if current in options:
+            return current
+        if current not in (None, ""):
+            friendly = to_friendly(self._entity_type, current)
+            if friendly in options:
+                return friendly
+        if (
+            self._entity_type == PARAM_COLLECTION_POINT
+            and PARAM_COLLECTION_POINT_PROMPT in options
+        ):
+            return PARAM_COLLECTION_POINT_PROMPT
+        return options[0] if options else None
 
     @override
     async def async_select_option(self, option: str) -> None:

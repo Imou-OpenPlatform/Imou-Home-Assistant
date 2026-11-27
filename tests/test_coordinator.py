@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_registry import RegistryEntryDisabler
+from pyimouapi.bulb_light import empty_bulb_state
+from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -30,6 +32,10 @@ def _mock_device(device_id: str, channel_id: str | None = None) -> MagicMock:
     device.device_id = device_id
     device.channel_id = channel_id
     device.product_id = f"prod_{device_id}"
+    device.parent_device_id = None
+    device.parent_product_id = None
+    device.capability_ids = None
+    device.capability_set = None
     return device
 
 
@@ -59,6 +65,49 @@ async def _run_update(
     coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
     await coordinator._async_update_data()
     return coordinator
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_refresh_copies_the_new_play_token(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A later device list updates the play token kept on the known device."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    current = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    current.set_channel_id("0")
+    fresh = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    fresh.set_channel_id("0")
+    fresh.set_play_token_v2("token-v2")
+    key = imou_life_device_key(current)
+    coordinator.devices_by_key = {key: current}
+    await coordinator._async_refresh_known_devices({key: fresh})
+    assert current.play_token_v2 == "token-v2"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_refresh_copies_source_and_device_capability_ids(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A refresh updates source and device capability ids without channel drift."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    current = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    current.set_channel_id("1")
+    current.set_capability_ids({"record.file.list"})
+    current.set_source("share")
+    fresh = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    fresh.set_channel_id("1")
+    fresh.set_capability_ids({"record.file.list"})
+    fresh.set_source("bind")
+    fresh.set_device_capability_ids({"record.file.bitmap"})
+    key = imou_life_device_key(current)
+    coordinator.devices_by_key = {key: current}
+    await coordinator._async_refresh_known_devices({key: fresh})
+    assert current.source == "bind"
+    assert current.device_capability_ids == frozenset({"record.file.bitmap"})
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -120,8 +169,8 @@ async def test_coordinator_skips_poll_when_all_entities_disabled(
     )
     entity_registry = er.async_get(hass)
     entity_registry.async_get_or_create(
-        DOMAIN,
         "sensor",
+        DOMAIN,
         f"{device_key}$status",
         config_entry=coordinator.config_entry,
         device_id=device_entry.id,
@@ -190,13 +239,13 @@ async def test_first_discovery_keeps_registry_devices_still_on_account(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
+async def test_deselecting_a_device_removes_it_from_the_registry(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Polling filter must not remove Home Assistant device registry entries.
+    """Unchecked devices leave the Home Assistant device list.
 
-    Deselecting in options only stops polling. Names, areas, and automations
-    stay. Devices gone from the Imou account are still detached.
+    The poll picker still lists every account device. A device left unchecked
+    is removed here, together with its entities.
     """
     devices = [_mock_device("d1"), _mock_device("d2")]
     entry = MockConfigEntry(
@@ -211,10 +260,19 @@ async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
         identifiers={(DOMAIN, imou_life_device_key(devices[0]))},
         name="Still polled",
     )
+    filtered_key = imou_life_device_key(devices[1])
     filtered = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, imou_life_device_key(devices[1]))},
-        name="Stopped polling",
+        identifiers={(DOMAIN, filtered_key)},
+        name="Not selected",
+    )
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{filtered_key}$status",
+        config_entry=entry,
+        device_id=filtered.id,
     )
 
     device_manager.async_get_devices.return_value = devices
@@ -223,7 +281,12 @@ async def test_deselecting_a_device_does_not_detach_it_from_the_registry(
 
     assert {d.device_id for d in coordinator.devices} == {"d1"}
     assert entry.entry_id in device_registry.async_get(kept.id).config_entries
-    assert entry.entry_id in device_registry.async_get(filtered.id).config_entries
+    gone = device_registry.async_get(filtered.id)
+    assert gone is None or entry.entry_id not in gone.config_entries
+    assert (
+        entity_registry.async_get_entity_id("sensor", DOMAIN, f"{filtered_key}$status")
+        is None
+    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -270,19 +333,13 @@ async def test_coordinator_default_interval_is_five_minutes(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_skips_ability_refs_when_device_set_unchanged(
+async def test_rediscovery_uses_single_capability_list_when_unchanged(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A rediscovery that finds the same devices must not re-fetch ability refs."""
+    """Rediscovery lists the account once; pyimouapi runs capability.list inside."""
     devices = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, devices)
     device_manager.async_get_devices.assert_awaited()
-    assert (
-        device_manager.async_get_devices.await_args.kwargs.get(
-            "fetch_ability_refs", True
-        )
-        is True
-    )
 
     device_manager.async_get_devices.reset_mock()
     device_manager.async_get_devices.return_value = devices
@@ -290,70 +347,149 @@ async def test_rediscovery_skips_ability_refs_when_device_set_unchanged(
     await coordinator._async_update_data()
 
     device_manager.async_get_devices.assert_awaited_once()
-    assert (
-        device_manager.async_get_devices.await_args.kwargs["fetch_ability_refs"]
-        is False
-    )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_fetches_ability_refs_only_for_new_devices(
+async def test_discovery_configures_only_selected_devices(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A newly appeared device is the only one that spends a detail call."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        options={PARAM_SELECTED_DEVICES: ["d1"]},
+    )
+    entry.add_to_hass(hass)
+    coordinator = ImouDataUpdateCoordinator(hass, device_manager, entry)
+    device_manager.async_get_devices.return_value = [_mock_device("d1")]
+    await coordinator._async_update_data()
+    kwargs = device_manager.async_get_devices.await_args.kwargs
+    assert kwargs.get("configure_device_ids") == {"d1"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_ability_text_change_does_not_list_devices_again(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    original = _mock_device("d1")
+    original.device_ability = "WLAN"
+    original.channel_ability = "old"
+    coordinator = await _run_update(hass, device_manager, [original])
+    changed = _mock_device("d1")
+    changed.device_ability = "WLAN"
+    changed.channel_ability = "new"
+    device_manager.async_get_devices.reset_mock()
+    device_manager.async_get_devices.return_value = [changed]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+    device_manager.async_get_devices.assert_awaited_once()
+    original.set_channel_ability.assert_called_once_with("new")
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_registers_new_device_from_single_list(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """pyimouapi 2.x configures entities on the first list; no second list pass."""
     first = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, first)
 
     second = [_mock_device("d1"), _mock_device("d2")]
     device_manager.async_get_devices.reset_mock()
-    device_manager.async_get_devices.side_effect = [second, second]
+    device_manager.async_get_devices.return_value = second
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    assert device_manager.async_get_devices.await_count == 2
-    assert (
-        device_manager.async_get_devices.await_args_list[0].kwargs["fetch_ability_refs"]
-        is False
-    )
-    assert device_manager.async_get_devices.await_args_list[1].kwargs[
-        "fetch_ability_refs"
-    ] == {"d2"}
+    device_manager.async_get_devices.assert_awaited_once()
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_first_discovery_prefetches_iot_event_maps(
+async def test_rediscovery_retries_and_merges_complete_v2_snapshot(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Doorbell / motion gating needs product-model events before entities exist."""
+    """A recovered product/capability lookup adds entities to the live device."""
+    missing = ImouHaDevice("lamp", "Lamp", "Imou", "L1", "1.0")
+    missing.set_product_id("lamp-product")
+    coordinator = await _run_update(hass, device_manager, [missing])
+    callback = MagicMock()
+    coordinator.new_device_callbacks.append(callback)
+
+    capability = CapabilitySet(
+        properties=dict.fromkeys(("control.outlet.enabled",)),  # type: ignore[arg-type]
+        services=frozenset(),
+        events=frozenset(),
+    )
+    recovered = ImouHaDevice("lamp", "Lamp", "Imou", "L1", "1.0")
+    recovered.set_product_id("lamp-product")
+    recovered.set_product_device_type("Lamp")
+    recovered.set_capability_set(capability)
+    recovered.bulb_light = empty_bulb_state()
+    recovered.set_bulb_v2(True)
+
+    device_manager.async_get_devices.return_value = [recovered]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    current = coordinator.devices[0]
+    assert current is missing
+    assert current.product_device_type == "Lamp"
+    assert current.capability_set == capability
+    assert current.bulb_light is not None
+    callback.assert_called_once_with([current])
+
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    callback.assert_called_once_with([current])
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_rediscovery_refreshes_when_page_capability_ids_change_without_detail(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Changing page capability ids updates entities even if capability.list failed."""
+    initial = ImouHaDevice("cam", "Cam", "Imou", "IPC", "1.0")
+    initial.set_channel_id("0")
+    initial.set_capability_ids(frozenset())
+    coordinator = await _run_update(hass, device_manager, [initial])
+    callback = MagicMock()
+    coordinator.new_device_callbacks.append(callback)
+
+    updated = ImouHaDevice("cam", "Cam", "Imou", "IPC", "1.0")
+    updated.set_channel_id("0")
+    updated.set_capability_ids({"detection.motion.enabled"})
+    updated.switches["motion_detect"] = {
+        "state": False,
+        "v2_target_id": "detection.motion.enabled",
+    }
+
+    device_manager.async_get_devices.return_value = [updated]
+    coordinator._last_discovery = None
+    await coordinator._async_update_data()
+
+    current = coordinator.devices[0]
+    assert current.capability_ids == frozenset({"detection.motion.enabled"})
+    assert "motion_detect" in current.switches
+    callback.assert_called_once_with([current])
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_does_not_fetch_product_event_maps(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """Call and motion entities follow the capability list, not product events."""
     d1 = _mock_device("d1")
     d2 = _mock_device("d2")
     d2.product_id = "prod_d1"
     await _run_update(hass, device_manager, [d1, d2])
-    pids = [
-        call.args[0]
-        for call in device_manager.delegate.async_ensure_event_map.await_args_list
-    ]
-    assert set(pids) == {"prod_d1"}
-    assert device_manager.delegate.async_ensure_event_map.await_count == 1
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_paas_discovery_skips_event_map_prefetch(
-    hass: HomeAssistant, device_manager: MagicMock
-) -> None:
-    """PaaS cameras have no product model; abilities are already on the device."""
-    device = _mock_device("d1")
-    device.product_id = None
-    await _run_update(hass, device_manager, [device])
     device_manager.delegate.async_ensure_event_map.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_new_iot_device_prefetches_event_map(
+async def test_new_device_does_not_fetch_product_event_maps(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """A camera added later still needs its event map before entities are created."""
+    """A camera added later is registered from its capability list."""
     first = [_mock_device("d1")]
     coordinator = await _run_update(hass, device_manager, first)
     device_manager.delegate.async_ensure_event_map.reset_mock()
@@ -363,31 +499,26 @@ async def test_new_iot_device_prefetches_event_map(
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    device_manager.delegate.async_ensure_event_map.assert_awaited_once_with("prod_d2")
+    device_manager.delegate.async_ensure_event_map.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_rediscovery_detail_failure_still_removes_devices(
+async def test_rediscovery_single_list_removes_gone_and_adds_new(
     hass: HomeAssistant, device_manager: MagicMock
 ) -> None:
-    """Detail failure must not skip account removals for the same rediscovery."""
-    from pyimouapi.exceptions import RequestFailedException
-
+    """One capability.list pass updates additions and removals together."""
     first = [_mock_device("d1"), _mock_device("gone")]
     coordinator = await _run_update(hass, device_manager, first)
     assert {d.device_id for d in coordinator.devices} == {"d1", "gone"}
 
     remaining = [_mock_device("d1"), _mock_device("new")]
     device_manager.async_get_devices.reset_mock()
-    device_manager.async_get_devices.side_effect = [
-        remaining,
-        RequestFailedException("detail failed"),
-    ]
+    device_manager.async_get_devices.return_value = remaining
     coordinator._last_discovery = None
     await coordinator._async_update_data()
 
-    assert {d.device_id for d in coordinator.devices} == {"d1"}
-    assert coordinator._last_discovery is None
+    assert {d.device_id for d in coordinator.devices} == {"d1", "new"}
+    assert coordinator._last_discovery is not None
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -412,21 +543,23 @@ async def test_status_poll_uses_shared_device_update(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_property_push_skips_iot_detail_after_first_fetch(
-    hass: HomeAssistant, device_manager: MagicMock
+@pytest.mark.parametrize("push_type", [EVENT_PUSH_TYPE_CAPABILITY_EVENT])
+async def test_property_push_skips_v2_state_after_first_snapshot(
+    hass: HomeAssistant, device_manager: MagicMock, push_type: str
 ) -> None:
     """First status update snapshots; the next interval skips those ids."""
     device = _mock_device("d1", "0")
     device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
     options = {
         PARAM_ENABLE_EVENT_PUSH: True,
-        PARAM_EVENT_PUSH_TYPES: list(DEFAULT_EVENT_PUSH_TYPES),
+        PARAM_EVENT_PUSH_TYPES: [push_type],
     }
     coordinator = await _run_update(hass, device_manager, [device], options=options)
     first_skip = device_manager.async_update_devices_status.await_args.kwargs.get(
         "skip_iot_property_ids"
     )
     assert first_skip in (None, set())
+    assert coordinator._v2_state_snapshots == {"d1"}
 
     device_manager.async_update_devices_status.reset_mock()
     device_manager.async_update_devices_status.return_value = set()
@@ -435,6 +568,28 @@ async def test_property_push_skips_iot_detail_after_first_fetch(
         "skip_iot_property_ids"
     ]
     assert "d1" in skipped
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_capability_push_still_polls_paas_entity_values(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """PaaS devices keep entity polling when capability events are subscribed."""
+    device = _mock_device("d1", "0")
+    device.product_id = None
+    device_manager.async_update_devices_status = AsyncMock(return_value={"d1"})
+    options = {
+        PARAM_ENABLE_EVENT_PUSH: True,
+        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
+    }
+    coordinator = await _run_update(hass, device_manager, [device], options=options)
+    device_manager.async_update_devices_status.reset_mock()
+    device_manager.async_update_devices_status.return_value = set()
+    await coordinator._async_update_data()
+    skipped = device_manager.async_update_devices_status.await_args.kwargs[
+        "skip_iot_property_ids"
+    ]
+    assert "d1" not in skipped
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -453,3 +608,40 @@ async def test_property_push_inactive_never_skips_iot_detail(
     await coordinator._async_update_data()
     kwargs = device_manager.async_update_devices_status.await_args.kwargs
     assert kwargs.get("skip_iot_property_ids") in (None, set())
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_removed_accessory_forgets_snapshot_before_rejoining(
+    hass: HomeAssistant, device_manager: MagicMock
+) -> None:
+    """A removed gateway accessory must take a fresh snapshot if it returns."""
+    device = _mock_device("sensor", "0")
+    device.parent_device_id = "gateway"
+    device.parent_product_id = "gateway-product"
+    physical_id = "sensor_gateway_gateway-product"
+    device_manager.async_update_devices_status = AsyncMock(return_value={physical_id})
+    options = {
+        PARAM_ENABLE_EVENT_PUSH: True,
+        PARAM_EVENT_PUSH_TYPES: [EVENT_PUSH_TYPE_CAPABILITY_EVENT],
+    }
+    coordinator = await _run_update(hass, device_manager, [device], options=options)
+    assert coordinator._v2_state_snapshots == {physical_id}
+
+    coordinator._async_add_remove_devices({})
+    assert coordinator._v2_state_snapshots == set()
+
+    replacement = _mock_device("sensor", "0")
+    replacement.parent_device_id = "gateway"
+    replacement.parent_product_id = "gateway-product"
+    replacement_key = imou_life_device_key(replacement)
+    coordinator._async_add_remove_devices({replacement_key: replacement})
+    coordinator._last_discovery = 1e18
+    device_manager.async_update_devices_status.reset_mock()
+    await coordinator._async_update_data()
+
+    assert (
+        device_manager.async_update_devices_status.await_args.kwargs[
+            "skip_iot_property_ids"
+        ]
+        == set()
+    )

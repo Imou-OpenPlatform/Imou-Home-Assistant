@@ -6,15 +6,13 @@ from homeassistant.components.number import NumberDeviceClass, NumberEntity, Num
 from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from pyimouapi.const import PARAM_REF, PARAM_STATE
+from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     COUNT_DOWN_MAX_MINUTES,
-    OVERCHARGE_HIGH_REF,
     OVERCHARGE_MAX_WATTS_DEFAULT,
-    OVERCHARGE_MAX_WATTS_HIGH,
     OVERCHARGE_MIN_WATTS,
     PARAM_COUNT_DOWN_SWITCH,
     PARAM_OVERCHARGE_SWITCH,
@@ -44,7 +42,7 @@ def _iter_overcharge(
     return [
         (PARAM_OVERCHARGE_SWITCH, device)
         for device in coordinator.devices
-        if PARAM_OVERCHARGE_SWITCH in device.texts
+        if (PARAM_OVERCHARGE_SWITCH in device.texts and device.capability_set is None)
     ]
 
 
@@ -118,10 +116,7 @@ class ImouOverchargeNumber(ImouEntity, NumberEntity):
 
     @property
     def native_max_value(self) -> float:
-        """Higher-capacity plugs accept a larger watt limit."""
-        ref = self.device.texts[PARAM_OVERCHARGE_SWITCH].get(PARAM_REF)
-        if ref == OVERCHARGE_HIGH_REF:
-            return float(OVERCHARGE_MAX_WATTS_HIGH)
+        """Plug watt limit shown on the number entity."""
         return float(OVERCHARGE_MAX_WATTS_DEFAULT)
 
     @property

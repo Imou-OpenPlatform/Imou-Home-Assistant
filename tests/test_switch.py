@@ -9,11 +9,11 @@ from custom_components.imou_life.const import (
     PARAM_LINKAGE_SIREN,
     PARAM_LINKAGE_WHITE_LIGHT,
     PARAM_MOTION_DETECT,
+    PARAM_OVERCHARGE_SWITCH,
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_PLUG_SWITCH,
     PARAM_SMART_TRACK,
-    PARAM_WIDE_DYNAMIC,
 )
 from custom_components.imou_life.switch import (
     SWITCH_TYPES,
@@ -30,7 +30,6 @@ FEATURE_SWITCH_KEYS = {
     PARAM_PET_DETECT,
     PARAM_PLAY_SOUND,
     PARAM_SMART_TRACK,
-    PARAM_WIDE_DYNAMIC,
 }
 
 
@@ -63,6 +62,14 @@ def test_iter_switches_whitelist_only() -> None:
 def test_switch_types_include_plug_switch() -> None:
     """Plug switch remains in the supported whitelist."""
     assert PARAM_PLUG_SWITCH in {description.key for description in SWITCH_TYPES}
+
+
+def test_switch_types_include_v2_overcharge_protection() -> None:
+    """V2 overcharge protection is a binary switch, not a watt limit."""
+    description = next(
+        item for item in SWITCH_TYPES if item.key == PARAM_OVERCHARGE_SWITCH
+    )
+    assert description.translation_key == PARAM_OVERCHARGE_SWITCH
 
 
 def test_switch_types_include_feature_switches() -> None:

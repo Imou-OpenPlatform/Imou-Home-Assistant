@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
-    EVENT_PUSH_TYPE_IOT,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPES_ALL,
     PARAM_ALARM_PICTURE,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_ENABLE_EVENT_PUSH,
@@ -76,7 +76,7 @@ def _online_alarm_image(
     if types is not None:
         options[PARAM_EVENT_PUSH_TYPES] = types
     elif push:
-        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
+        options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
     return ImouAlarmImage(
         coordinator,
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),
@@ -125,20 +125,14 @@ async def test_unavailable_when_alarm_push_is_off(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_unavailable_when_decrypt_is_off(hass: HomeAssistant) -> None:
-    """Decrypt off means there is no still to show."""
-    device = _device(channel_id="0")
-    entity = _online_alarm_image(hass, device, push=True, attach=False)
-    assert entity.available is False
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_unavailable_when_alarm_type_not_subscribed(
     hass: HomeAssistant,
 ) -> None:
-    """iotProperty push does not carry alarm stills."""
+    """Device status push does not carry alarm stills."""
     device = _device(channel_id="0")
-    entity = _online_alarm_image(hass, device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    entity = _online_alarm_image(
+        hass, device, push=True, types=[EVENT_PUSH_TYPE_DEVICE_STATUS]
+    )
     assert entity.available is False
 
 

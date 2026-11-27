@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any, override
 
 from homeassistant.components.light import (
@@ -13,17 +15,25 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.util.color import color_temperature_to_hs
 from pyimouapi.bulb_light import (
+    BULB_PROP_BRIGHTNESS,
+    BULB_PROP_COLOR_TEMP,
+    BULB_PROP_HUE,
+    BULB_PROP_MODE,
+    BULB_PROP_SATURATION,
+    BULB_PROP_SCENE,
+    BULB_PROP_SWITCH,
+    BULB_PROP_VALUE,
+    BULB_V2_PROPERTY_IDS,
     MAX_KELVIN,
     MIN_KELVIN,
     MODE_COLOR,
     MODE_SCENE,
-    REF_MODE,
-    REF_SWITCH,
     percent_to_brightness,
     properties_for_turn_off,
     properties_for_turn_on,
@@ -34,11 +44,14 @@ from pyimouapi.const import PARAM_STATE
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 
-from .const import DOMAIN, PARAM_BULB, PARAM_WHITE_LIGHT
+from .const import DOMAIN, PARAM_BULB, PARAM_WHITE_LIGHT, WHITE_LIGHT_OFF_DELAY
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
 
 PARALLEL_UPDATES = 1
+
+_COUNTDOWN_START = "white_light_start"
+_COUNTDOWN_STOP = "white_light_stop"
 
 
 def _iter_white_lights(
@@ -48,8 +61,18 @@ def _iter_white_lights(
     return [
         (PARAM_WHITE_LIGHT, device)
         for device in coordinator.devices
-        if PARAM_WHITE_LIGHT in device.switches
+        if _device_has_white_light(device)
     ]
+
+
+def _device_has_white_light(device: ImouHaDevice) -> bool:
+    """Countdown start/stop, or the steady lamp switch."""
+    buttons = device.buttons or {}
+    return (
+        PARAM_WHITE_LIGHT in device.switches
+        or _COUNTDOWN_START in buttons
+        or _COUNTDOWN_STOP in buttons
+    )
 
 
 def _iter_bulbs(
@@ -76,7 +99,7 @@ async def async_setup_entry(
 
 
 class ImouWhiteLight(ImouEntity, LightEntity):
-    """Camera floodlight: on or off, the same write as the old switch."""
+    """Camera floodlight. On for 30 seconds, or until it is turned off."""
 
     _attr_color_mode = ColorMode.ONOFF
 
@@ -90,22 +113,90 @@ class ImouWhiteLight(ImouEntity, LightEntity):
         """Initialize the white-light entity."""
         super().__init__(coordinator, config_entry, entity_type, device)
         self._attr_supported_color_modes = {ColorMode.ONOFF}
+        self._held_on = False
+        self._unsub_off: Callable[[], None] | None = None
+
+    def _uses_countdown(self) -> bool:
+        """True when this camera has the countdown start/stop services."""
+        buttons = self.device.buttons or {}
+        return _COUNTDOWN_START in buttons or _COUNTDOWN_STOP in buttons
+
+    @property
+    @override
+    def assumed_state(self) -> bool:
+        """The countdown lamp does not report on/off through the steady switch."""
+        return self._uses_countdown()
+
+    async def async_added_to_hass(self) -> None:
+        """Cancel a pending auto-off when the entity is removed."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_off_timer)
+
+    @callback
+    def _cancel_off_timer(self) -> None:
+        """Drop a pending auto-off, if any."""
+        if self._unsub_off is not None:
+            self._unsub_off()
+            self._unsub_off = None
+
+    def _schedule_off(self) -> None:
+        """Turn the lamp off after the hold, restarting if it was already on."""
+        self._cancel_off_timer()
+        self._unsub_off = async_call_later(
+            self.hass, WHITE_LIGHT_OFF_DELAY, self._async_auto_off
+        )
+
+    async def _async_auto_off(self, _now: datetime) -> None:
+        """Turn the lamp off when the hold ends."""
+        self._unsub_off = None
+        await self.async_turn_off()
 
     @property
     @override
     def is_on(self) -> bool | None:
         """Return True when the lamp is on."""
-        return self.device.switches[PARAM_WHITE_LIGHT][PARAM_STATE]
+        if self._uses_countdown():
+            return self._held_on
+        switch = self.device.switches.get(PARAM_WHITE_LIGHT)
+        if not isinstance(switch, dict):
+            return None
+        return switch.get(PARAM_STATE)
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the lamp on."""
+        """Start the countdown lamp, or the steady lamp, for 30 seconds."""
+        if self._uses_countdown():
+            await self._press(_COUNTDOWN_START)
+            self._held_on = True
+            self._schedule_off()
+            self.async_write_ha_state()
+            return
         await self._async_set(True)
+        self._schedule_off()
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the lamp off."""
+        """Stop the countdown lamp, or clear the steady lamp."""
+        self._cancel_off_timer()
+        if self._uses_countdown():
+            await self._press(_COUNTDOWN_STOP)
+            self._held_on = False
+            self.async_write_ha_state()
+            return
         await self._async_set(False)
+
+    async def _press(self, button_type: str) -> None:
+        """Invoke the countdown start or stop service."""
+        if button_type not in (self.device.buttons or {}):
+            return
+        try:
+            await self.coordinator.device_manager.async_press_button(
+                self.device,
+                button_type,
+                0,
+            )
+        except ImouException as err:
+            self._raise_imou_ha_error(err, "button_press_failed")
 
     async def _async_set(self, enable: bool) -> None:
         """Write the white-light switch through the vendor library."""
@@ -123,10 +214,6 @@ class ImouWhiteLight(ImouEntity, LightEntity):
 class ImouBulbLight(ImouEntity, LightEntity):
     """Color bulb: white, color, and scenes on one light."""
 
-    _attr_supported_features = LightEntityFeature.EFFECT
-    _attr_min_color_temp_kelvin = MIN_KELVIN
-    _attr_max_color_temp_kelvin = MAX_KELVIN
-
     def __init__(
         self,
         coordinator: ImouDataUpdateCoordinator,
@@ -134,10 +221,81 @@ class ImouBulbLight(ImouEntity, LightEntity):
         entity_type: str,
         device: ImouHaDevice,
     ) -> None:
-        """Initialize color modes and the scene list."""
+        """Initialize the bulb entity."""
         super().__init__(coordinator, config_entry, entity_type, device)
-        self._attr_supported_color_modes = {ColorMode.COLOR_TEMP, ColorMode.HS}
-        self._attr_effect_list = scene_effect_names()
+
+    @property
+    def _supported_property_ids(self) -> set[str]:
+        """Return bulb property ids from the device's current capability snapshot."""
+        if self.device.bulb_v2:
+            if self.device.capability_ids is not None:
+                return {
+                    property_id
+                    for property_id in BULB_V2_PROPERTY_IDS
+                    if property_id in self.device.capability_ids
+                }
+            if self.device.capability_set is not None:
+                return {
+                    property_id
+                    for property_id in BULB_V2_PROPERTY_IDS
+                    if property_id in self.device.capability_set.properties
+                }
+        return set(BULB_V2_PROPERTY_IDS)
+
+    @property
+    def _supported_color_modes(self) -> set[ColorMode]:
+        """Return modes valid for the device's current property subset."""
+        supported_property_ids = self._supported_property_ids
+        color_modes: set[ColorMode] = set()
+        if {BULB_PROP_BRIGHTNESS, BULB_PROP_COLOR_TEMP} <= supported_property_ids:
+            color_modes.add(ColorMode.COLOR_TEMP)
+        if {
+            BULB_PROP_HUE,
+            BULB_PROP_SATURATION,
+            BULB_PROP_VALUE,
+        } <= supported_property_ids:
+            color_modes.add(ColorMode.HS)
+        if not color_modes:
+            color_modes.add(
+                ColorMode.BRIGHTNESS
+                if BULB_PROP_BRIGHTNESS in supported_property_ids
+                else ColorMode.ONOFF
+            )
+        return color_modes
+
+    @property
+    @override
+    def supported_color_modes(self) -> set[ColorMode]:
+        """Return color modes from the current capability snapshot."""
+        return self._supported_color_modes
+
+    @property
+    @override
+    def supported_features(self) -> LightEntityFeature:
+        """Return scene support from the current capability snapshot."""
+        if BULB_PROP_SCENE in self._supported_property_ids:
+            return LightEntityFeature.EFFECT
+        return LightEntityFeature(0)
+
+    @property
+    @override
+    def effect_list(self) -> list[str] | None:
+        """Return scenes only while the scene property is supported."""
+        if BULB_PROP_SCENE in self._supported_property_ids:
+            return scene_effect_names()
+        return None
+
+    @property
+    @override
+    def min_color_temp_kelvin(self) -> int:
+        """Return the bulb's minimum supported color temperature."""
+        return MIN_KELVIN
+
+    @property
+    @override
+    def max_color_temp_kelvin(self) -> int:
+        """Return the bulb's maximum supported color temperature."""
+        return MAX_KELVIN
 
     @property
     def _state(self) -> dict[str, Any]:
@@ -154,7 +312,11 @@ class ImouBulbLight(ImouEntity, LightEntity):
 
     def _active_effect(self) -> str | None:
         """Scene name when this bulb is on in a known scene."""
-        if not self.is_on or self._state["mode"] != MODE_SCENE:
+        if (
+            BULB_PROP_SCENE not in self._supported_property_ids
+            or not self.is_on
+            or self._state["mode"] != MODE_SCENE
+        ):
             return None
         return scene_effect_name(int(self._state["scene"]))
 
@@ -164,11 +326,12 @@ class ImouBulbLight(ImouEntity, LightEntity):
         """White brightness, or color brightness while in color mode."""
         if not self.is_on or self._active_effect() is not None:
             return None
-        level = (
-            self._state["value"]
-            if self._state["mode"] == MODE_COLOR
-            else self._state["brightness"]
-        )
+        if self.color_mode == ColorMode.HS:
+            level = self._state["value"]
+        elif BULB_PROP_BRIGHTNESS in self._supported_property_ids:
+            level = self._state["brightness"]
+        else:
+            return None
         return percent_to_brightness(int(level))
 
     @property
@@ -183,9 +346,16 @@ class ImouBulbLight(ImouEntity, LightEntity):
             return None
         if self._active_effect() is not None:
             return ColorMode.ONOFF
-        if self._state["mode"] == MODE_COLOR:
+        if (
+            self._state["mode"] == MODE_COLOR
+            and ColorMode.HS in self._supported_color_modes
+        ):
             return ColorMode.HS
-        return ColorMode.COLOR_TEMP
+        if ColorMode.COLOR_TEMP in self._supported_color_modes:
+            return ColorMode.COLOR_TEMP
+        if ColorMode.HS in self._supported_color_modes:
+            return ColorMode.HS
+        return next(iter(self._supported_color_modes))
 
     @property
     @override
@@ -226,30 +396,52 @@ class ImouBulbLight(ImouEntity, LightEntity):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the bulb on and apply color, temperature, brightness, or a scene."""
-        raw_hs = kwargs.get(ATTR_HS_COLOR)
+        raw_hs = (
+            kwargs.get(ATTR_HS_COLOR)
+            if ColorMode.HS in self._supported_color_modes
+            else None
+        )
         hs = (float(raw_hs[0]), float(raw_hs[1])) if raw_hs is not None else None
+        color_temp_kelvin = (
+            kwargs.get(ATTR_COLOR_TEMP_KELVIN)
+            if ColorMode.COLOR_TEMP in self._supported_color_modes
+            else None
+        )
+        effect = (
+            kwargs.get(ATTR_EFFECT)
+            if BULB_PROP_SCENE in self._supported_property_ids
+            else None
+        )
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        if hs is None and BULB_PROP_BRIGHTNESS not in self._supported_property_ids:
+            brightness = None
         preview = (
             hs is not None
-            and kwargs.get(ATTR_COLOR_TEMP_KELVIN) is None
-            and kwargs.get(ATTR_EFFECT) is None
+            and color_temp_kelvin is None
+            and effect is None
             and self._hs_is_white_preview(hs)
         )
         try:
             if preview:
-                payload = {REF_SWITCH: 1, REF_MODE: MODE_COLOR}
+                payload = {BULB_PROP_SWITCH: 1, BULB_PROP_MODE: MODE_COLOR}
             else:
                 payload = properties_for_turn_on(
                     self._state,
-                    brightness=kwargs.get(ATTR_BRIGHTNESS),
-                    color_temp_kelvin=kwargs.get(ATTR_COLOR_TEMP_KELVIN),
+                    brightness=brightness,
+                    color_temp_kelvin=color_temp_kelvin,
                     hs_color=hs,
-                    effect=kwargs.get(ATTR_EFFECT),
+                    effect=effect,
                 )
         except ValueError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="unknown_bulb_effect",
             ) from err
+        payload = {
+            property_id: value
+            for property_id, value in payload.items()
+            if property_id in self._supported_property_ids
+        }
         await self._async_write(payload)
 
     @override

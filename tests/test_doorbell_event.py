@@ -8,22 +8,21 @@ from unittest.mock import MagicMock
 
 import pytest
 from custom_components.imou_life.const import (
-    DEFAULT_EVENT_PUSH_TYPES,
     DOMAIN,
     EVENT_IMOU_ALARM,
-    EVENT_PUSH_TYPE_IOT,
-    PARAM_DOORBELL,
+    EVENT_PUSH_TYPE_DEVICE_STATUS,
+    EVENT_PUSH_TYPES_ALL,
+    PARAM_CALL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_STATUS,
 )
 from custom_components.imou_life.event import (
-    ImouDoorbellEvent,
-    _iter_doorbell_events,
-    is_doorbell_call_msg_type,
+    ImouCallEvent,
+    _iter_call_events,
+    is_call_msg_type,
 )
 from custom_components.imou_life.webhook import async_handle_imou_webhook
-from homeassistant.components.event import EventDeviceClass
 from homeassistant.core import HomeAssistant
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
@@ -42,6 +41,8 @@ def _device(*, channel_id: object | None, device_id: str = "SN1") -> MagicMock:
     device.is_ipc = True
     device.device_ability = "WLAN"
     device.channel_ability = "WLAN"
+    device.capability_set = None
+    device.capability_ids = None
     device.device_name = "Front"
     device.channel_name = "Front"
     device.manufacturer = "Imou"
@@ -71,7 +72,7 @@ def _online_doorbell(
     *,
     push: bool,
     types: list[str] | None = None,
-) -> ImouDoorbellEvent:
+) -> ImouCallEvent:
     """Doorbell entity for an online camera with the given push options."""
     coordinator = _coordinator([device])
     coordinator.last_update_success = True
@@ -81,19 +82,19 @@ def _online_doorbell(
     if types is not None:
         options[PARAM_EVENT_PUSH_TYPES] = types
     elif push:
-        options[PARAM_EVENT_PUSH_TYPES] = list(DEFAULT_EVENT_PUSH_TYPES)
-    return ImouDoorbellEvent(
+        options[PARAM_EVENT_PUSH_TYPES] = list(EVENT_PUSH_TYPES_ALL)
+    return ImouCallEvent(
         coordinator,
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT, options=options),
-        PARAM_DOORBELL,
+        PARAM_CALL,
         device,
     )
 
 
 @asynccontextmanager
 async def _listening_doorbell(
-    hass: HomeAssistant, entity: ImouDoorbellEvent
-) -> AsyncIterator[ImouDoorbellEvent]:
+    hass: HomeAssistant, entity: ImouCallEvent
+) -> AsyncIterator[ImouCallEvent]:
     """Subscribe the entity, then drop its bus listener."""
     entity.hass = hass
     entity.entity_id = "event.front_doorbell"
@@ -127,75 +128,100 @@ async def _listening_doorbell(
         (None, False),
     ],
 )
-def test_is_doorbell_call_msg_type(msg_type: str | None, expected: bool) -> None:
+def test_is_call_msg_type(msg_type: str | None, expected: bool) -> None:
     """Only the agreed call / press types drive the doorbell event."""
-    assert is_doorbell_call_msg_type(msg_type) is expected
+    assert is_call_msg_type(msg_type) is expected
 
 
-def test_iter_doorbell_events_paas_needs_call_ability() -> None:
-    """PaaS doorbell follows CallAbility, not every camera channel."""
+def _capability(
+    *,
+    events: tuple[str, ...] = (),
+    services: tuple[str, ...] = (),
+) -> MagicMock:
+    capability = MagicMock()
+    capability.properties = {}
+    capability.services = frozenset(services)
+    capability.events = frozenset(events)
+    return capability
+
+
+def _set_call_ids(
+    device: MagicMock,
+    *,
+    services: tuple[str, ...] = (),
+    events: tuple[str, ...] = (),
+) -> None:
+    device.capability_ids = frozenset((*services, *events))
+    device.capability_set = _capability(services=services, events=events)
+
+
+def test_iter_call_events_follows_v2_call() -> None:
+    """Doorbell follows an incoming call, not every camera."""
     camera = _device(channel_id="0")
-    camera.channel_ability = "WLAN,CallAbility"
+    _set_call_ids(camera, events=("call.session.called",))
     plug = _device(channel_id=None, device_id="PLUG")
+    _set_call_ids(plug, events=("call.session.called",))
     no_call = _device(channel_id="0", device_id="IPC2")
-    no_call.channel_ability = "WLAN,MobileDetect"
-    pairs = _iter_doorbell_events(_coordinator([camera, plug, no_call]))
-    assert [(key, device.device_id) for key, device in pairs] == [
-        (PARAM_DOORBELL, "SN1")
-    ]
+    _set_call_ids(no_call, services=("ptz.aim.step",))
+    pairs = _iter_call_events(_coordinator([camera, plug, no_call]))
+    assert [(key, device.device_id) for key, device in pairs] == [(PARAM_CALL, "SN1")]
 
 
-def test_iter_doorbell_events_ipc_uses_device_ability_on_channel_0() -> None:
-    """An IPC often lists CallAbility on the device, not the channel."""
+def test_iter_call_events_accepts_call_controls() -> None:
+    """Answer, hang up, and refuse are the call feature when the event is absent."""
+    camera = _device(channel_id="0")
+    _set_call_ids(camera, services=("call.session.answer",))
+    assert _iter_call_events(_coordinator([camera])) == [(PARAM_CALL, camera)]
+
+
+def test_iter_call_events_ignores_legacy_call_ability() -> None:
+    """The old call ability name does not create a doorbell."""
     camera = _device(channel_id="0")
     camera.device_ability = "WLAN,CallAbility"
-    camera.channel_ability = "WLAN"
-    pairs = _iter_doorbell_events(_coordinator([camera]))
-    assert pairs == [(PARAM_DOORBELL, camera)]
+    camera.channel_ability = "WLAN,CallAbility"
+    assert _iter_call_events(_coordinator([camera])) == []
 
 
-def test_iter_doorbell_events_nvr_channel_ignores_device_ability() -> None:
-    """An NVR channel only gets doorbell when that channel reports the ability."""
+def test_iter_call_events_channel_without_call_is_skipped() -> None:
+    """A channel whose capability list has no call feature is skipped."""
     camera = _device(channel_id="1")
     camera.is_ipc = False
-    camera.device_ability = "CallAbility"
-    camera.channel_ability = "WLAN"
-    assert _iter_doorbell_events(_coordinator([camera])) == []
+    _set_call_ids(camera, services=("call.session.deviceTalk",))
+    assert _iter_call_events(_coordinator([camera])) == []
 
 
-def test_iter_doorbell_events_iot_uses_product_model_events() -> None:
-    """IoT doorbell follows thing-model call events, not PaaS abilities."""
+def test_iter_call_events_iot_uses_the_same_v2_call() -> None:
+    """A product id does not change the capability check."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
-    camera.channel_ability = "WLAN"
-    pairs = _iter_doorbell_events(
-        _coordinator([camera], event_map={"311000": "e_callEventCall"})
-    )
-    assert pairs == [(PARAM_DOORBELL, camera)]
+    _set_call_ids(camera, events=("call.session.called",))
+    assert _iter_call_events(_coordinator([camera])) == [(PARAM_CALL, camera)]
 
 
-def test_iter_doorbell_events_iot_without_call_events_skipped() -> None:
-    """An IoT camera with CallAbility but no call events must not get doorbell."""
+def test_iter_call_events_iot_event_refs_are_not_enough() -> None:
+    """Old product-model call refs do not create a doorbell."""
     camera = _device(channel_id="0")
     camera.product_id = "pidA"
     camera.channel_ability = "WLAN,CallAbility"
-    pairs = _iter_doorbell_events(
-        _coordinator([camera], event_map={"33000": "e_videoMotion"})
+    assert (
+        _iter_call_events(
+            _coordinator([camera], event_map={"311000": "e_callEventCall"})
+        )
+        == []
     )
-    assert pairs == []
 
 
-def test_doorbell_entity_is_a_doorbell_class() -> None:
-    """Device automations treat this as a doorbell ring."""
+def test_call_entity_is_not_a_doorbell() -> None:
+    """Recorders that can receive a call are not labeled as doorbells."""
     device = _device(channel_id="0")
-    entity = ImouDoorbellEvent(
+    entity = ImouCallEvent(
         _coordinator([device]),
         MockConfigEntry(domain=DOMAIN, data=USER_INPUT),
-        PARAM_DOORBELL,
+        PARAM_CALL,
         device,
     )
-    assert entity.device_class is EventDeviceClass.DOORBELL
-    assert "ring" in entity.event_types
+    assert entity.device_class is None
+    assert entity.event_types == ["call"]
     assert entity.state is None
 
 
@@ -206,9 +232,9 @@ def test_doorbell_unavailable_when_alarm_push_is_off() -> None:
 
 
 def test_doorbell_unavailable_when_alarm_type_not_subscribed() -> None:
-    """iotProperty push does not carry call / doorbell alarms."""
+    """Device status push does not carry call / doorbell alarms."""
     device = _device(channel_id="0")
-    entity = _online_doorbell(device, push=True, types=[EVENT_PUSH_TYPE_IOT])
+    entity = _online_doorbell(device, push=True, types=[EVENT_PUSH_TYPE_DEVICE_STATUS])
     assert entity.available is False
 
 
@@ -225,7 +251,7 @@ async def test_call_bell_event_rings(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
@@ -233,7 +259,7 @@ async def test_call_bell_event_rings(hass: HomeAssistant) -> None:
         )
         await hass.async_block_till_done()
         assert entity.state is not None
-        assert entity.state_attributes["event_type"] == "ring"
+        assert entity.state_attributes["event_type"] == "call"
         assert entity.state_attributes["msg_type"] == "callBellEvent"
 
 
@@ -244,7 +270,7 @@ async def test_iot_call_supply_rings(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
@@ -266,7 +292,7 @@ async def test_unresolved_iot_ref_rings(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
@@ -284,7 +310,7 @@ async def test_other_camera_does_not_ring(hass: HomeAssistant) -> None:
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         hass.bus.async_fire(
             EVENT_IMOU_ALARM,
@@ -303,7 +329,7 @@ async def test_unanswered_and_legacy_doorbell_do_not_ring(
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         for msg_type in ("callNoAnswered", "Doorbell", "message"):
             hass.bus.async_fire(
@@ -321,16 +347,22 @@ async def test_webhook_call_event_rings(hass: HomeAssistant) -> None:
     device = _device(channel_id="0")
     coordinator = _coordinator([device])
     entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         await async_handle_imou_webhook(
             hass,
             "webhook-id",
-            MockRequest({"msgType": "callEvent", "deviceId": "SN1", "channelId": "0"}),
+            MockRequest(
+                {
+                    "msgType": "call.session.called",
+                    "deviceId": "SN1",
+                    "channelId": "0",
+                }
+            ),
         )
         await hass.async_block_till_done(wait_background_tasks=True)
         assert entity.state is not None
-        assert entity.state_attributes["msg_type"] == "callEvent"
+        assert entity.state_attributes["msg_type"] == "call.session.called"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -340,7 +372,7 @@ async def test_removed_listener_ignores_later_calls(hass: HomeAssistant) -> None
     coordinator = _coordinator([device])
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT)
     entry.add_to_hass(hass)
-    entity = ImouDoorbellEvent(coordinator, entry, PARAM_DOORBELL, device)
+    entity = ImouCallEvent(coordinator, entry, PARAM_CALL, device)
     async with _listening_doorbell(hass, entity):
         pass
     hass.bus.async_fire(

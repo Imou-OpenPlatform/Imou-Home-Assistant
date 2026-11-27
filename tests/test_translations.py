@@ -63,6 +63,18 @@ def test_language_files_exist() -> None:
     assert LANGUAGE_FILES, "expected translations/*.json"
 
 
+def test_overcharge_switch_is_translated_on_switch_platform() -> None:
+    """Every locale exposes the V2 binary overcharge control."""
+    for path in [REFERENCE, *LANGUAGE_FILES]:
+        assert (
+            load(path)
+            .get("entity", {})
+            .get("switch", {})
+            .get("overcharge_switch", {})
+            .get("name")
+        )
+
+
 @pytest.mark.parametrize("path", LANGUAGE_FILES, ids=lambda p: p.name)
 def test_translations_match_strings_json(path: Path) -> None:
     """Each language must define the same messages with the same placeholders."""

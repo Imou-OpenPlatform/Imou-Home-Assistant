@@ -5,11 +5,15 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from custom_components.imou_life.config_flow import ImouConfigFlow
 from custom_components.imou_life.const import (
+    API_URL_LOGIN_REGIONS,
     CONF_API_URL_FK,
+    CONF_API_URL_INTL,
     CONF_API_URL_OR,
     CONF_API_URL_SG,
     DOMAIN,
+    PARAM_API_URL,
     PARAM_SELECTED_DEVICES,
     PARAM_WEBHOOK_ID,
     api_url_from_region,
@@ -19,6 +23,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pyimouapi.exceptions import RequestFailedException
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import LOGIN_INPUT, USER_INPUT, patch_async_setup_entry
 
@@ -35,13 +40,25 @@ assert "/openapi/" not in _CONFIG_FLOW_PATH.read_text(encoding="utf-8")
 
 def test_api_url_region_mapping() -> None:
     """Login region keys map to stored hostnames and back."""
+    assert api_url_from_region("intl") == CONF_API_URL_INTL
     assert api_url_from_region("sg") == CONF_API_URL_SG
     assert api_url_from_region("eu") == CONF_API_URL_FK
     assert api_url_from_region("na") == CONF_API_URL_OR
+    assert api_url_region_from_value(CONF_API_URL_INTL) == "intl"
     assert api_url_region_from_value(CONF_API_URL_SG) == "sg"
     assert api_url_region_from_value(CONF_API_URL_FK) == "eu"
     assert api_url_region_from_value(CONF_API_URL_OR) == "na"
+    assert api_url_region_from_value("intl") == "intl"
     assert api_url_region_from_value("sg") == "sg"
+
+
+def test_user_schema_uses_login_regions_only() -> None:
+    schema = ImouConfigFlow._user_schema()
+    api_url_field = next(
+        key for key in schema.schema if getattr(key, "schema", None) == PARAM_API_URL
+    )
+    selector = schema.schema[api_url_field]
+    assert selector.config["options"] == list(API_URL_LOGIN_REGIONS)
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow_with_devices")
@@ -70,6 +87,39 @@ async def test_async_step_user_without_user_input(hass: HomeAssistant) -> None:
     assert PARAM_WEBHOOK_ID in result["data"]
     assert len(mock_setup_entry.mock_calls) == 1
     await hass.async_block_till_done()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
+async def test_callback_snapshot_log_omits_webhook_id(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+    imou_config_flow: MagicMock,
+) -> None:
+    """Callback diagnostics must not disclose the secret webhook path."""
+    webhook_id = "secret-webhook-id"
+    callback_url = f"https://ha.example.com/api/webhook/{webhook_id}"
+    client = imou_config_flow.return_value
+    client.async_get_message_callback.return_value = {
+        "callbackFlag": "alarm",
+        "callbackUrl": callback_url,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: webhook_id},
+    )
+    entry.add_to_hass(hass)
+
+    with caplog.at_level("DEBUG", logger="custom_components.imou_life.config_flow"):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"next_step_id": "event_push"}
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "event_push"
+    client.async_get_message_callback.assert_awaited_once_with()
+    assert webhook_id not in caplog.text
+    assert callback_url not in caplog.text
 
 
 @pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")

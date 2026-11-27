@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "Wähle die Serverregion, die deinem Standort am nächsten liegt",
+          "api_url": "Must match where your App was created. Choose International for open.imoulife.com and most overseas accounts; choose China for apps created on the China open platform.",
           "app_id": "Die App ID von der Imou-Cloud-Plattform",
           "app_secret": "Das App secret von der Imou-Cloud-Plattform"
         }
@@ -50,7 +50,7 @@
       },
       "select_devices": {
         "title": "Geräte auswählen",
-        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte werden nicht abgefragt.",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte erscheinen nicht in Home Assistant.",
         "data": {
           "selected_devices": "Geräte"
         }
@@ -76,6 +76,18 @@
     "open_api_quota_exceeded": {
       "title": "Monatliches Kontingent der Imou Open Platform aufgebraucht",
       "description": "Diese App-ID hat in diesem Monat keine Open-Platform-Aufrufe mehr. Geräteliste, Live-Ansicht und Schalter erreichen die Cloud erst wieder, wenn du Kontingent nachlegst oder der Monat zurückgesetzt wird. Öffne **Meine Ressourcen** in der Open-Platform-Konsole und lade die Integration anschließend neu."
+    },
+    "record_playback": {
+      "title": "Aufnahmen können nicht wiedergegeben werden",
+      "description": "Dieses Imou-Konto kann derzeit keine Aufnahmen wiedergeben. Versuche es erneut mit dem primären Imou-Konto."
+    },
+    "decrypt_libs_missing": {
+      "title": "Alarmbilder brauchen die offiziellen Bibliotheken",
+      "description": "Alarmbilder werden auf diesem Home Assistant entschlüsselt. Kopiere `libLCOpenApiClient.so` und `libLCOpenSDK.so` nach `{native_dir}` ({found} von 2 gefunden). Offizielles Paket: [China](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt) oder [Ausland](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo). Lade Imou Life neu, wenn beide Dateien liegen."
+    },
+    "decrypt_libs_unsupported": {
+      "title": "Dieses Home Assistant kann Alarmbilder nicht entschlüsseln",
+      "description": "Die offiziellen Bibliotheken laufen nur auf linux x86-64. Dieser Host ist {arch}, daher bleiben Alarmbilder verschlüsselt."
     }
   },
   "options": {
@@ -85,49 +97,45 @@
       "bind_device_not_listed": "Das Gerät wurde gekoppelt, erscheint aber noch nicht in der Geräteliste des Kontos. Versuche es in einem Moment erneut.",
       "callback_failed": "Callback-URL konnte nicht bei Imou registriert werden: {error}",
       "callback_url_missing": "Bei aktiviertem Ereignis-Push ist eine Callback-URL erforderlich.",
-      "decrypt_libs_missing": "Die Entschlüsselungsbibliotheken sind auf diesem Host nicht installiert, daher würde dieser Schalter nichts bewirken. Lege sie zuerst ab, oder lass ihn aus.",
-      "record_path_not_allowed": "Dieser Ordner ist nicht in allowlist_external_dirs. Füge ihn unter Home Assistant → Allowlist external directories hinzu und versuche es erneut."
+      "decrypt_libs_missing": "Die Entschlüsselungsbibliotheken sind auf diesem Host nicht installiert, daher würde dieser Schalter nichts bewirken. Lege sie zuerst ab, oder lass ihn aus."
     },
     "step": {
       "init": {
         "title": "Imou Life konfigurieren",
-        "description": "Alarm-Push: **{push_state}** · Alarmbilder: **{decrypt_state}** · Bei Alarm aufzeichnen: **{record_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder und Bei Alarm aufzeichnen wirken nur, während Alarm-Push eingeschaltet ist.",
+        "description": "Alarm-Push: **{push_state}** · Statusabfrage: **{polling_state}**\n\nJede Seite speichert beim Absenden und kehrt hierher zurück. Alarmbilder werden auf diesem Home Assistant entschlüsselt und brauchen die beiden offiziellen Bibliotheken. **Einstellungen → System → Reparaturen** sagt, wohin sie gehören, wenn sie fehlen. Die Cliplänge steht unter Alarm-Push und Benachrichtigungen. Alarmclips liegen im Medienordner und sind im Medienbrowser zu sehen.",
         "menu_options": {
           "general_settings": "Abfrage und Kameras",
           "event_push": "Alarm-Push und Benachrichtigungen",
-          "alarm_image_decrypt": "Alarmbilder",
-          "local_recording": "Bei Alarm aufzeichnen",
-          "select_poll_devices": "Zu abfragende Geräte wählen",
           "bind_device": "Neues Gerät koppeln",
           "finish": "Fertig"
         }
       },
       "general_settings": {
         "title": "Statusabfrage und Kamera-Standardwerte",
-        "description": "Wie oft Home Assistant den Gerätestatus aktualisiert, plus die Live-Stream- und PTZ-Standardwerte, mit denen jede Kamera dieses Kontos startet.",
+        "description": "Abfrageintervall, welche Geräte abgefragt werden, und die Live- und PTZ-Standardwerte dieses Kontos.",
         "data": {
           "enable_polling": "Statusabfrage aktivieren",
           "update_interval": "Abfrageintervall (Sekunden)",
-          "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)"
+          "selected_devices": "Zu abfragende Geräte"
         },
         "data_description": {
-          "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und die Abonnementtypen IoT-Gerätenachrichten enthalten, werden *Eigenschaften* von Thing-Modell-Geräten in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Online-Status, PaaS-Fähigkeiten und dienstgestützte Entitäten werden weiterhin abgefragt.",
+          "enable_polling": "Ausschalten, um regelmäßige Cloud-Aktualisierungen zu überspringen. Entitätszustände können veralten. Einrichtung und Neuladen holen die Geräteliste weiterhin einmal. Wenn Ereignis-Push an ist und das Abonnement Gerätenachrichten enthält, werden Eigenschaften in diesem Intervall nicht aktualisiert (Einrichtung und Neuladen machen weiterhin einen Snapshot). Der Online-Status wird weiterhin in diesem Intervall aktualisiert.",
           "update_interval": "Standard 300 s (5 Minuten), Bereich 30–900 s. Wird ignoriert, wenn die Abfrage aus ist.",
-          "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s."
+          "selected_devices": "Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant. Diese Liste zeigt weiterhin jedes Gerät des Kontos."
         },
         "sections": {
           "camera_defaults": {
             "name": "Kamera-Standardwerte",
-            "description": "Live-Stream- und PTZ-Standardwerte für dieses Konto.",
+            "description": "Standardwerte für Livestream, Schnappschuss und Steuerung im Ruhezustand für dieses Konto.",
             "data": {
               "download_snap_wait_time": "Wartezeit für Schnappschuss (Sekunden)",
-              "live_resolution": "Videoauflösung",
-              "rotation_duration": "PTZ-Drehdauer (ms)"
+              "dormant_write_retry_wait_seconds": "Wartezeit vor Ruhezustand-Wiederholung (Sekunden)",
+              "live_resolution": "Videoauflösung"
             },
             "data_description": {
               "download_snap_wait_time": "Die Kamera muss den Schnappschuss aufnehmen und hochladen, bevor Imou ihn bereitstellen kann. So lange wartet Home Assistant vor dem Abruf. Erhöhe den Wert, wenn Schnappschüsse veraltet oder leer ankommen. Standard 3 s.",
-              "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet.",
-              "rotation_duration": "Wie weit ein Druck auf eine PTZ-Richtungstaste bewegt, als Bewegungszeit. Standard 500 ms."
+              "dormant_write_retry_wait_seconds": "Wenn der Gerätestatus Ruhezustand ist und ein Befehl fehlschlägt, wartet Home Assistant so lange, bevor derselbe Befehl einmal erneut gesendet wird. Standard 5 s, Bereich 5–60 s.",
+              "live_resolution": "HD = hohe Auflösung, SD = Standard. Wird für die Live-Kameraentität verwendet."
             }
           }
         }
@@ -138,57 +146,31 @@
         "data": {
           "enable_event_push": "Ereignis-Push aktivieren",
           "webhook_url": "Callback-URL",
-          "event_push_types": "Abonnieren"
+          "event_push_types": "Abonnieren",
+          "local_record_duration": "Cliplänge (Sekunden)"
         },
         "data_description": {
           "enable_event_push": "Die Imou-Cloud sendet Alarme per POST an diesen Home-Assistant-Webhook. Alarme werden auch mit der Imou Life App synchronisiert.",
           "webhook_url": "Erforderlich, wenn Ereignis-Push an ist. Muss aus dem Internet erreichbar sein; wenn die vorgeschlagene Adresse das nicht ist, ändere nur Hostname und Port.",
-          "event_push_types": "Welche Cloud-Nachrichten Home Assistant empfangen soll."
+          "event_push_types": "Welche Cloud-Nachrichten Home Assistant empfangen soll.",
+          "local_record_duration": "Wie lange nach einem Alarm aufgezeichnet wird. Standard 60 Sekunden, von 15 bis 180. Verbraucht Live-Stream-Kontingent. Der Schalter jeder Kamera steht auf ihrer Geräteseite."
         },
         "sections": {
           "notifications": {
             "name": "Bei Alarm benachrichtigen",
-            "description": "Optional. Leer lassen, um nur Automationen zu nutzen.",
+            "description": "Benachrichtigt standardmäßig das Home Assistant Web und jede angemeldete App.",
             "data": {
               "notify_services": "Benachrichtigungsziele"
             },
             "data_description": {
-              "notify_services": "Registrierte Notify-Dienste auf diesem Home Assistant. Eine Nachricht pro Alarm. Schalte **Bei Alarm benachrichtigen** auf einer Geräteseite aus, um dieses Gerät zu überspringen. Um das Alarmbild in diese Nachrichten zu legen, siehe **Alarmbilder**."
+              "notify_services": "Eine Nachricht pro Alarm."
             }
           }
         }
       },
-      "alarm_image_decrypt": {
-        "title": "Alarmbilder",
-        "description": "{push_hint}Alarmbilder kommen verschlüsselt an, daher muss Home Assistant eines lokal entschlüsseln, bevor es in eine Benachrichtigung kann.\n\nStatus: {native_hint}\n\nDie unten aufgeführten Geräte benötigen ihr Imou-Life-Gerätepasswort; nicht aufgeführte Geräte brauchen nichts. Gespeicherte Passwörter werden wieder eingetragen (maskiert). Zum Löschen **Gespeicherte Passwörter entfernen** verwenden. Gespeichert: {password_count} ({configured_serials}).",
-        "data": {
-          "attach_decrypted_thumbnail": "Bild in Alarmbenachrichtigungen anzeigen",
-          "default_device_password": "Standard-Gerätepasswort",
-          "clear_default_device_password": "Standard-Gerätepasswort löschen",
-          "remove_device_passwords": "Gespeicherte Passwörter entfernen"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "Benötigt die externe URL von Home Assistant (Einstellungen → System → Netzwerk) für Telefone außerhalb des LAN. Bilder werden unauthentifiziert unter /local/imou_life/thumbs/ etwa 24 Stunden gespeichert. Passwörter bleiben auf diesem Home Assistant und dienen nur der Entschlüsselung.",
-          "default_device_password": "Fallback für Geräte, die unten kein eigenes Passwort haben.",
-          "clear_default_device_password": "Löscht den gespeicherten Standard. Gerätebezogene Passwörter bleiben unverändert.",
-          "remove_device_passwords": "Markierte Seriennummern werden gelöscht."
-        }
-      },
-      "local_recording": {
-        "title": "Bei Alarm aufzeichnen",
-        "description": "{push_hint}Zeichnet nach einem Alarm einen kurzen Clip aus dem Cloud-Stream auf. Pro-Kamera **Bei Alarm aufzeichnen** steht auf jeder Geräteseite.",
-        "data": {
-          "local_record_path": "Speicherordner",
-          "local_record_duration": "Cliplänge (Sekunden)"
-        },
-        "data_description": {
-          "local_record_path": "Beispiel: /media/imou. Leer lassen zum Überspringen. Der Ordner muss in allowlist_external_dirs stehen.",
-          "local_record_duration": "Cliplänge nach dem Alarm. Standard 60 s, Bereich 15–180 s. Verbraucht Live-Stream-Kontingent."
-        }
-      },
       "select_poll_devices": {
         "title": "Zu abfragende Geräte wählen",
-        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte bleiben in Home Assistant, werden aber nicht abgefragt.",
+        "description": "{device_count} Gerät(e) gefunden. Nicht ausgewählte Geräte erscheinen nicht in der Geräteliste von Home Assistant.",
         "data": {
           "selected_devices": "Geräte"
         }
@@ -226,10 +208,8 @@
   "selector": {
     "api_url": {
       "options": {
-        "cn": "China",
-        "eu": "Europa",
-        "na": "Nordamerika",
-        "sg": "Singapur (Asien-Pazifik)"
+        "intl": "International",
+        "cn": "China"
       }
     },
     "webhook_placeholder": {
@@ -253,11 +233,8 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "Gerätealarme (Rauch, Gas, Person, Bildänderung usw.)",
-        "device_status": "Gerät online/offline",
-        "iot": "IoT-Gerätenachrichten. Wenn dies ausgewählt und Ereignis-Push an ist, aktualisieren Thing-Modell-Geräte Schalter/Sensoren/Scharfschaltung sofort aus iotProperty und überspringen die Intervall-Eigenschaftsabfrage. Schalte Ereignis-Push aus oder entferne die Markierung, um diese Eigenschaften wieder abzufragen.",
-        "numberstat": "Personenzählung",
-        "face_analysis": "Gesichtsanalyse"
+        "capability_event": "Gerätefähigkeitsereignisse",
+        "device_status": "Gerät online/offline"
       }
     },
     "device_status": {
@@ -274,8 +251,86 @@
         "labels": "Bezeichnungen: {labels}",
         "time": "Zeit: {time_str}",
         "details": "Details: {desc_type}",
+        "detected": "Erkannt: {targets}",
+        "detected_person": "Person",
+        "detected_vehicle": "Fahrzeug",
+        "detected_pet": "Haustier",
+        "detected_package": "Paket",
+        "detected_object": "Objekt",
+        "no_target": "Kein Ziel erkannt.",
+        "target_detected": "Ziel erkannt.",
+        "picture": "Bildbeschreibung: {description}",
         "unknown_device": "Unbekanntes Gerät",
         "unknown_alarm": "Alarm"
+      }
+    },
+    "insight_trial_dialog": {
+      "options": {
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
+        "intl_title": "AI Insight testen",
+        "intl_message": "AI Insight ergänzt die intelligente Suche und einen Tagesbericht für deine Kameras. Füge das offizielle WhatsApp +86 19106884129 hinzu, um einen Test zu starten."
+      }
+    },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "Snapshot-KI-Erkennung testen",
+        "message": "Die Snapshot-KI-Erkennung ist für dieses Konto noch nicht verfügbar. Kontaktieren Sie den Vertrieb für eine Testversion:\n\n💬 WeChat: 17799860785\n📱 WhatsApp: +86 19106884129"
+      }
+    },
+    "insight_dashboard": {
+      "options": {
+        "title": "AI Insight",
+        "view_briefing": "AI-Bericht",
+        "view_search": "Intelligente Meldungen",
+        "view_trial": "Testversion beantragen",
+        "device": "Kamera",
+        "account": "Konto",
+        "account_name": "Insight-Konto",
+        "date": "Datum",
+        "keyword": "Suchtext",
+        "search_empty": "Keine Alarme passen zu „{keyword}“.",
+        "search_page": "Seite {page}",
+        "search_count": "{count} Alarme",
+        "search_seen": "Erkannt",
+        "search_risk_name": "Risiko",
+        "search_risk": "{word} ({level}/10)",
+        "risk_low": "Niedrig",
+        "risk_medium": "Mittel",
+        "risk_high": "Hoch",
+        "risk_severe": "Sehr hoch",
+        "tag_person": "Person",
+        "tag_vehicle": "Fahrzeug",
+        "tag_pet": "Haustier",
+        "tag_package": "Paket",
+        "tag_object": "Objekt",
+        "picture_name": "Bild",
+        "sure_name": "Sicherheit",
+        "sure_detail": "{word} ({score})",
+        "sure_fair": "Ziemlich sicher",
+        "sure_high": "Sicher",
+        "sure_very": "Sehr sicher",
+        "date_name": "Berichtsdatum",
+        "keyword_name": "Suchtext",
+        "search_begin": "Startdatum",
+        "search_end": "Enddatum",
+        "search_begin_name": "Startdatum",
+        "search_end_name": "Enddatum",
+        "search_alarms": "Alarme suchen",
+        "refresh_briefing": "Bericht aktualisieren",
+        "morning_refresh": "Bericht jeden Morgen aktualisieren",
+        "search": "Suchen",
+        "previous": "Zurück",
+        "next": "Weiter",
+        "briefing": "Tagesbericht",
+        "results": "Ergebnisse",
+        "trial_button": "AI Insight testen",
+        "empty": "Noch keine Kamera nutzt AI Insight.",
+        "trial_intro": "AI Insight ergänzt die intelligente Suche und einen Tagesbericht. Füge unten das offizielle WeChat oder WhatsApp hinzu, um einen Test zu starten.",
+        "wechat": "17799860785",
+        "wechat_label": "WeChat",
+        "whatsapp": "+86 19106884129",
+        "trial_markdown": "## ✨ AI Insight sagt, was die Kameras gesehen haben\n\n🌅 **Ein Bericht für den Tag, den du wählst**\nWähle ein Datum. Personen, Fahrzeuge, Haustiere, Pakete und die Zahl des Tages stehen in einem Diagramm.\n\n🔍 **Einen Alarm in einem Satz finden**\nSchreib auf, woran du dich erinnerst. Passende Alarme erscheinen mit Uhrzeit, Bild, Kennzeichnungen und Risikostufe.\n\n🚶 🚗 🐾 **Jede Art von Moment hat ein eigenes Symbol**\nPerson, Fahrzeug, Haustier und Paket haben je ein Zeichen. Der Titel ist der Satz, der zu diesem Alarm gehört."
       }
     },
     "alarm_type": {
@@ -480,8 +535,52 @@
           "upgrading": "Upgrade läuft"
         }
       },
+      "ai_insight_status": {
+        "name": "AI Insight",
+        "state": {
+          "active": "Aktiv",
+          "paused": "Pausiert",
+          "inactive": "Inaktiv",
+          "unavailable": "Nicht verfügbar"
+        }
+      },
+      "cloud_storage_status": {
+        "name": "Cloud storage",
+        "state": {
+          "active": "Aktiv",
+          "inactive": "Inaktiv",
+          "unavailable": "Nicht verfügbar"
+        }
+      },
+      "ai_insight_cloud_storage_status": {
+        "name": "AI Insight cloud storage",
+        "state": {
+          "active": "Aktiv",
+          "paused": "Pausiert",
+          "inactive": "Inaktiv",
+          "unavailable": "Nicht verfügbar"
+        }
+      },
       "storage_used": {
-        "name": "Speicher belegt"
+        "name": "Speicher belegt",
+        "state": {
+          "abnormal": "Speicherfehler",
+          "checking": "Wird geprüft",
+          "init_failed": "Initialisierung fehlgeschlagen",
+          "initializing": "Wird initialisiert",
+          "mount_failed": "Einbindung fehlgeschlagen",
+          "needs_format": "Formatierung nötig",
+          "needs_init": "Initialisierung nötig",
+          "no_card": "Keine Speicherkarte",
+          "partition_error": "Partitionsfehler",
+          "read_error": "Lesefehler",
+          "read_only": "Nur lesen",
+          "restarting": "Wird neu gestartet",
+          "uninitialized": "Nicht initialisiert",
+          "unsupported": "Format nicht unterstützt",
+          "worn_out": "Lebensdauer erreicht",
+          "write_error": "Schreibfehler"
+        }
       },
       "switch_cnt": {
         "name": "Schaltzyklen heute"
@@ -491,12 +590,23 @@
       },
       "use_time": {
         "name": "Nutzungsdauer"
+      },
+      "insight_briefing": {
+        "name": "AI-Insight-Bericht"
+      },
+      "insight_search_result": {
+        "name": "AI-Insight-Suche"
       }
     },
     "select": {
       "device_volume": {
         "name": "Lautstärke",
         "state": {
+          "1": "Stufe 1",
+          "2": "Stufe 2",
+          "3": "Stufe 3",
+          "4": "Stufe 4",
+          "5": "Stufe 5",
           "high": "Hoch",
           "low": "Niedrig",
           "medium": "Mittel",
@@ -512,7 +622,8 @@
           "intelligent": "Intelligente Nachtsicht",
           "lowlight": "Schwachlicht-Nachtsicht",
           "off": "Aus",
-          "smartlowlight": "Intelligente Schwachlicht-Nachtsicht"
+          "smartlowlight": "Intelligente Schwachlicht-Nachtsicht",
+          "starlight": "Sternenlicht-Vollfarb-Nachtsicht"
         }
       },
       "collection_point": {
@@ -520,6 +631,17 @@
         "state": {
           "select_collection_point": "Sammelposition wählen…"
         }
+      },
+      "wide_dynamic": {
+        "name": "Wide dynamic range",
+        "state": {
+          "off": "Aus",
+          "on": "Ein",
+          "adaptive": "Adaptiv"
+        }
+      },
+      "insight_workbench_device": {
+        "name": "AI-Insight-Kamera"
       }
     },
     "light": {
@@ -567,6 +689,9 @@
       "motion_detect": {
         "name": "Bildänderung"
       },
+      "overcharge_switch": {
+        "name": "Überladeschutz"
+      },
       "pet_detect": {
         "name": "Haustiererkennung"
       },
@@ -607,6 +732,12 @@
       },
       "siren_stop": {
         "name": "Sirene stoppen"
+      },
+      "snap_detect": {
+        "name": "Snapshot-KI-Erkennung"
+      },
+      "ai_insight_trial": {
+        "name": "AI Insight testen"
       }
     },
     "camera": {
@@ -627,8 +758,11 @@
       }
     },
     "event": {
-      "doorbell": {
-        "name": "Türklingel"
+      "call": {
+        "name": "Anruf",
+        "state": {
+          "call": "Anruf"
+        }
       }
     },
     "image": {
@@ -650,6 +784,12 @@
       }
     }
   },
+  "media_source": {
+    "record_media_cloud_folder": "Cloud recordings",
+    "record_media_local_folder": "Local recordings",
+    "record_media_alarm_folder": "Record on alarm",
+    "record_media_device_offline": "Gerät ist offline"
+  },
   "services": {
     "control_move_ptz": {
       "name": "PTZ steuern",
@@ -660,6 +800,10 @@
           "description": "PTZ-Drehdauer"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "Aufnahme und Erkennung",
+      "description": "Nimmt ein Bild auf und führt die Erkennung aus. Benachrichtigungsleiste und angemeldete Telefon-Apps zeigen das Bild. Ein Rahmen und das Erkennungsergebnis erscheinen nur, wenn das Ergebnis mindestens zu 85 % sicher ist."
     }
   },
   "exceptions": {
@@ -700,10 +844,64 @@
       "message": "Gerät {name} kann nicht entfernt werden: Imou-Geräte-ID fehlt."
     },
     "remove_device_has_siblings": {
-      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts in den Integrationsoptionen auf, um die Abfrage zu beenden, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
+      "message": "{name} kann nicht entfernt werden: es ist ein Kanal des Imou-Geräts {device_id}, das auch {siblings} umfasst. Hebe die Auswahl des gesamten Geräts unter „Abfrage und Kameras“ auf, um es zu entfernen, oder deaktiviere die Entitäten dieses Kanals, um ihn auszublenden."
     },
     "remove_device_no_runtime": {
       "message": "Gerät {name} kann nicht entfernt werden: die Integration ist nicht geladen."
+    },
+    "snap_detect_entity_required": {
+      "message": "Wählen Sie ein Imou-Gerät für diese Aufnahme und Erkennung."
+    },
+    "snap_detect_entity_not_found": {
+      "message": "Diese Entität gehört nicht zu dieser Imou-Integration."
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou startet noch. Versuchen Sie es in einem Moment erneut."
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "Dieses Gerät ist in Imou derzeit nicht geladen."
+    },
+    "snap_detect_failed": {
+      "message": "Imou konnte Aufnahme und Erkennung nicht ausführen: {error}"
+    },
+    "record_media_unresolved": {
+      "message": "This recording item could not be opened."
+    },
+    "record_media_not_loaded": {
+      "message": "Imou is not loaded for this account."
+    },
+    "record_playback_failed": {
+      "message": "Could not start recording playback."
+    },
+    "insight_briefing_failed": {
+      "message": "Imou konnte den Bericht nicht laden: {error}"
+    },
+    "insight_search_failed": {
+      "message": "Imou konnte die Alarme nicht durchsuchen: {error}"
+    },
+    "insight_search_keyword_required": {
+      "message": "Schreib, wonach gesucht werden soll."
+    },
+    "insight_search_page_unavailable": {
+      "message": "Zuerst suchen, dann blättern."
+    },
+    "insight_search_forward_only": {
+      "message": "Smart Messages kann nur zur nächsten Seite weitergehen."
+    },
+    "insight_search_last_page": {
+      "message": "Keine weiteren Ergebnisse."
+    },
+    "insight_workbench_entry_required": {
+      "message": "Wenn mehr als ein Imou-Konto eingerichtet ist, wähle welches."
+    },
+    "insight_workbench_no_device": {
+      "message": "Wähle zuerst eine Kamera in AI Insight."
+    },
+    "insight_workbench_not_ready": {
+      "message": "Imou startet noch. Versuche es gleich noch einmal."
+    },
+    "insight_workbench_unknown_device": {
+      "message": "Diese Kamera steht nicht in der AI-Insight-Liste."
     }
   }
 }

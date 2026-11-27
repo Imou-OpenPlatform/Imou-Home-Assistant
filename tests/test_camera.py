@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from custom_components.imou_life.camera import STREAM_IDLE_CHECK, ImouCamera
+from custom_components.imou_life.camera import (
+    STREAM_IDLE_CHECK,
+    STREAM_IDLE_MAX_RESCHEDULES,
+    ImouCamera,
+)
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_HEADER_DETECT,
@@ -17,6 +22,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 from pyimouapi.const import PARAM_STATE
+from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -26,6 +32,20 @@ from pytest_homeassistant_custom_component.common import (
 from . import USER_INPUT
 
 RTSP = "rtsp://rtspproxy.example.com:8554/abc?expire=1787888972&digest=x"
+
+
+def _idle_stream_mock(*, preload_stream: bool = False) -> MagicMock:
+    stream = MagicMock()
+    stream.outputs.return_value = {}
+    stream.stop = AsyncMock()
+    stream.dynamic_stream_settings = MagicMock(preload_stream=preload_stream)
+    return stream
+
+
+def _stream_output_mock(*, has_segment: bool) -> MagicMock:
+    output = MagicMock()
+    output.last_segment = object() if has_segment else None
+    return output
 
 
 def _device() -> MagicMock:
@@ -69,10 +89,8 @@ async def test_watching_does_not_replace_the_url(hass: HomeAssistant) -> None:
     device = _device()
     camera = _camera(hass, device)
     fetch = camera.coordinator.device_manager.async_get_device_stream
-    stream = MagicMock()
-    stream.outputs.return_value = {"hls": object()}
-    stream.update_source = MagicMock()
-    stream.stop = AsyncMock()
+    stream = _idle_stream_mock()
+    stream.outputs.return_value = {"hls": _stream_output_mock(has_segment=True)}
     camera.stream = stream
 
     await camera.async_added_to_hass()
@@ -84,7 +102,6 @@ async def test_watching_does_not_replace_the_url(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
         fetch.assert_awaited_once()
-        stream.update_source.assert_not_called()
         stream.stop.assert_not_awaited()
         assert camera.stream is stream
     finally:
@@ -98,10 +115,7 @@ async def test_idle_stream_is_dropped_so_the_next_open_fetches_again(
     """After nobody is pulling, drop the Stream so the next open is a new ticket."""
     device = _device()
     camera = _camera(hass, device)
-    stream = MagicMock()
-    stream.outputs.return_value = {}
-    stream.update_source = MagicMock()
-    stream.stop = AsyncMock()
+    stream = _idle_stream_mock()
     camera.stream = stream
 
     await camera.async_added_to_hass()
@@ -113,8 +127,96 @@ async def test_idle_stream_is_dropped_so_the_next_open_fetches_again(
         await hass.async_block_till_done()
 
         stream.stop.assert_awaited_once()
-        stream.update_source.assert_not_called()
         assert camera.stream is None
+    finally:
+        _cleanup_camera(camera)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_stuck_stream_outputs_are_dropped_after_startup_timeout(
+    hass: HomeAssistant,
+) -> None:
+    """Outputs without segments stop keeping the ticket after the startup window."""
+    device = _device()
+    camera = _camera(hass, device)
+    stream = _idle_stream_mock()
+    stream.outputs.return_value = {"hls": _stream_output_mock(has_segment=False)}
+    camera.stream = stream
+
+    await camera.async_added_to_hass()
+    try:
+        await camera.stream_source()
+        for _ in range(STREAM_IDLE_MAX_RESCHEDULES):
+            async_fire_time_changed(
+                hass, dt_util.utcnow() + STREAM_IDLE_CHECK + timedelta(seconds=2)
+            )
+            await hass.async_block_till_done()
+        stream.stop.assert_not_awaited()
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + STREAM_IDLE_CHECK + timedelta(seconds=2)
+        )
+        await hass.async_block_till_done()
+
+        stream.stop.assert_awaited_once()
+        assert camera.stream is None
+    finally:
+        _cleanup_camera(camera)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_preload_stream_keeps_stream_without_outputs(
+    hass: HomeAssistant,
+) -> None:
+    """Preloaded streams stay cached when outputs are empty but the worker runs."""
+    device = _device()
+    camera = _camera(hass, device)
+    stream = _idle_stream_mock(preload_stream=True)
+    camera.stream = stream
+
+    await camera.async_added_to_hass()
+    try:
+        await camera.stream_source()
+        for _ in range(STREAM_IDLE_MAX_RESCHEDULES + 2):
+            async_fire_time_changed(
+                hass, dt_util.utcnow() + STREAM_IDLE_CHECK + timedelta(seconds=2)
+            )
+            await hass.async_block_till_done()
+
+        stream.stop.assert_not_awaited()
+        assert camera.stream is stream
+    finally:
+        _cleanup_camera(camera)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_owner_hls_is_returned_directly(
+    hass: HomeAssistant,
+) -> None:
+    """Owner HLS is the cloud playlist itself; it is not an RTSP ticket."""
+    device = _device()
+    camera = _camera(hass, device)
+    hls = "https://cmgw.example/live.m3u8"
+    camera.coordinator.device_manager.async_get_device_stream = AsyncMock(
+        return_value=hls
+    )
+    stream = _idle_stream_mock()
+    camera.stream = stream
+
+    await camera.async_added_to_hass()
+    try:
+        assert await camera.stream_source() == hls
+        camera.coordinator.device_manager.async_get_device_stream.assert_awaited_once()
+        assert (
+            camera.coordinator.device_manager.async_get_device_stream.await_args.args[2]
+            == "http"
+        )
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + STREAM_IDLE_CHECK + timedelta(seconds=2)
+        )
+        await hass.async_block_till_done()
+        stream.stop.assert_not_awaited()
+        assert camera.stream is stream
     finally:
         _cleanup_camera(camera)
 
@@ -230,3 +332,100 @@ async def test_motion_detection_raises_when_the_camera_has_no_detect_switch(
     with pytest.raises(HomeAssistantError):
         await camera.async_enable_motion_detection()
     camera.coordinator.device_manager.async_switch_operation.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_recent_snapshot_is_reused(hass: HomeAssistant) -> None:
+    """Opening the still again within 30s must not ask the cloud for another."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(return_value=b"jpeg-1")
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    assert await camera.async_camera_image() == b"jpeg-1"
+    assert await camera.async_camera_image() == b"jpeg-1"
+
+    fetch.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_snapshot_is_fetched_again_after_30_seconds(
+    hass: HomeAssistant,
+) -> None:
+    """A still older than 30s is replaced by a new cloud snapshot."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(side_effect=[b"jpeg-1", b"jpeg-2"])
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    # Check, store, check 30s later, store.
+    with patch(
+        "custom_components.imou_life.camera.monotonic",
+        side_effect=[1000.0, 1000.0, 1030.0, 1030.0],
+    ):
+        assert await camera.async_camera_image() == b"jpeg-1"
+        assert await camera.async_camera_image() == b"jpeg-2"
+
+    assert fetch.await_count == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_snapshot_is_reused_until_30_seconds(hass: HomeAssistant) -> None:
+    """29 seconds is still inside the window, so the cloud is not asked again."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(return_value=b"jpeg-1")
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    with patch(
+        "custom_components.imou_life.camera.monotonic",
+        side_effect=[1000.0, 1000.0, 1029.0],
+    ):
+        assert await camera.async_camera_image() == b"jpeg-1"
+        assert await camera.async_camera_image() == b"jpeg-1"
+
+    fetch.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_failed_snapshot_is_requested_again(hass: HomeAssistant) -> None:
+    """A failed grab is not kept, so the next open tries the cloud again."""
+    device = _device()
+    camera = _camera(hass, device)
+    fetch = AsyncMock(side_effect=[ImouException("no picture"), b"jpeg-1"])
+    camera.coordinator.device_manager.async_get_device_image = fetch
+
+    with pytest.raises(HomeAssistantError):
+        await camera.async_camera_image()
+    assert await camera.async_camera_image() == b"jpeg-1"
+
+    assert fetch.await_count == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_overlapping_snapshot_requests_share_one_cloud_call(
+    hass: HomeAssistant,
+) -> None:
+    """Two opens while the camera is still uploading share one grab."""
+    device = _device()
+    camera = _camera(hass, device)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _slow_image(*_args: object) -> bytes:
+        started.set()
+        await release.wait()
+        return b"jpeg-1"
+
+    camera.coordinator.device_manager.async_get_device_image = AsyncMock(
+        side_effect=_slow_image
+    )
+
+    first = asyncio.create_task(camera.async_camera_image())
+    await started.wait()
+    second = asyncio.create_task(camera.async_camera_image())
+    release.set()
+
+    assert await first == b"jpeg-1"
+    assert await second == b"jpeg-1"
+    camera.coordinator.device_manager.async_get_device_image.assert_awaited_once()

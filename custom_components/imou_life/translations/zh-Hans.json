@@ -23,7 +23,7 @@
           "app_secret": "App secret"
         },
         "data_description": {
-          "api_url": "选择离你最近的服务器区域",
+          "api_url": "须与创建应用时使用的区域一致。open.imoulife.com 及海外账号一般选「国际」；在乐橙/国内开放平台创建的应用选「中国」。",
           "app_id": "在 Imou 开放平台创建应用后获得的 App ID",
           "app_secret": "在 Imou 开放平台创建应用后获得的 App secret"
         }
@@ -50,7 +50,7 @@
       },
       "select_devices": {
         "title": "选择设备",
-        "description": "账号下共找到 {device_count} 个设备。未勾选的设备不会轮询。",
+        "description": "账号下共找到 {device_count} 个设备。没勾选的不会出现在 Home Assistant 里。",
         "data": {
           "selected_devices": "设备"
         }
@@ -76,6 +76,18 @@
     "open_api_quota_exceeded": {
       "title": "Imou 开放平台本月调用次数已用完",
       "description": "这个 App ID 本月的开放平台调用次数已经用完。设备列表、直播和开关暂时都无法访问云端，需要补充配额或等到下月重置。请到开放平台控制台打开 **我的资源**，然后重新加载集成。"
+    },
+    "record_playback": {
+      "title": "录像暂时无法播放",
+      "description": "当前 Imou 账号无法播放录像。请改用主账号后重试。"
+    },
+    "decrypt_libs_missing": {
+      "title": "告警图片需要官方库",
+      "description": "告警图片在本机解密。请把 `libLCOpenApiClient.so` 和 `libLCOpenSDK.so` 都复制到 `{native_dir}`（已找到 {found}/2）。官方包：[国内](https://openapi.lechange.cn/openweb/getPublicResourceUrl?resourceType=ImageDecrpt)、[海外](https://openapi.easy4ip.com/openweb/getPublicResourceUrl?resourceType=HTTPInterfaceCallDemo)。两个文件都放好后，重新加载 Imou Life。"
+    },
+    "decrypt_libs_unsupported": {
+      "title": "这台 Home Assistant 解不了告警图片",
+      "description": "官方库只能在 linux x86-64 上运行。这台机器是 {arch}，告警图片会保持加密。"
     }
   },
   "options": {
@@ -85,49 +97,45 @@
       "bind_device_not_listed": "设备已绑定，但尚未出现在账号设备列表中，请稍后再试。",
       "callback_failed": "向 Imou 注册回调地址失败：{error}",
       "callback_url_missing": "开启事件推送时必须填写回调地址。",
-      "decrypt_libs_missing": "本机没有装解密库，这个开关打开也不会有任何效果。请先放好库文件，或者保持关闭。",
-      "record_path_not_allowed": "该目录不在 allowlist_external_dirs 中。请先在 Home Assistant 的外部目录白名单中加入该路径，然后再保存。"
+      "decrypt_libs_missing": "本机没有装解密库，这个开关打开也不会有任何效果。请先放好库文件，或者保持关闭。"
     },
     "step": {
       "init": {
         "title": "配置 Imou Life",
-        "description": "告警推送：**{push_state}** · 告警图片：**{decrypt_state}** · 告警时录像：**{record_state}** · 状态轮询：**{polling_state}**\n\n每一页提交后即保存并回到这里。「告警图片」和「告警时录像」只在告警推送开启时才会生效。",
+        "description": "告警推送：**{push_state}** · 状态轮询：**{polling_state}**\n\n每一页提交后即保存并回到这里。告警图片在本机解密，需要两个官方库。缺文件时，**设置 → 系统 → 修复** 会说明放到哪里。告警时录像的时长在「告警推送与通知」里设置，只在告警推送开启时才会录。片段保存在媒体目录，在媒体浏览器里查看。",
         "menu_options": {
           "general_settings": "轮询与摄像头",
           "event_push": "告警推送与通知",
-          "alarm_image_decrypt": "告警图片",
-          "local_recording": "告警时录像",
-          "select_poll_devices": "选择要轮询的设备",
           "bind_device": "绑定新设备",
           "finish": "完成"
         }
       },
       "general_settings": {
         "title": "轮询间隔与摄像头默认",
-        "description": "Home Assistant 多久刷新一次设备状态，以及本账号下每台摄像头的直播与云台默认值。",
+        "description": "轮询间隔、要轮询的设备，以及本账号的直播默认值。",
         "data": {
           "enable_polling": "启用状态轮询",
           "update_interval": "轮询间隔（秒）",
-          "dormant_write_retry_wait_seconds": "休眠控制重试等待（秒）"
+          "selected_devices": "要轮询的设备"
         },
         "data_description": {
-          "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了物模型设备消息时，那些设备的**属性**不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态、PaaS 能力和靠 Service 读的实体仍按间隔刷新。",
+          "enable_polling": "关闭后不再定期从云端刷新状态，实体可能过期。安装与重载仍会拉取一次设备列表。已开事件推送且订阅了设备消息时，设备属性不参与间隔刷新（安装 / 重载仍会拉一次快照）。在线状态仍按间隔刷新。",
           "update_interval": "默认 300 秒，范围 30–900 秒。关闭轮询时不生效。",
-          "dormant_write_retry_wait_seconds": "设备状态为休眠且控制失败时，Home Assistant 会先等待这段时间，再发送同一命令一次。默认 5 秒，范围 5–60 秒。"
+          "selected_devices": "没勾选的设备不会出现在 Home Assistant 的设备列表里。这里仍列出账号下的全部设备，方便以后再勾上。"
         },
         "sections": {
           "camera_defaults": {
             "name": "摄像头默认",
-            "description": "本账号的直播与云台默认参数。",
+            "description": "本账号的直播、抓图，以及休眠时控制的默认值。",
             "data": {
               "download_snap_wait_time": "抓图等待时间（秒）",
-              "live_resolution": "视频分辨率",
-              "rotation_duration": "云台转动时间（毫秒）"
+              "dormant_write_retry_wait_seconds": "休眠控制重试等待（秒）",
+              "live_resolution": "视频分辨率"
             },
             "data_description": {
               "download_snap_wait_time": "摄像头要先拍好并上传，乐橙云才能给出这张图。这里是 Home Assistant 取图前等待的时间。抓到的图偏旧或为空时把它调大。默认 3 秒。",
-              "live_resolution": "HD = 高清，SD = 标清。用于「直播」摄像头实体。",
-              "rotation_duration": "按一次云台方向按钮转多远，按转动时间计。默认 500 毫秒。"
+              "dormant_write_retry_wait_seconds": "设备状态为休眠且控制失败时，Home Assistant 会先等待这段时间，再发送同一命令一次。默认 5 秒，范围 5–60 秒。",
+              "live_resolution": "HD = 高清，SD = 标清。用于「直播」摄像头实体。"
             }
           }
         }
@@ -138,57 +146,31 @@
         "data": {
           "enable_event_push": "启用事件推送",
           "webhook_url": "回调地址",
-          "event_push_types": "订阅类型"
+          "event_push_types": "订阅类型",
+          "local_record_duration": "片段时长（秒）"
         },
         "data_description": {
           "enable_event_push": "Imou 云向本实例的 Webhook 推送告警，同时会同步到乐橙 App。",
           "webhook_url": "开启推送时必填，须公网可达。建议地址不可达时，只改主机名和端口，路径不要改。",
-          "event_push_types": "选择要接收的云端消息类型。"
+          "event_push_types": "选择要接收的云端消息类型。",
+          "local_record_duration": "告警后录制的秒数。默认 60，范围 15–180。会占用直播额度。每台摄像头的开关在设备页。"
         },
         "sections": {
           "notifications": {
             "name": "告警时通知",
-            "description": "可选。留空只靠自动化。",
+            "description": "默认通知本机网页和已登录的 App。",
             "data": {
               "notify_services": "通知目标"
             },
             "data_description": {
-              "notify_services": "本实例已注册的 notify 服务。每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。想让这些消息带上图片，见「告警图片」。"
+              "notify_services": "每条告警发一条消息。某台设备不想推，到设备页关掉「告警时通知」。"
             }
           }
         }
       },
-      "alarm_image_decrypt": {
-        "title": "告警图片",
-        "description": "{push_hint}告警图片是加密下发的，Home Assistant 要先在本机解密，才能把它放进告警通知。\n\n状态：{native_hint}\n\n下面列出的设备需要填写乐橙 App 里的设备密码；没有列出的设备不用填。已存密码会回填到输入框（掩码显示）。要删掉某个密码，用「删除已存密码」。已存 {password_count} 个（{configured_serials}）。",
-        "data": {
-          "attach_decrypted_thumbnail": "在告警通知中显示图片",
-          "default_device_password": "默认设备密码",
-          "clear_default_device_password": "清除默认设备密码",
-          "remove_device_passwords": "删除已存密码"
-        },
-        "data_description": {
-          "attach_decrypted_thumbnail": "手机不在局域网时，需要在「设置 → 系统 → 网络」填好 Home Assistant 外网 URL。图片存放在 /local/imou_life/thumbs/，无身份验证，保留约 24 小时。密码只留在本机，仅用于解密。",
-          "default_device_password": "没有单独填写密码的设备用这个。",
-          "clear_default_device_password": "删除已存的默认密码；各设备单独密码不变。",
-          "remove_device_passwords": "勾选的序列号会删除密码。"
-        }
-      },
-      "local_recording": {
-        "title": "告警时录像",
-        "description": "{push_hint}收到告警后从云端流录一小段。各摄像头的 **告警时录像** 开关在设备页。",
-        "data": {
-          "local_record_path": "保存目录",
-          "local_record_duration": "片段时长（秒）"
-        },
-        "data_description": {
-          "local_record_path": "例如 /media/imou。留空则不保存。目录须加入 allowlist_external_dirs。",
-          "local_record_duration": "告警后录制秒数，默认 60，范围 15–180。消耗直播配额。"
-        }
-      },
       "select_poll_devices": {
         "title": "选择要轮询的设备",
-        "description": "账号下共找到 {device_count} 个设备。未勾选的仍留在 Home Assistant，只是不再轮询。",
+        "description": "账号下共找到 {device_count} 个设备。没勾选的不会出现在 Home Assistant 的设备列表里。",
         "data": {
           "selected_devices": "设备"
         }
@@ -226,10 +208,8 @@
   "selector": {
     "api_url": {
       "options": {
-        "cn": "中国",
-        "eu": "欧洲",
-        "na": "北美",
-        "sg": "新加坡（亚太）"
+        "intl": "国际",
+        "cn": "中国"
       }
     },
     "webhook_placeholder": {
@@ -253,11 +233,8 @@
     },
     "event_push_type": {
       "options": {
-        "alarm": "设备告警（烟感 / 燃气 / 人形 / 画面变化等）",
-        "device_status": "设备上下线",
-        "iot": "物模型设备消息。在已启用事件推送时勾选此项后，物模型设备的开关 / 传感器 / 布防靠属性推送即时更新，间隔轮询不再拉这些属性。关掉推送或取消勾选，属性重新跟轮询走。",
-        "numberstat": "客流统计",
-        "face_analysis": "人脸分析"
+        "capability_event": "设备能力事件",
+        "device_status": "设备上下线"
       }
     },
     "device_status": {
@@ -274,8 +251,86 @@
         "labels": "标签：{labels}",
         "time": "时间：{time_str}",
         "details": "详情：{desc_type}",
+        "detected": "检测到：{targets}",
+        "detected_person": "人",
+        "detected_vehicle": "车",
+        "detected_pet": "宠物",
+        "detected_package": "包裹",
+        "detected_object": "目标",
+        "no_target": "未检测到目标。",
+        "target_detected": "已检测到目标。",
+        "picture": "画面描述：{description}",
         "unknown_device": "未知设备",
         "unknown_alarm": "告警"
+      }
+    },
+    "insight_trial_dialog": {
+      "options": {
+        "china_title": "智见试用",
+        "china_message": "智见为您的摄像头提供智能搜索与每日简报。添加 17799860785 官方微信，即可获取试用。",
+        "intl_title": "AI 智见试用",
+        "intl_message": "AI 智见为摄像头提供智能搜索和每日简报。添加官方 WhatsApp +86 19106884129，即可开始试用。"
+      }
+    },
+    "snap_detect_trial_dialog": {
+      "options": {
+        "title": "抓图 AI 检测试用",
+        "message": "当前账号暂未开通抓图 AI 检测。联系商务申请试用：\n\n💬 微信：17799860785\n📱 WhatsApp：+86 19106884129"
+      }
+    },
+    "insight_dashboard": {
+      "options": {
+        "title": "AI 智见",
+        "view_briefing": "AI简报",
+        "view_search": "智慧消息",
+        "view_trial": "申请试用",
+        "device": "摄像头",
+        "account": "账号",
+        "account_name": "智见账号",
+        "date": "日期",
+        "keyword": "搜索词",
+        "search_empty": "没有找到和「{keyword}」相关的告警。",
+        "search_page": "第 {page} 页",
+        "search_count": "{count} 条",
+        "search_seen": "识别到",
+        "search_risk_name": "风险",
+        "search_risk": "{word}（{level}/10）",
+        "risk_low": "较低",
+        "risk_medium": "中等",
+        "risk_high": "较高",
+        "risk_severe": "很高",
+        "tag_person": "人",
+        "tag_vehicle": "车",
+        "tag_pet": "宠物",
+        "tag_package": "包裹",
+        "tag_object": "目标",
+        "picture_name": "画面",
+        "sure_name": "把握",
+        "sure_detail": "{word} ({score})",
+        "sure_fair": "可以确认",
+        "sure_high": "比较确定",
+        "sure_very": "很确定",
+        "date_name": "智见简报日期",
+        "keyword_name": "智见搜索词",
+        "search_begin": "开始日期",
+        "search_end": "结束日期",
+        "search_begin_name": "开始日期",
+        "search_end_name": "结束日期",
+        "search_alarms": "搜索智见告警",
+        "refresh_briefing": "刷新智见简报",
+        "morning_refresh": "每天早上刷新智见简报",
+        "search": "搜索",
+        "previous": "上一页",
+        "next": "下一页",
+        "briefing": "智见简报",
+        "results": "搜索结果",
+        "trial_button": "AI 智见试用",
+        "empty": "还没有开通智见的摄像头。",
+        "trial_intro": "智见为摄像头提供智能搜索和每日简报。添加下面的官方微信或 WhatsApp，即可开始试用。",
+        "wechat": "17799860785",
+        "wechat_label": "微信",
+        "whatsapp": "+86 19106884129",
+        "trial_markdown": "## ✨ AI 智见，看摄像头今天记下了什么\n\n🌅 **选一个日期，得到当天的简报**\n人、车、宠物、包裹和全部排在一张图上，哪一类最多一眼就能看出来。\n\n🔍 **用一句话找出那段告警**\n写下你记得的画面。对上的告警会带着时间、图片、识别标签和风险等级列出来。\n\n🚶 🚗 🐾 **不同的事，不同的图标**\n有人经过、车辆、宠物、包裹各有标记。标题就是这条告警自带的那句话。"
       }
     },
     "alarm_type": {
@@ -480,8 +535,52 @@
           "upgrading": "升级中"
         }
       },
+      "ai_insight_status": {
+        "name": "AI 智见",
+        "state": {
+          "active": "已开通",
+          "paused": "暂停中",
+          "inactive": "未开通",
+          "unavailable": "未知"
+        }
+      },
+      "cloud_storage_status": {
+        "name": "云存储",
+        "state": {
+          "active": "已开通",
+          "inactive": "未开通",
+          "unavailable": "未知"
+        }
+      },
+      "ai_insight_cloud_storage_status": {
+        "name": "AI 智见云存储",
+        "state": {
+          "active": "已开通",
+          "paused": "暂停中",
+          "inactive": "未开通",
+          "unavailable": "未知"
+        }
+      },
       "storage_used": {
-        "name": "存储使用率"
+        "name": "存储使用率",
+        "state": {
+          "abnormal": "存储异常",
+          "checking": "正在检查",
+          "init_failed": "初始化失败",
+          "initializing": "正在初始化",
+          "mount_failed": "挂载失败",
+          "needs_format": "需要格式化",
+          "needs_init": "需要初始化",
+          "no_card": "没有存储卡",
+          "partition_error": "分区错误",
+          "read_error": "读取错误",
+          "read_only": "只读",
+          "restarting": "正在重启",
+          "uninitialized": "未初始化",
+          "unsupported": "格式不支持",
+          "worn_out": "寿命已尽",
+          "write_error": "写入错误"
+        }
       },
       "switch_cnt": {
         "name": "今日开关次数"
@@ -491,12 +590,23 @@
       },
       "use_time": {
         "name": "使用时长"
+      },
+      "insight_briefing": {
+        "name": "智见简报"
+      },
+      "insight_search_result": {
+        "name": "智见搜索"
       }
     },
     "select": {
       "device_volume": {
         "name": "音量",
         "state": {
+          "1": "档 1",
+          "2": "档 2",
+          "3": "档 3",
+          "4": "档 4",
+          "5": "档 5",
           "high": "高",
           "low": "低",
           "medium": "中",
@@ -512,7 +622,8 @@
           "intelligent": "智能夜视",
           "lowlight": "微光夜视",
           "off": "关闭",
-          "smartlowlight": "智能微光夜视"
+          "smartlowlight": "智能微光夜视",
+          "starlight": "黑光全彩夜视"
         }
       },
       "collection_point": {
@@ -520,6 +631,17 @@
         "state": {
           "select_collection_point": "选择收藏点…"
         }
+      },
+      "wide_dynamic": {
+        "name": "宽动态",
+        "state": {
+          "off": "关",
+          "on": "开",
+          "adaptive": "自适应"
+        }
+      },
+      "insight_workbench_device": {
+        "name": "智见设备"
       }
     },
     "light": {
@@ -567,6 +689,9 @@
       "motion_detect": {
         "name": "画面变化"
       },
+      "overcharge_switch": {
+        "name": "过充保护"
+      },
       "pet_detect": {
         "name": "宠物检测"
       },
@@ -607,6 +732,12 @@
       },
       "siren_stop": {
         "name": "关闭警笛"
+      },
+      "snap_detect": {
+        "name": "抓图 AI 检测"
+      },
+      "ai_insight_trial": {
+        "name": "AI 智见试用"
       }
     },
     "camera": {
@@ -627,8 +758,11 @@
       }
     },
     "event": {
-      "doorbell": {
-        "name": "门铃"
+      "call": {
+        "name": "呼叫",
+        "state": {
+          "call": "呼叫"
+        }
       }
     },
     "image": {
@@ -650,6 +784,12 @@
       }
     }
   },
+  "media_source": {
+    "record_media_cloud_folder": "云录像",
+    "record_media_local_folder": "本地录像",
+    "record_media_alarm_folder": "告警时录像",
+    "record_media_device_offline": "设备离线"
+  },
   "services": {
     "control_move_ptz": {
       "name": "转动云台",
@@ -660,6 +800,10 @@
           "description": "云台转动持续时间"
         }
       }
+    },
+    "device_snap_detect": {
+      "name": "抓图检测",
+      "description": "抓取当前画面并做检测。通知栏和已登录的手机显示图片。把握达到 85% 时才画框并写出检测结果。"
     }
   },
   "exceptions": {
@@ -700,10 +844,64 @@
       "message": "无法删除设备 {name}：缺少 Imou 设备 ID。"
     },
     "remove_device_has_siblings": {
-      "message": "无法删除 {name}：它是 Imou 设备 {device_id} 的其中一个通道，该设备还包含 {siblings}。要停止轮询整台设备，请在集成选项中取消勾选；要隐藏此通道，请禁用其实体。"
+      "message": "无法删除 {name}：它是设备 {device_id} 的其中一个通道，该设备还有 {siblings}。要整台从 Home Assistant 去掉，请在「轮询与摄像头」里取消勾选；要只隐藏这一路，请禁用其实体。"
     },
     "remove_device_no_runtime": {
       "message": "无法删除设备 {name}：集成未加载。"
+    },
+    "snap_detect_entity_required": {
+      "message": "请选择一台 Imou 设备。"
+    },
+    "snap_detect_entity_not_found": {
+      "message": "该实体不属于本 Imou 集成。"
+    },
+    "snap_detect_not_ready": {
+      "message": "Imou 仍在启动，请稍后再试。"
+    },
+    "snap_detect_device_not_loaded": {
+      "message": "该设备当前未在 Imou 中加载。"
+    },
+    "snap_detect_failed": {
+      "message": "Imou 无法完成抓图检测：{error}"
+    },
+    "record_media_unresolved": {
+      "message": "无法打开该录像项。"
+    },
+    "record_media_not_loaded": {
+      "message": "该账号的 Imou 集成未加载。"
+    },
+    "record_playback_failed": {
+      "message": "无法开始录像播放。"
+    },
+    "insight_briefing_failed": {
+      "message": "智见简报没有生成：{error}"
+    },
+    "insight_search_failed": {
+      "message": "智见搜索没有完成：{error}"
+    },
+    "insight_search_keyword_required": {
+      "message": "请填写搜索词。"
+    },
+    "insight_search_page_unavailable": {
+      "message": "请先搜索，再翻页。"
+    },
+    "insight_search_forward_only": {
+      "message": "智慧消息只能向后翻页。"
+    },
+    "insight_search_last_page": {
+      "message": "没有更多结果。"
+    },
+    "insight_workbench_entry_required": {
+      "message": "加载了多个账号时，请指定智见设备。"
+    },
+    "insight_workbench_no_device": {
+      "message": "请先在智见设备里选择一台摄像头。"
+    },
+    "insight_workbench_not_ready": {
+      "message": "还在启动，请稍后再试。"
+    },
+    "insight_workbench_unknown_device": {
+      "message": "这台摄像头不在智见设备列表里。"
     }
   }
 }

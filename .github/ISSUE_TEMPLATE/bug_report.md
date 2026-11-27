@@ -28,14 +28,14 @@ Please enable **debug** logging, reproduce the issue once, then paste the releva
 
 ### Enable debug logging
 
-**Option A — temporary (UI)**  
-1. **Settings → System → Logs**  
-2. Three-dot menu (⋮) → set log level / enable debug  
+**Option A — temporary (UI)**<br>
+1. **Settings → System → Logs**<br>
+2. Three-dot menu (⋮) → set log level / enable debug<br>
 3. Set these to **debug**:
    - `custom_components.imou_life`
    - `pyimouapi`
 
-**Option B — persistent (`configuration.yaml`)**  
+**Option B — persistent (`configuration.yaml`)**<br>
 Then restart Home Assistant:
 
 ```yaml

@@ -7,7 +7,6 @@ never told, and it keeps posting to a webhook that now drops everything.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +15,7 @@ from custom_components.imou_life import async_unload_entry
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_ENABLE_EVENT_PUSH,
+    PARAM_EVENT_PUSH_TYPES,
     PARAM_NOTIFY_SERVICES,
     PARAM_WEBHOOK_ID,
 )
@@ -63,8 +63,34 @@ def _loaded_entry(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_turning_push_off_tells_the_cloud_to_stop(hass: HomeAssistant) -> None:
-    """The options already read "off"; the runtime is what remembers it was on."""
+async def test_setup_event_push_does_not_rewrite_the_cloud_subscription(hass) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh-setup"},
+        options={
+            PARAM_ENABLE_EVENT_PUSH: True,
+            PARAM_EVENT_PUSH_TYPES: ["capability_event"],
+        },
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    client = MagicMock()
+    client.async_set_message_callback = AsyncMock()
+    runtime = ImouRuntimeData(coordinator=MagicMock())
+    with patch(
+        "custom_components.imou_life.event_push.async_register_imou_webhook",
+        return_value="https://example.test/hook",
+    ):
+        await async_setup_event_push(hass, entry, client, runtime)
+    client.async_set_message_callback.assert_not_awaited()
+    assert runtime.push_enabled is True
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_turning_push_off_on_unload_does_not_call_the_cloud(
+    hass: HomeAssistant,
+) -> None:
+    """Unload/teardown only tears down the local webhook."""
     entry, client = _loaded_entry(
         hass, options={PARAM_ENABLE_EVENT_PUSH: False}, push_was_on=True
     )
@@ -74,15 +100,14 @@ async def test_turning_push_off_tells_the_cloud_to_stop(hass: HomeAssistant) -> 
     ):
         assert await async_unload_entry(hass, entry) is True
 
-    client.async_set_message_callback.assert_awaited_once()
-    assert client.async_set_message_callback.await_args.kwargs["status"] == "off"
+    client.async_set_message_callback.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_removing_an_entry_with_push_on_still_stops_the_cloud(
+async def test_removing_an_entry_with_push_on_leaves_cloud_untouched(
     hass: HomeAssistant,
 ) -> None:
-    """The plain removal path, where the options never changed, keeps working."""
+    """Removing an entry does not blind-reset cloud subscription."""
     entry, client = _loaded_entry(
         hass, options={PARAM_ENABLE_EVENT_PUSH: True}, push_was_on=True
     )
@@ -92,7 +117,7 @@ async def test_removing_an_entry_with_push_on_still_stops_the_cloud(
     ):
         assert await async_unload_entry(hass, entry) is True
 
-    assert client.async_set_message_callback.await_args.kwargs["status"] == "off"
+    client.async_set_message_callback.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -111,10 +136,10 @@ async def test_push_that_was_never_on_costs_no_cloud_call(hass: HomeAssistant) -
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_turning_push_on_and_off_leaves_the_cloud_off(
+async def test_setup_and_options_update_do_not_rewrite_cloud_on_reload(
     hass: HomeAssistant,
 ) -> None:
-    """End to end through the options flow, which is how users hit this."""
+    """Setup and reload only register the local webhook."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh-roundtrip"},
@@ -140,21 +165,13 @@ async def test_turning_push_on_and_off_leaves_the_cloud_off(
     ):
         assert await hass.config_entries.async_setup(entry.entry_id) is True
         await hass.async_block_till_done()
-        assert client.async_set_message_callback.await_args.kwargs["status"] == "on"
+        client.async_set_message_callback.assert_not_awaited()
 
         hass.config_entries.async_update_entry(
             entry, options={PARAM_ENABLE_EVENT_PUSH: False}
         )
         await hass.async_block_till_done()
-
-    statuses = [
-        call.kwargs["status"]
-        for call in client.async_set_message_callback.await_args_list
-    ]
-    assert "off" in statuses, (
-        "the reload after saving the options never told the cloud to stop, so it "
-        f"keeps pushing; calls were {statuses}"
-    )
+        client.async_set_message_callback.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -190,33 +207,36 @@ async def test_setup_event_push_loads_notify_services(
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-async def test_setup_event_push_does_not_log_full_callback_url(
-    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+async def test_setup_event_push_defaults_notify_when_unset(
+    hass: HomeAssistant,
 ) -> None:
-    """INFO logs must not leak the webhook id that authenticates the endpoint."""
-    webhook_id = "abcd1234efgh5678ijkl"
+    """Missing notify_services option loads persistent + mobile defaults."""
+    from custom_components.imou_life.helpers import default_notify_service_targets
+
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={**USER_INPUT, PARAM_WEBHOOK_ID: webhook_id},
-        options={PARAM_ENABLE_EVENT_PUSH: True},
+        data={**USER_INPUT, PARAM_WEBHOOK_ID: "wh-default"},
+        options={},
         version=2,
     )
     entry.add_to_hass(hass)
-    client = MagicMock()
-    client.async_set_message_callback = AsyncMock()
     runtime = ImouRuntimeData(coordinator=MagicMock())
-    callback = f"https://ha.example.test/api/webhook/{webhook_id}"
-    with (
-        patch(
-            "custom_components.imou_life.event_push.async_register_imou_webhook",
-            return_value=callback,
-        ),
-        caplog.at_level(logging.INFO, logger="custom_components.imou_life.event_push"),
+    with patch(
+        "custom_components.imou_life.event_push.async_register_imou_webhook",
+        return_value="https://example.test/hook",
     ):
-        await async_setup_event_push(hass, entry, client, runtime)
+        await async_setup_event_push(hass, entry, MagicMock(), runtime)
 
-    client.async_set_message_callback.assert_awaited()
-    assert (
-        callback == client.async_set_message_callback.await_args.kwargs["callback_url"]
-    )
-    assert webhook_id not in caplog.text
+    assert runtime.notify_services == default_notify_service_targets(hass)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_setup_event_push_does_not_log_full_callback_url(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """_redact_callback_url hides the webhook id that authenticates the endpoint."""
+    webhook_id = "abcd1234efgh5678ijkl"
+    callback = f"https://ha.example.test/api/webhook/{webhook_id}"
+    redacted = _redact_callback_url(callback)
+    assert webhook_id not in redacted
+    assert "abcd" in redacted

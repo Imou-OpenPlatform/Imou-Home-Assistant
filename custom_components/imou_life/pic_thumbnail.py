@@ -14,12 +14,11 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
-from aiohttp import ClientError, ClientTimeout
+from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from pyimouapi.pic_decode import (
     CLIENT_LIB,
@@ -27,18 +26,20 @@ from pyimouapi.pic_decode import (
     LCOpenPicDecoder,
     PicDecodeError,
     is_tcm_ability,
-    resolve_encrypt_key,
 )
-from pyimouapi.push import preferred_pic_url
+from pyimouapi.play_token import login_password_from_play_token
+from pyimouapi.push import alarm_picture_url
 
 from .const import (
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DEFAULT_DEVICE_PASSWORD,
-    PARAM_DEVICE_PASSWORDS,
     imou_life_device_key_from_ids,
     imou_life_device_keys_from_ids,
 )
 from .helpers import fill_template, selector_option_label
+from .record_http_fetch import (
+    UrlFetchBodyTooLargeError,
+    UrlFetchUnsafeError,
+    async_fetch_url_response,
+)
 
 if TYPE_CHECKING:
     from .runtime_data import ImouRuntimeData
@@ -52,7 +53,6 @@ _LOCAL_PREFIX = "/local/"
 _SAFE_THUMB_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _DECRYPT_TIMEOUT_SECONDS = 30
 _DOWNLOAD_TIMEOUT_SECONDS = 20
-_DOWNLOAD_CHUNK_BYTES = 64 * 1024
 _MAX_PICTURE_BYTES = 20 * 1024 * 1024
 # The alarm notification waits on the download, so this budget stays short.
 _DOWNLOAD_RETRY_DELAYS = (1.0, 2.0, 4.0)
@@ -178,11 +178,27 @@ def native_support_status(hass: HomeAssistant, language: str) -> str:
 
 
 def _redact_picture_url(url: str) -> str:
-    """Drop the query string before a picture URL is written to the log."""
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return url
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    """Keep only a validated authority when a picture URL is logged."""
+    if any(not character.isprintable() or character.isspace() for character in url):
+        return "***"
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname or ""
+        port = parsed.port
+    except ValueError:
+        return "***"
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or "%" in hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port == 0
+    ):
+        return "***"
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    authority = f"{host}:{port}" if port is not None else host
+    return f"{parsed.scheme}://{authority}"
 
 
 def native_libs_found(hass: HomeAssistant) -> int:
@@ -231,22 +247,46 @@ def native_libraries_hint(hass: HomeAssistant, language: str) -> str:
     )
 
 
-def _nonempty_password(value: Any) -> str | None:
-    if isinstance(value, str):
-        text = value.strip()
-        if text:
-            return text
+async def async_remember_picture_passwords(
+    runtime: ImouRuntimeData, devices: Any
+) -> None:
+    """Read each device's picture password once for this process.
+
+    A later password change in the Imou app is not picked up until reload.
+    """
+    client = runtime.client
+    if client is None:
+        return
+    seen: set[str] = set()
+    for device in devices:
+        device_id = getattr(device, "device_id", None)
+        if not isinstance(device_id, str) or not device_id or device_id in seen:
+            continue
+        seen.add(device_id)
+        if device_id in runtime.picture_password_ready:
+            continue
+        token = getattr(device, "play_token_v2", None)
+        if not isinstance(token, str) or not token.strip():
+            continue
+        runtime.picture_password_ready.add(device_id)
+        try:
+            key = await client.async_get_play_token_key(device_id)
+        except Exception:
+            _LOGGER.warning("Picture password was not read for %s", device_id)
+            continue
+        if not isinstance(key, str) or not key.strip():
+            continue
+        password = login_password_from_play_token(play_token=token, play_token_key=key)
+        if password:
+            runtime.picture_passwords[device_id] = password
+
+
+def _picture_password(runtime: ImouRuntimeData, device_id: str) -> str | None:
+    """Return the password read at load, if this device has one."""
+    password = runtime.picture_passwords.get(device_id)
+    if isinstance(password, str) and password:
+        return password
     return None
-
-
-def password_for_device(options: Mapping[str, Any], device_id: str) -> str | None:
-    """Resolve per-serial password from entry options."""
-    passwords = options.get(PARAM_DEVICE_PASSWORDS)
-    if isinstance(passwords, dict):
-        per_device = _nonempty_password(passwords.get(device_id))
-        if per_device:
-            return per_device
-    return _nonempty_password(options.get(PARAM_DEFAULT_DEVICE_PASSWORD))
 
 
 def _device_for_event(
@@ -270,22 +310,9 @@ def _device_for_event(
     return None
 
 
-def _field_pic_urls(value: Any) -> list[str]:
-    """Return non-empty URL strings from a list or a single string."""
-    if isinstance(value, str) and value:
-        return [value]
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, str) and item]
-
-
 def _preferred_push_pic_url(raw: dict[str, Any]) -> str | None:
-    """Prefer thumbUrl, then picUrlArray / picUrlArr / picUrl."""
-    for key in ("thumbUrl", "picUrlArray", "picUrlArr", "picUrl"):
-        picked = preferred_pic_url(_field_pic_urls(raw.get(key)))
-        if picked:
-            return picked
-    return None
+    """Use picUrlArray[0], then older thumb and url fields."""
+    return alarm_picture_url(raw)
 
 
 def _thumb_filename(alarm_id: str | None, pic_url: str) -> str:
@@ -428,7 +455,10 @@ def _sync_decrypt_and_write(
 
 
 def _content_length(headers: Mapping[str, Any]) -> int | None:
-    raw = headers.get("Content-Length")
+    raw = next(
+        (value for name, value in headers.items() if name.lower() == "content-length"),
+        None,
+    )
     try:
         return int(raw) if raw is not None else None
     except (TypeError, ValueError):
@@ -443,56 +473,53 @@ class _DownloadFailure(NamedTuple):
 
 
 async def _async_try_download_picture(
-    session: Any, pic_url: str
+    hass: HomeAssistant, pic_url: str
 ) -> bytes | _DownloadFailure:
-    """Fetch the picture once, or report why it did not arrive.
+    """Safely fetch the picture once, or report why it did not arrive.
 
-    The decrypt rejects a short read as corrupt, so the body has to be read to
-    the end and checked against Content-Length rather than taken from a single
-    read() that only returns what has arrived so far.
+    Every redirect is validated and DNS-pinned by the shared media fetcher. Its
+    streaming and curl limits stop an oversized body before it is buffered.
     """
     try:
-        async with session.get(
-            pic_url, timeout=ClientTimeout(total=_DOWNLOAD_TIMEOUT_SECONDS)
-        ) as response:
-            if response.status != 200:
-                return _DownloadFailure(f"HTTP {response.status}", True)
-            expected = _content_length(response.headers)
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_BYTES):
-                total += len(chunk)
-                if total > _MAX_PICTURE_BYTES:
-                    return _DownloadFailure(
-                        f"larger than {_MAX_PICTURE_BYTES} bytes", False
-                    )
-                chunks.append(chunk)
-    except (TimeoutError, ClientError) as err:
+        response = await async_fetch_url_response(
+            hass,
+            pic_url,
+            max_bytes=_MAX_PICTURE_BYTES,
+            timeout_seconds=_DOWNLOAD_TIMEOUT_SECONDS,
+        )
+    except UrlFetchBodyTooLargeError:
+        return _DownloadFailure(f"larger than {_MAX_PICTURE_BYTES} bytes", False)
+    except UrlFetchUnsafeError as err:
+        return _DownloadFailure(f"{type(err).__name__}: {err}", False)
+    except (TimeoutError, ClientError, OSError, ValueError) as err:
         return _DownloadFailure(f"{type(err).__name__}: {err}", True)
 
-    data = b"".join(chunks)
+    if response.status != 200:
+        return _DownloadFailure(f"HTTP {response.status}", True)
+    data = response.body
     if not data:
         return _DownloadFailure("empty body", True)
+    expected = _content_length(response.headers)
     if expected is not None and len(data) != expected:
         return _DownloadFailure(f"truncated: got {len(data)} of {expected} bytes", True)
     return data
 
 
-async def _async_download_picture(hass: HomeAssistant, pic_url: str) -> bytes | None:
-    """Download the encrypted alarm picture, waiting out a late upload.
+async def _async_download_picture(
+    hass: HomeAssistant, pic_url: str, *, retry: bool = True
+) -> bytes | None:
+    """Download the encrypted alarm picture.
 
-    The push regularly beats the picture onto the alarm CDN: the object 404s
-    for a moment, or a half-uploaded one comes back short. Both look permanent
-    on a single try, so retry briefly. The alarm notification is waiting on
-    this, which is what keeps the budget small.
+    Alarm pushes often arrive before the picture is on the CDN, so those
+    downloads retry a short 404. Search already has a stored URL and does not.
     """
-    session = async_get_clientsession(hass)
     started = time.monotonic()
     attempts = 0
     last_reason = ""
-    for delay in (*_DOWNLOAD_RETRY_DELAYS, None):
+    delays = (*_DOWNLOAD_RETRY_DELAYS, None) if retry else (None,)
+    for delay in delays:
         attempts += 1
-        result = await _async_try_download_picture(session, pic_url)
+        result = await _async_try_download_picture(hass, pic_url)
         if not isinstance(result, _DownloadFailure):
             _LOGGER.debug(
                 "Downloaded encrypted alarm picture (%s bytes, attempt %s, %.1fs)",
@@ -559,11 +586,16 @@ async def async_maybe_decrypt_thumbnail(
     entry: ConfigEntry,
     runtime: ImouRuntimeData,
     event_data: dict[str, Any],
+    *,
+    ignore_switch: bool = False,
+    retry: bool = True,
 ) -> str | None:
-    """Decrypt push image when enabled; return /local/... URL or None."""
-    if not entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
-        _LOGGER.debug("Skip decrypt: attach_decrypted_thumbnail is off")
-        return None
+    """Decrypt an alarm picture; return /local/... URL or None.
+
+    Pictures are always decrypted. ``ignore_switch`` is kept so existing
+    callers stay valid; the old per-account switch is no longer consulted.
+    """
+    del ignore_switch
     if runtime.pic_decoder_failed:
         _LOGGER.debug("Skip decrypt: native decoder previously failed to load")
         return None
@@ -589,18 +621,16 @@ async def async_maybe_decrypt_thumbnail(
     device = _device_for_event(runtime, event_data)
     device_ability = device.device_ability if device is not None else ""
     is_tcm = is_tcm_ability(device_ability)
-    device_password = password_for_device(entry.options, str(device_id))
-    encrypt_key = resolve_encrypt_key(
-        is_tcm=is_tcm,
-        device_id=str(device_id),
-        device_password=device_password,
-    )
-    if encrypt_key is None:
+    device_password = _picture_password(runtime, str(device_id))
+    if is_tcm and not device_password:
         _LOGGER.debug(
-            "Skipping TCM decrypt for %s: no device password configured",
+            "Skip decrypt for TCM device %s: configure a picture password or reload "
+            "after signing in",
             device_id,
         )
         return None
+    # A recovered password is tried first. The SDK then falls back to the serial.
+    encrypt_key = device_password or str(device_id)
 
     # Keyed per channel, not per serial: the lenses of one camera alarm
     # independently, and each alarm carries its own picture. Same-lens
@@ -618,6 +648,7 @@ async def async_maybe_decrypt_thumbnail(
             is_tcm,
             encrypt_key,
             bool(device_password),
+            retry,
         )
 
 
@@ -630,6 +661,7 @@ async def _async_decrypt_thumbnail_locked(
     is_tcm: bool,
     encrypt_key: str,
     used_password: bool,
+    retry: bool = True,
 ) -> str | None:
     """Download and decrypt after the per-device in-flight lock is held."""
     # Load before downloading: a host without the libraries can never use the
@@ -646,7 +678,7 @@ async def _async_decrypt_thumbnail_locked(
         _redact_picture_url(pic_url),
     )
 
-    data = await _async_download_picture(hass, pic_url)
+    data = await _async_download_picture(hass, pic_url, retry=retry)
     if not data:
         return None
 
@@ -675,9 +707,7 @@ async def _async_decrypt_thumbnail_locked(
 
     if result is None and code == _SDK_CODE_WRONG_KEY:
         _LOGGER.warning(
-            "Alarm picture decrypt for %s rejected the %s; check Configure → "
-            "Alarm pictures",
+            "Alarm picture for %s could not be decrypted on this Home Assistant",
             device_id,
-            "configured device password" if used_password else "serial key",
         )
     return result

@@ -7,7 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from custom_components.imou_life.button import ImouButton
 from custom_components.imou_life.const import (
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
     PARAM_RESTART_DEVICE,
+    PARAM_SNAP_DETECT,
     PARAM_STATUS,
 )
 from custom_components.imou_life.number import ImouCountdownNumber, ImouOverchargeNumber
@@ -32,10 +34,16 @@ CONFIG_SWITCHES = {
     "pet_detect",
     "play_sound",
     "smart_track",
-    "wide_dynamic",
 }
-CONFIG_SELECTS = {"device_volume", "night_vision_mode"}
-DIAGNOSTIC_SENSORS = {PARAM_STATUS, "battery", "storage_used"}
+CONFIG_SELECTS = {"device_volume", "night_vision_mode", "wide_dynamic"}
+DIAGNOSTIC_SENSORS = {
+    PARAM_STATUS,
+    "battery",
+    "storage_used",
+    "ai_insight_status",
+    PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS,
+    "cloud_storage_status",
+}
 
 
 def _categorised(descriptions, category: EntityCategory) -> set[str]:
@@ -50,7 +58,7 @@ def test_switch_configuration_split() -> None:
     """Detection and indicator toggles are configuration, controls are not."""
     assert _categorised(SWITCH_TYPES, EntityCategory.CONFIG) == CONFIG_SWITCHES
     remaining = {d.key for d in SWITCH_TYPES} - CONFIG_SWITCHES
-    assert remaining == {"close_camera", "switch"}
+    assert remaining == {"close_camera", "overcharge_switch", "switch"}
 
 
 def test_select_configuration_split() -> None:
@@ -84,6 +92,7 @@ def test_overcharge_number_is_configuration() -> None:
     ("entity_type", "expected"),
     [
         (PARAM_RESTART_DEVICE, EntityCategory.CONFIG),
+        (PARAM_SNAP_DETECT, None),
         ("ptz_up", None),
         ("mute", None),
     ],

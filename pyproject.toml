@@ -17,7 +17,7 @@ pyimouapi = { path = "../Py-Imou-Open-Api", editable = true }
 # stable Home Assistant (see .github/workflows/ci-test.yml).
 dev = [
   "homeassistant==2025.4.4",
-  "pyimouapi==1.4.4",
+  "pyimouapi==2.0.0",
   "pytest-homeassistant-custom-component==0.13.236",
   "pytest-asyncio>=0.24.0",
   "pytest-timeout>=2.3.0",
@@ -40,6 +40,10 @@ select = [
   # G/LOG keep per-poll logs from formatting messages nobody will read.
   "ASYNC", "G", "LOG",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+".github/scripts/close_inactive_author_issues.py" = ["E501", "RUF001", "RUF002", "RUF003"]
+"custom_components/imou_life/media_source.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -114,6 +114,27 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
         config_entry=entry,
         device_id=device_entry.id,
     )
+    old_doorbell = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "cam_0$doorbell",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    old_motion = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        "cam_0$motion",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
+    motion_event = registry.async_get_or_create(
+        "event",
+        DOMAIN,
+        "cam_0$motion",
+        config_entry=entry,
+        device_id=device_entry.id,
+    )
 
     async_remove_replaced_legacy_entities(hass, entry)
 
@@ -126,26 +147,33 @@ async def test_setup_removes_replaced_mode_select_and_siren_buttons(hass) -> Non
     assert registry.async_get(night.entity_id) is not None
     assert registry.async_get(panel.entity_id) is not None
     assert registry.async_get(plug_switch.entity_id) is not None
+    assert registry.async_get(old_doorbell.entity_id) is None
+    assert registry.async_get(old_motion.entity_id) is not None
+    assert registry.async_get(motion_event.entity_id) is None
 
 
-def _paas_camera(device_id: str, *, channel_ability: str) -> MagicMock:
+def _paas_camera(device_id: str, *, properties: tuple[str, ...] = ()) -> MagicMock:
     device = MagicMock()
     device.device_id = device_id
     device.channel_id = "0"
     device.product_id = None
     device.is_ipc = True
-    device.device_ability = "WLAN"
-    device.channel_ability = channel_ability
+    capability = MagicMock()
+    capability.properties = {property_id: object() for property_id in properties}
+    capability.services = frozenset()
+    capability.events = frozenset()
+    device.capability_set = capability
+    device.capability_ids = frozenset(properties)
     return device
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
-    """1.4.0 created Motion on every camera; ungated leftovers must be removed."""
+    """Motion sensors and Call events stay only on channels that still offer them."""
     entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, version=2)
     entry.add_to_hass(hass)
-    keep = _paas_camera("keep", channel_ability="WLAN,MobileDetect")
-    drop = _paas_camera("drop", channel_ability="WLAN")
+    keep = _paas_camera("keep", properties=("detection.motion.enabled",))
+    drop = _paas_camera("drop")
     coordinator = MagicMock()
     coordinator.devices = [keep, drop]
     coordinator.devices_by_key = {"keep_0": keep, "drop_0": drop}
@@ -183,10 +211,10 @@ async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
         config_entry=entry,
         device_id=drop_device.id,
     )
-    drop_doorbell = registry.async_get_or_create(
+    drop_call = registry.async_get_or_create(
         "event",
         DOMAIN,
-        "drop_0$doorbell",
+        "drop_0$call",
         config_entry=entry,
         device_id=drop_device.id,
     )
@@ -202,7 +230,7 @@ async def test_upgrade_drops_motion_on_cameras_without_detect(hass) -> None:
 
     assert registry.async_get(keep_motion.entity_id) is not None
     assert registry.async_get(drop_motion.entity_id) is None
-    assert registry.async_get(drop_doorbell.entity_id) is None
+    assert registry.async_get(drop_call.entity_id) is None
     assert registry.async_get(gone_motion.entity_id) is not None
 
 

@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
+from pyimouapi.const import ERROR_CODE_OPEN_API_QUOTA_EXCEEDED
 from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
@@ -86,9 +87,9 @@ async def test_listing_resumes_once_the_interval_passes(
         await coordinator._async_update_data()
     assert len(coordinator.devices) == 1
 
-    device_manager.async_get_devices.side_effect = [
-        [_mock_device("d1"), _mock_device("d2")],
-        [_mock_device("d1"), _mock_device("d2")],
+    device_manager.async_get_devices.return_value = [
+        _mock_device("d1"),
+        _mock_device("d2"),
     ]
     with patch(
         "custom_components.imou_life.coordinator.monotonic",
@@ -96,8 +97,8 @@ async def test_listing_resumes_once_the_interval_passes(
     ):
         await coordinator._async_update_data()
 
-    # First discovery + list-only rediscovery + ability refs for the new id.
-    assert device_manager.async_get_devices.await_count == 3
+    # First discovery + one rediscovery list (capability.list included).
+    assert device_manager.async_get_devices.await_count == 2
     assert {d.device_id for d in coordinator.devices} == {"d1", "d2"}
     assert [d.device_id for batch in added for d in batch] == ["d2"]
 
@@ -187,7 +188,8 @@ async def test_quota_poll_failure_creates_repair_and_clears_on_success(
     assert (DOMAIN, issue_id) not in ir.async_get(hass).issues
 
     device_manager.async_update_devices_status.side_effect = RequestFailedException(
-        "OP1013:Call interface times exceed limit (total)."
+        "Call interface times exceed limit (total).",
+        api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
     )
     await coordinator.async_refresh()
     await hass.async_block_till_done()

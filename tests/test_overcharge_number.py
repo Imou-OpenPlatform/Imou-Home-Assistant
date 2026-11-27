@@ -19,14 +19,15 @@ from custom_components.imou_life.number import (
 from homeassistant.components.number import NumberDeviceClass, NumberMode
 from homeassistant.const import UnitOfPower
 from homeassistant.core import HomeAssistant
-from pyimouapi.const import PARAM_REF, PARAM_STATE
+from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
 
 
-def _device(*, ref: str = "1008") -> MagicMock:
+def _device() -> MagicMock:
     device = MagicMock(spec=ImouHaDevice)
     device.device_id = "plug1"
     device.channel_id = None
@@ -38,8 +39,9 @@ def _device(*, ref: str = "1008") -> MagicMock:
     device.swversion = "1.0"
     device.sensors = {PARAM_STATUS: {PARAM_STATE: DeviceStatus.ONLINE.value}}
     device.texts = {
-        PARAM_OVERCHARGE_SWITCH: {PARAM_STATE: "100", PARAM_REF: ref},
+        PARAM_OVERCHARGE_SWITCH: {PARAM_STATE: "100"},
     }
+    device.capability_set = None
     return device
 
 
@@ -73,16 +75,9 @@ def test_overcharge_is_a_watt_number() -> None:
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_typical_plug_caps_at_2500_w(hass: HomeAssistant) -> None:
     """Most plugs stop at 2500 W."""
-    number = _number(hass, _device(ref="1008"))
+    number = _number(hass, _device())
     assert number.native_max_value == 2500
     assert number.native_value == 100
-
-
-@pytest.mark.usefixtures("enable_custom_integrations")
-async def test_higher_capacity_plug_caps_at_3680_w(hass: HomeAssistant) -> None:
-    """A few plugs accept a higher watt limit."""
-    number = _number(hass, _device(ref="128900"))
-    assert number.native_max_value == 3680
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -110,3 +105,17 @@ def test_iterators_split_countdown_and_overcharge() -> None:
         PARAM_OVERCHARGE_SWITCH
     }
     assert {key for key, _ in _iter_countdowns(coordinator)} == {"count_down_switch"}
+
+
+def test_v2_overcharge_does_not_duplicate_legacy_number() -> None:
+    """Capability-backed overcharge remains on the switch platform only."""
+    device = _device()
+    device.capability_set = CapabilitySet(
+        properties={},
+        services=frozenset(),
+        events=frozenset(),
+    )
+    device.switches = {PARAM_OVERCHARGE_SWITCH: {PARAM_STATE: True}}
+    coordinator = _coordinator(device)
+
+    assert _iter_overcharge(coordinator) == []

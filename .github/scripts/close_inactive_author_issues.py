@@ -32,7 +32,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 CLOSE_COMMENT = (
@@ -175,9 +175,12 @@ def gh(method: str, url: str, *, data: dict | list | None = None) -> object:
     except urllib.error.HTTPError as e:
         if e.code == 401:
             print(
-                "GitHub 返回 401：token 无效、已撤销，或仍是示例占位符（ghp_+36 个 x）。\n"
-                "请换用 Settings → Developer settings → Personal access tokens 里生成的真实 PAT，\n"
-                "写入 github_report.secrets.json 的 github_token，或导出 GITHUB_TOKEN 后再运行。",
+                "GitHub 返回 401：token 无效、已撤销，"
+                "或仍是示例占位符（ghp_+36 个 x）。\n"
+                "请换用 Settings → Developer settings → Personal access tokens "
+                "里生成的真实 PAT，\n"
+                "写入 github_report.secrets.json 的 github_token，"
+                "或导出 GITHUB_TOKEN 后再运行。",
                 file=sys.stderr,
             )
         raise
@@ -287,7 +290,7 @@ def main() -> None:
     stale_label_l = stale_label.lower()
     exclude = _exclude_labels()
     dry = _dry_run()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     close_cutoff = now - timedelta(days=close_days)
     stale_cutoff = now - timedelta(days=stale_days)
 
@@ -315,7 +318,10 @@ def main() -> None:
         # 最后一条不是维护者：线程已由他人跟进，去掉误打的 stale
         if last_login not in maintainers:
             if stale_label_l in labels_l:
-                msg = f"{'[dry-run] ' if dry else ''}Remove label {stale_label!r} from #{num} (last comment by non-maintainer)"
+                msg = (
+                    f"{'[dry-run] ' if dry else ''}Remove label {stale_label!r} "
+                    f"from #{num} (last comment by non-maintainer)"
+                )
                 print(msg)
                 if not dry:
                     try:
@@ -331,7 +337,10 @@ def main() -> None:
             # 未满关闭天数：若已早于 stale 阈值则打 stale；若未满 stale 天则去掉 stale（维护者刚回复）
             if last_t <= stale_cutoff:
                 if stale_label_l not in labels_l:
-                    msg = f"{'[dry-run] ' if dry else ''}Add label {stale_label!r} to #{num} (last=maintainer, age>={stale_days}d)"
+                    msg = (
+                        f"{'[dry-run] ' if dry else ''}Add label {stale_label!r} "
+                        f"to #{num} (last=maintainer, age>={stale_days}d)"
+                    )
                     print(msg)
                     if not dry:
                         try:
@@ -342,7 +351,10 @@ def main() -> None:
                     n_stale_added += 1
             else:
                 if stale_label_l in labels_l:
-                    msg = f"{'[dry-run] ' if dry else ''}Remove label {stale_label!r} from #{num} (maintainer replied within {stale_days}d)"
+                    msg = (
+                        f"{'[dry-run] ' if dry else ''}Remove label {stale_label!r} "
+                        f"from #{num} (maintainer replied within {stale_days}d)"
+                    )
                     print(msg)
                     if not dry:
                         try:
@@ -380,7 +392,8 @@ def main() -> None:
         time.sleep(0.35)
 
     print(
-        f"Done. closed={n_closed}, stale_added={n_stale_added}, stale_removed={n_stale_removed}"
+        f"Done. closed={n_closed}, stale_added={n_stale_added}, "
+        f"stale_removed={n_stale_removed}"
         f"{' (dry-run)' if dry else ''}"
     )
 

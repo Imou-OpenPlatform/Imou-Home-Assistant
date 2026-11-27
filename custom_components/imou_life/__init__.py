@@ -24,39 +24,60 @@ from .const import (
     PARAM_API_URL,
     PARAM_APP_ID,
     PARAM_APP_SECRET,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DOORBELL,
+    PARAM_CALL,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_ENABLE_POLLING,
     PARAM_EVENT_PUSH_TYPES,
     PARAM_EXCLUDED_DEVICES,
     PARAM_MOTION,
     PARAM_NOTIFY_ON_ALARM,
-    PARAM_NOTIFY_SERVICES,
     PARAM_SELECTED_DEVICES,
     PARAM_UPDATE_INTERVAL,
     PARAM_WEBHOOK_ID,
     PARAM_WEBHOOK_URL,
     PLATFORMS,
+    SERVICE_DEVICE_SNAP_DETECT,
+    SERVICE_REFRESH_AI_INSIGHT_BRIEFING,
+    SERVICE_SEARCH_AI_ALARMS,
     imou_life_device_key,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
-from .devices import async_register_imou_devices, is_account_device_row
+from .devices import (
+    async_register_imou_devices,
+    async_remove_account_placeholder_device,
+    is_account_device_row,
+)
 from .event_push import async_setup_event_push, async_teardown_event_push
 from .helpers import (
+    alarm_pictures_enabled,
     dormant_write_retry_wait_seconds,
     get_excluded_device_ids,
     get_selected_device_ids,
-    parse_notify_services,
+    notify_services_from_entry_options,
 )
-from .repairs import async_delete_quota_issue
+from .insight_dashboard import (
+    async_setup_insight_dashboard,
+    async_unload_insight_dashboard,
+)
+from .insight_frontend import async_register_insight_trial_frontend
+from .insight_workbench import async_register_insight_workbench_services
+from .record_hls_proxy import async_remove_record_hls_proxy_sessions
+from .record_playback_hls import async_remove_record_playback_sources
+from .repairs import (
+    async_delete_decrypt_library_issues,
+    async_delete_quota_issue,
+    async_refresh_decrypt_library_issues,
+)
 from .runtime_data import ImouRuntimeData, get_runtime_data
+from .snap_detect import async_register_snap_detect_service
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 _UNSET = object()
 
 _REPLACED_BUTTON_SUFFIXES = ("$siren_start", "$siren_stop")
+_REPLACED_DOORBELL_SUFFIX = "$doorbell"
+_REPLACED_MOTION_EVENT_SUFFIX = "$motion"
 
 
 def async_remove_replaced_legacy_entities(
@@ -74,7 +95,20 @@ def async_remove_replaced_legacy_entities(
         drop_white_light = entity_entry.domain == "switch" and unique_id.endswith(
             "$white_light"
         )
-        if drop_select or drop_button or drop_text or drop_white_light:
+        drop_doorbell = entity_entry.domain == "event" and unique_id.endswith(
+            _REPLACED_DOORBELL_SUFFIX
+        )
+        drop_motion_event = entity_entry.domain == "event" and unique_id.endswith(
+            _REPLACED_MOTION_EVENT_SUFFIX
+        )
+        if (
+            drop_select
+            or drop_button
+            or drop_text
+            or drop_white_light
+            or drop_doorbell
+            or drop_motion_event
+        ):
             registry.async_remove(entity_entry.entity_id)
 
 
@@ -100,20 +134,20 @@ def async_remove_bulb_relay_switches(hass: HomeAssistant, entry: ConfigEntry) ->
 
 
 def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Drop 1.4.0 Motion (and ungated Doorbell) rows this camera no longer offers.
+    """Drop Motion sensors and Call events this channel no longer offers.
 
-    Only currently loaded devices are considered, so a deselected camera keeps
-    its registry row until it is selected again.
+    Only currently loaded devices are considered. A device left unchecked is
+    already removed from the device list before this runs.
     """
     coordinator = entry.runtime_data.coordinator
     from .binary_sensor import _iter_motion_sensors
-    from .event import _iter_doorbell_events
+    from .event import _iter_call_events
 
     allowed_motion = {
         imou_life_device_key(device) for _, device in _iter_motion_sensors(coordinator)
     }
-    allowed_doorbell = {
-        imou_life_device_key(device) for _, device in _iter_doorbell_events(coordinator)
+    allowed_call = {
+        imou_life_device_key(device) for _, device in _iter_call_events(coordinator)
     }
     known = set(coordinator.devices_by_key)
     registry = er.async_get(hass)
@@ -128,8 +162,8 @@ def async_remove_ungated_push_entities(hass: HomeAssistant, entry: ConfigEntry) 
             and device_key not in allowed_motion
         ) or (
             entity_entry.domain == "event"
-            and entity_type == PARAM_DOORBELL
-            and device_key not in allowed_doorbell
+            and entity_type == PARAM_CALL
+            and device_key not in allowed_call
         )
         if drop:
             registry.async_remove(entity_entry.entity_id)
@@ -212,6 +246,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
             "Failed to set up event push (non-fatal, integration continues normally)"
         )
 
+    await async_register_insight_trial_frontend(hass)
     await coordinator.async_config_entry_first_refresh()
     async_remove_replaced_legacy_entities(hass, entry)
     async_remove_ungated_push_entities(hass, entry)
@@ -232,6 +267,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(_async_drop_register_callback)
     async_register_imou_devices(hass, entry, coordinator.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    async_remove_account_placeholder_device(hass, entry)
     runtime.push_ready = True
     from .webhook import async_flush_pending_alarms
 
@@ -244,6 +280,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> bool
     entry.async_on_unload(coordinator.async_add_listener(_async_keep_polling))
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     entry.async_on_unload(runtime.countdown.async_unload)
+    async_register_snap_detect_service(hass)
+    async_register_insight_workbench_services(hass)
+    await async_setup_insight_dashboard(hass, entry)
+    await async_refresh_decrypt_library_issues(hass)
     return True
 
 
@@ -251,8 +291,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ImouConfigEntry) -> boo
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
     async_delete_quota_issue(hass, entry)
+    if len(hass.config_entries.async_entries(DOMAIN)) <= 1:
+        async_delete_decrypt_library_issues(hass)
+        if hass.services.has_service(DOMAIN, SERVICE_DEVICE_SNAP_DETECT):
+            hass.services.async_remove(DOMAIN, SERVICE_DEVICE_SNAP_DETECT)
+        if hass.services.has_service(DOMAIN, SERVICE_SEARCH_AI_ALARMS):
+            hass.services.async_remove(DOMAIN, SERVICE_SEARCH_AI_ALARMS)
+        if hass.services.has_service(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING):
+            hass.services.async_remove(DOMAIN, SERVICE_REFRESH_AI_INSIGHT_BRIEFING)
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    await async_unload_insight_dashboard(hass, entry)
+    await async_remove_record_playback_sources(hass, entry.entry_id)
+    await async_remove_record_hls_proxy_sessions(hass, entry.entry_id)
 
     webhook_id = entry.data.get(PARAM_WEBHOOK_ID, "")
     if not webhook_id:
@@ -294,8 +345,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     new_signature = options_reload_signature(entry.options)
     if runtime is not None and runtime.defer_reload:
         runtime.reload_pending = new_signature != runtime.reload_signature
-        runtime.notify_services = parse_notify_services(
-            entry.options.get(PARAM_NOTIFY_SERVICES)
+        runtime.notify_services = notify_services_from_entry_options(
+            hass, entry.options
         )
         runtime.selected_devices = get_selected_device_ids(entry)
         runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(
@@ -303,8 +354,8 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
         )
         return
     if runtime is not None and runtime.reload_signature == new_signature:
-        runtime.notify_services = parse_notify_services(
-            entry.options.get(PARAM_NOTIFY_SERVICES)
+        runtime.notify_services = notify_services_from_entry_options(
+            hass, entry.options
         )
         runtime.selected_devices = get_selected_device_ids(entry)
         runtime.coordinator.device_manager.set_dormant_write_retry_wait_seconds(
@@ -312,7 +363,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
         )
         # Soft path never rebuilds the decoder. Clearing the sticky failure
         # flag lets a later alarm retry after the user drops the .so files in.
-        if entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL):
+        if alarm_pictures_enabled(entry.options):
             runtime.pic_decoder_failed = False
             runtime.pic_decoder = None
         _LOGGER.debug(

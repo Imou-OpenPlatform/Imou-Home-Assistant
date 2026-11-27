@@ -2,6 +2,9 @@
   "domain": "imou_life",
   "name": "Imou Life Official",
   "after_dependencies": [
+    "frontend",
+    "http",
+    "lovelace",
     "stream"
   ],
   "codeowners": [
@@ -9,6 +12,8 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "media_player",
+    "media_source",
     "persistent_notification",
     "webhook"
   ],
@@ -21,7 +26,7 @@
   ],
   "quality_scale": "silver",
   "requirements": [
-    "pyimouapi==1.4.4"
+    "pyimouapi==2.0.0"
   ],
-  "version": "1.4.4"
+  "version": "2.0.0"
 }

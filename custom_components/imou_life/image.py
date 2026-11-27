@@ -60,7 +60,7 @@ class ImouAlarmImage(ImouEntity, ImageEntity):
 
     @property
     def available(self) -> bool:
-        """Unavailable when alarm push or local decrypt is off."""
+        """Unavailable when alarm push is off."""
         return super().available and decrypt_pictures_active(self._config_entry)
 
     def image(self) -> bytes | None:

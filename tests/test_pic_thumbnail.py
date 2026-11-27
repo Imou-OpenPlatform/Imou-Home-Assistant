@@ -6,24 +6,28 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import socket
 import sys
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import ClientSession
 from custom_components.imou_life.const import (
     DOMAIN,
     PARAM_ATTACH_DECRYPTED_THUMBNAIL,
-    PARAM_DEVICE_PASSWORDS,
 )
 from custom_components.imou_life.pic_thumbnail import (
     _async_download_picture,
+    _redact_picture_url,
     _sync_decrypt_and_write,
     async_maybe_decrypt_thumbnail,
+    async_remember_picture_passwords,
     public_media_url,
 )
+from custom_components.imou_life.record_http_fetch import UrlFetchResponse
 from custom_components.imou_life.runtime_data import ImouRuntimeData
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -35,22 +39,48 @@ CIPHERTEXT = b"DHAV" + b"\x00" * 32
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 10
 
 
-async def _aiter(chunks: Iterable[bytes]) -> AsyncIterator[bytes]:
-    for chunk in chunks:
-        yield chunk
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://user:secret@media.example:8443/signed/path?token=secret", "***"),
+        ("https://media.example/signed/path?token=secret", "https://media.example"),
+        ("https://media.example:8443/image.jpg#fragment", "https://media.example:8443"),
+        ("http://[2001:4860:4860::8888]/pic", "http://[2001:4860:4860::8888]"),
+        ("https://media.example:0/pic", "***"),
+        ("https://media.example/pic\r\nX-Injected: yes", "***"),
+        ("not a URL", "***"),
+    ],
+)
+def test_redact_picture_url_hides_credentials_and_paths(
+    url: str, expected: str
+) -> None:
+    assert _redact_picture_url(url) == expected
 
 
-class _AsyncCtx:
-    """Minimal async context manager around a mocked aiohttp response."""
+@pytest.fixture
+def public_dns(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> Iterator[None]:
+    """Keep safe-fetch tests offline with public DNS and mocked HTTP."""
 
-    def __init__(self, response: Any) -> None:
-        self._response = response
+    def create_session(*, connector: Any, **_kwargs: Any) -> ClientSession:
+        session = ClientSession(connector=connector)
+        object.__setattr__(session, "_request", aioclient_mock.match_request)
+        return session
 
-    async def __aenter__(self) -> Any:
-        return self._response
-
-    async def __aexit__(self, *_exc: object) -> bool:
-        return False
+    with (
+        patch(
+            "custom_components.imou_life.record_http_fetch.socket.getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+            ],
+        ),
+        patch(
+            "custom_components.imou_life.record_http_fetch.ClientSession",
+            side_effect=create_session,
+        ),
+    ):
+        yield
 
 
 def _runtime_with_access_token(token: str = "openapi-token") -> ImouRuntimeData:
@@ -84,6 +114,130 @@ def _entry(hass: HomeAssistant, *, attach: bool = True) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
+
+
+def _sealed_play_token(password: str = "door-42") -> tuple[str, str]:
+    """Return (play token, hex key) that decrypt to ``password``."""
+    import base64
+    import json
+    import os
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = os.urandom(32)
+    nonce = b"0123456789ab"
+    body = AESGCM(key).encrypt(
+        nonce, json.dumps({"devLoginPassword": password}).encode(), None
+    )
+    token = base64.b64encode(nonce + body).decode("ascii")
+    return token, key.hex()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_is_read_once_for_the_whole_device() -> None:
+    """Two channels share one password, and a later list does not ask again."""
+    token, key_hex = _sealed_play_token()
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(return_value=key_hex)
+    channels = [
+        MagicMock(device_id="SN1", play_token_v2=token),
+        MagicMock(device_id="SN1", play_token_v2=token),
+    ]
+    await async_remember_picture_passwords(runtime, channels)
+    assert runtime.picture_passwords["SN1"] == "door-42"
+    assert runtime.client.async_get_play_token_key.await_count == 1
+
+    runtime.client.async_get_play_token_key.reset_mock()
+    channels[0].play_token_v2 = "a-newer-token"
+    await async_remember_picture_passwords(runtime, channels)
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+    assert runtime.picture_passwords["SN1"] == "door-42"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_is_not_asked_again_after_a_failure() -> None:
+    """A failed read stays failed until the integration loads again."""
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(
+        side_effect=RuntimeError("down")
+    )
+    device = MagicMock(device_id="SN1", play_token_v2="token")
+    await async_remember_picture_passwords(runtime, [device])
+    await async_remember_picture_passwords(runtime, [device])
+    assert "SN1" not in runtime.picture_passwords
+    assert runtime.client.async_get_play_token_key.await_count == 1
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_picture_password_waits_until_a_token_exists() -> None:
+    """A device with no token yet is read once the list includes one."""
+    token, key_hex = _sealed_play_token("later")
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock(return_value=key_hex)
+    bare = MagicMock(device_id="SN1", play_token_v2=None)
+    await async_remember_picture_passwords(runtime, [bare])
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+    later = MagicMock(device_id="SN1", play_token_v2=token)
+    await async_remember_picture_passwords(runtime, [later])
+    assert runtime.picture_passwords["SN1"] == "later"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_decrypt_uses_the_password_read_at_load(hass: HomeAssistant) -> None:
+    """An alarm uses the stored password and does not ask for a key."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    runtime.picture_passwords["SN1"] = "door-42"
+    runtime.client.async_get_play_token_key = AsyncMock()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ) as mock_decrypt,
+    ):
+        result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert result == "/local/imou_life/thumbs/a1.jpg"
+    assert mock_decrypt.call_args.args[6] == "door-42"
+    runtime.client.async_get_play_token_key.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_decrypt_without_a_stored_password_uses_the_serial(
+    hass: HomeAssistant,
+) -> None:
+    """No password from load means the picture is tried with the device serial."""
+    entry = _entry(hass)
+    runtime = _runtime_with_access_token()
+    runtime.client.async_get_play_token_key = AsyncMock()
+    event_data = {
+        "device_id": "SN1",
+        "alarm_id": "a1",
+        "raw": {"picUrl": "https://example.com/only.jpg"},
+    }
+    with (
+        _patched_decoder(),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._async_download_picture",
+            AsyncMock(return_value=CIPHERTEXT),
+        ),
+        patch(
+            "custom_components.imou_life.pic_thumbnail._sync_decrypt_and_write",
+            return_value=("/local/imou_life/thumbs/a1.jpg", 0),
+        ) as mock_decrypt,
+    ):
+        await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
+    assert mock_decrypt.call_args.args[6] == "SN1"
+    runtime.client.async_get_play_token_key.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -538,7 +692,7 @@ async def test_maybe_decrypt_uses_pic_url_list(hass: HomeAssistant) -> None:
 
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_maybe_decrypt_prefers_thumb_url(hass: HomeAssistant) -> None:
-    """thumbUrl is used before picUrlArray / picUrlArr / picUrl."""
+    """picUrlArray[0] is the alarm picture when that array is present."""
     entry = _entry(hass)
     runtime = _runtime_with_access_token()
     event_data = {
@@ -566,7 +720,7 @@ async def test_maybe_decrypt_prefers_thumb_url(hass: HomeAssistant) -> None:
         result = await async_maybe_decrypt_thumbnail(hass, entry, runtime, event_data)
 
     assert result == "/local/imou_life/thumbs/a1.jpg"
-    assert mock_download.await_args.args[1] == "https://example.com/thumb.jpg"
+    assert mock_download.await_args.args[1] == "https://example.com/big.jpg"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -635,13 +789,11 @@ async def test_maybe_decrypt_wrong_password_points_at_the_option(
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=USER_INPUT,
-        options={
-            PARAM_ATTACH_DECRYPTED_THUMBNAIL: True,
-            PARAM_DEVICE_PASSWORDS: {"SN1": "wrong"},
-        },
+        options={PARAM_ATTACH_DECRYPTED_THUMBNAIL: True},
     )
     entry.add_to_hass(hass)
     runtime = _runtime_with_access_token()
+    runtime.picture_passwords["SN1"] = "wrong"
     device = MagicMock()
     device.device_id = "SN1"
     device.device_ability = "WLAN,TCM"
@@ -668,10 +820,10 @@ async def test_maybe_decrypt_wrong_password_points_at_the_option(
 
     assert result is None
     runtime.client.async_get_token.assert_not_awaited()
-    assert "configured device password" in caplog.text
+    assert "could not be decrypted on this Home Assistant" in caplog.text
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "public_dns")
 async def test_download_picture_reads_whole_body(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
@@ -682,7 +834,7 @@ async def test_download_picture_reads_whole_body(
     assert await _async_download_picture(hass, "https://example.com/pic") == body
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "public_dns")
 async def test_download_picture_gives_up_after_retries(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
@@ -696,6 +848,20 @@ async def test_download_picture_gives_up_after_retries(
     assert aioclient_mock.call_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS) + 1
 
 
+@pytest.mark.usefixtures("enable_custom_integrations", "public_dns")
+async def test_download_picture_can_skip_retries(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Search pictures are already stored, so a miss is not tried again."""
+    aioclient_mock.get("https://example.com/pic", status=404, content=b"missing")
+
+    assert (
+        await _async_download_picture(hass, "https://example.com/pic", retry=False)
+        is None
+    )
+    assert aioclient_mock.call_count == 1
+
+
 @pytest.mark.usefixtures("enable_custom_integrations")
 async def test_download_picture_waits_for_a_late_upload(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
@@ -704,23 +870,30 @@ async def test_download_picture_waits_for_a_late_upload(
     from custom_components.imou_life import pic_thumbnail
 
     body = b"DHAV" + b"\x00" * 32
-    missing = MagicMock()
-    missing.status = 404
-    late = MagicMock()
-    late.status = 200
-    late.headers = {"Content-Length": str(len(body))}
-    late.content.iter_chunked = lambda _size: _aiter([body])
-    session = MagicMock()
-    session.get = MagicMock(side_effect=[_AsyncCtx(missing), _AsyncCtx(late)])
+    responses = [
+        UrlFetchResponse(404, {}, b"missing"),
+        UrlFetchResponse(200, {"Content-Length": str(len(body))}, body),
+    ]
 
     with (
-        patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
+        patch.object(
+            pic_thumbnail,
+            "async_fetch_url_response",
+            AsyncMock(side_effect=responses),
+        ) as mock_fetch,
         patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
         caplog.at_level("DEBUG", logger="custom_components.imou_life.pic_thumbnail"),
     ):
         result = await pic_thumbnail._async_download_picture(hass, "https://a/pic")
 
     assert result == body
+    assert mock_fetch.await_count == 2
+    mock_fetch.assert_awaited_with(
+        hass,
+        "https://a/pic",
+        max_bytes=pic_thumbnail._MAX_PICTURE_BYTES,
+        timeout_seconds=pic_thumbnail._DOWNLOAD_TIMEOUT_SECONDS,
+    )
     assert mock_sleep.await_count == 1
     assert "attempt 2" in caplog.text
 
@@ -732,15 +905,13 @@ async def test_download_picture_retries_a_short_body(
     """A body shorter than Content-Length is a half-uploaded picture, so retry."""
     from custom_components.imou_life import pic_thumbnail
 
-    response = MagicMock()
-    response.status = 200
-    response.headers = {"Content-Length": "100"}
-    response.content.iter_chunked = lambda _size: _aiter([b"short"])
-    session = MagicMock()
-    session.get = MagicMock(return_value=_AsyncCtx(response))
-
+    short = UrlFetchResponse(200, {"content-length": "100"}, b"short")
     with (
-        patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
+        patch.object(
+            pic_thumbnail,
+            "async_fetch_url_response",
+            AsyncMock(return_value=short),
+        ) as mock_fetch,
         patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
         caplog.at_level("WARNING"),
     ):
@@ -748,31 +919,136 @@ async def test_download_picture_retries_a_short_body(
 
     assert result is None
     assert "truncated" in caplog.text
+    assert mock_fetch.await_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS) + 1
     assert mock_sleep.await_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS)
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "public_dns")
 async def test_download_picture_does_not_retry_an_oversized_body(
     hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An object far too large to be an alarm still will not shrink on a retry."""
     from custom_components.imou_life import pic_thumbnail
 
-    huge = b"\x00" * (pic_thumbnail._MAX_PICTURE_BYTES + 1)
-    response = MagicMock()
-    response.status = 200
-    response.headers = {}
-    response.content.iter_chunked = lambda _size: _aiter([huge])
-    session = MagicMock()
-    session.get = MagicMock(return_value=_AsyncCtx(response))
+    monkeypatch.setattr(pic_thumbnail, "_MAX_PICTURE_BYTES", 1024)
+    aioclient_mock.get("https://example.com/pic", content=b"\x00" * 1025)
 
     with (
-        patch.object(pic_thumbnail, "async_get_clientsession", return_value=session),
         patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+        caplog.at_level("WARNING"),
     ):
-        result = await pic_thumbnail._async_download_picture(hass, "https://a/pic")
+        result = await _async_download_picture(hass, "https://example.com/pic")
 
     assert result is None
+    assert aioclient_mock.call_count == 1
+    assert "larger than 1024 bytes" in caplog.text
+    mock_sleep.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/pic",
+        "http://[::1]/pic",
+        "http://10.0.0.1/pic",
+        "http://user:secret@example.com/pic",
+        "https://example.com:0/pic",
+        "https://example.com/pic\r\nX-Injected: yes",
+        "https://example.com/\x00pic",
+        "https://example.com/\x7fpic",
+    ],
+)
+async def test_download_picture_rejects_unsafe_urls_without_retrying(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    url: str,
+) -> None:
+    from custom_components.imou_life import pic_thumbnail
+
+    with patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep:
+        assert await _async_download_picture(hass, url) is None
+
+    assert aioclient_mock.call_count == 0
+    mock_sleep.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_download_picture_rejects_private_dns_answer(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    from custom_components.imou_life import pic_thumbnail
+
+    with (
+        patch(
+            "custom_components.imou_life.record_http_fetch.socket.getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.8", 443))
+            ],
+        ),
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+    ):
+        assert (
+            await _async_download_picture(hass, "https://private.example/pic") is None
+        )
+
+    assert aioclient_mock.call_count == 0
+    mock_sleep.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_download_picture_retries_a_transient_dns_failure(
+    hass: HomeAssistant,
+) -> None:
+    from custom_components.imou_life import pic_thumbnail
+
+    with (
+        patch(
+            "custom_components.imou_life.record_http_fetch.socket.getaddrinfo",
+            side_effect=socket.gaierror("temporary DNS failure"),
+        ) as dns,
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+    ):
+        assert await _async_download_picture(hass, "https://example.com/pic") is None
+
+    assert dns.call_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS) + 1
+    assert mock_sleep.await_count == len(pic_thumbnail._DOWNLOAD_RETRY_DELAYS)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations", "public_dns")
+async def test_download_picture_rejects_redirect_to_private_target(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from custom_components.imou_life import pic_thumbnail
+
+    def resolve(host: str, port: int, _family: int, _type: int) -> list[tuple]:
+        address = "10.0.0.8" if host == "private.example" else "8.8.8.8"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
+
+    aioclient_mock.get(
+        "https://public.example/start",
+        status=302,
+        headers={"Location": "http://private.example/secret"},
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_http_fetch.socket.getaddrinfo",
+            side_effect=resolve,
+        ),
+        patch.object(pic_thumbnail.asyncio, "sleep", AsyncMock()) as mock_sleep,
+        caplog.at_level("WARNING"),
+    ):
+        assert (
+            await _async_download_picture(hass, "https://public.example/start") is None
+        )
+
+    assert aioclient_mock.call_count == 1
+    assert "not public" in caplog.text
     mock_sleep.assert_not_awaited()
 
 

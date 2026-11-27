@@ -9,6 +9,7 @@ from custom_components.imou_life.const import (
     PARAM_DEVICE_VOLUME,
     PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
+    PARAM_WIDE_DYNAMIC,
 )
 from custom_components.imou_life.select import SELECT_TYPES, _iter_selects
 from pyimouapi.const import PARAM_CURRENT_OPTION, PARAM_OPTIONS
@@ -57,4 +58,5 @@ def test_select_types_match_core_whitelist() -> None:
         PARAM_COLLECTION_POINT,
         PARAM_DEVICE_VOLUME,
         PARAM_NIGHT_VISION_MODE,
+        PARAM_WIDE_DYNAMIC,
     }

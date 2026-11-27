@@ -13,6 +13,9 @@ from custom_components.imou_life.const import (
     PARAM_WEBHOOK_ID,
 )
 from custom_components.imou_life.diagnostics import async_get_config_entry_diagnostics
+from custom_components.imou_life.insight_frontend import (
+    async_register_insight_trial_frontend,
+)
 from custom_components.imou_life.runtime_data import ImouRuntimeData, get_runtime_data
 from custom_components.imou_life.webhook import (
     async_handle_imou_webhook,
@@ -20,6 +23,7 @@ from custom_components.imou_life.webhook import (
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
 from pyimouapi.exceptions import ConnectFailedException, InvalidAppIdOrSecretException
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -48,6 +52,37 @@ def _entry(hass: HomeAssistant, **kwargs: Any) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
+
+
+async def test_trial_frontend_absence_does_not_fail_setup(
+    hass: HomeAssistant,
+) -> None:
+    """Missing optional frontend support must not prevent setup."""
+    assert "frontend" not in hass.config.components
+
+    assert await async_register_insight_trial_frontend(hass) is False
+
+
+async def test_trial_frontend_registers_once(hass: HomeAssistant) -> None:
+    """Available frontend support is registered only once."""
+    assert await async_setup_component(hass, "http", {})
+    hass.config.components.add("frontend")
+
+    with (
+        patch.object(hass.http, "register_view") as register,
+        patch(
+            "custom_components.imou_life.insight_frontend.frontend.add_extra_js_url"
+        ) as add_js,
+    ):
+        assert await async_register_insight_trial_frontend(hass) is True
+        assert await async_register_insight_trial_frontend(hass) is True
+
+    assert register.call_count == 2
+    assert add_js.call_count == 2
+    assert [call.args[1] for call in add_js.call_args_list] == [
+        "/imou_life_static/trial-dialog.js?v=3",
+        "/imou_life_static/insight-form.js?v=1",
+    ]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

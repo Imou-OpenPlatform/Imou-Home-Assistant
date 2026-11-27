@@ -13,3 +13,51 @@ control_move_ptz:
           min: 100
           max: 10000
           unit_of_measurement: ms
+device_snap_detect:
+  target:
+    device:
+      integration: imou_life
+search_ai_alarms:
+  target:
+    entity:
+      integration: imou_life
+  fields:
+    keyword:
+      required: true
+      example: "person in black coat"
+      selector:
+        text:
+    begin_date:
+      required: false
+      example: "2026-11-01"
+      selector:
+        date:
+    end_date:
+      required: false
+      example: "2026-11-19"
+      selector:
+        date:
+    days:
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 31
+          unit_of_measurement: days
+    page:
+      required: false
+      selector:
+        select:
+          options:
+            - next
+refresh_ai_insight_briefing:
+  target:
+    entity:
+      integration: imou_life
+  fields:
+    end_date:
+      required: false
+      example: "2026-11-12"
+      selector:
+        date:

@@ -6,8 +6,35 @@
 			}
 		},
 		"sensor": {
+			"ai_insight_status": {
+				"default": "mdi:brain"
+			},
+			"cloud_storage_status": {
+				"default": "mdi:cloud-arrow-up"
+			},
+			"ai_insight_cloud_storage_status": {
+				"default": "mdi:cloud-sync"
+			},
 			"storage_used": {
-				"default": "mdi:harddisk"
+				"default": "mdi:harddisk",
+				"state": {
+					"abnormal": "mdi:harddisk-remove",
+					"checking": "mdi:harddisk",
+					"init_failed": "mdi:harddisk-remove",
+					"initializing": "mdi:harddisk",
+					"mount_failed": "mdi:harddisk-remove",
+					"needs_format": "mdi:harddisk-remove",
+					"needs_init": "mdi:harddisk-remove",
+					"no_card": "mdi:micro-sd",
+					"partition_error": "mdi:harddisk-remove",
+					"read_error": "mdi:harddisk-remove",
+					"read_only": "mdi:harddisk",
+					"restarting": "mdi:harddisk",
+					"uninitialized": "mdi:harddisk-remove",
+					"unsupported": "mdi:harddisk-remove",
+					"worn_out": "mdi:harddisk-remove",
+					"write_error": "mdi:harddisk-remove"
+				}
 			},
 			"status": {
 				"default": "mdi:lan-connect",
@@ -49,7 +76,7 @@
 				"default": "mdi:radar"
 			},
 			"motion_detect": {
-				"default": "mdi:motion-sensor"
+				"default": "mdi:picture-in-picture-bottom-right"
 			},
 			"pet_detect": {
 				"default": "mdi:paw"
@@ -117,6 +144,11 @@
 				"default": "mdi:bullhorn-outline"
 			}
 		},
+		"event": {
+			"call": {
+				"default": "mdi:phone-incoming"
+			}
+		},
 		"camera": {
 			"camera": {
 				"default": "mdi:video"
@@ -139,6 +171,9 @@
 	"services": {
 		"control_move_ptz": {
 			"service": "mdi:cursor-move"
+		},
+		"device_snap_detect": {
+			"service": "mdi:image-search"
 		}
 	}
 }

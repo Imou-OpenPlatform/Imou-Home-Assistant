@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -52,7 +52,15 @@ class ImouRuntimeData:
         default_factory=lambda: asyncio.Semaphore(PUSH_DISPATCH_LIMIT)
     )
     thumb_decrypt_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    # Device picture passwords read once at load. Not diagnostics.
+    picture_passwords: dict[str, str] = field(default_factory=dict)
+    picture_password_ready: set[str] = field(default_factory=set)
     countdown: CountdownTracker = field(default_factory=CountdownTracker)
+    workbench_device_key: str | None = None
+    workbench_search_sensor: Any = None
+    workbench_briefing_sensor: Any = None
+    search_revision: int = 0
+    search_session: Any = None
 
     def record_push_msg(self, msg_type: str | None) -> None:
         """Record an accepted push for diagnostics (in-memory only)."""

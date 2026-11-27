@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.const import EntityCategory
+from homeassistant.const import ATTR_ENTITY_ID, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
@@ -17,31 +17,44 @@ from pyimouapi.ha_device import ImouHaDevice
 
 from .const import (
     DOMAIN,
+    EVENT_AI_INSIGHT_TRIAL,
+    PARAM_AI_INSIGHT_TRIAL,
     PARAM_PTZ,
     PARAM_RESTART_DEVICE,
-    PARAM_ROTATION_DURATION,
+    PARAM_SNAP_DETECT,
+    PARAM_TRIAL_CONTACT_URL,
     SERVICE_CONTROL_MOVE_PTZ,
+    SERVICE_DEVICE_SNAP_DETECT,
 )
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouEntity, async_add_imou_entities
+from .helpers import camera_channel_devices
+from .insight_account import ImouAccountEntity, async_trial_dialog_copy
 
 _LOGGER = logging.getLogger(__package__)
 
 PARALLEL_UPDATES = 1
 
 _SIREN_BUTTONS = frozenset({PARAM_SIREN_START, PARAM_SIREN_STOP})
+_WHITE_LIGHT_BUTTONS = frozenset({"white_light_start", "white_light_stop"})
+_HIDDEN_BUTTONS = _SIREN_BUTTONS | _WHITE_LIGHT_BUTTONS
 
 
 def _iter_buttons(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
     """Return (button_type, device) pairs for supported buttons."""
-    return [
+    buttons = [
         (button_type, device)
         for device in coordinator.devices
         for button_type in device.buttons
-        if button_type not in _SIREN_BUTTONS
+        if button_type not in _HIDDEN_BUTTONS
     ]
+    buttons.extend(
+        (PARAM_SNAP_DETECT, device)
+        for device in camera_channel_devices(coordinator.devices)
+    )
+    return buttons
 
 
 async def async_setup_entry(
@@ -51,6 +64,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Imou button entities."""
     async_add_imou_entities(entry, async_add_entities, ImouButton, _iter_buttons)
+    async_add_entities(
+        [ImouAiInsightTrialButton(entry.runtime_data.coordinator, entry)]
+    )
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
@@ -64,14 +80,48 @@ async def async_setup_entry(
     )
 
 
+class ImouAiInsightTrialButton(ImouAccountEntity, ButtonEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: ImouDataUpdateCoordinator,
+        config_entry: ImouConfigEntry,
+    ) -> None:
+        super().__init__(coordinator, config_entry, PARAM_AI_INSIGHT_TRIAL)
+
+    async def async_press(self) -> None:
+        url = str(self._config_entry.options.get(PARAM_TRIAL_CONTACT_URL) or "").strip()
+        title, message = await async_trial_dialog_copy(self.hass, self._config_entry)
+        if url:
+            message = f"{message}\n\n{url}"
+        self.hass.bus.async_fire(
+            EVENT_AI_INSIGHT_TRIAL,
+            {"title": title, "message": message},
+        )
+
+
 class ImouButton(ImouEntity, ButtonEntity):
     """Representation of an Imou button."""
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        await self._async_do_press(
-            self._config_entry.options.get(PARAM_ROTATION_DURATION, 500)
-        )
+        if self._entity_type == PARAM_SNAP_DETECT:
+            await self.hass.services.async_call(
+                DOMAIN,
+                SERVICE_DEVICE_SNAP_DETECT,
+                {ATTR_ENTITY_ID: self.entity_id},
+                blocking=True,
+            )
+            return
+        await self._async_do_press(500)
+
+    @property
+    def icon(self) -> str | None:
+        """Return the snapshot detection icon."""
+        if self._entity_type == PARAM_SNAP_DETECT:
+            return "mdi:image-search"
+        return None
 
     @property
     def device_class(self) -> ButtonDeviceClass | None:

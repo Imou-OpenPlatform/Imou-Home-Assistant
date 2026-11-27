@@ -8,25 +8,26 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from pyimouapi.capability.binding import binding_supported, cached_v2_target_map
 from pyimouapi.const import PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice
 
 from .const import MOTION_OFF_DELAY, PARAM_MOTION
 from .coordinator import ImouConfigEntry, ImouDataUpdateCoordinator
 from .entity import ImouAlarmPushEntity, ImouEntity, async_add_imou_entities
-from .helpers import (
-    PAAS_MOTION_ABILITIES,
-    alarm_push_active,
-    device_has_paas_ability,
-    device_iot_events_match,
-)
+from .helpers import alarm_push_active
 
 PARALLEL_UPDATES = 0
+
+# Picture change and person detect, including each binding's fallback target.
+_MOTION_CAPABILITY_KEYS = frozenset({"motion_detect", "header_detect"})
 
 _MOTION_ON = frozenset(
     {
         "videomotion",
+        "detection.motion.detected",
         "human",
+        "detection.person.detected",
         "mobiledetect",
         "motiondetect",
         "alarmpir",
@@ -79,26 +80,25 @@ def _iter_binary_sensors(
 def _iter_motion_sensors(
     coordinator: ImouDataUpdateCoordinator,
 ) -> list[tuple[str, ImouHaDevice]]:
-    """One HA-only motion sensor per camera that reports picture/human detect."""
+    """One motion sensor per channel that reports picture or person detect."""
     return [
         (PARAM_MOTION, device)
         for device in coordinator.devices
-        if _device_offers_motion(coordinator, device)
+        if _device_offers_motion(device)
     ]
 
 
-def _device_offers_motion(
-    coordinator: ImouDataUpdateCoordinator, device: ImouHaDevice
-) -> bool:
-    """PaaS: detect abilities. IoT: product-model motion events, not switch refs."""
+def _device_offers_motion(device: ImouHaDevice) -> bool:
+    """True when this channel's capability ids include picture or person detect."""
     if device.channel_id is None:
         return False
-    if device.product_id:
-        return device_iot_events_match(
-            coordinator, device, lambda msg: motion_binary_state(msg) is True
-        )
+    capability_ids = device.capability_ids
+    if not capability_ids:
+        return False
     return any(
-        device_has_paas_ability(device, ability) for ability in PAAS_MOTION_ABILITIES
+        binding_supported(binding, capability_ids)
+        for binding in cached_v2_target_map()
+        if binding.ha_key in _MOTION_CAPABILITY_KEYS
     )
 
 
@@ -135,7 +135,7 @@ class ImouBinarySensor(ImouEntity, BinarySensorEntity):
 
 
 class ImouMotionBinarySensor(ImouAlarmPushEntity, BinarySensorEntity):
-    """Camera motion from Imou alarm pushes; auto-off if the cloud sends no clear."""
+    """Camera motion from alarm pushes. Holds Detected, then returns to Clear."""
 
     _attr_device_class = BinarySensorDeviceClass.MOTION
     _attr_is_on = False
@@ -143,7 +143,7 @@ class ImouMotionBinarySensor(ImouAlarmPushEntity, BinarySensorEntity):
 
     @property
     def available(self) -> bool:
-        """Unavailable when alarm push is off: off would mean 'no motion'."""
+        """Unavailable when alarm push is off: Clear would mean no motion."""
         return super().available and alarm_push_active(self._config_entry)
 
     def _alarm_state(self, msg_type: str | None) -> bool | None:

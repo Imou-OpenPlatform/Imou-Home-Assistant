@@ -2,19 +2,38 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from custom_components.imou_life.const import DOMAIN
 from custom_components.imou_life.repairs import (
+    ISSUE_DECRYPT_LIBS_MISSING,
+    ISSUE_DECRYPT_LIBS_UNSUPPORTED,
     ISSUE_EVENT_PUSH_NO_URL,
     ISSUE_OPEN_API_QUOTA,
+    ISSUE_RECORD_PLAYBACK,
+    RecordPlaybackEmptySourceError,
     async_create_event_push_no_url_issue,
+    async_create_record_playback_issue,
     async_delete_event_push_issues,
     async_delete_quota_issue,
+    async_delete_record_playback_issue,
     async_notify_imou_api_error,
+    async_refresh_decrypt_library_issues,
     is_quota_exceeded,
 )
 from homeassistant.helpers import issue_registry as ir
-from pyimouapi.exceptions import RequestFailedException
+from pyimouapi.const import (
+    ERROR_CODE_INVALID_APP,
+    ERROR_CODE_NO_PERMISSION,
+    ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
+    ERROR_CODE_TOKEN_OVERDUE,
+)
+from pyimouapi.exceptions import (
+    ConnectFailedException,
+    InvalidAppIdOrSecretException,
+    RequestFailedException,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from . import USER_INPUT
@@ -23,11 +42,13 @@ from . import USER_INPUT
 def test_is_quota_exceeded_detects_open_platform_limit() -> None:
     """The monthly call-limit code is what the repair is for."""
     assert is_quota_exceeded(
-        RequestFailedException("OP1013:Call interface times exceed limit (total).")
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED)
     )
-    assert is_quota_exceeded(RequestFailedException("op1013: quota"))
     assert not is_quota_exceeded(RequestFailedException("cloud down"))
-    assert not is_quota_exceeded(RequestFailedException("OP1009:No permission"))
+    assert not is_quota_exceeded(RequestFailedException("quota-looking message OP1013"))
+    assert not is_quota_exceeded(
+        RequestFailedException("denied", api_code=ERROR_CODE_NO_PERMISSION)
+    )
     assert not is_quota_exceeded(TimeoutError("timeout"))
 
 
@@ -63,7 +84,7 @@ async def test_quota_issue_lifecycle(hass) -> None:
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
     issue = ir.async_get(hass).issues[(DOMAIN, issue_id)]
@@ -91,7 +112,7 @@ async def test_quota_repair_learn_more_uses_china_console(hass) -> None:
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
 
@@ -118,7 +139,7 @@ async def test_quota_repair_not_cleared_when_every_device_is_skipped(
     async_notify_imou_api_error(
         hass,
         entry,
-        RequestFailedException("OP1013:Call interface times exceed limit (total)."),
+        RequestFailedException("quota", api_code=ERROR_CODE_OPEN_API_QUOTA_EXCEEDED),
     )
     await hass.async_block_till_done()
     issue_id = f"{ISSUE_OPEN_API_QUOTA}_{entry.entry_id}"
@@ -141,3 +162,157 @@ async def test_quota_repair_not_cleared_when_every_device_is_skipped(
 
     assert (DOMAIN, issue_id) in ir.async_get(hass).issues
     manager.async_update_devices_status.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_issue_lifecycle_is_entry_scoped(hass) -> None:
+    """Stable playback failures create one issue per entry and success clears one."""
+    entry_a = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-a")
+    entry_b = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, entry_id="entry-b")
+    entry_a.add_to_hass(hass)
+    entry_b.add_to_hass(hass)
+
+    error = RequestFailedException("No permission", api_code=ERROR_CODE_NO_PERMISSION)
+    async_create_record_playback_issue(hass, entry_a.entry_id, error)
+    async_create_record_playback_issue(hass, entry_a.entry_id, error)
+    async_create_record_playback_issue(hass, entry_b.entry_id, error)
+    await hass.async_block_till_done()
+
+    issues = ir.async_get(hass).issues
+    issue_a = issues[(DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_a.entry_id}")]
+    assert issue_a.translation_key == ISSUE_RECORD_PLAYBACK
+    assert issue_a.translation_placeholders is None
+    assert issue_a.severity is ir.IssueSeverity.ERROR
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_b.entry_id}") in issues
+
+    async_delete_record_playback_issue(hass, entry_a.entry_id)
+    async_delete_record_playback_issue(hass, entry_a.entry_id)
+    await hass.async_block_till_done()
+
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_a.entry_id}") not in issues
+    assert (DOMAIN, f"{ISSUE_RECORD_PLAYBACK}_{entry_b.entry_id}") in issues
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RequestFailedException("denied", api_code=ERROR_CODE_NO_PERMISSION),
+        RequestFailedException("expired", api_code=ERROR_CODE_TOKEN_OVERDUE),
+        InvalidAppIdOrSecretException("invalid", api_code=ERROR_CODE_INVALID_APP),
+        RequestFailedException("forbidden", status_code=403),
+        RecordPlaybackEmptySourceError(),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_stable_failures_create_issue(hass, error) -> None:
+    """Authentication, account denial, and empty sources need user action."""
+    async_create_record_playback_issue(hass, "entry-a", error)
+    await hass.async_block_till_done()
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) in ir.async_get(hass).issues
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OSError("connection reset"),
+        TimeoutError("timed out"),
+        RequestFailedException("temporary network failure"),
+        ConnectFailedException("forbidden-looking message"),
+        RequestFailedException("OP1009: message only"),
+        ValueError("malformed segment"),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_record_playback_transient_failures_do_not_create_issue(
+    hass, error
+) -> None:
+    """Network, timeout, and segment failures must not persist a repair."""
+    async_create_record_playback_issue(hass, "entry-a", error)
+    await hass.async_block_till_done()
+
+    assert (
+        DOMAIN,
+        f"{ISSUE_RECORD_PLAYBACK}_entry-a",
+    ) not in ir.async_get(hass).issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_missing_decrypt_libraries_open_one_repair(hass) -> None:
+    """A linux x86-64 host without both libraries gets the download repair."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=1,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_lib_dir",
+            return_value="/config/imou_life/native",
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, ISSUE_DECRYPT_LIBS_MISSING)]
+    assert issue.translation_placeholders["found"] == "1"
+    assert issue.translation_placeholders["native_dir"] == "/config/imou_life/native"
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED) not in issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_present_decrypt_libraries_clear_the_repair(hass) -> None:
+    """Both libraries in place remove the repair."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=0,
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_libs_found",
+            return_value=2,
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_MISSING) not in issues
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED) not in issues
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_unsupported_host_does_not_ask_for_libraries(hass) -> None:
+    """A host that cannot run the libraries is told that, not where to download."""
+    with (
+        patch(
+            "custom_components.imou_life.repairs.native_platform_supported",
+            return_value=False,
+        ),
+        patch(
+            "custom_components.imou_life.repairs.native_platform_label",
+            return_value="linux aarch64",
+        ),
+    ):
+        await async_refresh_decrypt_library_issues(hass)
+    await hass.async_block_till_done()
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, ISSUE_DECRYPT_LIBS_UNSUPPORTED)]
+    assert issue.translation_placeholders["arch"] == "linux aarch64"
+    assert (DOMAIN, ISSUE_DECRYPT_LIBS_MISSING) not in issues

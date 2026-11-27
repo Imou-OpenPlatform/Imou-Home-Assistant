@@ -17,7 +17,6 @@ from .const import (
     DOMAIN,
     PARAM_API_URL,
     PARAM_APP_ID,
-    PARAM_ATTACH_DECRYPTED_THUMBNAIL,
     PARAM_DEVICE_PASSWORDS,
     PARAM_ENABLE_EVENT_PUSH,
     PARAM_EVENT_PUSH_TYPES,
@@ -26,7 +25,7 @@ from .const import (
     PARAM_WEBHOOK_URL,
     imou_life_device_key,
 )
-from .helpers import get_selected_device_ids
+from .helpers import alarm_pictures_enabled, get_selected_device_ids
 from .pic_thumbnail import (
     native_libs_present,
     native_platform_label,
@@ -160,9 +159,7 @@ async def async_get_config_entry_diagnostics(
         "webhook_url_configured": bool(webhook_url),
         "last_update_success": last_update_success,
         "pyimouapi_version": _PYIMOUAPI_VERSION,
-        "attach_decrypted_thumbnail": bool(
-            entry.options.get(PARAM_ATTACH_DECRYPTED_THUMBNAIL)
-        ),
+        "attach_decrypted_thumbnail": alarm_pictures_enabled(entry.options),
         "native_libs_present": await hass.async_add_executor_job(
             native_libs_present, hass
         ),

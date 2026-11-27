@@ -78,15 +78,24 @@ def imou_life_device_keys_from_ids(
 
 
 # Configuration definitions
+CONF_API_URL_INTL = "openapi.easy4ip.com"
 CONF_API_URL_SG = "openapi-sg.easy4ip.com"
 CONF_API_URL_OR = "openapi-or.easy4ip.com"
 CONF_API_URL_FK = "openapi-fk.easy4ip.com"
 CONF_API_URL_HZ = "openapi.lechange.cn"
 
 API_URL_REGIONS: dict[str, str] = {
+    "intl": CONF_API_URL_INTL,
     "sg": CONF_API_URL_SG,
     "eu": CONF_API_URL_FK,
     "na": CONF_API_URL_OR,
+    "cn": CONF_API_URL_HZ,
+}
+
+# Login UI offers International and China only; legacy region keys remain in
+# API_URL_REGIONS.
+API_URL_LOGIN_REGIONS: dict[str, str] = {
+    "intl": CONF_API_URL_INTL,
     "cn": CONF_API_URL_HZ,
 }
 
@@ -94,12 +103,12 @@ _API_URL_REGION_BY_HOSTNAME = {
     hostname: region for region, hostname in API_URL_REGIONS.items()
 }
 
-DEFAULT_API_URL_REGION = "sg"
+DEFAULT_API_URL_REGION = "intl"
 
 
 def api_url_from_region(region: str) -> str:
     """Map a config-flow region key to the stored API hostname."""
-    return API_URL_REGIONS.get(region, CONF_API_URL_SG)
+    return API_URL_REGIONS.get(region, CONF_API_URL_INTL)
 
 
 def api_url_region_from_value(value: str) -> str:
@@ -126,12 +135,23 @@ PARAM_EXCLUDED_DEVICES = "excluded_devices"
 PARAM_ENABLE_EVENT_PUSH = "enable_event_push"
 PARAM_EVENT_PUSH_TYPES = "event_push_types"
 PARAM_NOTIFY_SERVICES = "notify_services"
+PARAM_SNAP_DETECT = "snap_detect"
+SERVICE_DEVICE_SNAP_DETECT = "device_snap_detect"
+SERVICE_SEARCH_AI_ALARMS = "search_ai_alarms"
+SERVICE_REFRESH_AI_INSIGHT_BRIEFING = "refresh_ai_insight_briefing"
+PARAM_INSIGHT_WORKBENCH_DEVICE = "insight_workbench_device"
+PARAM_INSIGHT_SEARCH_RESULT = "insight_search_result"
+PARAM_INSIGHT_BRIEFING = "insight_briefing"
+PARAM_AI_INSIGHT_TRIAL = "ai_insight_trial"
+PARAM_TRIAL_CONTACT_URL = "trial_contact_url"
+DEFAULT_INSIGHT_LOOKBACK_DAYS = 7
+DEFAULT_INSIGHT_BRIEFING_DAYS = 1
+EVENT_AI_INSIGHT_TRIAL = f"{DOMAIN}_ai_insight_trial"
 PARAM_NOTIFY_ON_ALARM = "notify_on_alarm"
 PARAM_ATTACH_DECRYPTED_THUMBNAIL = "attach_decrypted_thumbnail"
 PARAM_DEFAULT_DEVICE_PASSWORD = "default_device_password"
 PARAM_DEVICE_PASSWORDS = "device_passwords"
 PARAM_LOCAL_EVENT_RECORD = "local_event_record"
-PARAM_LOCAL_RECORD_PATH = "local_record_path"
 PARAM_LOCAL_RECORD_DURATION = "local_record_duration"
 DEFAULT_LOCAL_RECORD_DURATION = 60
 # Always sync pushes to the Imou app as well as HA (setMessageCallback basePush).
@@ -139,11 +159,23 @@ BASE_PUSH_ALWAYS = "1"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_MOTION = "motion"
 MOTION_OFF_DELAY = 15
-PARAM_DOORBELL = "doorbell"
+PARAM_CALL = "call"
 PARAM_ALARM_PICTURE = "alarm_picture"
 PARAM_SIREN = "siren"
 SIREN_OFF_DELAY = 15
+WHITE_LIGHT_OFF_DELAY = 30
 PARAM_STATUS = "status"
+PARAM_AI_INSIGHT_STATUS = "ai_insight_status"
+PARAM_AI_INSIGHT_CLOUD_STORAGE_STATUS = "ai_insight_cloud_storage_status"
+PARAM_CLOUD_STORAGE_STATUS = "cloud_storage_status"
+AI_INSIGHT_STATUS_OPTIONS = ("active", "paused", "inactive", "unavailable")
+AI_INSIGHT_CLOUD_STORAGE_STATUS_OPTIONS = (
+    "active",
+    "paused",
+    "inactive",
+    "unavailable",
+)
+CLOUD_STORAGE_STATUS_OPTIONS = AI_INSIGHT_STATUS_OPTIONS
 PARAM_STORAGE_USED = "storage_used"
 PARAM_HEADER_DETECT = "header_detect"
 PARAM_ALARM_PIR = "alarm_pir"
@@ -177,38 +209,52 @@ DORMANT_WRITE_RETRY_WAIT_MIN = 5
 DORMANT_WRITE_RETRY_WAIT_MAX = 60
 PARAM_DOWNLOAD_SNAP_WAIT_TIME = "download_snap_wait_time"
 PARAM_LIVE_RESOLUTION = "live_resolution"
-PARAM_ROTATION_DURATION = "rotation_duration"
 PARAM_PTZ = "ptz"
 PARAM_COUNT_DOWN_SWITCH = "count_down_switch"
 COUNT_DOWN_MAX_MINUTES = 1440
 PARAM_OVERCHARGE_SWITCH = "overcharge_switch"
 OVERCHARGE_MIN_WATTS = 5
 OVERCHARGE_MAX_WATTS_DEFAULT = 2500
-OVERCHARGE_MAX_WATTS_HIGH = 3680
-OVERCHARGE_HIGH_REF = "128900"
 
 # event push — selector keys (hassfest: [a-z0-9-_]+) map to Imou API callbackFlag values
+EVENT_PUSH_TYPE_CAPABILITY_EVENT = "capability_event"
 EVENT_PUSH_TYPE_ALARM = "alarm"
 EVENT_PUSH_TYPE_DEVICE_STATUS = "device_status"
 EVENT_PUSH_TYPE_IOT = "iot"
+# Legacy keys — stripped on save; never shown in Configure UI
 EVENT_PUSH_TYPE_NUMBERSTAT = "numberstat"
 EVENT_PUSH_TYPE_FACE_ANALYSIS = "face_analysis"
 
-EVENT_PUSH_TYPE_OPTIONS = (
-    EVENT_PUSH_TYPE_ALARM,
+EVENT_PUSH_TYPE_OPTIONS_ALWAYS = (
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
-    EVENT_PUSH_TYPE_NUMBERSTAT,
-    EVENT_PUSH_TYPE_FACE_ANALYSIS,
 )
 
+# Selector in options UI offers only the two types managed by this integration.
+EVENT_PUSH_TYPE_OPTIONS = EVENT_PUSH_TYPE_OPTIONS_ALWAYS
+
+LEGACY_EVENT_PUSH_TYPES_DROP = frozenset(
+    {
+        EVENT_PUSH_TYPE_NUMBERSTAT,
+        EVENT_PUSH_TYPE_FACE_ANALYSIS,
+        EVENT_PUSH_TYPE_ALARM,
+        EVENT_PUSH_TYPE_IOT,
+    }
+)
+
+CALLBACK_FLAG_CAPABILITY_EVENT = "capabilityEvent"
 CALLBACK_FLAG_ALARM = "alarm"
 CALLBACK_FLAG_DEVICE_STATUS = "deviceStatus"
 CALLBACK_FLAG_IOT = "iot"
 CALLBACK_FLAG_NUMBERSTAT = "numberstat"
 CALLBACK_FLAG_FACE_ANALYSIS = "faceAnalysis"
 
+HA_CALLBACK_FLAGS = frozenset(
+    {CALLBACK_FLAG_CAPABILITY_EVENT, CALLBACK_FLAG_DEVICE_STATUS}
+)
+
 EVENT_PUSH_TYPE_TO_CALLBACK_FLAG: dict[str, str] = {
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT: CALLBACK_FLAG_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_ALARM: CALLBACK_FLAG_ALARM,
     EVENT_PUSH_TYPE_DEVICE_STATUS: CALLBACK_FLAG_DEVICE_STATUS,
     EVENT_PUSH_TYPE_IOT: CALLBACK_FLAG_IOT,
@@ -220,35 +266,69 @@ CALLBACK_FLAG_TO_EVENT_PUSH_TYPE: dict[str, str] = {
     v: k for k, v in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG.items()
 }
 
-DEFAULT_EVENT_PUSH_TYPES = [
-    EVENT_PUSH_TYPE_ALARM,
+# Configure UI: multi-select starts with nothing checked; user chooses explicitly.
+DEFAULT_EVENT_PUSH_TYPES: list[str] = []
+
+EVENT_PUSH_TYPES_ALL = (
+    EVENT_PUSH_TYPE_CAPABILITY_EVENT,
     EVENT_PUSH_TYPE_DEVICE_STATUS,
-    EVENT_PUSH_TYPE_IOT,
-]
+)
 
 
 def event_push_types_to_callback_flags(types: list[str]) -> list[str]:
     """Map config option values to Imou API callbackFlag strings."""
     flags: list[str] = []
     for value in types:
+        if value in (CALLBACK_FLAG_NUMBERSTAT, CALLBACK_FLAG_FACE_ANALYSIS):
+            continue
         if value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
             flags.append(EVENT_PUSH_TYPE_TO_CALLBACK_FLAG[value])
         else:
-            # Legacy v1.2.10 options stored API flag strings directly
             flags.append(value)
     return flags
+
+
+def event_push_selector_options(
+    account_callback_flags: set[str] | None = None,
+) -> list[str]:
+    """Build Configure selector keys: only the two Home Assistant flags."""
+    del account_callback_flags
+    return list(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
+
+
+def checked_ha_push_types(*, push_enabled: bool, account_flags: set[str]) -> list[str]:
+    """Boxes to show. A disabled push offers both. An enabled push shows the cloud."""
+    if not push_enabled:
+        return [EVENT_PUSH_TYPE_CAPABILITY_EVENT, EVENT_PUSH_TYPE_DEVICE_STATUS]
+    checked: list[str] = []
+    if CALLBACK_FLAG_CAPABILITY_EVENT in account_flags:
+        checked.append(EVENT_PUSH_TYPE_CAPABILITY_EVENT)
+    if CALLBACK_FLAG_DEVICE_STATUS in account_flags:
+        checked.append(EVENT_PUSH_TYPE_DEVICE_STATUS)
+    return checked
+
+
+def merge_callback_flags(existing: set[str], selected_types: list[str]) -> set[str]:
+    """Replace only the two Home Assistant flags inside an account flag set."""
+    selected = (
+        set(event_push_types_to_callback_flags(selected_types)) & HA_CALLBACK_FLAGS
+    )
+    return (set(existing) - HA_CALLBACK_FLAGS) | selected
+
+
+def sanitize_event_push_types(types: list[str]) -> list[str]:
+    """Drop legacy UI keys and unknown strings that map only to removed flags."""
+    allowed = set(EVENT_PUSH_TYPE_OPTIONS_ALWAYS)
+    return [value for value in types if value in allowed]
 
 
 def callback_flags_to_event_push_types(flags: list[str]) -> list[str]:
     """Map stored values to hassfest-safe selector option keys."""
     types: list[str] = []
     for value in flags:
-        if value in CALLBACK_FLAG_TO_EVENT_PUSH_TYPE:
-            types.append(CALLBACK_FLAG_TO_EVENT_PUSH_TYPE[value])
-        elif value in EVENT_PUSH_TYPE_TO_CALLBACK_FLAG:
-            types.append(value)
-        else:
-            types.append(value)
+        mapped = CALLBACK_FLAG_TO_EVENT_PUSH_TYPE.get(value, value)
+        if mapped in EVENT_PUSH_TYPE_OPTIONS_ALWAYS:
+            types.append(mapped)
     return types
 
 

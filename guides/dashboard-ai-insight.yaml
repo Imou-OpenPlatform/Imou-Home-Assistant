@@ -1,0 +1,75 @@
+# The integration adds this dashboard to the sidebar as AI Insight / AI 智见.
+# Import this file only if that dashboard was removed.
+# Picking the date refreshes the briefing for that whole day.
+# Search reads the keyword and the two dates when the button does not pass them.
+
+title: AI Insight
+views:
+  - title: AI Briefing
+    path: briefing
+    cards:
+      - type: entities
+        title: AI Briefing
+        entities:
+          - entity: select.imou_life_insight_workbench_device
+            name: Camera
+          - entity: input_datetime.imou_insight_briefing_end
+            name: Date
+      - type: markdown
+        title: Daily briefing
+        content: >
+          {{ state_attr('sensor.imou_life_insight_briefing', 'markdown')
+             or states('sensor.imou_life_insight_briefing') }}
+  - title: Smart Messages
+    path: search
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Smart Messages
+            entities:
+              - entity: select.imou_life_insight_workbench_device
+                name: Camera
+              - entity: input_text.imou_insight_search_keyword
+                name: Keyword
+              - entity: input_datetime.imou_insight_search_begin
+                name: Start
+              - entity: input_datetime.imou_insight_search_end
+                name: End
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Search
+                icon: mdi:magnify
+                icon_height: 24px
+                tap_action:
+                  action: call-service
+                  service: imou_life.search_ai_alarms
+                  target:
+                    entity_id: select.imou_life_insight_workbench_device
+              - type: button
+                name: Next
+                icon: mdi:chevron-right
+                icon_height: 24px
+                tap_action:
+                  action: call-service
+                  service: imou_life.search_ai_alarms
+                  target:
+                    entity_id: select.imou_life_insight_workbench_device
+                  data:
+                    page: next
+      - type: markdown
+        title: Results
+        content: >
+          {{ state_attr('sensor.imou_life_insight_search_result', 'markdown')
+             or states('sensor.imou_life_insight_search_result') }}
+  - title: Request a trial
+    path: trial
+    cards:
+      - type: markdown
+        content: >
+          AI Insight adds search and a daily briefing.
+
+          Plans are opened in the Imou cloud console.
+
+          For questions, add official WhatsApp +86 19106884129.

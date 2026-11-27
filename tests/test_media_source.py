@@ -1,0 +1,568 @@
+"""Tests for Imou media source identifiers and browse."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from custom_components.imou_life.const import (
+    DOMAIN,
+    imou_life_device_key,
+)
+from custom_components.imou_life.media_source import (
+    MEDIA_SOURCE_NAME,
+    ImouRecordMediaSource,
+    _record_hls_expiry,
+    _split,
+)
+from homeassistant.components.media_player import BrowseError
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+from pyimouapi.capability.catalog import CapabilitySet
+from pyimouapi.cloud_record import CloudRecordSegment
+from pyimouapi.const import PARAM_STATE, PARAM_STATUS
+from pyimouapi.device import ImouDeviceManager
+from pyimouapi.exceptions import ImouException
+from pyimouapi.ha_device import ImouHaDevice
+from pyimouapi.local_record import LocalRecordSegment
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from . import USER_INPUT
+
+pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
+
+
+def test_split_identifier() -> None:
+    assert _split(None) == []
+    assert _split("entry:abc|cam:SN1:0|cloud") == [
+        "entry:abc",
+        "cam:SN1:0",
+        "cloud",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_browse_root_lists_loaded_entries(hass: HomeAssistant) -> None:
+    """Media browser root returns Imou Life without raising."""
+    entry = MockConfigEntry(domain=DOMAIN, data=USER_INPUT, title="Imou test")
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    source = ImouRecordMediaSource(hass)
+    item = MagicMock()
+    item.identifier = None
+    item.domain = DOMAIN
+    browse = await source.async_browse_media(item)
+    assert browse.title == MEDIA_SOURCE_NAME
+    assert any(child.title == "Imou test" for child in browse.children or [])
+
+
+def _record_device(
+    device_id: str,
+    channel_id: str,
+    services: frozenset[str] | None,
+) -> ImouHaDevice:
+    device = ImouHaDevice(device_id, "Camera", "Imou", "IPC", "1.0")
+    device.set_channel_id(channel_id)
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "online"
+    if services is not None:
+        device.set_capability_ids(services)
+        device.set_capability_set(
+            CapabilitySet(
+                properties={},
+                services=services,
+                events=frozenset(),
+            )
+        )
+    return device
+
+
+def _record_browse_source(
+    hass: HomeAssistant,
+    devices: list[ImouHaDevice],
+    *,
+    options: dict | None = None,
+) -> tuple[ImouRecordMediaSource, MockConfigEntry, MagicMock]:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=USER_INPUT,
+        title="Imou test",
+        options=options,
+    )
+    entry.add_to_hass(hass)
+    object.__setattr__(entry, "state", ConfigEntryState.LOADED)
+    coordinator = MagicMock()
+    coordinator.devices_by_key = {
+        imou_life_device_key(device): device for device in devices
+    }
+    coordinator.get_device.side_effect = coordinator.devices_by_key.get
+    entry.runtime_data = SimpleNamespace(coordinator=coordinator)
+    return ImouRecordMediaSource(hass), entry, coordinator
+
+
+async def _browse_record_kinds(
+    source: ImouRecordMediaSource,
+    entry: MockConfigEntry,
+    *,
+    device_id: str = "SN1",
+    channel_id: str = "0",
+) -> list[str]:
+    browse = await source._browse_kinds(
+        [f"entry:{entry.entry_id}", f"cam:{device_id}:{channel_id}"]
+    )
+    return [child.title for child in browse.children or []]
+
+
+@pytest.mark.parametrize(
+    "services",
+    [
+        None,
+        frozenset(),
+        frozenset({"record.file.bitmap"}),
+    ],
+)
+async def test_local_folder_hidden_without_record_list_capability(
+    hass: HomeAssistant, services: frozenset[str] | None
+) -> None:
+    """Local recordings require the clip list. A bitmap alone stays hidden."""
+    source, entry, _ = _record_browse_source(
+        hass, [_record_device("SN1", "0", services)]
+    )
+
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
+
+
+async def test_local_bitmap_failure_lists_no_days(hass: HomeAssistant) -> None:
+    """A failed local bitmap leaves the month empty."""
+    from pyimouapi.exceptions import ImouException
+
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_local_record_bitmap = AsyncMock(side_effect=ImouException("down"))
+
+    browse = await source._browse_days(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+        ]
+    )
+
+    assert browse.children == []
+
+
+async def test_local_folder_shown_when_page_ids_omit_the_record_list(
+    hass: HomeAssistant,
+) -> None:
+    """A fixed lens keeps record services on the capability list, not page ids."""
+    device = _record_device("SN1", "1", frozenset({"image.night.mode"}))
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset({"record.file.list", "record.file.bitmap"}),
+            events=frozenset(),
+        )
+    )
+    source, entry, _ = _record_browse_source(hass, [device])
+
+    assert "Local recordings" in await _browse_record_kinds(
+        source, entry, channel_id="1"
+    )
+
+
+async def test_local_folder_shown_with_list_and_no_bitmap(
+    hass: HomeAssistant,
+) -> None:
+    source, entry, _ = _record_browse_source(
+        hass, [_record_device("SN1", "0", frozenset({"record.file.list"}))]
+    )
+    assert "Local recordings" in await _browse_record_kinds(source, entry)
+
+
+async def test_missing_bitmap_lists_days_through_today(
+    hass: HomeAssistant,
+) -> None:
+    device = _record_device("SN1", "1", frozenset({"record.file.list"}))
+    device.set_device_capability_ids(frozenset())
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    coordinator.device_manager.delegate.async_local_record_bitmap = AsyncMock()
+    with patch(
+        "custom_components.imou_life.media_source.dt_util.now",
+        return_value=datetime(2026, 11, 20, tzinfo=dt_util.UTC),
+    ):
+        current = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-11"]
+        )
+        past = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-10"]
+        )
+        future = await source._browse_days(
+            [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-12"]
+        )
+    coordinator.device_manager.delegate.async_local_record_bitmap.assert_not_awaited()
+    assert [child.title for child in current.children or []] == [
+        f"2026-11-{day:02d}" for day in range(1, 21)
+    ]
+    assert [child.title for child in past.children or []] == [
+        f"2026-10-{day:02d}" for day in range(1, 32)
+    ]
+    assert future.children == []
+
+
+async def test_device_level_bitmap_still_queries_the_fixed_lens(
+    hass: HomeAssistant,
+) -> None:
+    device = _record_device("SN1", "1", frozenset({"record.file.list"}))
+    device.set_device_capability_ids(frozenset({"record.file.bitmap"}))
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    coordinator.device_manager.delegate.async_local_record_bitmap = AsyncMock(
+        return_value={"outputData": {"bitmap": "1" + "0" * 30}}
+    )
+    browse = await source._browse_days(
+        [f"entry:{entry.entry_id}", "cam:SN1:1", "local", "month:2026-10"]
+    )
+    coordinator.device_manager.delegate.async_local_record_bitmap.assert_awaited()
+    assert browse.children
+
+
+async def test_local_folder_hidden_when_device_is_missing(
+    hass: HomeAssistant,
+) -> None:
+    """A missing coordinator device does not expose local recordings."""
+    source, entry, _ = _record_browse_source(hass, [])
+
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
+
+
+async def test_local_folder_shown_with_both_record_services(
+    hass: HomeAssistant,
+) -> None:
+    """Both local-recording services expose the local folder."""
+    source, entry, _ = _record_browse_source(
+        hass,
+        [
+            _record_device(
+                "SN1",
+                "0",
+                frozenset({"record.file.bitmap", "record.file.list"}),
+            )
+        ],
+    )
+
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Local recordings",
+        "Record on alarm",
+    ]
+
+
+async def test_local_folder_uses_channel_device_capabilities(
+    hass: HomeAssistant,
+) -> None:
+    """A channel camera resolves the matching coordinator device."""
+    source, entry, _ = _record_browse_source(
+        hass,
+        [
+            _record_device("SN1", "0", frozenset()),
+            _record_device(
+                "SN1",
+                "1",
+                frozenset({"record.file.bitmap", "record.file.list"}),
+            ),
+        ],
+    )
+
+    assert "Local recordings" not in await _browse_record_kinds(source, entry)
+    assert "Local recordings" in await _browse_record_kinds(
+        source, entry, channel_id="1"
+    )
+
+
+async def test_local_folder_reflects_capability_rediscovery(
+    hass: HomeAssistant,
+) -> None:
+    """Each browse reads the latest coordinator device capability set."""
+    device = _record_device("SN1", "0", frozenset())
+    source, entry, _ = _record_browse_source(hass, [device])
+    assert "Local recordings" not in await _browse_record_kinds(source, entry)
+
+    device.set_capability_ids({"record.file.bitmap", "record.file.list"})
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset({"record.file.bitmap", "record.file.list"}),
+            events=frozenset(),
+        )
+    )
+
+    assert "Local recordings" in await _browse_record_kinds(source, entry)
+
+
+async def test_cloud_folder_stays_visible_without_record_data(
+    hass: HomeAssistant,
+) -> None:
+    """Cloud browsing is offered without a device, records, or a query."""
+    source, entry, coordinator = _record_browse_source(hass, [])
+    coordinator.device_manager.delegate.async_query_cloud_record_bitmap.side_effect = (
+        RuntimeError("query unavailable")
+    )
+
+    assert await _browse_record_kinds(source, entry) == [
+        "Cloud recordings",
+        "Record on alarm",
+    ]
+    coordinator.device_manager.delegate.async_query_cloud_record_bitmap.assert_not_called()
+
+
+async def test_alarm_folder_is_always_in_the_media_browser(
+    hass: HomeAssistant,
+) -> None:
+    """Alarm clips live under Media, so the folder does not need a saved path."""
+    source, entry, _ = _record_browse_source(hass, [])
+    titles = await _browse_record_kinds(source, entry)
+    assert "Record on alarm" in titles
+
+
+async def test_local_day_uses_aggregate_record_list(
+    hass: HomeAssistant,
+) -> None:
+    """A local day uses the public aggregate and keeps DAV paths as metadata."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.set_product_id("pid")
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    dav_path = "/mnt/sd/2026-11-01/001/dav/00/00.06.55-00.08.10[M][0@0][0].dav"
+    manager.async_list_local_record_segments = AsyncMock(
+        return_value=[
+            LocalRecordSegment(
+                file_name=dav_path,
+                begin_time="2026-11-01 00:06:55",
+                end_time="2026-11-01 00:08:10",
+            )
+        ]
+    )
+    manager.async_local_record_list = AsyncMock()
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    manager.async_list_local_record_segments.assert_awaited_once_with(
+        "SN1",
+        "0",
+        begin_time="2026-11-01 00:00:00",
+        end_time="2026-11-01 23:59:59",
+        product_id="pid",
+    )
+    manager.async_local_record_list.assert_not_awaited()
+    assert len(browse.children or []) == 1
+    child = (browse.children or [])[0]
+    assert child.title == "00:06:55 - 00:08:10"
+    assert dav_path not in (child.identifier or "")
+
+
+async def test_cloud_day_titles_clips_with_the_time_range_only(
+    hass: HomeAssistant,
+) -> None:
+    """The day folder carries the date, so a cloud clip title shows only times."""
+    source, entry, coordinator = _record_browse_source(hass, [])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_cloud_record_segments = AsyncMock(
+        return_value=[
+            CloudRecordSegment(
+                record_id="rec-1",
+                begin_time="2026-11-24 14:29:00",
+                end_time="2026-11-24 14:33:12",
+            )
+        ]
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "cloud",
+            "month:2026-11",
+            "day:24",
+        ]
+    )
+
+    assert len(browse.children or []) == 1
+    assert (browse.children or [])[0].title == "14:29:00 - 14:33:12"
+
+
+async def test_local_day_is_empty_when_aggregate_fails(
+    hass: HomeAssistant,
+) -> None:
+    """An unavailable SD card leaves the selected day empty."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        side_effect=ImouException("SD card unavailable")
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    manager.async_list_local_record_segments.assert_awaited_once()
+    assert browse.children == []
+    assert browse.can_expand is False
+
+
+async def test_offline_local_day_says_the_device_is_offline(
+    hass: HomeAssistant,
+) -> None:
+    """A local-recording failure on an offline device is not an empty folder."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "offline"
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        side_effect=ImouException("device offline", api_code="DV1007")
+    )
+
+    with pytest.raises(BrowseError, match=r"offline|设备离线"):
+        await source._browse_clips(
+            [
+                f"entry:{entry.entry_id}",
+                "cam:SN1:0",
+                "local",
+                "month:2026-11",
+                "day:01",
+            ]
+        )
+
+
+async def test_local_clip_shows_a_cover_when_the_record_has_one(
+    hass: HomeAssistant,
+) -> None:
+    """A cover URL is shown through this Home Assistant, not the raw cloud address."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_list_local_record_segments = AsyncMock(
+        return_value=[
+            LocalRecordSegment(
+                file_name="rec-1",
+                begin_time="2026-11-01 08:00:00",
+                end_time="2026-11-01 08:10:00",
+                thumb_url="https://example.test/cover.jpg",
+            )
+        ]
+    )
+
+    browse = await source._browse_clips(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+            "day:01",
+        ]
+    )
+
+    thumbnail = (browse.children or [])[0].thumbnail or ""
+    assert thumbnail.startswith("/api/imou_life/record_cover/")
+    token = thumbnail.rsplit("/", 1)[-1]
+    cover = hass.data["imou_life_record_covers"][token]
+    assert cover.kind == "local"
+    assert cover.begin_time == "2026-11-01 08:00:00"
+    assert cover.end_time == "2026-11-01 08:10:00"
+
+
+async def test_local_month_bitmap_forwards_product_id(
+    hass: HomeAssistant,
+) -> None:
+    """The month bitmap uses the same product identity as the recording list."""
+    device = _record_device(
+        "SN1",
+        "0",
+        frozenset({"record.file.bitmap", "record.file.list"}),
+    )
+    device.set_product_id("pid")
+    source, entry, coordinator = _record_browse_source(hass, [device])
+    manager = coordinator.device_manager.delegate
+    manager.async_local_record_bitmap = AsyncMock(
+        return_value={"outputData": {"bitmap": "1"}}
+    )
+
+    await source._browse_days(
+        [
+            f"entry:{entry.entry_id}",
+            "cam:SN1:0",
+            "local",
+            "month:2026-11",
+        ]
+    )
+
+    manager.async_local_record_bitmap.assert_awaited_once_with(
+        "SN1",
+        "0",
+        year=2026,
+        month=11,
+        product_id="pid",
+    )
+
+
+async def test_library_playback_expiry_reaches_media_source() -> None:
+    """Playback expiry survives the real library response instead of a mock shape."""
+    client = AsyncMock()
+    client.async_request_api.return_value = {
+        "url": "https://example.test/record.m3u8",
+        "expireTime": 1_800_000_000,
+    }
+    manager = ImouDeviceManager(client)
+
+    data = await manager.async_create_device_record_hls(
+        "SN1",
+        "0",
+        begin_time="2026-11-01 00:06:55",
+        end_time="2026-11-01 00:08:10",
+        record_type="cloudRecord",
+    )
+
+    assert _record_hls_expiry(data) == 1_800_000_000
