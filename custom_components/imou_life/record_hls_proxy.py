@@ -183,9 +183,16 @@ class RecordHlsSession:
     playlist_trailer: list[str] | None = None
     segment_blocks: list[list[str]] = field(default_factory=list)
     content_indexes: dict[str, int] = field(default_factory=dict)
-    # Latest presentation time among listed live segments; a new segment that
-    # starts at or before it repeats content the player has already received.
-    max_listed_pts: float | None = None
+    # End of the presentation span already listed for remux. A new segment that
+    # starts before this still overlaps prior content even when its start PTS
+    # moves forward (localvod's sliding window); ffmpeg copy then remuxes the
+    # overlap as a repeated scene on a monotonic timeline.
+    max_listed_end: float | None = None
+    # When each localvod slice resets PTS (or PTS cannot be read), fall back to
+    # keeping every Nth upstream segment so a 3-wide / 2s-slide window does not
+    # remux the same scene twice.
+    slide_stride: int = 1
+    upstream_seen: int = 0
     prefetch_task: asyncio.Task[None] | None = None
     follow_timer: Callable[[], None] | None = None
     follow_failures: int = 0
@@ -212,7 +219,9 @@ class RecordHlsSession:
         self.playlist_header = None
         self.playlist_trailer = None
         self.content_indexes.clear()
-        self.max_listed_pts = None
+        self.max_listed_end = None
+        self.slide_stride = 1
+        self.upstream_seen = 0
         self.signed_paths.clear()
         if self.refreshed_segments is not None:
             self.refreshed_segments.clear()
@@ -443,9 +452,10 @@ def _is_encrypted_playlist(body: str) -> bool:
     return any(line.strip().startswith(_ENCRYPTION_TAGS) for line in body.splitlines())
 
 
-def _first_presentation_time(body: bytes) -> float | None:
-    """Return the earliest PES presentation time (seconds) in a TS segment."""
+def _presentation_time_bounds(body: bytes) -> tuple[float | None, float | None]:
+    """Return the earliest and latest PES presentation times (seconds)."""
     earliest: float | None = None
+    latest: float | None = None
     offset = 0
     limit = len(body) - _TS_PACKET_SIZE
     while offset <= limit:
@@ -478,40 +488,144 @@ def _first_presentation_time(body: bytes) -> float | None:
         ) / 90000
         if earliest is None or presentation_time < earliest:
             earliest = presentation_time
-    return earliest
+        if latest is None or presentation_time > latest:
+            latest = presentation_time
+    return earliest, latest
+
+
+def _first_presentation_time(body: bytes) -> float | None:
+    """Return the earliest PES presentation time (seconds) in a TS segment."""
+    return _presentation_time_bounds(body)[0]
+
+
+def _extinf_duration(block: list[str] | None) -> float | None:
+    if not block:
+        return None
+    for line in block:
+        stripped = line.strip()
+        if not stripped.startswith("#EXTINF:"):
+            continue
+        try:
+            return float(stripped.split(":", 1)[1].split(",", 1)[0])
+        except ValueError:
+            return None
+    return None
+
+
+def _coverage_end(
+    start: float | None, body: bytes | None, block: list[str] | None
+) -> float | None:
+    """Return how far this segment covers on the presentation timeline."""
+    if body:
+        _earliest, latest = _presentation_time_bounds(body)
+        if latest is not None and (start is None or latest > start + 0.01):
+            return latest
+    duration = _extinf_duration(block)
+    if start is not None and duration is not None:
+        return start + duration
+    if body:
+        return _presentation_time_bounds(body)[1]
+    return start
+
+
+def _overlaps_listed_coverage(start: float, max_end: float) -> bool:
+    """Return whether start is still inside media already listed for remux.
+
+    Localvod slides a long segment forward by a shorter step. Keeping every
+    extending slide remuxes the overlap as a repeated scene on a monotonic
+    timeline, so only segments that begin at (or after) the covered end are
+    listed.
+    """
+    return start < max_end - _REWIND_TOLERANCE_SECONDS
+
+
+def _starts_progress_reliably(
+    starts: list[float | None], *, min_step: float
+) -> bool:
+    """Return whether every start is known and advances enough for PTS checks."""
+    if len(starts) < 2 or any(start is None for start in starts):
+        return False
+    return all(
+        starts[index] >= starts[index - 1] + min_step for index in range(1, len(starts))
+    )
 
 
 def _drop_rewound_segments(
     segments: list[HlsSegment],
     blocks: list[list[str]],
     segment_prefetch: dict[int, bytes],
-) -> tuple[list[HlsSegment], list[list[str]], dict[int, bytes], float | None]:
-    """Remove opening segments whose presentation time repeats prior content."""
-    kept: list[HlsSegment] = []
-    kept_blocks: list[list[str]] = []
-    kept_prefetch: dict[int, bytes] = {}
-    latest: float | None = None
+) -> tuple[list[HlsSegment], list[list[str]], dict[int, bytes], float | None, int]:
+    """Remove opening segments that rewind or overlap already covered media."""
+    starts: list[float | None] = []
+    ends: list[float | None] = []
+    durations: list[float | None] = []
+    for index, _segment in enumerate(segments):
+        body = segment_prefetch.get(index)
+        block = blocks[index] if index < len(blocks) else None
+        start = _first_presentation_time(body) if body is not None else None
+        starts.append(start)
+        ends.append(_coverage_end(start, body, block))
+        durations.append(_extinf_duration(block))
+
+    typical = next((duration for duration in durations if duration), None)
+    min_step = max(1.0, (typical or 2.0) * 0.4)
+    if _starts_progress_reliably(starts, min_step=min_step):
+        kept: list[HlsSegment] = []
+        kept_blocks: list[list[str]] = []
+        kept_prefetch: dict[int, bytes] = {}
+        max_end: float | None = None
+        dropped = 0
+        for index, segment in enumerate(segments):
+            body = segment_prefetch.get(index)
+            block = blocks[index] if index < len(blocks) else None
+            start = starts[index]
+            end = ends[index]
+            if (
+                start is not None
+                and max_end is not None
+                and _overlaps_listed_coverage(start, max_end)
+            ):
+                dropped += 1
+                continue
+            if end is not None:
+                max_end = end if max_end is None else max(max_end, end)
+            if body is not None:
+                kept_prefetch[len(kept)] = body
+            kept.append(segment)
+            if block is not None:
+                kept_blocks.append(block)
+        if dropped:
+            _LOGGER.debug(
+                "Imou live window dropped %s overlapping opening segment(s)", dropped
+            )
+        return kept, kept_blocks, kept_prefetch, max_end, 1
+
+    # PTS resets per slice (common on localvod) or cannot be read: keep every
+    # Nth segment from a sliding window so remux does not replay the overlap.
+    stride = max(1, len(segments) - 1) if len(segments) >= 3 else 1
+    kept = []
+    kept_blocks = []
+    kept_prefetch = {}
     dropped = 0
     for index, segment in enumerate(segments):
-        body = segment_prefetch.get(index)
-        start = _first_presentation_time(body) if body is not None else None
-        if (
-            start is not None
-            and latest is not None
-            and start <= latest + _REWIND_TOLERANCE_SECONDS
-        ):
+        block = blocks[index] if index < len(blocks) else None
+        if index % stride != 0:
             dropped += 1
             continue
-        if start is not None:
-            latest = start
+        body = segment_prefetch.get(index)
         if body is not None:
             kept_prefetch[len(kept)] = body
         kept.append(segment)
-        if index < len(blocks):
-            kept_blocks.append(blocks[index])
+        if block is not None:
+            kept_blocks.append(block)
+    max_end = (len(kept) * typical) if typical is not None and kept else None
     if dropped:
-        _LOGGER.debug("Imou live window dropped %s rewound opening segment(s)", dropped)
-    return kept, kept_blocks, kept_prefetch, latest
+        _LOGGER.debug(
+            "Imou live window kept every %s opening segment(s); dropped %s slide(s)",
+            stride,
+            dropped,
+        )
+    return kept, kept_blocks, kept_prefetch, max_end, stride
 
 
 def _adopt_sliding_window(
@@ -593,6 +707,12 @@ def _replace_sliding_window(
             index = session.content_indexes.get(segment.content)
         if index is None and segment.identity is not None:
             index = identity_indexes.get(segment.identity)
+        body_bytes: bytes | None = None
+        if window_bodies is not None:
+            key = segment.content or segment.identity
+            if key is not None:
+                body_bytes = window_bodies.get(key)
+        end = _coverage_end(start, body_bytes, block)
         if index is None:
             listed = segment.content or segment.identity
             if (
@@ -605,30 +725,44 @@ def _replace_sliding_window(
                 # here so the window stays in order and retry on the next pass.
                 unpublished += 1
                 break
-            if (
+            if session.slide_stride > 1:
+                session.upstream_seen += 1
+                if (session.upstream_seen - 1) % session.slide_stride != 0:
+                    # Same slide stride as the opening window: skip the overlap.
+                    rewound += 1
+                    continue
+            elif (
                 start is not None
-                and session.max_listed_pts is not None
-                and start <= session.max_listed_pts + _REWIND_TOLERANCE_SECONDS
+                and session.max_listed_end is not None
+                and _overlaps_listed_coverage(start, session.max_listed_end)
             ):
-                # The upstream transcoder repeated an already published span
-                # under a new segment number; ffmpeg cannot drop the overlap.
+                # Upstream re-served media that is still inside the span already
+                # listed for remux (same start, or a forward slide that overlaps).
                 rewound += 1
                 continue
             index = len(session.segments)
             session.segments.append(segment)
             session.segment_blocks.append(block)
             appended += 1
+            if session.slide_stride > 1:
+                duration = _extinf_duration(block)
+                if duration is not None:
+                    session.max_listed_end = (
+                        duration
+                        if session.max_listed_end is None
+                        else session.max_listed_end + duration
+                    )
         else:
             session.segments[index] = segment
             session.segment_blocks[index] = block
-        if start is not None and (
-            session.max_listed_pts is None or start > session.max_listed_pts
-        ):
-            session.max_listed_pts = start
-        if window_bodies is not None:
-            key = segment.content or segment.identity
-            if key is not None and key in window_bodies:
-                session.segment_prefetch.setdefault(index, window_bodies[key])
+        if session.slide_stride <= 1 and end is not None:
+            session.max_listed_end = (
+                end
+                if session.max_listed_end is None
+                else max(session.max_listed_end, end)
+            )
+        if body_bytes is not None:
+            session.segment_prefetch.setdefault(index, body_bytes)
         if segment.content is not None:
             session.content_indexes.setdefault(segment.content, index)
         if segment.identity is not None:
@@ -683,11 +817,13 @@ async def _async_prefetch_upstream_segments(
         if 200 <= upstream_response.status < 300 and upstream_response.body:
             session.segment_prefetch[index] = upstream_response.body
             total_bytes += len(upstream_response.body)
-            start = _first_presentation_time(upstream_response.body)
-            if start is not None and (
-                session.max_listed_pts is None or start > session.max_listed_pts
-            ):
-                session.max_listed_pts = start
+            if session.slide_stride <= 1:
+                start = _first_presentation_time(upstream_response.body)
+                end = _coverage_end(start, upstream_response.body, None)
+                if end is not None and (
+                    session.max_listed_end is None or end > session.max_listed_end
+                ):
+                    session.max_listed_end = end
 
     for index in indexes:
         await async_prefetch(index)
@@ -882,14 +1018,14 @@ async def _async_follow_live_playlist(
             blocks = [split_blocks[0]] * len(missing) + split_blocks
         else:
             blocks = split_blocks
-        # Probe PTS while the clip is still live. Skipping this left mid-clip
-        # rewinds (for example 32:58 → 32:56) in the playlist until ENDLIST.
-        # Re-download known segments only until the watermark is seeded.
+        # Probe PTS while the clip is still live so overlapping slides and
+        # PTS resets can be filtered before ffmpeg remuxes them. Re-download
+        # known segments only until the coverage watermark is seeded.
         window_times, window_bodies = await _async_buffer_window_segments(
             hass,
             session,
             incoming,
-            probe_known=session.max_listed_pts is None,
+            probe_known=session.max_listed_end is None and session.slide_stride <= 1,
         )
         if not _is_sliding_playlist(body):
             # Trailing entries on the final window are listed past the clip's
@@ -1501,21 +1637,39 @@ async def async_create_record_hls_proxy_playlist_url(
         for index, prefetched_body in prepared_playback.segment_prefetch.items():
             if 0 <= index < len(segments):
                 segment_prefetch[index] = prefetched_body
-    max_listed_pts: float | None = None
-    if following and segment_prefetch:
-        segments, blocks, segment_prefetch, max_listed_pts = _drop_rewound_segments(
-            segments, blocks, segment_prefetch
-        )
+    max_listed_end: float | None = None
+    slide_stride = 1
+    upstream_seen = 0
+    if following:
+        # Need bodies for the whole first window so forward-overlapping slides
+        # and PTS-reset windows are filtered before ffmpeg remuxes them.
+        for index, segment in enumerate(segments):
+            if index in segment_prefetch or segment.byte_range is not None:
+                continue
+            try:
+                upstream_response = await async_fetch_url_response(hass, segment.url)
+            except (OSError, TimeoutError, ValueError):
+                continue
+            if 200 <= upstream_response.status < 300 and upstream_response.body:
+                segment_prefetch[index] = upstream_response.body
+        if segment_prefetch:
+            upstream_seen = len(segments)
+            segments, blocks, segment_prefetch, max_listed_end, slide_stride = (
+                _drop_rewound_segments(segments, blocks, segment_prefetch)
+            )
+            if slide_stride <= 1:
+                upstream_seen = 0
     content_indexes: dict[str, int] = {}
     for index, segment in enumerate(segments):
         if segment.content is not None:
             content_indexes.setdefault(segment.content, index)
     _LOGGER.debug(
-        "Imou HLS session: %s segments, first PDT %s, live=%s, following=%s",
+        "Imou HLS session: %s segments, first PDT %s, live=%s, following=%s, stride=%s",
         len(segments),
         _first_program_date_time(body) or "none",
         live,
         following,
+        slide_stride,
     )
     session_expiry = _session_expiry(
         upstream_playlist_url,
@@ -1542,7 +1696,9 @@ async def async_create_record_hls_proxy_playlist_url(
         playlist_trailer=trailer if following else None,
         segment_blocks=blocks if following else [],
         content_indexes=content_indexes,
-        max_listed_pts=max_listed_pts,
+        max_listed_end=max_listed_end,
+        slide_stride=slide_stride,
+        upstream_seen=upstream_seen,
     )
     _sessions(hass)[session_id] = session
     session.segment_prefetch.update(segment_prefetch)
