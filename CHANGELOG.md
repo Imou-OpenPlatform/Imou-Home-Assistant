@@ -2,6 +2,12 @@
 
 ## English
 
+### [2.0.1]
+
+#### Fixed
+
+- Open Platform calls from this Home Assistant send `Client-Type: HomeAssistant` again (including AI Briefing, Smart Messages, and Capture and detect). Requires **pyimouapi 2.0.1**, installed automatically with this integration.
+
 ### [2.0.0]
 
 #### Breaking
@@ -380,6 +386,12 @@
 ---
 
 ## 中文
+
+### [2.0.1]
+
+#### 修复
+
+- 本 Home Assistant 发出的开放平台请求会再次带上 `Client-Type: HomeAssistant`（含 AI 简报、智能消息、抓图检测）。需要 **pyimouapi 2.0.1**，随本集成自动安装。
 
 ### [2.0.0]
 
