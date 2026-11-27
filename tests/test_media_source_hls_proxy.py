@@ -977,21 +977,21 @@ async def test_live_playlist_retains_the_public_window_it_already_issued(
     first = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_0.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_1.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
 """
     second = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:2
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_3.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_4.ts&proto=https
 #EXT-X-ENDLIST
 """
@@ -1000,11 +1000,6 @@ https://media.example/clip?userid=seg_4.ts&proto=https
         "https://media.example/clip?userid=seg_1.ts&proto=https",
         "https://media.example/clip?userid=seg_2.ts&proto=https",
     ]
-
-    def segment_pts(url: str) -> bytes:
-        index = int(url.split("seg_")[1].split(".")[0])
-        return _ts_segment(float(index * 2))
-
     with (
         patch(
             "custom_components.imou_life.record_hls_proxy._load_media_playlist",
@@ -1019,9 +1014,7 @@ https://media.example/clip?userid=seg_4.ts&proto=https
         patch(
             "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
             new_callable=AsyncMock,
-            side_effect=lambda _hass, url, **_k: _upstream_response(
-                200, segment_pts(url)
-            ),
+            return_value=_upstream_response(200, b"warm"),
         ),
         patch(
             "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
@@ -1055,15 +1048,15 @@ https://media.example/clip?userid=seg_4.ts&proto=https
         == f"""#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 {origin}/api/imou_life/record_hls/{session_id}/segment/0.ts
-#EXTINF:2,
+#EXTINF:4,
 {origin}/api/imou_life/record_hls/{session_id}/segment/1.ts
-#EXTINF:2,
+#EXTINF:4,
 {origin}/api/imou_life/record_hls/{session_id}/segment/2.ts
-#EXTINF:2,
+#EXTINF:4,
 {origin}/api/imou_life/record_hls/{session_id}/segment/3.ts
-#EXTINF:2,
+#EXTINF:4,
 {origin}/api/imou_life/record_hls/{session_id}/segment/4.ts
 #EXT-X-ENDLIST
 """
@@ -1168,74 +1161,6 @@ def test_first_presentation_time_reads_the_earliest_pes_timestamp() -> None:
     assert _first_presentation_time(b"not a transport stream") is None
 
 
-def test_drop_rewound_segments_uses_stride_when_pts_resets() -> None:
-    """Localvod slices that restart PTS must not remux the same scene twice."""
-    from custom_components.imou_life.record_hls_proxy import (
-        HlsSegment,
-        _drop_rewound_segments,
-    )
-
-    segments = [
-        HlsSegment("https://media.example/0.ts", "0", None, True, "0"),
-        HlsSegment("https://media.example/1.ts", "1", None, True, "1"),
-        HlsSegment("https://media.example/2.ts", "2", None, True, "2"),
-    ]
-    blocks = [["#EXTINF:4,"], ["#EXTINF:4,"], ["#EXTINF:4,"]]
-    # Each slice restarts presentation time at 0 — start-only PTS checks never fire.
-    prefetch = {
-        0: _ts_segment(0.0),
-        1: _ts_segment(0.0),
-        2: _ts_segment(0.0),
-    }
-
-    kept, kept_blocks, kept_prefetch, max_end, stride = _drop_rewound_segments(
-        segments, blocks, prefetch
-    )
-
-    assert [segment.url for segment in kept] == [
-        "https://media.example/0.ts",
-        "https://media.example/2.ts",
-    ]
-    assert kept_blocks == [["#EXTINF:4,"], ["#EXTINF:4,"]]
-    assert set(kept_prefetch) == {0, 1}
-    assert max_end == pytest.approx(8.0)
-    assert stride == 2
-
-
-def test_drop_rewound_segments_skips_forward_overlapping_slides() -> None:
-    """A slide whose start moves forward but still overlaps prior media is dropped."""
-    from custom_components.imou_life.record_hls_proxy import (
-        HlsSegment,
-        _drop_rewound_segments,
-    )
-
-    segments = [
-        HlsSegment("https://media.example/0.ts", "0", None, True, "0"),
-        HlsSegment("https://media.example/1.ts", "1", None, True, "1"),
-        HlsSegment("https://media.example/2.ts", "2", None, True, "2"),
-    ]
-    blocks = [["#EXTINF:4,"], ["#EXTINF:4,"], ["#EXTINF:4,"]]
-    # 4s media sliding by 2s: starts 0,2,4 with ends 4,6,8 — middle overlaps.
-    prefetch = {
-        0: _ts_segment(0.0, 4.0),
-        1: _ts_segment(2.0, 6.0),
-        2: _ts_segment(4.0, 8.0),
-    }
-
-    kept, kept_blocks, kept_prefetch, max_end, stride = _drop_rewound_segments(
-        segments, blocks, prefetch
-    )
-
-    assert [segment.url for segment in kept] == [
-        "https://media.example/0.ts",
-        "https://media.example/2.ts",
-    ]
-    assert kept_blocks == [["#EXTINF:4,"], ["#EXTINF:4,"]]
-    assert set(kept_prefetch) == {0, 1}
-    assert max_end == pytest.approx(8.0)
-    assert stride == 1
-
-
 @pytest.mark.asyncio
 async def test_live_playlist_drops_a_new_segment_that_rewinds_the_timeline(
     hass: HomeAssistant,
@@ -1244,21 +1169,21 @@ async def test_live_playlist_drops_a_new_segment_that_rewinds_the_timeline(
     first = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_0.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_1.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
 """
     second = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:2
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_3.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_4.ts&proto=https
 #EXT-X-ENDLIST
 """
@@ -1332,7 +1257,7 @@ https://media.example/clip?userid=seg_4.ts&proto=https
         segment_url("seg_2"),
         segment_url("seg_4"),
     ]
-    assert session.max_listed_end == pytest.approx(8.0)
+    assert session.max_listed_pts == pytest.approx(6.0)
     assert session.segment_prefetch.get(3) == bodies[segment_url("seg_4")]
     segments = [
         line
@@ -1445,7 +1370,7 @@ https://media.example/clip?userid=seg_3.ts&proto=https
         segment_url("seg_1"),
         segment_url("seg_2"),
     ]
-    assert session.max_listed_end == pytest.approx(6.0)
+    assert session.max_listed_pts == pytest.approx(4.0)
 
 
 @pytest.mark.asyncio
@@ -1456,17 +1381,17 @@ async def test_live_playlist_serves_a_segment_once_it_is_published(
     first = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_0.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_1.ts&proto=https
 """
     second = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:2
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_3.ts&proto=https
 """
 
@@ -1568,23 +1493,23 @@ async def test_live_window_is_followed_without_a_playlist_request(
     first = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_0.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_1.ts&proto=https
 """
     middle = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:2
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_2.ts&proto=https
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_3.ts&proto=https
 """
     final = """#EXTM3U
 #EXT-X-MEDIA-SEQUENCE:4
 #EXT-X-TARGETDURATION:4
-#EXTINF:2,
+#EXTINF:4,
 https://media.example/clip?userid=seg_4.ts&proto=https
 #EXT-X-ENDLIST
 """
@@ -1898,8 +1823,7 @@ https://media.example/clip?userid=seg_2.ts&proto=https
 
     assert [segment.url for segment in session.segments] == [urls[0], urls[2]]
     assert session.window_indexes == [0, 1]
-    assert session.slide_stride == 2
-    assert session.max_listed_end == pytest.approx(8.0)
+    assert session.max_listed_pts == pytest.approx(4.0)
     assert session.segment_prefetch == {0: first_body, 1: second_body}
     segments = [
         line
