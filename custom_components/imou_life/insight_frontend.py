@@ -27,9 +27,7 @@ def _module_url(filename: str, version: int) -> str:
     return f"{_STATIC_URL}/{filename}?v={version}"
 
 
-def _make_script_view(
-    filename: str, view_name: str
-) -> type[HomeAssistantView]:
+def _make_script_view(filename: str, view_name: str) -> type[HomeAssistantView]:
     script_path = _WWW / filename
 
     class ImouInsightScriptView(HomeAssistantView):

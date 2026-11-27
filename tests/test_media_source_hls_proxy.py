@@ -9,6 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlsplit
 
 import pytest
 from aiohttp import web
@@ -40,6 +41,7 @@ from custom_components.imou_life.record_hls_proxy import (
     async_remove_record_hls_proxy_sessions,
     record_hls_proxy_origin,
 )
+from custom_components.imou_life.record_http_fetch import PinnedUrl
 from custom_components.imou_life.record_playback_hls import (
     CACHE_SUBDIR,
     DATA_RECORD_PLAYBACK_HLS,
@@ -128,6 +130,44 @@ IOS_CLIENT_PLAYLIST = (
     "/api/imou_life/record_hls/0123456789abcdef0123456789abcdef/"
     "client.m3u8?authSig=client"
 )
+
+
+@pytest.fixture(autouse=True)
+def _pin_public_urls_without_dns():
+    """Keep playlist setup and background prefetch off real DNS/sockets."""
+
+    async def _pin(_hass: HomeAssistant, url: str) -> PinnedUrl:
+        parsed = urlsplit(url)
+        host = parsed.hostname or "media.example"
+        port = parsed.port or (443 if (parsed.scheme or "https") == "https" else 80)
+        return PinnedUrl(url, host, port, ("8.8.8.8",))
+
+    blocked_fetch = AsyncMock(
+        return_value=SimpleNamespace(
+            status=403,
+            body=b"",
+            headers={"Content-Type": "video/mp2t"},
+        )
+    )
+    with (
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_pin_public_url",
+            side_effect=_pin,
+        ),
+        patch(
+            "custom_components.imou_life.record_http_fetch.async_pin_public_url",
+            side_effect=_pin,
+        ),
+        patch(
+            "custom_components.imou_life.record_hls_proxy.async_fetch_url_response",
+            blocked_fetch,
+        ),
+        patch(
+            "custom_components.imou_life.record_http_fetch.async_fetch_url_response",
+            blocked_fetch,
+        ),
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)

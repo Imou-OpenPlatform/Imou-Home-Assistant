@@ -285,11 +285,7 @@ async def async_handle_search_ai_alarms(hass: HomeAssistant, call: ServiceCall) 
         ) from err
     next_index, hits = parse_search_ai_alarms(raw)
     alarm_ids = tuple(hit.alarm_id or "" for hit in hits)
-    if (
-        go_next
-        and session is not None
-        and (not hits or alarm_ids == session.alarm_ids)
-    ):
+    if go_next and session is not None and (not hits or alarm_ids == session.alarm_ids):
         session.next_index = None
         raise ServiceValidationError(
             translation_domain=DOMAIN,

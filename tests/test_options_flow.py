@@ -605,7 +605,7 @@ async def test_options_event_push_requires_callback_url_when_enabled(hass) -> No
     assert entry.options.get(PARAM_ENABLE_EVENT_PUSH) is not True
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_event_push_prefills_generated_callback_url(
     hass,
 ) -> None:
@@ -667,7 +667,7 @@ def test_looks_publicly_reachable(url: str, public: bool) -> None:
     assert config_flow._looks_publicly_reachable(url) is public
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_event_push_flags_a_lan_callback_url(hass) -> None:
     """A LAN callback address must be called out, not silently offered."""
     entry = MockConfigEntry(
@@ -689,7 +689,7 @@ async def test_options_event_push_flags_a_lan_callback_url(hass) -> None:
     assert "local network" in result["description_placeholders"]["lan_hint"]
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_event_push_does_not_flag_a_public_callback_url(hass) -> None:
     """A properly exposed instance must not be nagged."""
     entry = MockConfigEntry(
@@ -865,7 +865,7 @@ async def test_event_push_save_fails_if_open_snapshot_failed(
     client.async_set_message_callback.assert_not_awaited()
 
 
-@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.usefixtures("enable_custom_integrations", "imou_config_flow")
 async def test_options_event_push_prefers_the_stored_callback_url(hass) -> None:
     """A saved address the user edited must win over the generated one."""
     entry = MockConfigEntry(

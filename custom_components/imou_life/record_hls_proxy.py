@@ -11,6 +11,7 @@ from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from aiohttp import web
@@ -195,19 +196,21 @@ class RecordHlsSession:
     follow_timer: Callable[[], None] | None = None
     follow_failures: int = 0
 
-    def close(self) -> asyncio.Task[RecordHlsDescriptor | str] | None:
-        """Release callbacks and cancel an in-progress refresh."""
+    def close(self) -> list[asyncio.Task[Any]]:
+        """Release callbacks and cancel in-progress refresh/prefetch work."""
         self.active = False
         self.refresh = None
         if (cancel_follow := self.follow_timer) is not None:
             cancel_follow()
         self.follow_timer = None
-        refresh_task = self.refresh_task
-        if refresh_task is not None:
+        cancelled: list[asyncio.Task[Any]] = []
+        if (refresh_task := self.refresh_task) is not None:
             refresh_task.cancel()
+            cancelled.append(refresh_task)
         self.refresh_task = None
-        if self.prefetch_task is not None:
-            self.prefetch_task.cancel()
+        if (prefetch_task := self.prefetch_task) is not None:
+            prefetch_task.cancel()
+            cancelled.append(prefetch_task)
         self.prefetch_task = None
         self.segments.clear()
         self.window_indexes.clear()
@@ -225,7 +228,7 @@ class RecordHlsSession:
             resources.clear()
         if self.refreshed_resources is not None:
             self.refreshed_resources.clear()
-        return refresh_task
+        return cancelled
 
 
 def async_register_record_hls_proxy(hass: HomeAssistant) -> None:
@@ -247,12 +250,10 @@ def _sessions(hass: HomeAssistant) -> dict[str, RecordHlsSession]:
     return store
 
 
-def _remove_session(
-    hass: HomeAssistant, session_id: str
-) -> asyncio.Task[RecordHlsDescriptor | str] | None:
+def _remove_session(hass: HomeAssistant, session_id: str) -> list[asyncio.Task[Any]]:
     if (session := _sessions(hass).pop(session_id, None)) is not None:
         return session.close()
-    return None
+    return []
 
 
 def _prune_sessions(hass: HomeAssistant, *, reschedule: bool = True) -> None:
@@ -303,10 +304,10 @@ async def async_remove_record_hls_proxy_playlist_session(
     session_id = path[len(prefix) : -len(suffix)]
     if not session_id or "/" in session_id:
         return
-    task = _remove_session(hass, session_id)
+    tasks = _remove_session(hass, session_id)
     _schedule_cleanup(hass)
-    if task is not None:
-        await asyncio.gather(task, return_exceptions=True)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def async_remove_record_hls_proxy_sessions(
@@ -315,16 +316,13 @@ async def async_remove_record_hls_proxy_sessions(
     """Remove all proxy sessions owned by one config entry."""
     if not isinstance(hass.data.get(DATA_RECORD_HLS_PROXY), dict):
         return
-    refresh_tasks: list[asyncio.Task[RecordHlsDescriptor | str]] = []
+    cancelled: list[asyncio.Task[Any]] = []
     for session_id, session in list(_sessions(hass).items()):
-        if (
-            session.entry_id == entry_id
-            and (task := _remove_session(hass, session_id)) is not None
-        ):
-            refresh_tasks.append(task)
+        if session.entry_id == entry_id:
+            cancelled.extend(_remove_session(hass, session_id))
     _schedule_cleanup(hass)
-    if refresh_tasks:
-        await asyncio.gather(*refresh_tasks, return_exceptions=True)
+    if cancelled:
+        await asyncio.gather(*cancelled, return_exceptions=True)
 
 
 def _playlist_target_duration(playlist_body: str) -> int:
@@ -1527,7 +1525,7 @@ async def async_create_record_hls_proxy_playlist_url(
     _sessions(hass)[session_id] = session
     session.segment_prefetch.update(segment_prefetch)
     if prepared_playback is None and not live and session.segments:
-        hass.async_create_task(
+        session.prefetch_task = hass.async_create_task(
             _async_prefetch_upstream_segments(hass, session, [0]),
         )
     _schedule_live_prefetch(hass, session)
