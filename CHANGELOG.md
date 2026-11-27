@@ -2,12 +2,6 @@
 
 ## English
 
-### [2.0.1]
-
-#### Fixed
-
-- Open Platform calls from this Home Assistant send `Client-Type: HomeAssistant` again (including AI Briefing, Smart Messages, and Capture and detect). Requires **pyimouapi 2.0.1**, installed automatically with this integration.
-
 ### [2.0.0]
 
 #### Breaking
@@ -27,7 +21,7 @@
 
 #### Changed
 
-- Requires **pyimouapi 2.0.0**, installed automatically with this integration.
+- Requires **pyimouapi 2.0.1**, installed automatically with this integration.
 - Entities are created only for features each device reports on your account (same rule for cameras, plugs, bulbs, and sensors).
 - Unchecked devices under **Configure → Polling and cameras** do not appear in the Home Assistant device list. That page still lists every device on the account so you can check one again later.
 - **Night vision mode** includes **Starlight full-color night vision** on devices that support it.
@@ -50,6 +44,7 @@
 - **Cloud recordings** clip tiles show only the start and end time, like **Local recordings**, so the title fits the tile. The day header already shows the date.
 - Expired cloud segment tokens are fetched again while remux runs. A clip whose audio track is shorter than the video, or has gaps where the camera sent no audio, gets a continuous audio timeline padded with silence so playback does not stop early.
 - Recording day listings and cover retries share work so Open Platform calls are not repeated for every blank tile.
+- Open Platform calls from this Home Assistant send `Client-Type: HomeAssistant` (including AI Briefing, Smart Messages, and Capture and detect).
 
 ### [1.4.4]
 
@@ -387,12 +382,6 @@
 
 ## 中文
 
-### [2.0.1]
-
-#### 修复
-
-- 本 Home Assistant 发出的开放平台请求会再次带上 `Client-Type: HomeAssistant`（含 AI 简报、智能消息、抓图检测）。需要 **pyimouapi 2.0.1**，随本集成自动安装。
-
 ### [2.0.0]
 
 #### 破坏性变更
@@ -412,7 +401,7 @@
 
 #### 变更
 
-- 需要 **pyimouapi 2.0.0**，随本集成自动安装。
+- 需要 **pyimouapi 2.0.1**，随本集成自动安装。
 - 仅根据账号下每台设备实际支持的功能创建实体（摄像头、插座、灯泡与传感器使用同一规则）。
 - **配置 → 轮询与摄像头** 里没勾选的设备，不会出现在 Home Assistant 的设备列表里。这一页仍列出账号下的全部设备，重新勾选后会再出现。
 - **夜视模式** 在支持的设备上包含 **黑光全彩夜视**。
@@ -435,6 +424,7 @@
 - **云录像**片段的标题和**本地录像**一样只显示起止时间，标题不再被日期挤断；日期在当天的文件夹标题上。
 - 云录像转封装过程中过期的分片令牌会自动重新获取；音频轨比视频短、或中间有摄像头没发音频的空档时，会补齐为连续的音频轨并补静音，避免播到音轨结尾提前停下。
 - 按日列出录像与封面重试会共用结果，不再为每张空白封面重复调用开放平台。
+- 本 Home Assistant 发出的开放平台请求会带上 `Client-Type: HomeAssistant`（含 AI 简报、智能消息、抓图检测）。
 
 ### [1.4.4]
 
